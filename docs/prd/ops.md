@@ -54,11 +54,11 @@
   2. 게시 성공 → 원본(staging `.bin`·`_docflow/<seq>/_source_files`) 삭제(`drop_original()` — 원본을 지우는 곳은 여기 하나, 파싱 끝 `candidate_ready.finish()`는 처리 기록·sha256만 남김) → 구조화 대기열(`ops.run_pipeline.structure.structure_workers` 스레드 — gold_bundle·pgvector_load) → `_docflow/<seq>` 삭제(`--no-cleanup`이면 남김).
   3. 파싱 실패·게시 실패 → 원본을 남기고 로그에만(gold로 안 감, EDW에 안 씀). 파싱 실패면 그 문서 표지(`RUN_PIPELINE_DOC`)가 붙은 컨테이너 안 프로세스를 끈다.
   4. 받기가 뺀 문서(`_docflow/<seq>/parse/_source/only.txt`가 빔 — 중복·DRM·암호, pl-02) → 파싱 없이 건너뜀(`parse_one`이 `SKIP`) → 게시(중복은 ParsingMeta `skipped_dup`, DRM·암호는 보고서로만) → 원본 삭제 → `_docflow/<seq>` 삭제. gold로 안 간다. 실패가 아니다 — 끝 요약에 `건너뜀`으로 따로 세고 종료 코드를 1로 만들지 않는다(pl-18).
-  5. 미리 받기(`stage_one`)는 앞 실행의 `_docflow/<seq>`를 그 폴더 `parse/_source/manifest.jsonl`의 원본 키가 이 문서일 때만 다시 쓴다(seq는 실행마다 바뀜) — 다른 문서 것이면 지우고 새로 받는다.
+  5. 미리 받기(`stage_one`)는 문서마다 늘 컨테이너 `candidate_ready stage`를 부른다 — ETag 확인·같은 밤 중복 표시는 stage 안에 있고, staging 원본의 ETag가 같으면 stage가 다시 받지 않는다. 앞 실행의 `_docflow/<seq>`는 지우고 새로 만든다(seq는 실행마다 바뀜). 게시 뒤 원본 삭제(`drop_original`)는 staging `<sha1>.bin`과 그 ETag 파일 `<sha1>.etag`를 함께 지운다.
   6. gold 실패 → 게시한 silver·ParsingMeta 행은 그대로, 로그에만. `gold_version`이 비어 다음 `--skip-done`이 다시 고른다(파싱·게시부터 다시).
 - 파일: `deploy/host/scripts/run_pipeline.py`(`stage_one`, `parse_one`, `drop_original`, `drop_temp`, `main`) · `pipeline/extract/candidate_ready.py`(`finish`).
 - 비고: PC에서 `pipeline.cli parse --source rdb:csv:…`로 돌리면 `drop_original`이 없어 받은 원본(`_source_files`·`prepared`·staging `.bin`)이 남는다 — 지금은 손으로 지운다. DRM·암호로 건너뛴 문서는 게시가 EDW 행을 쓰지 않아(보고서로만) 다음 실행이 다시 고른다(다시 받고 다시 건너뜀).
-- QA: `tests/general/deploy/test_docs_flow.py`(`test_doc_order_and_exit_code` 표 — 건너뜀 → 게시·원본 삭제·gold 없음·종료 0) · `tests/general/deploy/test_run_pipeline.py`(`test_parse_one_skips_stage_dropped`·`test_stage_reuse_same_doc_only` 표) · 통과.
+- QA: `tests/general/deploy/test_docs_flow.py`(`test_doc_order_and_exit_code` 표 — 건너뜀 → 게시·원본 삭제·gold 없음·종료 0) · `tests/general/deploy/test_run_pipeline.py`(`test_parse_one_skips_stage_dropped`·`test_stage_always_calls_stage`·`test_drop_original_removes_etag` 표) · 통과.
 - Status: done
 
 <a id="pl-55"></a>

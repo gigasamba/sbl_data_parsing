@@ -364,19 +364,20 @@ def test_pg_count_sums_source_schemas():
     assert all(f"rag_{s}.doc" in seen[0] and f"rag_{s}.chunk" in seen[0] for s in SOURCES) and "rag.doc" not in seen[0], seen
 
 
-def test_stage_reuse_same_doc_only(tmp_path):
-    """앞 실행의 _docflow/<seq>는 그 폴더 manifest의 원본 키가 이 행일 때만 다시 쓴다 — seq는 실행마다 바뀜(다른 문서면 지우고 새로 받음)."""
+def test_stage_always_calls_stage(tmp_path):
+    """미리 받기는 늘 컨테이너 stage를 부른다(ETag 확인·같은 밤 중복 표시는 stage 안 — 다시 받을지도 stage가 ETag로 정함).
+    앞 실행의 _docflow/<seq>는 어느 문서 것이든 지우고 새로 만든다(seq는 실행마다 바뀜)."""
     import json
 
     row = {"id": "1", "s3_key": "SFDC/a/new.pdf", "original_filename": "new.pdf", "file_size": 3}
-    cases = [  # (폴더의 manifest 원본 키(None = 폴더 없음), .staged, staging 원본 있음, 기대 다시 씀)
-        ("SFDC/a/new.pdf", True, True, True),
-        ("SFDC/b/old.pdf", True, True, False),  # seq가 밀려 다른 문서의 폴더 — 지우고 받기
-        ("SFDC/a/new.pdf", False, True, False),  # 받기가 끝나지 않음
-        ("SFDC/a/new.pdf", True, False, False),  # staging 원본이 지워짐
-        (None, False, False, False),
+    cases = [  # (폴더의 manifest 원본 키(None = 폴더 없음), .staged, staging 원본 있음, stage 종료 코드)
+        ("SFDC/a/new.pdf", True, True, 0),  # 같은 문서를 받아 둔 폴더 — 그래도 stage(ETag 확인)
+        ("SFDC/b/old.pdf", True, True, 0),  # seq가 밀려 다른 문서의 폴더
+        ("SFDC/a/new.pdf", False, True, 0),  # 받기가 끝나지 않음
+        (None, False, False, 0),
+        (None, False, False, 1),  # stage 실패 — 그 문서는 실패
     ]
-    for key, staged, has_bin, want in cases:
+    for key, staged, has_bin, rc in cases:
         flow, staging = tmp_path / "flow", tmp_path / "staging"
         for p in (flow, staging):
             __import__("shutil").rmtree(p, ignore_errors=True)
@@ -391,19 +392,44 @@ def test_stage_reuse_same_doc_only(tmp_path):
         if has_bin:
             (staging / RD._staging_bin(row)).write_bytes(b"x")
         calls = []
-        RD._stage_reused.clear()
         with (
             mock.patch.object(RD, "DOCFLOW", flow),
             mock.patch.object(RD, "STAGING", staging),
             mock.patch.object(RD, "PROG", tmp_path),
-            mock.patch.object(RD, "sh", lambda cmd, timeout=0, log=None, calls=calls: calls.append((cmd, log)) or (0, "", "")),
+            mock.patch.object(RD, "sh", lambda cmd, timeout=0, log=None, calls=calls, rc=rc: calls.append((cmd, log)) or (rc, "", "")),
         ):
-            assert RD.stage_one(4, row) is True, key
-        assert (4 in RD._stage_reused) == want, (key, staged, has_bin)
-        assert (d / "stale.txt").exists() == want, key  # 다시 쓰지 않으면 앞 문서 흔적을 지움
+            assert RD.stage_one(4, row) is (rc == 0), key
+        assert not (d / "stale.txt").exists(), key  # 앞 실행 흔적은 지움
+        assert (d / ".staged").exists() is (rc == 0), key
         staged_logs = [lg for c, lg in calls if "candidate_ready" in c]
-        assert bool(staged_logs) != want, (key, calls)
-        assert all(lg == d / "stage.log" for lg in staged_logs), staged_logs  # 받기 기록은 문서 폴더마다(공유 기록에 섞이지 않게)
+        assert staged_logs == [d / "stage.log"], (key, calls)  # 늘 한 번 · 받기 기록은 문서 폴더마다
+
+
+def test_drop_original_removes_etag(tmp_path):
+    """게시 뒤 원본 삭제는 staging 원본(<sha1>.bin)과 그 ETag 파일(<sha1>.etag — candidate_ready가 씀)을 함께 지운다."""
+    row = {"s3_key": "SFDC/a/x.pdf"}
+    sha = RD._staging_bin(row)[: -len(".bin")]
+    cases = [  # (staging에 있는 파일, 지운 뒤 남는 파일)
+        ([f"{sha}.bin", f"{sha}.etag"], []),
+        ([f"{sha}.bin"], []),
+        ([f"{sha}.bin", f"{sha}.etag", "other.bin", "other.etag"], ["other.bin", "other.etag"]),
+    ]
+    for files, left in cases:
+        staging = tmp_path / "staging"
+        __import__("shutil").rmtree(staging, ignore_errors=True)
+        staging.mkdir()
+        for f in files:
+            (staging / f).write_bytes(b"x")
+        calls = []
+        with (
+            mock.patch.object(RD, "DOCFLOW", tmp_path / "flow"),
+            mock.patch.object(RD, "STAGING", staging),
+            mock.patch.object(RD, "sh", lambda cmd, timeout=0, calls=calls: calls.append(cmd) or (0, "", "")),
+        ):
+            RD.drop_original(4, row)
+        assert sorted(x.name for x in staging.iterdir()) == left, files
+        inner = _inner(calls[0])
+        assert f"/app/output/_staging/{sha}.bin" in inner and f"/app/output/_staging/{sha}.etag" in inner, inner
 
 
 def test_parse_one_skips_stage_dropped(tmp_path):

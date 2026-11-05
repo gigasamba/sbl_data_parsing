@@ -533,30 +533,15 @@ def write_doc_csv(row, path):
         w.writerow([row["id"], row["s3_key"], row["original_filename"], row["file_size"]])
 
 
-_stage_reused: set = set()  # 이미 받아 둔 파일이라 컨테이너를 부르지 않은 문서(소요 기록의 reused)
-
-
-def _staged_for(d, row):
-    """문서 폴더 d가 이 행을 받은 결과인가 — seq는 실행마다 바뀌므로 그 폴더 manifest의 원본 키(key)가 이 행의 s3_key인지 본다."""
-    try:
-        lines = (d / "parse" / "_source" / "manifest.jsonl").read_text(encoding="utf-8").splitlines()
-        return any(json.loads(ln).get("key") == row["s3_key"] for ln in lines if ln.strip())
-    except (OSError, ValueError):
-        return False
-
-
 def stage_one(seq, row):
     """문서 1개 미리 받기(candidate_ready stage — 상주 컨테이너 env 그대로). 실패하면 그 문서 파싱이 실패로 끝난다(따로 받는 길 없음).
-    앞 실행의 _docflow/<seq>는 같은 원본일 때만 다시 쓰고(받은 표지 .staged·staging 원본·manifest 키), 다른 문서 것이면 지우고 새로 받는다."""
+    늘 stage를 부른다 — ETag 확인·같은 밤 중복 표시는 stage 안에 있고, staging 원본의 ETag가 같으면 stage가 다시 받지 않는다.
+    앞 실행의 _docflow/<seq>는 지우고 새로 만든다(seq는 실행마다 바뀜)."""
     d = DOCFLOW / f"{seq}"
-    reuse = (STAGING / _staging_bin(row)).exists() and (d / ".staged").exists() and _staged_for(d, row)
-    if not reuse and d.exists():
+    if d.exists():
         _wipe(seq)
     d.mkdir(parents=True, exist_ok=True)
     write_doc_csv(row, d / "batch.csv")
-    if reuse:
-        _stage_reused.add(seq)
-        return True
     rc, _, err = sh(stage_cmd(seq), timeout=900, log=d / "stage.log")
     if rc == 0:
         (d / ".staged").touch()
@@ -674,7 +659,6 @@ def downloader(rows, order):
                     sec=round(time.time() - t_w, 1),
                     bytes=row.get("file_size"),
                     doc=_doc_name(row),
-                    reused=seq in _stage_reused,
                 )
                 classify_doc(seq, row, cache=cache)  # OCR 필요도 사전 분류(캐시 우선) → 워커 배분용
                 with _flow_lock:
@@ -772,15 +756,24 @@ def _staging_bin(row):
     return hashlib.sha1(f"{SOURCE_BUCKET}|{row['s3_key']}".encode()).hexdigest() + ".bin"
 
 
+def _staging_etag(row):
+    """받은 판의 ETag 파일 — candidate_ready가 원본 옆에 같은 이름 .etag로 씀."""
+    return _staging_bin(row)[: -len(".bin")] + ".etag"
+
+
 def drop_original(seq, row):
-    """원본 삭제(silver 게시가 성공한 뒤에만): staging 원본과 문서 폴더의 링크(_source_files). 파싱 결과(parse/)는 gold가 씀.
+    """원본 삭제(silver 게시가 성공한 뒤에만): staging 원본·그 ETag 파일(<sha1>.etag — stage가 받은 판 표시)과 문서 폴더의 링크(_source_files). 파싱 결과(parse/)는 gold가 씀.
     컨테이너(uid 10001)가 만든 파일은 호스트가 못 지우므로 docker exec(같은 공유 볼륨, 그 uid)로 지우고 잔여만 호스트가 마무리."""
     if NO_CLEANUP:
         return
     o = _img("output_root")
-    sh(pexec(f"rm -rf {_inside(seq, '_source_files')} ; rm -f {o}/_staging/{_staging_bin(row)}"), timeout=60)
+    sh(
+        pexec(f"rm -rf {_inside(seq, '_source_files')} ; rm -f {o}/_staging/{_staging_bin(row)} {o}/_staging/{_staging_etag(row)}"),
+        timeout=60,
+    )
     shutil.rmtree(DOCFLOW / f"{seq}" / "_source_files", ignore_errors=True)
     (STAGING / _staging_bin(row)).unlink(missing_ok=True)
+    (STAGING / _staging_etag(row)).unlink(missing_ok=True)
 
 
 def drop_temp(seq):
