@@ -1,5 +1,6 @@
 """host_ctl.sh — 상주 컨테이너 3개의 compose 파일을 늘 함께 붙이고, 실행 이미지(*-runtime)거나
-CODE_DIR를 주면 compose.code*.yml 셋을 더한 뒤 인자를 그대로 넘기는지. DOCKER=echo로 명령 줄만 본다(docker·설정 읽기 없음 — PC 전용)."""
+CODE_DIR를 주면 compose.code*.yml 셋을 더하고, 개발 작업 공간(option.devbox — DEVBOX_SSH_PORT)이면 compose.dev.yml(+ opencode 설정이면
+compose.opencode.yml)을 더한 뒤(prd·코드가 든 이미지면 거부) 인자를 그대로 넘기는지. DOCKER=echo로 명령 줄만 본다(docker·설정 읽기 없음 — PC 전용)."""
 
 import os
 import subprocess
@@ -13,23 +14,32 @@ from tests.general.deploy.test_trigger_gate import _bash
 SCRIPT = DEPLOY_ROOT / "deploy" / "host" / "scripts" / "host_ctl.sh"
 BASE = ["compose.pipeline.yml", "compose.data-parsing.yml", "compose.mcp-server.yml"]
 CODE = ["compose.code.yml", "compose.code.data-parsing.yml", "compose.code.mcp-server.yml"]
+DEV = ["compose.dev.yml"]
 PORTS = {"MCP_PORT": "8775", "DATA_PARSING_PORT": "8776"}  # 여러 벌은 포트가 기본값이 아니어야 함
-CASES = [  # (DATA_PIPELINE_IMAGE, CODE_DIR, 코드 덧씌우기?, ops.host.instance_name, 그 밖 env, compose 묶음 이름 — 종료 코드 2면 거부 문구)
-    ("data-pipeline:0.2.0", "", False, "", {}, "compose"),  # 코드가 든 이미지(운영) · 한 벌 — 묶음 이름은 compose 기본 그대로
-    ("data-pipeline-runtime:0.2.0", "", True, "", {}, "compose"),  # 실행 이미지(개발) — 이 코드 폴더를 붙임
-    ("data-pipeline:0.2.0", "/srv/x/code", True, "", {}, "compose"),  # CODE_DIR를 주면 그 값
-    ("data-pipeline:0.2.0", "", False, "hong", PORTS, "compose-hong"),  # 여러 벌 — 묶음 이름 끝 -<instance>
-    ("data-pipeline:0.2.0", "", False, "Hong_1", PORTS, "!ops.host.instance_name"),  # 영소문자·숫자·-만 — 시작 거부
+SSH = {"DEVBOX_SSH_PORT": "2222"}  # option.devbox.ssh_port — 개발 작업 공간
+OC = {**SSH, "DEVBOX_OPENCODE_CONFIG": "/srv/x/opencode.json"}  # + option.devbox.opencode_config
+RT = "data-pipeline-runtime:0.2.0"
+CASES = [  # (DATA_PIPELINE_IMAGE, CODE_DIR, 덧붙는 compose 파일, ops.host.instance_name, 그 밖 env, compose 묶음 이름 — 종료 코드 2면 거부 문구)
+    ("data-pipeline:0.2.0", "", [], "", {}, "compose"),  # 코드가 든 이미지(운영) · 한 벌 — 묶음 이름은 compose 기본 그대로
+    (RT, "", CODE, "", {}, "compose"),  # 실행 이미지(개발) — 이 코드 폴더를 붙임
+    ("data-pipeline:0.2.0", "/srv/x/code", CODE, "", {}, "compose"),  # CODE_DIR를 주면 그 값
+    ("data-pipeline:0.2.0", "", [], "hong", PORTS, "compose-hong"),  # 여러 벌 — 묶음 이름 끝 -<instance>
+    ("data-pipeline:0.2.0", "", [], "Hong_1", PORTS, "!ops.host.instance_name"),  # 영소문자·숫자·-만 — 시작 거부
     (
         "data-pipeline:0.2.0",
         "",
-        False,
+        [],
         "hong",
         {"MCP_PORT": "8775"},
         "!ops.services.data_parsing.data_parsing_port",
     ),  # 여러 벌인데 기본 포트 — 거부
-    ("data-pipeline:0.2.0", "", False, "hong", {"DATA_PARSING_PORT": "8776"}, "!search.server.mcp_port"),
-    ("data-pipeline:0.2.0", "", False, "hong", {**PORTS, "RUN_ENV": "prd"}, "!운영(prd)"),  # prd는 한 벌
+    ("data-pipeline:0.2.0", "", [], "hong", {"DATA_PARSING_PORT": "8776"}, "!search.server.mcp_port"),
+    ("data-pipeline:0.2.0", "", [], "hong", {**PORTS, "RUN_ENV": "prd"}, "!운영(prd)"),  # prd는 한 벌
+    (RT, "", CODE + DEV, "", SSH, "compose"),  # 개발 작업 공간 — 코드 폴더 쓰기 가능·홈 폴더
+    (RT, "", CODE + DEV + ["compose.opencode.yml"], "", OC, "compose"),  # + opencode 설정 파일
+    (RT, "", CODE, "", {"DEVBOX_OPENCODE_CONFIG": "/srv/x/opencode.json"}, "compose"),  # 포트 없이 opencode만 — 끔
+    (RT, "", [], "", {**SSH, "RUN_ENV": "prd"}, "!option.devbox.ssh_port는 개발 서버"),  # 운영은 거부
+    ("data-pipeline:0.2.0", "", [], "", SSH, "!실행 이미지(*-runtime)에서만"),  # 코드가 든 이미지는 거부
 ]
 
 
@@ -44,7 +54,7 @@ def test_dc_command():
         sf.write_text("required:\n  env: {run_env: dev}\n", encoding="utf-8")
         p = sf.resolve().as_posix()
         sp = f"/{p[0].lower()}{p[2:]}" if p[1:2] == ":" else p  # Git Bash(Windows)가 절대 경로로 보는 꼴
-        for image, code, overlay, inst, extra, project in CASES:
+        for image, code, more, inst, extra, project in CASES:
             env = {  # env 남김 — 하위 프로세스(호스트 셸이 load_settings로 받는 이름 — 시험)
                 "PATH": os.environ.get("PATH", ""),
                 "SETTINGS_FILE": sp,
@@ -65,7 +75,7 @@ def test_dc_command():
             assert r.returncode == 0, (image, code, r.stderr)
             files = [w.rsplit("/", 1)[-1] for w in r.stdout.split() if w.endswith(".yml")]
             assert r.stdout.split()[:3] == ["compose", "-p", project] and r.stdout.split()[-3:] == ["up", "-d", "mcp"], r.stdout
-            assert files == BASE + (CODE if overlay else []), (image, code, files)
+            assert files == BASE + more, (image, code, extra, files)
 
 
 STUB = "from pathlib import Path\nprint(f\"export DATA_PIPELINE_IMAGE='{Path(__file__).parents[4].name}'\")\n"  # settings_to_env.py 대역 — 루트 이름을 냄

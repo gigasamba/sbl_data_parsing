@@ -1519,7 +1519,22 @@ class CommonDev(Section):
     docker: CommonDevDocker = Field(default_factory=CommonDevDocker)
 
 
+class CommonHostDevbox(Section):
+    ssh_port: int | None = F(
+        None,
+        "DEVBOX_SSH_PORT",
+        "개발 작업 공간(선택 — 개발 서버 dev만): data-pipeline 컨테이너를 SSH 작업 공간으로 띄울 포트(호스트 네트워크 그대로 — 개발자마다 다르게)."
+        " 비우면 끔. 적으면 host_ctl.sh가 compose.dev.yml을 더함(코드 폴더 쓰기 가능·홈 폴더 <루트>/home) — prd면 거부",
+    )
+    opencode_config: str | None = F(
+        None,
+        "DEVBOX_OPENCODE_CONFIG",
+        "개발 작업 공간의 opencode 설정 파일(호스트 경로, 선택) — 읽기 전용으로 붙이고 OPENCODE_CONFIG로 가리킴. 비우면 이미지의 틀(홈의 ~/.config/opencode/opencode.json)",
+    )
+
+
 class CommonHost(Section):
+    devbox: CommonHostDevbox = Field(default_factory=CommonHostDevbox)
     doc_src: str | None = F(None, "DOC_SRC", "호스트 원본 문서 폴더 — compose가 컨테이너 /data/docs에 읽기 전용으로 붙임")
     docker: str | None = F(None, "DOCKER", "호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등 — op-10)")
     instance: str | None = F(

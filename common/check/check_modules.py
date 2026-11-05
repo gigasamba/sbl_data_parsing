@@ -244,6 +244,8 @@ def check():
         f.stem for f in (ROOT / "validation" / "e2e").glob("*.py") if f.stem != "__init__"
     }  # PC 평가 도구를 맨 이름으로 import하는 것도 잡음
     for f in sorted(ROOT.rglob("*.py")):
+        if ".venv" in f.relative_to(ROOT).parts:  # before resolve(): a worktree's .venv may be a link to another checkout's venv
+            continue
         rel = _virtual_rel(f)
         if rel is None or "/output/" in f"/{rel}" or ".venv" in rel or "__pycache__" in rel:
             continue

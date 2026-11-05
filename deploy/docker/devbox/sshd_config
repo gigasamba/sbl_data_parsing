@@ -1,0 +1,12 @@
+# sshd for the devbox workspace (dev_entry.sh): runs as the container user, key login only.
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+UsePAM no
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+# local forwarding: needed by VS Code Remote-SSH
+AllowTcpForwarding local
+X11Forwarding no
+PrintMotd no
+Subsystem sftp internal-sftp

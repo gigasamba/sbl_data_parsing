@@ -1,4 +1,4 @@
-"""host_ctl.sh init·timers·check — init: DC_ROOT 임시 루트에 settings.yaml·edw_chain.yaml·output/·backup/을 만들고(두 번 불러도 같음)
+"""host_ctl.sh init·timers·check — init: DC_ROOT 임시 루트에 settings.yaml·edw_chain.yaml·output/·backup/·home/을 만들고(두 번 불러도 같음)
 settings.yaml은 없을 때만 복사(덮지 않음), env/·code/·live는 만들지 않음. 루트는 코드 폴더의 부모(load_settings.sh). timers: 단위 파일의 @CODE_DIR@를
 코드 폴더로 채움. check: DC_FAKE로 단계를 바꿔 끼워 처음 실패에서 멈추는지·selftest는 "[판정] 통과" 줄로 판정하는지. docker·root·systemctl 없음 — PC 전용."""
 
@@ -41,7 +41,7 @@ def test_init():
         base = {"DC_ROOT": _posix(root)}
         r1 = _run(bash, ["init"], base)
         assert r1.returncode == 0, r1.stderr + r1.stdout
-        for sub in ("output", "output/_mcp_parse/jobs", "backup"):
+        for sub in ("output", "output/_mcp_parse/jobs", "backup", "home"):  # home — 개발 작업 공간(option.devbox) 홈
             assert (root / sub).is_dir(), (sub, r1.stdout)
         for gone in ("env", "code"):
             assert not (root / gone).exists(), (gone, r1.stdout)

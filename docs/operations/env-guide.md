@@ -160,6 +160,14 @@
 | `NIGHTLY_MAX_DOCS`(`ops.nightly.nightly_max_docs`) | 한 번에 처리할 새 문서 수 상한(1 이상) |
 | `NIGHTLY_DEADLINE`(`ops.nightly.nightly_stop_time`) | 마감 HH:MM(시작보다 이르면 다음 날, 시작보다 5분 넘게 뒤) — 지나면 새 문서를 받지 않고 받은 문서는 끝까지 |
 
+### 선택 기능 — 개발 작업 공간 (`option`, 파일 맨 아래)
+앱은 이 절을 읽지 않는다 — 호스트 스크립트(`host_ctl.sh`)만 쓴다. 비우면 끔. 쓰는 법: README §5-0 "개발 작업 공간".
+
+| 이름 | 기본 | 뜻 |
+|---|---|---|
+| `DEVBOX_SSH_PORT`(`option.devbox.ssh_port`) | 비움(끔) | 적으면 `data-pipeline`을 SSH 작업 공간(`devbox`)으로 띄움 — 그 포트에서 sshd(호스트 네트워크 그대로, 개발자마다 다르게) · 코드 폴더 쓰기 가능 · 홈 `<루트>/home`. 개발 서버(dev)의 실행 이미지에서만 — prd·코드가 든 이미지면 `host_ctl.sh` 종료 2 |
+| `DEVBOX_OPENCODE_CONFIG`(`option.devbox.opencode_config`) | 비움(이미지의 틀) | opencode 설정 파일의 호스트 경로 — 읽기 전용으로 붙이고 `OPENCODE_CONFIG`로 가리킴. 비우면 홈의 `~/.config/opencode/opencode.json`(첫 시작에 틀 복사 — 내부망 모델만) |
+
 ## 2. 자원·병렬 (보통 안 건드림)
 
 `PIPE_PROCS`(기본 `auto`)·`PIPE_WORKERS`·`VLM_CONCURRENCY`·`OCR_DPI`·`OCR_MAX_PAGES`·`MAX_FILE_MB`·`MEM_MAX_PCT`(90)·`CPU_MAX_LOAD`(0.9)·`EMBED_BATCH`·`EMBED_TIMEOUT`·`VLM_TIMEOUT` — 설명·기본값은 `settings.sample.yaml`. 자동 계산 계수와 호출 제한 시간·병렬 세부값은 `tuning` 절. 컨테이너 CPU·메모리 상한은 README §5-0 "자원".

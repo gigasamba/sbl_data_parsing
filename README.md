@@ -496,6 +496,24 @@ bash deploy/host/scripts/host_ctl.sh ps                                         
 - `instance_name`을 비우면 한 벌(이름 그대로). 이름은 영소문자·숫자·`-`만, 앞은 글자·숫자(틀리면 `host_ctl.sh`·앱이 시작 거부). PG 스키마·EDW 기록 표 접미는 `-`를 `_`로 바꿔 붙인다(`kim-2` → `sbl_kim_2`·`AI.ParsingMeta_kim_2`). 벌 이름은 settings.yaml에서만 읽는다(셸 변수로 덮지 않음). 컨테이너 명령은 셸 `DOCKER`가 있으면 그 값, 없으면 `ops.host.container_cli`.
 - 확인: `bash deploy/host/scripts/host_ctl.sh ps` — 그 벌의 컨테이너만 보인다. 자세한 것은 [server-guide §1-3](docs/operations/server-guide.md#1-3-한-서버에-여러-벌-띄우기개발자별).
 
+**개발 작업 공간(SSH·opencode — 개발 서버만, 선택)**
+- 네 이미지 모두 개발 도구(sshd·git·uv·ruff·mypy·pytest·ripgrep·sqlite3·tmux·vim 등)와 opencode(이미지를 만들 때 `assets/opencode/opencode`가 있으면)를 담고 있다. 앱은 이 도구를 쓰지 않는다 — 켜지 않으면 이미지는 지금처럼 돈다.
+- 켜기: 그 루트의 `settings.yaml` 맨 아래 `option.devbox.ssh_port`에 포트를 적는다(개발자마다 다르게). 그러면 `host_ctl.sh`가 `data-pipeline`을 SSH 작업 공간으로 띄운다 — 명령 `devbox`(sshd, 컨테이너 사용자 UID 10001 · 열쇠 로그인만), 코드 폴더를 쓰기 가능으로, 홈 `/home/rag` = `<루트>/home`. 실행 이미지(`*-runtime`)에서만 되고, 운영(`prd`)이면 `host_ctl.sh`가 거부한다(종료 2).
+- opencode는 내부망 모델만 쓴다(외부 모델 목록 받기·자동 업데이트 끔). 첫 시작에 홈의 `~/.config/opencode/opencode.json`에 틀이 복사되니 모델 주소·이름을 채운다. 루트에 따로 둔 설정 파일을 쓰려면 `option.devbox.opencode_config`에 그 호스트 경로를 적는다(읽기 전용으로 붙고 `OPENCODE_CONFIG`가 가리킨다).
+
+```bash
+# <루트>/settings.yaml 맨 아래
+#   option:
+#     devbox:
+#       ssh_port: 2222
+mkdir -p <루트>/home/.ssh && cp <내 공개 열쇠>.pub <루트>/home/.ssh/authorized_keys   # init이 만든 <루트>/home(10001, 700)
+chown -R 10001 <루트>/home/.ssh && chmod 700 <루트>/home/.ssh && chmod 600 <루트>/home/.ssh/authorized_keys
+bash deploy/host/scripts/host_ctl.sh up -d data-pipeline        # data-pipeline이 sshd로 뜸(호스트 네트워크 — 포트 게시 없음)
+ssh -p 2222 rag@<서버>                                           # 접속 뒤 cd /app/deploy — 코드 폴더(쓰기 가능), 컨테이너와 같은 env
+```
+- 끄기: `ssh_port`를 비우고 `host_ctl.sh up -d data-pipeline` — 다시 `idle`, 코드 폴더는 읽기 전용으로 돌아온다. 홈 폴더(열쇠·opencode 설정·작업 기록)는 남는다.
+- 작업 공간에서 고친 코드는 `mcp-data-parsing`·`mcp`가 같은 코드 폴더를 읽기 전용으로 보므로 그 컨테이너를 다시 띄우면 반영된다.
+
 ### 5-1. 버전 올리기
 
 규칙과 태그는 [release-and-patch §4](docs/operations/release-and-patch.md#4-버전).

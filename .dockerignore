@@ -11,6 +11,8 @@
 !assets
 !VERSION
 !CODE_COMMIT
+# 개발 도구 pip 판(이미지 base 단계 — PC 개발 도구와 같은 파일)
+!requirements-dev.txt
 # S9(D-018) — 서버 반입 시험만(실행기·tests/server) — 일반 시험(tests/general)·pytest 설정(conftest.py)·시험 데이터는 이미지에 안 들어감
 !tests/__init__.py
 !tests/runner.py

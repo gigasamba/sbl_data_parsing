@@ -130,7 +130,7 @@ bash deploy/host/scripts/pipe_exec.sh show-stack                         # 엔�
 
 ### 5-6. 반입 자산(`assets/`) 준비 — 이미지 빌드 전
 
-폐쇄망 서버는 첫 실행 때 모델을 받을 수 없으므로 pipeline 이미지를 빌드하기 전에 저장소 루트 `assets/`를 채운다. **이미지가 쓰는 자산은 `assets/rapidocr/*.onnx`뿐이다**(Dockerfile이 rapidocr 패키지의 `models/`로 복사). `assets/`는 git에 넣지 않는다.
+폐쇄망 서버는 첫 실행 때 모델을 받을 수 없으므로 pipeline 이미지를 빌드하기 전에 저장소 루트 `assets/`를 채운다. **이미지가 쓰는 자산은 `assets/rapidocr/*.onnx`(pipeline 이미지 — Dockerfile이 rapidocr 패키지의 `models/`로 복사)와 `assets/opencode/opencode`(네 이미지 — 개발 작업 공간의 opencode, linux-x64-baseline 실행 파일 하나)다.** `assets/`는 git에 넣지 않는다. 둘 중 없는 것이 있으면 `build_ship.sh`가 멈춘다(`ALLOW_NO_ASSETS=1`이면 빼고 빌드).
 
 ```bash
 # 1) (인터넷 되는 PC, rapidocr==3.9.2 설치) 한국어 PP-OCRv5 인식 모델을 한 번 받는다
@@ -139,7 +139,8 @@ python -c "from rapidocr import RapidOCR, LangRec, OCRVersion, ModelType; RapidO
 PYTHONPATH=. python deploy/release/assets.py pack      # → assets/ + assets/MANIFEST.json(해시·크기, 90 MB 넘으면 .partNN 조각)
 # 3) 확인
 PYTHONPATH=. python deploy/release/assets.py check
-ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는 것
+# opencode: <ASSET_SRC>/dl/opencode에 실행 파일을 두면 pack이 assets/opencode/opencode로 복사(조각으로 나누지 않음 — 없으면 "없음(건너뜀)")
+ls assets/rapidocr/*.onnx assets/opencode/opencode    # build_ship.sh가 보는 것
 ```
 
 ## 6. 보관 기준 — 디스크
