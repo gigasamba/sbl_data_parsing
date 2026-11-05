@@ -15,6 +15,7 @@ SECTIONS = ("required", "common", "extract", "transform", "load", "search", "ops
 # required — (카테고리 열쇠, 제목, [(칸 이름, 모델 경로, 필수 조건)]). 조건은 sample 주석 머리에 그대로 — "필수 · <언제·어느 앱>" 또는 "선택".
 _PG_NEED = "필수 · dev·prd(pipeline·mcp) — local은 비우면 sqlite 대역"
 _SERVER_NEED = "필수 · dev·prd(pipeline·mcp) — local은 무시(비움)"
+_WRITE_NEED = "필수 · dev·prd(pipeline — 게시) — local은 무시(비움)"
 REQUIRED_GROUPS = (
     ("env", "실행 환경", (("run_env", "common.run_env", "필수 · 모두(local·dev·prd)"),)),
     (
@@ -58,12 +59,8 @@ REQUIRED_GROUPS = (
             ("edw_database", "common.connections.rdb.database", _SERVER_NEED),
             ("edw_read_user", "common.connections.rdb.read.user", _SERVER_NEED),
             ("edw_read_password", "common.connections.rdb.read.password", _SERVER_NEED),
-            (
-                "edw_write_user",
-                "common.connections.rdb.write.user",
-                "선택 — 비우면 읽기 계정(쓰기 계정 이름·비밀번호 둘 다 비울 때) · local은 무시",
-            ),
-            ("edw_write_password", "common.connections.rdb.write.password", "선택 — 비우면 읽기 계정 · local은 무시"),
+            ("edw_write_user", "common.connections.rdb.write.user", _WRITE_NEED),
+            ("edw_write_password", "common.connections.rdb.write.password", _WRITE_NEED),
         ),
     ),
     (

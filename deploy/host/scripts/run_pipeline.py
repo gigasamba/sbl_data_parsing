@@ -56,6 +56,8 @@ SETTINGS_REQUIRED = (  # (칸 경로, 무엇에 쓰나) — 없으면 시작 거
     ("common.connections.rdb.database", "EDW DB"),
     ("common.connections.rdb.read.user", "EDW 읽기 계정"),
     ("common.connections.rdb.read.password", "EDW 읽기 계정 비밀번호"),
+    ("common.connections.rdb.write.user", "EDW 쓰기 계정 — publish의 ParsingMeta INSERT(컨테이너)"),
+    ("common.connections.rdb.write.password", "EDW 쓰기 계정 비밀번호(컨테이너)"),
     ("common.connections.object_storage.endpoint", "Object Storage 주소 — publish·받기(컨테이너)"),
     ("common.connections.object_storage.access_key", "Object Storage 키(컨테이너)"),
     ("common.connections.object_storage.secret_key", "Object Storage 비밀 키(컨테이너)"),
@@ -191,9 +193,7 @@ def configure(settings_file=None):
     SOURCE_BUCKET = _host().get(doc, "pipeline.connections.rdb.bucket")
     PG_CONTAINER = _host().get(doc, "common.host.pg_container")
     PG_USER, PG_DB = _host().get(doc, "common.connections.pg.user"), _host().get(doc, "common.connections.pg.db")
-    schema = (
-        _host().get(doc, "common.connections.pg.db_schema") or "data_parsing"
-    )  # 앱 설정 모델 기본값과 같음(EDW 쓰기 계정도 비우면 읽기 계정 — 앱이 정함)
+    schema = _host().get(doc, "common.connections.pg.db_schema") or "data_parsing"  # 앱 설정 모델 기본값과 같음
     PG_SCHEMA = _host().layout().per_instance(schema, inst)  # 앱과 같은 규칙(settings 여러 벌)
     return []
 
@@ -556,11 +556,11 @@ def stage_one(seq, row):
     if reuse:
         _stage_reused.add(seq)
         return True
-    rc, _, err = sh(stage_cmd(seq), timeout=900, log=PROG / "stage.log")
+    rc, _, err = sh(stage_cmd(seq), timeout=900, log=d / "stage.log")
     if rc == 0:
         (d / ".staged").touch()
     else:
-        log(f"doc#{seq} 받기(stage) 실패 — 이 문서는 파싱 실패로 끝남 ({err or _tail(PROG / 'stage.log', 100)})")
+        log(f"doc#{seq} 받기(stage) 실패 — 이 문서는 파싱 실패로 끝남 ({err or _tail(d / 'stage.log', 100)})")
     return rc == 0
 
 

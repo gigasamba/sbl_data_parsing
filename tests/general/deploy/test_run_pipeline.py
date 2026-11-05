@@ -208,6 +208,7 @@ def test_instance_names(tmp_path):
         ("prd", "hong", ports, None),
         ("dev", "hong", {"mcp.server.port": "8775"}, None),  # 파싱 포트가 기본값 그대로
         ("dev", "hong", {"common.runtime.data_parsing_port": "8776"}, None),  # 검색 포트가 기본값 그대로
+        ("dev", "", {"common.connections.rdb.write.user": ""}, None),  # EDW 쓰기 계정 없음 — 게시 못 함(읽기 계정으로 대신하지 않음, op-03)
     ):
         rd = _load()  # 모듈 값을 바꾸므로 따로 읽음
         model = {}
@@ -358,12 +359,14 @@ def test_stage_reuse_same_doc_only(tmp_path):
             mock.patch.object(RD, "DOCFLOW", flow),
             mock.patch.object(RD, "STAGING", staging),
             mock.patch.object(RD, "PROG", tmp_path),
-            mock.patch.object(RD, "sh", lambda cmd, timeout=0, log=None, calls=calls: calls.append(cmd) or (0, "", "")),
+            mock.patch.object(RD, "sh", lambda cmd, timeout=0, log=None, calls=calls: calls.append((cmd, log)) or (0, "", "")),
         ):
             assert RD.stage_one(4, row) is True, key
         assert (4 in RD._stage_reused) == want, (key, staged, has_bin)
         assert (d / "stale.txt").exists() == want, key  # 다시 쓰지 않으면 앞 문서 흔적을 지움
-        assert any("candidate_ready" in c for c in calls) != want, (key, calls)
+        staged_logs = [lg for c, lg in calls if "candidate_ready" in c]
+        assert bool(staged_logs) != want, (key, calls)
+        assert all(lg == d / "stage.log" for lg in staged_logs), staged_logs  # 받기 기록은 문서 폴더마다(공유 기록에 섞이지 않게)
 
 
 def test_parse_one_skips_stage_dropped(tmp_path):

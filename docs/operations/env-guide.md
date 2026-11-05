@@ -34,7 +34,13 @@
 | `tuning.ops.log.log_shutdown_sec` | 5 | 종료 때 남은 기록을 쓰는 상한(초) |
 | `tuning.search.audit.audit_max_input_bytes` · `audit_max_output_bytes` | 16384 · 65536 | MCP 감사 원문 저장 상한(바이트) |
 
-- `applog.skip_doc_info`(영구 건너뜀 문서 — pl-58)는 `ops.log.log_db_enabled`와 관계없이 쓰고 읽는다(대상 목록이 그 키를 뺌). 서버는 `migrate up --target applog`(판 `0002_applog`)가 먼저다 — 없으면 대상 목록·받기가 멈춘다. 보존 정리 대상이 아니다.
+- `applog.skip_doc_info`(영구 건너뜀 문서 — pl-58)는 `ops.log.log_db_enabled`와 관계없이 쓰고 읽는다(대상 목록이 그 키를 뺌). 서버는 `migrate up --target applog`(판 `0002_applog`)가 먼저다 — 없으면 대상 목록·받기가 멈춘다. PG 접속 칸을 채운 PC도 파싱 전에 `dbtool up --target applog`. 보존 정리 대상이 아니다.
+- **영구 건너뜀 풀기(기한 없음 — 사람이 지움).** 한 번 들어간 키는 `candidate_pick list --skip-done`이 계속 뺀다. 다시 고르게 할 때 — 새 엔진이 확장자를 받게 됐을 때(그 이유 전체), DRM 오탐·고친 파일이 같은 `s3_key`로 다시 올라왔을 때(그 키만) — DB 담당자 승인을 받고 행을 지운다. 지운 키는 다음 실행이 다시 고른다(다시 못 읽으면 다시 들어감):
+  ```sql
+  SELECT reason, count(*) FROM applog.skip_doc_info GROUP BY reason;          -- 먼저 대상 확인
+  DELETE FROM applog.skip_doc_info WHERE reason = 'unsupported_format';      -- 이유 단위(새 엔진이 받는 확장자 — 필요하면 AND file_name LIKE '%.hwpx')
+  DELETE FROM applog.skip_doc_info WHERE source_key = '<s3_key>';            -- 키 단위(DRM 오탐·고친 파일)
+  ```
 - 서버는 매일 `bash deploy/host/scripts/pipe_exec.sh migrate maintain --target applog`(PC: `python -m common.store.db.dbtool maintain --target applog`)를 예약한다 — 앞으로 2개월 파티션 준비, 보존 기한이 지난 파티션 삭제.
 - ⚠️ MCP 감사 행(`applog.mcp_log`)과 대체 파일에는 문서 원문이 들어간다(`get_doc_fulltext` 결과는 파일당 `audit_max_output_bytes`까지). `applog` DB·표와 `ops.log.log_fallback_dir`은 원본 문서와 같은 수준으로 접근을 제한한다(C-79). 대체 파일은 지우지 않으므로 디스크 회수도 운영에서 정한다.
 - 서버(dev·prd)는 값이 있는 비밀 칸이 8자 미만이면 시작을 거부한다(종료 2, 칸 경로만 찍음).
@@ -49,7 +55,7 @@
 - `run_pipeline.py`(서버 전용)도 같은 파일을 읽는다 — 필요한 칸이 없으면 칸 경로만 찍고 종료 2.
 - **모드마다 꼭 채울 칸**(sample 주석 `[필수 · …]`와 같음):
   - `local`(PC): `required.env.run_env`, 모델 접속 `required.models`(`embed_base_url`·`embed_model`·`llm_base_url`·`llm_model`·`vlm_base_url`·`vlm_model`). PG(`required.pg` 접속 다섯 칸)는 채우면 그 PG, 모두 비우면 sqlite 대역. EDW·Object Storage·토큰·배포 칸은 채우지 않는다 — 적혀 있어도 EDW 주소·계정, Object Storage 주소·키, 원천 버킷, 서버 게시 버킷은 비우고 `[settings] local(PC) — 서버 전용 칸을 무시함(비움): <칸 이름>` 한 줄을 찍는다(값 없음). 대신 `dev.local`(가짜 EDW `local_edw_sqlite_file` · 게시 폴더 `local_publish_dir` · 원본 폴더 `local_source_dir` · 새 문서 상한 `local_max_new_docs_per_run`)의 기본값을 쓴다.
-  - `dev`·`prd`(서버): 위에 더해 PG 접속 다섯 칸, EDW(`edw_host`·`edw_database`·`edw_read_user`·`edw_read_password`), `publish_bucket`, Object Storage 세 칸, 토큰(`mcp_token`·원문 도구를 쓰면 `fulltext_sign_key`), 배포 네 칸(`pipeline_image`·`mcp_image`·`host_docs_dir`·`pg_container_name`). `pg_schema`는 비우면 `data_parsing`, EDW 쓰기 계정은 둘 다 비우면 읽기 계정으로 게시한다.
+  - `dev`·`prd`(서버): 위에 더해 PG 접속 다섯 칸, EDW(`edw_host`·`edw_database`·`edw_read_user`·`edw_read_password`·`edw_write_user`·`edw_write_password`), `publish_bucket`, Object Storage 세 칸, 토큰(`mcp_token`·원문 도구를 쓰면 `fulltext_sign_key`), 배포 네 칸(`pipeline_image`·`mcp_image`·`host_docs_dir`·`pg_container_name`). `pg_schema`는 비우면 `data_parsing`. EDW 쓰기 계정은 파이프라인(게시)에 필수다(읽기 계정으로 대신하지 않음 — 검색 MCP는 쓰지 않음).
 - 라이브러리가 읽는 env(`TZ`·`OMP_NUM_THREADS`·`HF_HUB_OFFLINE`·`TESSDATA_PREFIX` 등 — 허용 목록 `common.config.settings.LIB_ENV_NAMES`)는 `ops.runtime.library_env` 사전에 적는다. 목록 밖 이름은 검증 오류.
 
 ### 0-2. 한 번 실행에만 다른 값 — `--set 이름=값`(서버 포함)
@@ -140,7 +146,7 @@
 |---|---|
 | `OS_ENDPOINT`·`OS_REGION`·`OS_ACCESS_KEY`·`OS_SECRET_KEY`·`OS_VERIFY_TLS` | `required.object_storage`(`object_storage_endpoint`·`object_storage_region`·`object_storage_access_key`·`object_storage_secret_key`·`object_storage_verify_tls`) — 서버만. PC(local)는 적혀 있어도 주소·키를 비우고 경고(게시는 `dev.local.local_publish_dir` 폴더). `object_storage_region` 비우면 `us-east-1` · `object_storage_verify_tls` 비우면 `1`, 사내 CA면 CA 파일 경로(`0`이면 검증 끔 — 경고) |
 | `RDB_CONNECT_KWARGS` | EDW 연결 추가 인자(JSON — 비밀) |
-| `RDB_WRITE_USER`·`RDB_WRITE_PASSWORD`(`required.edw.edw_write_user`·`edw_write_password`) | 쓰기 계정 — ParsingMeta 게시(INSERT·UPDATE)만, 파이프라인 이미지에만. 둘 다 비우면 게시도 읽기 계정을 쓴다(검색 MCP는 늘 읽기 계정만) · PC는 무시 |
+| `RDB_WRITE_USER`·`RDB_WRITE_PASSWORD`(`required.edw.edw_write_user`·`edw_write_password`) | 쓰기 계정 — ParsingMeta 게시(INSERT·UPDATE)만, 파이프라인 이미지에만. 서버(dev·prd) 필수 — 비우면 게시 접속이 빠진 칸으로 거부되고 `run_pipeline`이 시작하지 않는다(검색 MCP는 늘 읽기 계정만) · PC는 무시 |
 | `PM_BUCKET`·`PM_PREFIX`(`required.publish.publish_bucket`·`publish_prefix`) | silver 게시 위치 — 서버: 버킷 이름(원천 원본 버킷과 달라야 함) · PC(local): 이 칸은 무시하고 `dev.local.local_publish_dir`(`LOCAL_PM_DIR` — 폴더 경로, 기본 `valid_env/object_storage/Parsing_Result`, 처음 게시할 때 만듦)에 쓴다. `publish_prefix`는 버킷(폴더) 안 경로 접두(비우면 맨 위). ⚠ **첫 게시 전 EDW 표를 DBA가 한 번 만든다**: [`parsing_meta_mssql.sql`](parsing_meta_mssql.sql)(코드는 표를 만들지 않음 — 없으면 첫 INSERT에서 실패) |
 | `PM_TABLE`(`required.edw.parsing_meta_table`) | 게시할 EDW 표(비우면 `AI.ParsingMeta`) — PC 가짜 EDW는 표 이름 `ParsingMeta` 고정(이 칸 안 봄) |
 | `EDW_CHAIN_FILE`(`ops.paths.edw_chain_file`) | EDW 조인 사슬 파일 — 적재와 검색 MCP가 같은 칸을 읽는다. 비우면 코드의 `resources/config/edw_chain.yaml`, 서버 사본을 쓰려면 `/etc/rag/edw_chain.yaml`. 쓰는 법: [release-and-patch §8-6](release-and-patch.md#8-6-edw-조인-사슬-파일-고쳐-쓰기서버--pl-29) |

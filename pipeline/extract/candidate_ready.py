@@ -301,7 +301,9 @@ def _dedup(local, names, dedup_dir, state):
             if n in man:
                 man[n] = {**man[n], "sha256": keep[n]}
         _write_manifest(state, man.values())
-    rest = sorted(f.name for f in Path(local).iterdir() if f.is_file() and f.name != ".gitkeep" and f.name not in dropped)
+    rest = sorted(
+        f.name for f in Path(local).iterdir() if f.is_file() and not CP._hidden(f) and f.name != ".gitkeep" and f.name not in dropped
+    )
     (Path(dedup_dir) / "keep.txt").write_text("\n".join(rest) + "\n", encoding="utf-8")
     return left
 

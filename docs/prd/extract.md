@@ -13,7 +13,7 @@
 ### 규칙
 1. 파싱 입력(`--source`, 설정 `extract.source.source_input_location`)은 둘 중 하나여야 한다 — 폴더, 또는 `rdb:csv:<경로>`(문서 위치 표 CSV). 그 밖의 값이면 → 오류로 멈춘다.
 2. `rdb:csv`의 칸 이름은 설정 `tuning.extract.source_columns`가 정한다 — 기본 `source_column_doc_id`=`id`, `source_column_storage_key`=`s3_key`, `source_column_filename`=`original_filename`, `source_column_file_size`=`file_size`, `source_column_content_version`=`content_version_id`.
-3. 대상 목록은 컨테이너 안 `python -m pipeline.extract.candidate_pick list`가 FileStorageMap에서 고른다(파일 이름 키워드 `--filter`, 작은 파일부터 — 규칙은 [ops.md#pl-10](ops.md#pl-10)·[pl-23](ops.md#pl-23)). 서버 러너 `run_pipeline.py`는 그 목록 파일을 읽어 문서마다 `batch.csv`(한 줄)를 만든다.
+3. 대상 목록은 컨테이너 안 `python -m pipeline.extract.candidate_pick list`가 FileStorageMap에서 고른다(파일 이름 키워드 `--filter`, 작은 파일부터 — 규칙은 [ops.md#pl-10](ops.md#pl-10)·[pl-23](ops.md#pl-23)). 서버 러너 `run_pipeline.py`는 그 목록 파일을 읽어 문서마다 `batch.csv`(한 줄)를 만든다. 끝난 문서(ParsingMeta)·영구 건너뜀(`skip_doc_info`)을 뺄 때는 FileStorageMap `s3_key`를 그대로 비교한다 — 그 두 표의 원본 키는 `s3://버킷/` 앞머리가 없는 키라, FileStorageMap `s3_key`도 앞머리 없이 적혀 있어야 빠진다(앞머리가 붙은 행은 받기는 되지만 매번 다시 고름).
 4. 받기는 staging 하나다: `python -m pipeline.extract.candidate_ready stage --csv <batch.csv> --out <문서 폴더> --prepared <준비 폴더>`가 원본을 `extract.source.source_staging_dir` 폴더(`<sha1(버킷|키)>.bin`)에 받고(같은 크기 파일이 있으면 다시 받지 않음), 문서 폴더 `_source_files/`에 하드 링크로 놓은 뒤 같은 단계에서 중복·거르기([pl-02](#pl-02))까지 해 파싱할 이름을 `parse/_source/only.txt`에 적는다. 파싱은 `pipeline.cli parse --staged`로 그 목록만 읽는다. staging 칸이 비었거나 받지 못한 문서는 멈춘다(따로 받는 길 없음). PC의 `pipeline.cli parse --source`도 같은 함수(`stage_batch`)를 부른다.
 
 ### QA
@@ -36,7 +36,7 @@
 5. 켜져 있으면 이미지·스캔 PDF 쪽마다 4방향(0·90·180·270도) RapidOCR 점수를 스레드 4개로 동시에 재고 가장 높은 방향으로 돌린다 — 같으면 0도, 모두 0이면 그대로. 기록은 `output/prepared/rotation.csv`(파일·쪽·각도·네 방향 점수·회전 전 원본 sha256 `orig_sha256`).
 6. DRM·암호 파일은 감지해서 표시하고 건너뛴다(상태 `skipped_drm`, `prepared/_records/skipped.jsonl`). 복호화는 흐름 안에서 하지 않고 수동 명령 `python -m pipeline.extract.protected_docs decrypt`로만 한다.
 7. 압축 파일(zip)은 지원하지 않는다고 표시한다. 처리 엔진 없는 확장자(`registry.engines_for`가 빈 것)는 두 곳에서만 거른다 — 받기 전 `candidate_pick.rdb_pick`(`_filter_unsupported_rows` — rdb:csv 대상 고르기), 받은 뒤 `filter_and_rotate`(`unsupported_*`). 파일 크기 상한(`extract.max_source_file_mb`)은 파싱(`parse_engines`)이 본다.
-8. 중복·DRM·암호·미지원으로 건너뛴 문서는 문서마다 `applog.pipe_event`에 한 행을 남긴다(`candidate_ready.skip_event` — 단계 `extract.skip`, `doc_id` = 파일 이름, `status=skip`, `err_kind=doc`, `err`·`metrics.reason` = 이유 `dup_batch`·`dup_done`·`drm_*`·`encrypted_*`·`unsupported_*`, 중복이면 `metrics.dup_of` = 남긴 문서 — 같은 묶음은 파일 이름, ParsingMeta는 원본 키). 받기 전(`rdb_pick`)에 뺀 지원 안 하는 확장자도 같은 행을 남긴다. 함수는 `pipeline/shared/runtrace.py` `skip_event`. 다시 받아도 같은 결과인 문서는 [pl-58](#pl-58).
+8. 중복·DRM·암호·미지원으로 건너뛴 문서는 문서마다 `applog.pipe_event`에 한 행을 남긴다(`pipeline/shared/runtrace.py` `skip_event` — 단계 `extract.skip`, `doc_id` = 파일 이름, `status=skip`, `err_kind=doc`, `err`·`metrics.reason` = 이유 `dup_batch`·`dup_done`·`drm_*`·`encrypted_*`·`unsupported_*`, 중복이면 `metrics.dup_of` = 남긴 문서 — 같은 묶음은 파일 이름, ParsingMeta는 원본 키). 받기 전(`rdb_pick`)에 뺀 지원 안 하는 확장자도 같은 행을 남긴다. 다시 받아도 같은 결과인 문서는 [pl-58](#pl-58).
 
 ### QA
 - `tests/server/pipeline/test_stage_batch.py`(받기 → 중복 제외 → 거르기 사례 표: 같은 묶음 중복·ParsingMeta 중복(SQLite EDW 대역)·`skipped_dup` 행만 있는 내용·같은 키 재처리·DRM·미지원·보통 문서, 건너뜀 행) · `tests/server/common/test_pm_versions.py::test_done_by_sha` · `tests/server/pipeline/test_publish_parse.py::test_stage_dropped_docs`(받기가 뺀 문서 → `skipped_dup` 행·DRM은 행 없음) · `tests/server/pipeline/test_prepare.py`(`test_rotation_off_by_default` 등) · `tests/general/pipeline/test_dedup.py`(`run_folder` 대표 고르기).

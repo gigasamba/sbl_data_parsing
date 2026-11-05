@@ -77,7 +77,7 @@ pgvector의 표는 코드가 실행 중에 만들지 않는다. 모두 Alembic �
 | 갈래(`--target`) | 스키마 | 끝 판 |
 |---|---|---|
 | `search` | 기준 스키마(`required.pg.pg_schema`) + 원천 스키마 5벌 `<기준>_{sfdc,crms,las,faq,other}` | `0005_search`(0001→0005 차례로) |
-| `applog` | `applog`(고정 이름) | `0001_applog` |
+| `applog` | `applog`(고정 이름) | `0002_applog`(0001→0002 — 0002는 영구 건너뜀 표 `skip_doc_info`) |
 | `master` | `<기준>_master` | `0001_master` — 채우기는 `master load` |
 
 | 명령 | 하는 일 |
@@ -195,6 +195,7 @@ tuning:
   ```
   게시 폴더에 `<prefix>/<출처>/<원본 경로>/<파일명>_<날짜>.md`로 쓴다(게시 폴더는 원본 목록에서 빠진다). 원본 폴더(`ops.paths.source_docs_dir`)·파싱 원본(`extract.source.source_input_location` — 폴더 또는 `rdb:csv:<경로>`)·PG 대체 폴더(`dev.pg_standin.pg_standin_dir`)도 상대 경로를 받는다.
   `run_env: local`은 서버 전용 칸(`required.edw.edw_host`·EDW 계정, `required.object_storage.*`, 원천 버킷, `required.publish.publish_bucket`)을 **무시한다** — 적혀 있어도 비우고 `[settings] local(PC) — 서버 전용 칸을 무시함(비움): …` 한 줄에 칸 이름만 찍은 뒤 시작한다. 그래서 PC는 실제 EDW·Object Storage에 닿지 않는다. 서버(dev·prd)는 이 칸들을 쓰고 `dev.local`은 읽지 않는다.
+- **PG 접속 칸을 채운 PC는 파싱 전에 한 번 `.venv/bin/python -m common.store.db.dbtool up --target applog`** — 받기가 DRM·암호·지원 안 함 문서를 영구 건너뜀 표 `applog.skip_doc_info`에 쓰는데, 표가 없으면 그 문서에서 파싱이 멈춘다(PG를 비운 PC는 SQLite 대역이 표를 만든다). ④의 `up --target all`에도 들어 있다.
 - PG 접속 칸(`required.pg`의 `pg_host`·`pg_port`·`pg_database`·`pg_user`·`pg_password` 다섯 칸)은 **모두 채우거나 모두 비운다.** 일부만 채우면 채울 자리를 알려 주고 멈춘다. PC에서 host·password가 둘 다 비면 SQLite 대역(`output/pg_standin/`)으로 돌고 첫 줄에 `WARNING: PG 접속 정보 없음`을 찍는다(서버는 멈춤).
 
 ### 4-3. 점검
@@ -230,6 +231,7 @@ cp valid_env/edw/edw.sqlite output/demo/edw.sqlite   # EDW 대역 사본 — 파
 .venv/bin/python -m pipeline.cli --set RDB_SQLITE=output/demo/edw.sqlite parse --source $SRC --src output/demo/prepared
 ```
 
+- PG 접속 칸을 채웠다면 이 단계 전에 `dbtool up --target applog`를 한 번(§4-2 — 영구 건너뜀 표).
 - `--source`는 원본 폴더, `--src`는 준비된 파일이 놓이는 곳(`--src`만 주면 준비된 폴더로 보고 가져오기·중복 제거를 건너뜀).
 - EDW(`AI.ParsingMeta`)를 못 읽으면 서버는 종료 4, PC(local)는 받은 목록 그대로. PC는 `--set RDB_SQLITE`를 빼면 `valid_env/edw/edw_copy.sqlite`를 쓴다(위처럼 주면 그 사본).
 - 돌 문서가 없으면 `[parse] 이번 실행 0건 …` 한 줄을 남기고 종료 0.
@@ -252,7 +254,7 @@ cp valid_env/edw/edw.sqlite output/demo/edw.sqlite   # EDW 대역 사본 — 파
 ```bash
 .venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle output/demo/bundle --create-extension
 .venv/bin/python -m common.store.db.dbtool master load --schema demo
-.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0005_search · applog 0001_applog · master 0001_master
+.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0005_search · applog 0002_applog · master 0001_master
 .venv/bin/python -m common.store.db.dbtool check --target all      # 기대: 차이 없음
 ```
 
@@ -531,7 +533,7 @@ bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp   
 | `required.pg.pg_host`·`pg_port`·`pg_database`·`pg_user`·`pg_password`·`pg_schema` | 검색 DB(pgvector) — `pg_schema`는 비우면 `data_parsing` | DB 담당 | `pg.example.local` · `5432` · `rag` · `rag_app` · `<비밀>` · (비움) | PC·dev·prd | `host_ctl.sh check` ① check_env · ③ migrate check |
 | `required.models.embed_base_url`·`embed_model`·`embed_api_key` | 임베딩 모델(`embed_model`은 적재·검색 때 같아야 함) | 모델 담당(내부망 주소) | `http://llm.example.local:8000/v1` · `<모델>` · `<비밀>` | PC·dev·prd | `host_ctl.sh check` ② ping_models |
 | `required.models.llm_*`·`vlm_*` | LLM·VLM 모델 | 모델 담당 | `http://llm.example.local:8001/v1` · `<모델>` | dev·prd | `host_ctl.sh check` ② ping_models |
-| `required.edw.edw_host`·`edw_port`·`edw_database`·`read_*`·`write_*` | 회사 DB(EDW) 접속 — 읽기 계정(원천 목록·ParsingMeta 조회·`query_edw`), 쓰기 계정(ParsingMeta 게시 — 둘 다 비우면 읽기 계정으로 게시) · `edw_port`는 비우면 1433 | DB 담당 | `edw.example.local` · (비움) · `EDW` · `<계정>` · `<비밀>` | dev·prd | `run_pipeline` 시작(빠지면 칸 이름을 찍고 멈춤) · `pipe_exec.sh publish --dry-run`(④) |
+| `required.edw.edw_host`·`edw_port`·`edw_database`·`edw_read_*`·`edw_write_*` | 회사 DB(EDW) 접속 — 읽기 계정(원천 목록·ParsingMeta 조회·`query_edw`), 쓰기 계정(ParsingMeta 게시 — 필수, 읽기 계정으로 대신하지 않음) · `edw_port`는 비우면 1433 | DB 담당 | `edw.example.local` · (비움) · `EDW` · `<계정>` · `<비밀>` | dev·prd | `run_pipeline` 시작(빠지면 칸 이름을 찍고 멈춤) · `pipe_exec.sh publish --dry-run`(④) |
 | `required.edw.parsing_meta_table` | 게시 행을 쓸 EDW 표 — 비우면 `AI.ParsingMeta` | DB 담당 | (비움) | dev·prd | publish `--apply` |
 | `dev.local.*` | PC 전용 값(가짜 EDW·게시 폴더·원본 폴더·새 문서 상한) — **서버는 읽지 않음**(`local_edw_sqlite_file`이 적혀 있으면 EDW를 쓸 때 거부) | — | (sample 그대로) | PC만 | — |
 | `required.publish.publish_bucket`·`publish_prefix` | silver 게시 위치 — 버킷(원천 원본 버킷과 달라야 함)과 그 안 경로 접두(PC는 `publish_bucket` 대신 `dev.local.local_publish_dir`) | 운영 담당 | `rag-silver` · `parse` | dev·prd | `run_pipeline` 시작 · publish 미리보기 |

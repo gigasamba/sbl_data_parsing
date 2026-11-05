@@ -347,7 +347,7 @@ def faq_sync(reset, out):
     from common.core.paths import child_env
     from pipeline.parse_steps import run_step
 
-    out = Path(out)
+    out = Path(out).resolve()  # 자식은 APP_ROOT에서 돈다(상대 경로가 다른 곳을 가리키지 않게)
     out.unlink(missing_ok=True)
     try:
         rc = run_step(

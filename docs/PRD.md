@@ -13,7 +13,7 @@
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
 |---|---|---|---|---|
 | 문서 목록은 EDW 표 `AI.FileStorageMap`에서 읽는다(`id`·`s3_key`·`original_filename`·`file_size`) — 컨테이너 안 `candidate_pick list`(서버 러너 `run_pipeline.py`가 부름)가 파일 이름 키워드(`--filter`)로 거르고 작은 파일부터 | 목록의 기준은 EDW다. Object Storage를 직접 훑지 않는다 | done | [pl-01](prd/extract.md#pl-01) |  |
-| 새 문서만 고른다 — 목록에서 EDW `AI.ParsingMeta`에 끝난 행(`ok`·`partial`·`skipped_dup`)이 있는 원본 키(`s3_key`)를 뺀다. `pipeline/extract/candidate_pick.py` `done_keys` 하나가 EDW를 읽기 계정으로 한 번 읽음(서버는 `list --skip-done`, PC 직접 파싱은 `unparsed`) | 끝난 문서를 다시 파싱하지 않는다. `not_parsed`·실패·기록 없음(옛 값 `skipped_disk_cap` 행 포함 — 더 쓰지 않음)은 다시 고른다(사용자 11-01). 영구 건너뜀 문서도 뺀다([pl-58](prd/extract.md#pl-58)) 서버에서 EDW를 못 읽으면 시작하지 않는다(종료 4) | done | [pl-23](prd/ops.md#pl-23) |  |
+| 새 문서만 고른다 — 목록에서 EDW `AI.ParsingMeta`에 끝난 행(`ok`·`partial`·`skipped_dup`)이 있는 원본 키(`s3_key`)를 뺀다. `pipeline/extract/candidate_pick.py` `done_keys` 하나가 EDW를 읽기 계정으로 한 번 읽음(서버는 `list --skip-done`, PC 직접 파싱은 `unparsed`) | 끝난 문서를 다시 파싱하지 않는다. `not_parsed`·실패·기록 없음(옛 값 `skipped_disk_cap` 행 포함 — 더 쓰지 않음)은 다시 고른다(사용자 11-01). 영구 건너뜀 문서도 뺀다([pl-58](prd/extract.md#pl-58)). 서버에서 EDW를 못 읽으면 시작하지 않는다(종료 4) | done | [pl-23](prd/ops.md#pl-23) |  |
 | 파일은 Object Storage 버킷에서 `s3_key`로 받는다. 파싱 입력은 폴더 또는 목록 파일(`rdb:csv:<경로>`) 둘뿐 | 길을 하나로 | done | [pl-01](prd/extract.md#pl-01) |  |
 | 미리 받기(staging) — `run_pipeline`이 파싱보다 앞서 문서를 최대 20개(`ops.run_pipeline.staging.staging_max_docs`)까지 컨테이너 안 `candidate_ready stage`로 받아 `_staging`에 둔다. 원본을 받는 길은 이것 하나 — 같은 단계에서 같은 내용 하나만·형식·DRM·암호 거르기까지 하고 파싱은 남은 문서만 읽는다 | 다운로드를 기다리느라 파싱 워커가 놀지 않게. 받기에 실패한 문서는 파싱 실패로 끝난다(따로 받는 길 없음) | done | [pl-01](prd/extract.md#pl-01) |  |
 | 병렬 다운로드 — 목록 파일의 여러 파일을 동시에 받는다(`candidate_ready stage`의 staging 받기 — `extract.source.source_fetch_threads`, 기본 1개) | 큰 목록을 빨리 받는다. 받기는 네트워크 대기라 CPU를 거의 안 쓴다 | done | [pl-48](prd/extract.md#pl-48) |  |
@@ -80,7 +80,7 @@
 | ParsingMeta에는 INSERT만 — 키 (`source_system`, `source_key` = 원본 전체 키)가 이미 있으면 건너뜀. UPDATE는 적재 때 `loaded_at`·`gold_version`뿐 | — | done | [pl-09](prd/load.md#pl-09) |  |
 | DRM(`skipped_drm`)·실패(`failed`) 문서는 EDW에 쓰지 않고 `output/publish/excluded_<날짜>.md` 보고서에만. 업로드 대상 상태는 `tuning.load.publish.publish_upload_statuses`(기본 ok·partial) | 깨진 결과가 다른 팀에 넘어가지 않게 | done | [pl-09](prd/load.md#pl-09) |  |
 | 게시 버킷과 원천 원본 버킷이 같은지는 검사하지 않는다 — `required.publish.publish_bucket`을 다르게 두는 것은 운영자 몫 | 늘 꺼져 있던 검사 | done | [pl-09](prd/load.md#pl-09) |  |
-| 게시는 늘 하고 게시·EDW 칸은 settings.yaml `required` 한곳(`publish`·`object_storage`·`edw`) — 서버는 접속 칸, PC(`local`)는 채우지 않음(`dev.local` 게시 폴더·가짜 EDW — op-14) | `run_pipeline`는 문서마다 늘 게시하고 게시 위치·Object Storage·EDW 읽기 칸이 비면 시작을 거부한다(쓰기 계정은 비우면 읽기 계정) | done | [pl-26](prd/load.md#pl-26) |  |
+| 게시는 늘 하고 게시·EDW 칸은 settings.yaml `required` 한곳(`publish`·`object_storage`·`edw`) — 서버는 접속 칸, PC(`local`)는 채우지 않음(`dev.local` 게시 폴더·가짜 EDW — op-14) | `run_pipeline`는 문서마다 늘 게시하고 게시 위치·Object Storage·EDW 읽기·쓰기 계정 칸이 비면 시작을 거부한다 | done | [pl-26](prd/load.md#pl-26) |  |
 | FAQ를 다시 올리면 gold faq의 문서·청크를 모두 지우고 지금 FAQ 파일 전체를 다시 적재(판을 잇지 않음) | pl-13 "지우지 않음"의 FAQ 예외(등급 A) | done | [pl-41](prd/load.md#pl-41) |  |
 | 정형 DB(`struct` 스키마 — 마스터·문서 대장·표·칸)를 두지 않는다. 엔진 구성은 파일만 | 쓰이지 않았다. 서버에 남은 표는 DB 담당자가 정리 | done | [pl-08](prd/load.md#pl-08) |  |
 | 문서 대장(`doc_registry`)·숨김(`doc_hidden`)·원천 삭제 처리를 두지 않는다. 서버는 PG가 없으면 로컬 대체 DB로 바꿔 타지 않고 멈춘다 | 빼야 할 문서는 원천에서 지우거나 사람이 SQL로 | done | [pl-12](prd/load.md#pl-12) |  |

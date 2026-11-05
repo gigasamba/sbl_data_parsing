@@ -71,6 +71,7 @@ def test_stage_batch_order_and_skip_log():
     want_left = [n for n, _, reason, _ in CASES if reason is None]
     assert sorted(left) == sorted(want_left) and only == left, left
     assert "old.txt" not in keep_txt and "a(1).txt" not in keep_txt and "drm.pdf" in keep_txt  # 게시가 중복을 skipped_dup로 씀
+    assert ".DS_Store" not in keep_txt
     assert LEFTOVER[0] in keep_txt  # 묶음 밖 파일은 중복으로 표시하지 않음(앞 실행 문서가 skipped_dup로 굳지 않게)
     assert never == {n for n, _, reason, _ in CASES if SD.reason_of(n, reason)}, never  # 영구 이유(DRM·지원 안 함)만 skip_doc_info(pl-58)
     skips = {r["doc_id"]: r for r in rows if r["stage"] == "extract.skip"}
@@ -89,6 +90,7 @@ def _run(root):
     for name, body, _, _ in CASES:
         (src / name).write_bytes(body)
     (src / LEFTOVER[0]).write_bytes(LEFTOVER[1])
+    (src / ".DS_Store").write_bytes(b"same")  # 숨은 파일 — 받기 목록과 같이 keep.txt에도 없음(CP._hidden)
     os.utime(src / LEFTOVER[0], (2_000_000_000, 2_000_000_000))  # 묶음 안이었다면 대표로 뽑혔을 시각
     local, left, _, only = CR.stage_batch(str(src), root / "out", prepared, 0, _filter, done={LEFTOVER[0]})
     keep_txt = (root / "out" / "dedup" / "keep.txt").read_text(encoding="utf-8").split()

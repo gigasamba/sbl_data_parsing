@@ -59,7 +59,7 @@ flowchart TD
 | 5 | extract | 중복 제외(받은 뒤) | 이번 배치 안에서 sha256이 같은 파일은 하나만 남기고, 남긴 문서의 sha256을 `manifest.jsonl`에 적음(원본이 지워진 뒤 게시가 씀) | 컨테이너 | `pipeline/extract/candidate_ready.py` → `pipeline/extract/deduplication.py` | `_dedup()` → `run_folder()` |
 | 6 | extract | 중복 제외(받은 뒤) | sha256이 같은 끝난 문서(ParsingMeta)가 원본 위치가 다르면 건너뜀(같은 위치면 다시 돌리는 것이라 남김) | 컨테이너 | `pipeline/extract/candidate_ready.py` → `pipeline/extract/candidate_pick.py` → `common/store/parsing_meta_db.py` | `_dedup()` → `done_by_sha()` → `done_by_sha()` |
 | 7 | extract | 거르기(받은 뒤) | DRM·암호·미지원 형식을 거르고(DRM은 표시만 하고 건너뜀) 방향을 바로잡아 `prepared/`로, 지난 이름을 `only.txt`에 | 컨테이너(자식) | `pipeline/extract/candidate_ready.py` → `pipeline/extract/filter_and_rotate.py` | `stage_batch()` → `main()` |
-| 8 | extract | 건너뜀 기록 | 4~7행에서 뺀 문서마다 `applog.pipe_event`에 `extract.skip` 행. 7행이 뺀 영구 이유(지원 안 함·확장자 없음·DRM·암호)는 `applog.skip_doc_info`에도(원본 키당 한 행 — 3행이 다음 밤에 뺌). 중복·파싱 실패는 쓰지 않음 | 컨테이너 | `pipeline/extract/filter_and_rotate.py` → `pipeline/shared/runtrace.py` · `pipeline/extract/candidate_ready.py` → `pipeline/extract/skip_docs.py` | `_record_skip()` → `skip_event()` · `_record_filtered()` → `record()` |
+| 8 | extract | 건너뜀 기록 | 4~7행에서 뺀 문서마다 `applog.pipe_event`에 `extract.skip` 행. 7행이 뺀 영구 이유(지원 안 함·확장자 없음·DRM·암호)는 `applog.skip_doc_info`에도(원본 키당 한 행 — 3행이 다음 밤에 뺌). 중복·파싱 실패는 쓰지 않음 | 컨테이너(자식) | `pipeline/extract/filter_and_rotate.py` → `pipeline/shared/runtrace.py` · `pipeline/extract/candidate_ready.py` → `pipeline/extract/skip_docs.py` | `_record_skip()` → `skip_event()` · `_record_filtered()` → `record()` |
 | 9 | extract | 레인 나누기 | 받은 원본으로 light·medium·vlm 중 하나(캐시가 있으면 컨테이너를 부르지 않음) | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/extract/doc_lane_group.py` | `classify_doc()` → `doc_lane_group()` |
 | 10 | transform | 레인 워커 | 레인 대기열에서 문서 하나를 꺼냄(구조화 대기가 많거나 MCP 업로드 중이면 쉼) | 호스트 | `deploy/host/scripts/run_pipeline.py` | `lane_worker()` → `pick_lane()` |
 | 11 | transform | 문서 1건 파싱 시작 | 레인별 값으로 `pipeline.cli parse --staged` 명령을 만들어 실행(제한 시간 45분 — 실패·시간 초과면 `sweep_cmd()`로 그 문서 표지를 가진 컨테이너 안 프로세스를 끔). 받기 단계가 중복·DRM·암호·지원 안 함으로 뺀 문서(`only.txt`가 빔)는 파싱하지 않고 `건너뜀`으로 28행 게시로 바로 넘김(실패로 세지 않음) | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` | `parse_one()` → `parse_cmd()`·`sweep_cmd()` |
@@ -415,7 +415,7 @@ flowchart TD
 | `required.publish.publish_prefix`(`PM_PREFIX`) | 버킷 안 결과 경로 접두 | 같음 |
 | `required.object_storage.*`(`object_storage_endpoint`·`object_storage_access_key`·`object_storage_secret_key`) · `common.connections.object_storage.*`(`object_storage_region`·`object_storage_verify_tls` — 기본값 있음) | S3 호환 접속 | 쓰지 않음(적혀 있어도 비움) |
 | `required.edw.parsing_meta_table`(`PM_TABLE`) | 비우면 `AI.ParsingMeta` | 비움 |
-| `required.edw.edw_host`·`edw_port`·`edw_database`·`edw_write_user`·`edw_write_password` | ParsingMeta INSERT용 EDW 접속 — 쓰기 계정 두 칸을 비우면 읽기 계정을 씀 | 쓰지 않음(적혀 있어도 비움) |
+| `required.edw.edw_host`·`edw_port`·`edw_database`·`edw_write_user`·`edw_write_password` | ParsingMeta INSERT용 EDW 접속 — 쓰기 계정 필수(비우면 게시 거부, 읽기 계정으로 대신하지 않음) | 쓰지 않음(적혀 있어도 비움) |
 | `dev.local.local_edw_sqlite_file`(`RDB_SQLITE`) | 비움(서버에 있으면 실패) | 가짜 EDW sqlite 파일 하나(모든 표) — 비우면 `valid_env/edw/edw_copy.sqlite` |
 
 `--apply`인데 `required.publish.publish_bucket`이 비면 멈춘다(dry-run은 미리보기 값으로 표만 냄).
@@ -539,7 +539,7 @@ flowchart TD
 | 문서×단계 | `common.core.span.span()` | `applog.pipe_event` 한 행(`extract.plan`·`extract.parse`·`transform.represent`·`transform.figures`·`embed.bundle`·`proc.run` 등). run_id가 없으면 아무것도 안 함 |
 | 보내기 | `common/store/logsink.py` | 메모리 큐 → 배치 INSERT(`ops.log.log_db_enabled`). DB가 안 되면 `output/logs/<날짜>_<pid>.jsonl`(`paths.LOG_DIR`)에 대신 씀 |
 | JSON 로그 | `common/core/jsonlog.py` | run_id·span_id 문맥, 비밀값 가림 |
-| run_pipeline 진행 | `deploy.host.scripts.run_pipeline.log()`·`deploy.host.scripts.run_pipeline.mark()`·`deploy.host.scripts.run_pipeline.depth()` | `<작업 폴더>/batch_progress/progress.log`·`doc_<seq>.log`·`queue_depth.jsonl`·`stage.log` |
+| run_pipeline 진행 | `deploy.host.scripts.run_pipeline.log()`·`deploy.host.scripts.run_pipeline.mark()`·`deploy.host.scripts.run_pipeline.depth()` | `<작업 폴더>/batch_progress/progress.log`·`doc_<seq>.log`·`queue_depth.jsonl` · 받기 출력은 문서 폴더 `_docflow/<seq>/stage.log`(실패하면 끝 100자를 progress.log에 — 문서가 끝나면 폴더째 지움) |
 | 문서별 로그 | `deploy.host.scripts.run_pipeline.struct_cmd()`·`deploy.host.scripts.run_pipeline.publish_cmd()` | `_docflow/<seq>/structure.log`·`publish.log`(문서 임시 폴더와 함께 지워짐) |
 | 분석 도구 | `pipeline/tools/perf_report.py` | 성능 행(applog.pipe_event) 요약 |
 

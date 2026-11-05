@@ -43,8 +43,8 @@ required:
     edw_database:                             # [필수 · dev·prd(pipeline·mcp) — local은 무시(비움)] EDW 데이터베이스 이름 · 예 EDW
     edw_read_user:                            # [필수 · dev·prd(pipeline·mcp) — local은 무시(비움)] EDW 읽기 계정(원천 목록·ParsingMeta 조회·query_edw) · 예 svc_parse_r
     edw_read_password:                        # [필수 · dev·prd(pipeline·mcp) — local은 무시(비움)] EDW 읽기 비밀번호 · 예 DB 담당이 준 값 [비밀]
-    edw_write_user: null                      # [선택 — 비우면 읽기 계정(쓰기 계정 이름·비밀번호 둘 다 비울 때) · local은 무시] EDW 쓰기 계정(ParsingMeta INSERT만) · 예 svc_parse_w
-    edw_write_password: null                  # [선택 — 비우면 읽기 계정 · local은 무시] EDW 쓰기 비밀번호 · 예 DB 담당이 준 값 [비밀]
+    edw_write_user:                           # [필수 · dev·prd(pipeline — 게시) — local은 무시(비움)] EDW 쓰기 계정(ParsingMeta INSERT만) · 예 svc_parse_w
+    edw_write_password:                       # [필수 · dev·prd(pipeline — 게시) — local은 무시(비움)] EDW 쓰기 비밀번호 · 예 DB 담당이 준 값 [비밀]
   # ---- 게시(silver 적재) 위치 ----
   publish:
     publish_bucket:                           # [필수 · dev·prd(pipeline) — local은 무시(dev.local.local_publish_dir)] 게시 버킷(원본 버킷과 다르게) · 예 rag-silver

@@ -63,20 +63,14 @@ def login(role, extra=True):
     ("read" | "write" — docs/prd/ops.md#op-03). extra=False면 connect_kwargs를 안 넘김(gen_roster).
     형식 틀린 포트는 연결 전에 실패(checked — 1433으로 조용히 붙지 않게). 값은 출력하지 않는다.
     role은 둘 중 하나만(오타가 쓰기 계정으로 새지 않게) · connect_kwargs는 계정·서버 칸을 덮지 못함.
-    쓰기 계정 이름·비밀번호가 둘 다 비면 "write"도 읽기 계정을 쓴다(op-03) — 검색 MCP(읽기 전용 프로세스)는 예외로 빠진 칸."""
+    쓰기 계정이 비면 빠진 칸으로 알린다(읽기 계정으로 대신하지 않음 — op-03)."""
     import json
 
-    from common.config.settings import _EDW_READ_ONLY, _warn_once, cfg, checked, guard_run_env, reveal
+    from common.config.settings import cfg, checked, reveal
 
     if role not in ("read", "write"):
         raise ValueError(f"EDW 계정 역할은 read·write만 — {role!r}")
     c = cfg().connections.rdb
-    if role == "write" and not c.write.user and not reveal(c.write.password) and not _EDW_READ_ONLY[0]:
-        role = "read"
-        if guard_run_env() != "local":  # 서버(모르는 글자도 서버로 봄)
-            _warn_once(
-                "[edw] 쓰기 계정 칸이 비어 읽기 계정으로 ParsingMeta에 씀 — 읽기 계정에 ParsingMeta INSERT·UPDATE 권한이 필요(op-03)"
-            )
     acct = c.read if role == "read" else c.write
     checked("RDB_PORT")
     kw = {
