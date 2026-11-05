@@ -40,7 +40,7 @@ flowchart TD
 ### 1-1. 호출 순서 한 표 — `run_pipeline.py` 기준(문서 1건)
 
 - 실행 위치: **호스트** = 서버의 python(`run_pipeline.py`), **컨테이너** = `docker exec data-pipeline…`로 컨테이너 안에서 실행한다.
-- 한 행 = 한 파일 위치. 화살표(→)는 왼쪽 파일·함수가 오른쪽을 부른다는 뜻이다. "자식"은 별도 python 프로세스로 띄운다는 뜻이다.
+- 한 행 = 한 파일 위치. 화살표(→)는 왼쪽 파일·함수가 오른쪽을 부른다는 뜻이다. "자식"은 그 행의 왼쪽 프로세스가 새 python 프로세스를 하나 더 띄워 돌린다는 뜻이고, "자식의 자식"은 그 자식이 또 하나를 띄운다는 뜻이다 — 문서 1건이면 호스트 `run_pipeline.py` → 컨테이너 `pipeline.cli parse`(12행) → 자식 `parse_engines`·`parse_scoring`·`doc_represent`(각각 따로) → 자식의 자식 = 문서×엔진마다 엔진 하나(16행).
 - 3행은 문서 목록 전체에 한 번, 4행부터는 문서마다 돈다.
 - **받기 전(3행)** 에는 EDW 표에 있는 값(이름·확장자·크기·끝난 문서)만으로 거른다. **받은 뒤(4~8행)** 에야 알 수 있는 것(파일 내용이 같은지, DRM·암호)은 받은 파일로 거른다. 원본은 4행에서 한 번만 받고, 파싱은 7행을 지난 파일만 읽는다.
 - 중복·DRM·암호·미지원으로 건너뛴 문서는 문서마다 PostgreSQL `applog.pipe_event`에 `skip` 행 하나를 남긴다(까닭, 중복이면 남긴 문서 이름 — [db_schema.md](db_schema.md)).
@@ -57,7 +57,7 @@ flowchart TD
 | 8 | extract | 건너뜀 기록 — 5~7행에서 뺀 문서마다 `applog.pipe_event`에 `extract.skip` 행 | 컨테이너 | `pipeline/extract/filter_and_rotate.py` → `pipeline/extract/candidate_ready.py` | `_record_skip()` → `skip_event()` |
 | 9 | extract | 레인 나누기(light·medium·vlm) | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/extract/doc_lane_group.py` | `classify_doc()` → `doc_lane_group()` |
 | 10 | transform | 레인 워커 — 레인 대기열에서 문서 하나를 꺼냄(구조화 대기가 많거나 MCP 업로드 중이면 쉼) | 호스트 | `deploy/host/scripts/run_pipeline.py` | `lane_worker()` → `pick_lane()` |
-| 11 | transform | 문서 1건 파싱 시작 — 레인별 값으로 `pipeline.cli parse --staged` 명령을 만들어 실행(제한 시간 45분, 실패면 그 문서 프로세스를 끔). 받기 단계가 중복·DRM·암호로 뺀 문서(`only.txt`가 빔)는 파싱하지 않고 `건너뜀`으로 23행 게시로 바로 넘김(실패로 세지 않음) | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` | `parse_one()` → `parse_cmd()` |
+| 11 | transform | 문서 1건 파싱 시작 — 레인별 값으로 `pipeline.cli parse --staged` 명령을 만들어 실행(제한 시간 45분, 실패면 그 문서 프로세스를 끔). 받기 단계가 중복·DRM·암호로 뺀 문서(`only.txt`가 빔)는 파싱하지 않고 `건너뜀`으로 28행 게시로 바로 넘김(실패로 세지 않음) | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` | `parse_one()` → `parse_cmd()` |
 | 12 | transform | 파싱 명령 — 7행이 남긴 목록(`only.txt`)·원본 주소(`manifest.jsonl`)를 읽음 | 컨테이너 | `pipeline/cli.py` | `parse_module()` |
 | 13 | transform | 엔진 구성 검사(이미지에 없는 엔진이면 종료 2) | 컨테이너 | `pipeline/parse_steps.py` → `pipeline/transform/parse/engine_check.py` | `stack()` → `resolve()` |
 | 14 | transform | 엔진 계획 — 파일 크기 상한, `only.txt` 문서만, 설치된 엔진만, 문서 형식별 엔진 목록(엔진 구성 파일) → 문서×엔진 작업 목록 | 컨테이너(자식) | `pipeline/parse_steps.py` → `pipeline/transform/parse/parse_engines.py` | `parse_chain()` → `main()` → `engines_for_doc()`·`_drop_uninstalled()` |
@@ -66,24 +66,29 @@ flowchart TD
 | 17 | transform | 엔진 결과 채점(합격선 `criteria.json`) | 컨테이너(자식) | `pipeline/transform/represent/parse_scoring.py` | `main()` → `run()` |
 | 18 | transform | 대표 결과 고르기 — 채점으로 가장 나은 엔진 결과를 고르고, 다른 엔진 글로 문단·쪽·표를 보완 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` | `main()` → `represent()` → `_select_best()`·`_merge_paragraphs()`·`_merge_pages()`·`fix_tables()` |
 | 19 | transform | 스캔 쪽 채움 — 글자층 PDF 안의 스캔 쪽만 쪽 VLM 글로 바꿈 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` → `pipeline/transform/figures/scan_page_vlm.py` | `fill_scan_pages()` → `page_text_pages()` |
-| 20 | transform | 후보정 — 레인별로 켠 것만: 쪽 VLM 글·슬라이드 VLM, 그림 VLM, 차트 값, 위·아래 첨자, 메일 첨부 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` → `figures/scan_page_vlm.py`·`figures/pptx_render.py`·`figures/figure_extract.py`·`figures/chart_values.py`·`represent/superscripts.py`·`represent/mail_attachments.py` | `apply_post()` → `page_text_pages()`·`pptx_slide_vlm()`·`build_records()`·`chart_text()`·`merge_supsub()`·`mail_blocks()` |
-| 21 | transform | 끝 표시 `_rep/_DONE.json`(대표 결과가 바뀌었을 때만) | 컨테이너 | `pipeline/cli.py` → `pipeline/transform/represent/doc_represent.py` | `parse_module()` → `rep_digest()`·`write_mark()` |
-| 22 | extract | 받기 끝 기록 — 대표 결과가 나온 문서의 sha256과 처리 기록을 남김(파일은 지우지 않음) | 컨테이너 | `pipeline/cli.py` → `pipeline/extract/candidate_ready.py` | `parse_module()` → `finish()` |
-| 23 | load | silver 게시 — `rep.md`·원결과를 Object Storage에, ParsingMeta에 한 행. 건너뛴 문서는 결과 없이 상태만 씀(중복 `skipped_dup` → 다음 밤에 다시 안 고름, DRM·암호는 제외 보고서에만) — 건너뛴 문서는 25행 이후 gold를 돌지 않음 | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/load/publish_parse_result.py` | `publish_one()` → `main()` → `run()` → `plan()` → `apply()` |
-| 24 | — | 원본 삭제(한 곳) — 게시 성공 뒤에만 받은 원본(`_staging/`)·문서 폴더 링크(`_source_files/`)·`prepared/` 사본을 지움 | 호스트 | `deploy/host/scripts/run_pipeline.py` | `drop_original()` |
-| 25 | transform | 구조화 — 청크 나누기·고객 추정·임베딩 → 묶음(bundle) | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/transform/structure/gold_bundle.py` (+`chunking.py`) | `gold_one()` → `main()` → `chunk_all()`·`infer_clients()`·`embed_all()` |
-| 26 | load | 임베딩·모델 검사 — 묶음에 벡터가 있고 DB와 같은 임베딩 모델인지 | 컨테이너 | `pipeline/load/pgvector_load.py` | `load()` → `require_vectors()`·`require_same_model()` |
-| 27 | load | EDW 메타 붙이기 — 원천 표에서 만든 날짜·고객 등 | 컨테이너 | `pipeline/load/pgvector_load.py` → `pipeline/load/edw_doc_meta.py` | `load()` → `fetch()` |
-| 28 | load | SFDC·LAS 분류 라벨(이미 있는 라벨은 덮지 않음) | 컨테이너 | `pipeline/load/pgvector_load.py` → `pipeline/load/doc_classify.py` | `_classify()` → `apply()` |
-| 29 | load | PostgreSQL에 쓰기, ParsingMeta에 `gold_version` 기록 | 컨테이너 | `pipeline/load/pgvector_load.py` | `_load_src()` → `_mark_loaded()` |
-| 30 | — | 문서 임시 폴더 삭제(실패·시간 초과면 그 문서 프로세스도 끔) | 호스트 | `deploy/host/scripts/run_pipeline.py` | `drop_temp()` · `sweep_cmd()` |
+| 20 | transform | 후보정 ① 쪽 VLM 글 — 쪽마다 VLM이 옮긴 글을 덧붙임(19행이 이미 채운 쪽은 뺌). 레인 설정에 `vlm_page`가 있을 때만 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` → `pipeline/transform/figures/scan_page_vlm.py` | `apply_post()` → `page_text_pages()` |
+| 21 | transform | 후보정 ② 슬라이드 VLM — pptx 슬라이드를 그림으로 그려 VLM이 옮긴 글을 덧붙임(pptx가 아니면 바로 빈 결과) | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` → `pipeline/transform/figures/pptx_render.py` | `apply_post()` → `pptx_slide_vlm()` |
+| 22 | transform | 후보정 ③ 그림 — 문서 안 그림을 꺼내 그림 VLM 설명·근처 본문을 기록 블록으로 덧붙이고 그림 목록을 씀. `figures`가 켜졌을 때만 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` → `pipeline/transform/figures/figure_extract.py` | `apply_post()` → `build_records()`·`write_index()` |
+| 23 | transform | 후보정 ④ 차트 — 오피스 내장 차트의 제목·계열·값을 `[차트]` 줄로. `charts`가 켜졌을 때만 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` → `pipeline/transform/figures/chart_values.py` | `apply_post()` → `chart_text()` |
+| 24 | transform | 후보정 ⑤ 위·아래 첨자 — 본문의 해당 줄만 첨자 표기로 바꿈. `supsub`가 켜졌을 때만 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` → `pipeline/transform/represent/superscripts.py` | `apply_post()` → `merge_supsub()` |
+| 25 | transform | 후보정 ⑥ 메일 첨부 — 메일 첨부 파일을 파싱해 블록으로 덧붙임. `attachments`가 켜졌을 때만 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` → `pipeline/transform/represent/mail_attachments.py` | `apply_post()` → `mail_blocks()` |
+| 26 | transform | 끝 표시 `_rep/_DONE.json`(대표 결과가 바뀌었을 때만) | 컨테이너 | `pipeline/cli.py` → `pipeline/transform/represent/doc_represent.py` | `parse_module()` → `rep_digest()`·`write_mark()` |
+| 27 | extract | 받기 끝 기록 — 대표 결과가 나온 문서의 sha256과 처리 기록을 남김(파일은 지우지 않음) | 컨테이너 | `pipeline/cli.py` → `pipeline/extract/candidate_ready.py` | `parse_module()` → `finish()` |
+| 28 | load | silver 게시 — `rep.md`·원결과를 Object Storage에, ParsingMeta에 한 행. 건너뛴 문서는 결과 없이 상태만 씀(중복 `skipped_dup` → 다음 밤에 다시 안 고름, DRM·암호는 제외 보고서에만) — 건너뛴 문서는 30행 이후 gold를 돌지 않음 | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/load/publish_parse_result.py` | `publish_one()` → `main()` → `run()` → `plan()` → `apply()` |
+| 29 | — | 원본 삭제(한 곳) — 게시 성공 뒤에만 받은 원본(`_staging/`)·문서 폴더 링크(`_source_files/`)·`prepared/` 사본을 지움 | 호스트 | `deploy/host/scripts/run_pipeline.py` | `drop_original()` |
+| 30 | transform | 구조화 — 청크 나누기·고객 추정·임베딩 → 묶음(bundle) | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/transform/structure/gold_bundle.py` (+`chunking.py`) | `gold_one()` → `main()` → `chunk_all()`·`infer_clients()`·`embed_all()` |
+| 31 | load | 임베딩·모델 검사 — 묶음에 벡터가 있고 DB와 같은 임베딩 모델인지 | 컨테이너 | `pipeline/load/pgvector_load.py` | `load()` → `require_vectors()`·`require_same_model()` |
+| 32 | load | EDW 메타 붙이기 — 원천 표에서 만든 날짜·고객 등 | 컨테이너 | `pipeline/load/pgvector_load.py` → `pipeline/load/edw_doc_meta.py` | `load()` → `fetch()` |
+| 33 | load | SFDC·LAS 분류 라벨(이미 있는 라벨은 덮지 않음) | 컨테이너 | `pipeline/load/pgvector_load.py` → `pipeline/load/doc_classify.py` | `_classify()` → `apply()` |
+| 34 | load | PostgreSQL에 쓰기, ParsingMeta에 `gold_version` 기록 | 컨테이너 | `pipeline/load/pgvector_load.py` | `_load_src()` → `_mark_loaded()` |
+| 35 | — | 문서 임시 폴더 삭제(실패·시간 초과면 그 문서 프로세스도 끔) | 호스트 | `deploy/host/scripts/run_pipeline.py` | `drop_temp()` · `sweep_cmd()` |
 
 PC에서는 `python -m pipeline.cli parse`를 바로 부른다 — `--source`를 주면 4~8행의 `stage_batch()`를 같은 명령 안에서 돌린 뒤 13행부터 같은 함수로 간다(§2-2). 검색 MCP의 `parse_document`는 §1-2.
 
 ### 1-2. 호출 순서 한 표 — MCP `parse_document` 요청(문서 1건)
 
 - 실행 위치: **mcp-server** = 검색 MCP 컨테이너, **mcp-data-parsing** = 같은 data-pipeline 이미지의 작업 서비스 전용 컨테이너(`run-mcp-parsing`, 127.0.0.1:8766). 둘은 HTTP(토큰 `required.tokens.mcp_token`)로 잇는다.
-- 대상 목록·받기·중복·게시·gold는 없다 — 올린 파일 하나를 대표 결과까지 만들어 돌려준다. 같은 함수는 §1-1의 7행 거르기·13~20행이다.
+- 대상 목록·받기·중복·게시·gold는 없다 — 올린 파일 하나를 대표 결과까지 만들어 돌려준다. 같은 함수는 §1-1의 7행 거르기·13~25행이다.
 
 | 순서 | ETL | 기능 | 실행 위치 | 파일 | 함수 |
 |---|---|---|---|---|---|
@@ -96,7 +101,7 @@ PC에서는 `python -m pipeline.cli parse`를 바로 부른다 — `--source`를
 | 7 | transform | 엔진 계획(§1-1 14행과 같음) | mcp-data-parsing(자식) | `pipeline/parse_steps.py` → `pipeline/transform/parse/parse_engines.py` | `parse_chain()` → `main()` |
 | 8 | transform | 엔진 실행·엔진 하나(§1-1 15~16행과 같음) | mcp-data-parsing(자식 → 자식의 자식) | `pipeline/transform/parse/parse_engines.py` → `engines/registry.py` → `engines/<이름>/parser.py` | `run_job()` → `one_main()` → `run()`·`stamp()` |
 | 9 | transform | 채점 | mcp-data-parsing(자식) | `pipeline/transform/represent/parse_scoring.py` | `main()` → `run()` |
-| 10 | transform | 대표 결과·스캔 쪽 채움·후보정(§1-1 18~20행과 같음) | mcp-data-parsing(자식) | `pipeline/transform/represent/doc_represent.py` (+`figures/`) | `main()` → `represent()` |
+| 10 | transform | 대표 결과·스캔 쪽 채움·후보정(§1-1 18~25행과 같음) | mcp-data-parsing(자식) | `pipeline/transform/represent/doc_represent.py` (+`figures/`) | `main()` → `represent()` |
 | 11 | — | 결과 돌려주기 — 대표 결과 json(없으면 빈 결과 + 까닭: VLM 실패·DRM 추정), 작업 상태 조회 | mcp-data-parsing → mcp-server | `pipeline/run_mcp_parsing.py` → `mcp_server/services/parse_proxy.py` | `_result()`·`Handler.do_GET()` → `_parse_shaped()` |
 
 
