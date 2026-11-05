@@ -56,15 +56,37 @@ flowchart TD
 | 9 | transform | 엔진 파싱 — 문서마다 구성된 엔진을 동시에, 문서×엔진마다 자식 프로세스(엔진이 죽어도 전체는 계속), 제한 시간·재시도, 결과에 출처 표시 | 컨테이너(자식 → 자식의 자식) | `pipeline/parse_steps.py` → `pipeline/transform/parse/parse_engines.py` → `engines/registry.py` → `engines/<이름>/parser.py` | `parse_chain()` → `main()`·`engines_for_doc()`·`_run_with_retry()` → `one_main()` → `run()`·`stamp()` |
 | 10 | transform | 엔진 결과 채점(합격선 `criteria.json`) | 컨테이너(자식) | `pipeline/transform/represent/parse_scoring.py` | `main()` → `run()` |
 | 11 | transform | 대표 결과 고르기·보정·스캔 쪽 채움·후보정(VLM·그림·표) | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` (+`figures/`) | `main()` → `represent()` → `fill_scan_pages()`·`apply_post()` |
-| 12 | transform | 끝 표시 `_rep/_DONE.json`(대표 결과가 바뀌었을 때만), 문서 폴더의 원본 링크 정리 | 컨테이너 | `pipeline/transform/represent/doc_represent.py` · `pipeline/extract/candidate_ready.py` | `rep_digest()`·`write_mark()` · `finish()` |
-| 13 | load | silver 게시 — `rep.md`·원결과를 Object Storage에, ParsingMeta에 한 행 | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/load/publish_parse_result.py` | `publish_one()` → `main()` → `run()` → `plan()` → `apply()` |
-| 14 | — | 게시 성공 뒤에만 원본(`_staging/`) 삭제 | 호스트 | `deploy/host/scripts/run_pipeline.py` | `drop_original()` |
-| 15 | transform | 구조화 — 청크 나누기·고객 추정·임베딩 → 묶음(bundle) | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/transform/structure/gold_bundle.py` (+`chunking.py`) | `gold_one()` → `main()` → `chunk_all()`·`infer_clients()`·`embed_all()` |
-| 16 | load | gold 적재 준비 — 임베딩·모델 검사, EDW 메타 붙이기, SFDC·LAS 분류 | 컨테이너 | `pipeline/load/pgvector_load.py` → `edw_doc_meta.py` · `doc_classify.py` | `load()` → `fetch()` · `_classify()` → `apply()` |
-| 17 | load | PostgreSQL에 쓰기, ParsingMeta에 `gold_version` 기록 | 컨테이너 | `pipeline/load/pgvector_load.py` | `_load_src()` → `_mark_loaded()` |
-| 18 | — | 문서 임시 폴더 삭제(실패·시간 초과면 그 문서 프로세스도 끔) | 호스트 | `deploy/host/scripts/run_pipeline.py` | `drop_temp()` · `sweep_cmd()` |
+| 12 | transform | 끝 표시 `_rep/_DONE.json`(대표 결과가 바뀌었을 때만) | 컨테이너 | `pipeline/transform/represent/doc_represent.py` | `rep_digest()`·`write_mark()` |
+| 13 | extract | 받기 끝 정리 — 대표 결과가 나온 문서의 원본 링크(`_source_files/`)를 지우고 처리 기록에 남김 | 컨테이너 | `pipeline/extract/candidate_ready.py` | `finish()` |
+| 14 | load | silver 게시 — `rep.md`·원결과를 Object Storage에, ParsingMeta에 한 행 | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/load/publish_parse_result.py` | `publish_one()` → `main()` → `run()` → `plan()` → `apply()` |
+| 15 | — | 게시 성공 뒤에만 원본(`_staging/`) 삭제 | 호스트 | `deploy/host/scripts/run_pipeline.py` | `drop_original()` |
+| 16 | transform | 구조화 — 청크 나누기·고객 추정·임베딩 → 묶음(bundle) | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/transform/structure/gold_bundle.py` (+`chunking.py`) | `gold_one()` → `main()` → `chunk_all()`·`infer_clients()`·`embed_all()` |
+| 17 | load | 임베딩·모델 검사 — 묶음에 벡터가 있고 DB와 같은 임베딩 모델인지 | 컨테이너 | `pipeline/load/pgvector_load.py` | `load()` → `require_vectors()`·`require_same_model()` |
+| 18 | load | EDW 메타 붙이기 — 원천 표에서 만든 날짜·고객 등 | 컨테이너 | `pipeline/load/pgvector_load.py` → `pipeline/load/edw_doc_meta.py` | `load()` → `fetch()` |
+| 19 | load | SFDC·LAS 분류 라벨(이미 있는 라벨은 덮지 않음) | 컨테이너 | `pipeline/load/pgvector_load.py` → `pipeline/load/doc_classify.py` | `_classify()` → `apply()` |
+| 20 | load | PostgreSQL에 쓰기, ParsingMeta에 `gold_version` 기록 | 컨테이너 | `pipeline/load/pgvector_load.py` | `_load_src()` → `_mark_loaded()` |
+| 21 | — | 문서 임시 폴더 삭제(실패·시간 초과면 그 문서 프로세스도 끔) | 호스트 | `deploy/host/scripts/run_pipeline.py` | `drop_temp()` · `sweep_cmd()` |
 
-PC에서는 `python -m pipeline.cli parse`를 바로 부른다 — `--source`를 주면 4행의 `stage_batch()`를 같은 명령 안에서 돌린 뒤 8행부터 같은 함수로 간다(§2-2). 검색 MCP의 `parse_document`는 4행의 거르기(`place_inputs()`)와 9~11행만 같은 함수로 돈다(`pipeline/run_mcp_parsing.py` — §6).
+PC에서는 `python -m pipeline.cli parse`를 바로 부른다 — `--source`를 주면 4행의 `stage_batch()`를 같은 명령 안에서 돌린 뒤 8행부터 같은 함수로 간다(§2-2). 검색 MCP의 `parse_document`는 §1-2.
+
+### 1-2. 호출 순서 한 표 — MCP `parse_document` 요청(문서 1건)
+
+- 실행 위치: **mcp-server** = 검색 MCP 컨테이너, **mcp-data-parsing** = 같은 data-pipeline 이미지의 작업 서비스 전용 컨테이너(`run-mcp-parsing`, 127.0.0.1:8766). 둘은 HTTP(토큰 `required.tokens.mcp`)로 잇는다.
+- 대상 목록·받기·중복·게시·gold는 없다 — 올린 파일 하나를 대표 결과까지 만들어 돌려준다. 같은 함수는 §1-1의 4행 거르기(`place_inputs()`)·8~11행이다.
+
+| 순서 | ETL | 기능 | 실행 위치 | 파일 | 함수 |
+|---|---|---|---|---|---|
+| 1 | 입구 | 도구 등록 — 이름·입력 고정, 서비스를 자체 예산 창구로 부름 | mcp-server | `mcp_server/routers/parse_tool.py` | `parse_document()` |
+| 2 | 입구 | 작업 서비스에 작업 제출(경로 또는 base64) → 완료까지 폴링, 제한 시간이 지나면 작업 id만 돌려줌 | mcp-server | `mcp_server/services/parse_proxy.py` | `do_parse_document()` → `_run_mcp_parsing()` |
+| 3 | 입구 | 작업 받기 — 크기·확장자 확인, 작업 폴더 `_mcp_parse/jobs/<job_id>/in/`에 파일, 대기열에 넣음 | mcp-data-parsing | `pipeline/run_mcp_parsing.py` | `Handler.do_POST()` → `_submit()` |
+| 4 | 입구 | 작업자 스레드 — 큐에서 꺼냄, VLM 주소 없는 스캔 PDF는 빈 결과 바로 | mcp-data-parsing | `pipeline/run_mcp_parsing.py` | `_worker()` → `skip_note()` · `_run_job()` |
+| 5 | transform | 엔진 구성 검사(작업마다 다시) | mcp-data-parsing | `pipeline/parse_steps.py` → `pipeline/transform/parse/engine_check.py` | `stack()` → `resolve()` |
+| 6 | extract | 거르기 — DRM·암호·미지원을 거르고 `prep/`로 | mcp-data-parsing(자식) | `pipeline/parse_steps.py` → `pipeline/extract/filter_and_rotate.py` | `place_inputs()` → `main()` |
+| 7 | transform | 엔진 파싱 — 문서×엔진마다 자식 프로세스(§1-1 9행과 같음) | mcp-data-parsing(자식 → 자식의 자식) | `pipeline/parse_steps.py` → `pipeline/transform/parse/parse_engines.py` → `engines/registry.py` → `engines/<이름>/parser.py` | `parse_chain()` → `main()` → `one_main()` → `run()`·`stamp()` |
+| 8 | transform | 채점 | mcp-data-parsing(자식) | `pipeline/transform/represent/parse_scoring.py` | `main()` → `run()` |
+| 9 | transform | 대표 결과 | mcp-data-parsing(자식) | `pipeline/transform/represent/doc_represent.py` | `main()` → `represent()` |
+| 10 | — | 결과 돌려주기 — 대표 결과 json(없으면 빈 결과 + 까닭: VLM 실패·DRM 추정), 작업 상태 조회 | mcp-data-parsing → mcp-server | `pipeline/run_mcp_parsing.py` → `mcp_server/services/parse_proxy.py` | `_result()`·`Handler.do_GET()` → `_parse_shaped()` |
+
 
 ---
 
@@ -126,7 +148,7 @@ flowchart TD
 | 대상 고르기 | `deploy.host.scripts.run_pipeline.pick_targets()` → 컨테이너 `python -m pipeline.extract.candidate_pick list`(`pipeline.extract.candidate_pick.list_targets()`) | `AI.FileStorageMap`에서 `--filter`(기본 `RFP,proposal`) 이름 조건으로 목록(파일 크기 순, 크기 없는 행 뺌), `--start-offset`·`--limit`·`--seqs`, `--skip-done`이면 ParsingMeta에 끝난 문서(`ok`·`partial`은 `gold_version`도 있어야, `skipped_dup` — `pipeline.extract.candidate_pick.done_keys()` 하나)를 뺌, FAQ 교체가 필요하면 FAQ를 앞에(교체를 마친 키 `<결과 폴더>/_faq_seen.txt`), 앞 `--max-docs`개. 러너는 목록 파일만 읽는다 | EDW → `_docflow/targets.json`(`total`·`start`·`docs`[`seq`·`id`·`s3_key`·`original_filename`·`file_size`]) |
 | 받기·중복·거르기 | `deploy.host.scripts.run_pipeline.downloader()` → `deploy.host.scripts.run_pipeline.stage_one()` → 컨테이너 `python -m pipeline.extract.candidate_ready stage`(`pipeline.extract.candidate_ready.stage_batch()`) | 문서 위치 csv(`_docflow/<seq>/batch.csv`)를 쓰고 원본을 `<결과 폴더>/_staging/<sha1>.bin`으로 한 번 받음(같은 크기 파일이 있으면 다시 안 받음) → 문서 폴더 `_source_files/`에 링크 → 중복 확인 → 거르기·`prepared/`. 파일 1건마다 `pipeline.extract.candidate_ready.download()`가 `applog.pipe_event`에 `extract.download` 행(`head_ms`·`download_ms`·`mbps`·`lock_wait_ms`, 실패는 `external`)을 남긴다. 받기에 실패하면 그 문서는 파싱 실패로 끝난다 | Object Storage → `_staging/` → `prepared/`, `parse/_source/only.txt` |
 | 레인 분류 | `deploy.host.scripts.run_pipeline.classify_doc()` → 컨테이너 `python3 pipeline/extract/doc_lane_group.py <파일> <원본 이름> <크기>` → `pipeline.extract.doc_lane_group.doc_lane_group()` | 규칙은 `doc_lane_group()` 하나에 있다: 글자 형식 light · pptx·ppt vlm · pdf·오피스는 내용 검사(PDF 첫 3쪽 글자 수로 스캔, 오피스 zip 내장 그림 수·용량, 검사 실패) → heavy면 vlm, 아니면 크기 기준으로 medium/light · 그 밖 형식 vlm([ops.md#rn-01](../prd/ops.md#rn-01)). `classify_doc()`은 답의 마지막 줄만 읽고(없으면 vlm), 결과를 `batch_progress/docflow_class.json`(s3_key별)에 캐시. 원본 이름을 받은 `pipeline.extract.doc_lane_group.main()`은 판별 1건을 `extract.classify` 행(`doc_id` = 원본 이름, `metrics.group`, 파일이 없으면 fail)으로 남기고(기록이 실패해도 그룹은 같음), `classify_doc()`은 `batch_progress`의 classify 기록에 `sec`(분류 전체)·`probe_sec`(컨테이너 호출)을 적는다 | 원본 → 레인 |
-| 파싱 | `deploy.host.scripts.run_pipeline.lane_worker()` → `deploy.host.scripts.run_pipeline.parse_one()` → `deploy.host.scripts.run_pipeline.parse_cmd()` | 컨테이너 안 단계별 함수는 §1-1 표 7~12행. `pipeline.cli parse --staged`를 문서 폴더 `_docflow/<seq>`로 실행. 문서 폴더 칸(`PIPE_OUT_ROOT`·`DOC_DIR_PREPARED`·`PARSE_IMAGES_ROOT`·`PARSE_RAW_ROOT`) 다음 공통 `--set`(`PARSE_SET`): `VLM_MAX_CONCURRENCY=8`, `VLM_CONCURRENCY=8`, `VLM_FIGURES_MAX=10`, `PARSE_POST=supsub,charts,figures,context,attachments`, `RAPIDOCR_PAGE_WORKERS=2`, `OCR_THREADS=1`, `PIPE_PROCS=4`, `PARSE_REP_SELECT=first`, `PARSE_QA_LIGHT=1`. vlm 레인은 `VLM_MAX_CONCURRENCY=6`·`VLM_CONCURRENCY=6`·`PARSE_POST`에 `vlm_page` 추가·`VLM_PAGE_MAX=`(빈 값 = 쪽 수 제한 없음), 끝에 `CPU_MAX_LOAD=<게이트>`(light 레인은 9). 쪽 해상도는 덮지 않음(`extract.ocr.dpi` 그대로) | 원본 → `_docflow/<seq>/parse/_rep/` |
+| 파싱 | `deploy.host.scripts.run_pipeline.lane_worker()` → `deploy.host.scripts.run_pipeline.parse_one()` → `deploy.host.scripts.run_pipeline.parse_cmd()` | 컨테이너 안 단계별 함수는 §1-1 표 7~13행. `pipeline.cli parse --staged`를 문서 폴더 `_docflow/<seq>`로 실행. 문서 폴더 칸(`PIPE_OUT_ROOT`·`DOC_DIR_PREPARED`·`PARSE_IMAGES_ROOT`·`PARSE_RAW_ROOT`) 다음 공통 `--set`(`PARSE_SET`): `VLM_MAX_CONCURRENCY=8`, `VLM_CONCURRENCY=8`, `VLM_FIGURES_MAX=10`, `PARSE_POST=supsub,charts,figures,context,attachments`, `RAPIDOCR_PAGE_WORKERS=2`, `OCR_THREADS=1`, `PIPE_PROCS=4`, `PARSE_REP_SELECT=first`, `PARSE_QA_LIGHT=1`. vlm 레인은 `VLM_MAX_CONCURRENCY=6`·`VLM_CONCURRENCY=6`·`PARSE_POST`에 `vlm_page` 추가·`VLM_PAGE_MAX=`(빈 값 = 쪽 수 제한 없음), 끝에 `CPU_MAX_LOAD=<게이트>`(light 레인은 9). 쪽 해상도는 덮지 않음(`extract.ocr.dpi` 그대로) | 원본 → `_docflow/<seq>/parse/_rep/` |
 | 게시 | `deploy.host.scripts.run_pipeline.publish_one()` → `deploy.host.scripts.run_pipeline.publish_cmd()` | `pipeline.load.publish_parse_result --out <문서 폴더> --source-system FileStorageMap --apply` | `_rep` → Object Storage + ParsingMeta |
 | 원본 삭제 | `deploy.host.scripts.run_pipeline.drop_original()` | 게시 성공 뒤에만 `_staging/<sha1>.bin`과 `_source_files/`를 지움 | — |
 | gold | `deploy.host.scripts.run_pipeline.gold_one()` → `deploy.host.scripts.run_pipeline.struct_cmd()` | `gold_bundle --parse-dir … --out …/bundle` 다음 `pgvector_load load --bundle … --rep-dir …/parse/_rep`(`EMBED_CONCURRENCY=6` 등) | `_rep` → 묶음 → PG |
