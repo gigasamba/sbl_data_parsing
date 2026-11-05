@@ -27,6 +27,7 @@ LAYER_CODE = {
         "pipeline/shared/raw_cache.py",
         "pipeline/shared/env_error.py",
         "pipeline/shared/pdf_kind.py",
+        "pipeline/shared/srcsha.py",
         "pipeline/shared/vlmcall.py",
     ],
     # 대표 결과(represent·figures)를 만드는 코드 — 원문 파싱 관리(받기·준비·중복)는 빼서 그 코드를 고쳐도 p1이 바뀌지 않게.
@@ -41,6 +42,7 @@ LAYER_CODE = {
         "pipeline/shared/env_error.py",
         "pipeline/shared/pdf_kind.py",
         "pipeline/shared/ext_groups.py",
+        "pipeline/shared/srcsha.py",
         "pipeline/shared/vlmcall.py",
     ]
     + [
@@ -80,6 +82,7 @@ LAYER_CODE = {
         "pipeline/transform/structure/gold_bundle.py",
         "pipeline/transform/structure/chunking.py",
         "pipeline/transform/structure/client_roster.py",
+        "pipeline/shared/srcsha.py",
     ],
     "r": [
         "mcp_server/config.py",

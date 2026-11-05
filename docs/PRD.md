@@ -168,7 +168,7 @@
 | 은퇴한 설정(`common.paths.korean_font`·`eval_sets_dir` 등)은 없다 — 남아 있으면 시작 거부 | 쓰지 않는 칸 | done | [pl-21](prd/ops-settings.md#pl-21) |  |
 | run_pipeline 명령은 아무도 안 읽는 env(`FIG_OCR_BUDGET`·`SERVICE_MASTER_CSV`·`DIVISION_MASTER_CSV`·`PROD_MASTER_CSV`)를 넘기지 않는다 | C-51 | done | [pl-30](prd/ops-settings.md#pl-30) |  |
 | 서버 러너의 컨테이너 명령은 한 도우미가 만든다(`docker exec` · `PYTHONPATH` · 라이브러리 env 같게) · 게시·구조화가 시간 초과면 그 문서의 컨테이너 안 프로세스도 끈다 · 벌 이름 검사는 한 곳 · 스캔 회전 정책은 설정 칸 하나를 컨테이너가 직접 읽는다 · 레인 분류는 받기 단계 안에서(문서마다 따로 `docker exec` 없음) · 분류 캐시는 덧붙여 쓴다 | 명령마다 env가 다르면 같은 코드가 다르게 돈다. 끄지 않은 프로세스는 다음 문서와 CPU·메모리를 다툰다 | todo | [rn-09](prd/ops.md#rn-09) | `parse_cmd`에 `PYTHONPATH`가 없음. 시간 초과 때 끄는 것(`sweep_cmd`)은 파싱만. 스캔 회전 값이 run_pipeline → `stage --no-scan-rotate` → `stage_batch(scan_rotate)` → `filter_and_rotate --no-scan-rotate` 네 겹으로 전달. 분류는 문서마다 `docker exec`, 캐시는 문서마다 파일 전체를 다시 씀 |
-| 문서 1건의 반복 비용을 줄인다 — 원본 sha256은 한 번만 구하고 넘겨 씀 · 적재의 스키마 확인 질의는 하나(UNION) · 설정 파일은 프로세스마다 한 번 읽음 · `--set` 처리(`setarg.apply`)는 무거운 import 전에 | 문서 수천 건에서 같은 일을 되풀이하지 않는다 | todo | [rn-10](prd/ops.md#rn-10) | sha256은 받기가 한 번 구해 manifest로 넘기고 중복 제외·거르기·게시가 씀 — 파싱·대표 결과·구조화는 아직 각자 다시 구함(바꾸면 레이어 코드 지문 p0·p1·s가 바뀜). `pgvector_load`가 원천 스키마마다 따로 묻는다. 측정 전 — 줄일 크기는 `perf_report`로 먼저 잰다 |
+| 문서 1건의 반복 비용을 줄인다 — 원본 sha256은 한 번만 구하고 넘겨 씀 · 적재의 스키마 확인 질의는 하나(UNION) · 설정 파일은 프로세스마다 한 번 읽음 · `--set` 처리(`setarg.apply`)는 무거운 import 전에 | 문서 수천 건에서 같은 일을 되풀이하지 않는다 | todo | [rn-10](prd/ops.md#rn-10) | sha256은 받기가 한 번 구해 manifest로 넘기고 중복 제외·거르기·파싱·구조화·게시가 씀 — 대표 결과(`contract.source_record`, 핸드오프 파일)만 다시 구함. `pgvector_load`가 원천 스키마마다 따로 묻는다. 측정 전 — 줄일 크기는 `perf_report`로 먼저 잰다 |
 
 ## 테스트·평가 (test) — 변경을 어떻게 증명하나
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
