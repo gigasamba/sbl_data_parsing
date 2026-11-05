@@ -11,7 +11,7 @@
   1. CLI `pipeline.cli`는 `parse`·`show-stack`·`selftest`. 이미지 entrypoint(`deploy/docker/entrypoint.sh`)가 `publish`·`migrate`·`check`·`services`·`resources`·`tool`·`ask`·`mcp`·`run-mcp-parsing`·`idle`을 더한다. `idle` = 상주 컨테이너가 떠 있기만 한다(run_pipeline이 `docker exec`).
   2. 서버 실행은 호스트 python의 `deploy/host/scripts/run_pipeline.py`(PyYAML·pymssql 필요)가 상주 컨테이너 `data-pipeline` 안에서 문서마다 명령을 `docker exec`로 돌린다. 컨테이너 명령은 settings.yaml `ops.host.container_cli`(없으면 podman). PC에서는 실행하지 않는다.
   3. 시작: 설정 파일 = `--settings` → `SETTINGS_FILE` → `<루트>/settings.yaml`(루트 = 코드 폴더의 부모 — op-13). `required.env.run_env`가 dev·prd가 아니거나 필요한 칸이 없으면 칸 경로만 찍고 종료 2. 코드 폴더 = `--code`(없으면 스크립트가 든 코드 폴더) — 그 안의 `common/config/layout.py`·`deploy/host/scripts/host_settings.tsv`로 설정 배치와 컨테이너 안 경로를 읽는다.
-  4. 대상 목록(컨테이너 안 `python -m pipeline.extract.candidate_pick list` — run_pipeline은 목록 파일 `<결과 자리>/_docflow/targets.json`만 읽음): EDW `SELECT id, s3_key, original_filename, file_size FROM AI.FileStorageMap WHERE (<이름 조건>) AND file_size IS NOT NULL ORDER BY file_size ASC`. 이름 조건 = `--filter`(기본 `RFP,proposal`)의 낱말마다 `LOWER(original_filename) LIKE '%낱말%'`를 OR. 순번(seq)은 이 순서. `--start-offset N`(기본 1072 — 새벽 배치는 0)부터, `--seqs`면 그 순번만, `--skip-done`이면 끝난 문서([pl-23](#pl-23))를 빼고, FAQ 먼저([load.md#pl-41](load.md#pl-41)), `--max-docs`면 그 뒤 앞에서 N건, `--limit`은 시험용(그 전에 자름). `--filter`는 글자·숫자·`_` `,` `.` `-`만, `--seqs`는 숫자와 쉼표만(아니면 종료 2).
+  4. 대상 목록(컨테이너 안 `python -m pipeline.extract.candidate_pick list` — run_pipeline은 목록 파일 `<결과 자리>/_docflow/targets.json`만 읽음): EDW `SELECT id, s3_key, original_filename, file_size FROM AI.FileStorageMap WHERE (<이름 조건>) AND file_size IS NOT NULL ORDER BY file_size ASC`. 이름 조건 = `--filter`의 낱말마다 `LOWER(original_filename) LIKE '%낱말%'`를 OR — `--filter`가 없으면 이름 조건 없이 모든 문서(기본). 순번(seq)은 이 순서. `--start-offset N`(기본 0)부터, `--seqs`면 그 순번만, `--skip-done`이면 끝난 문서([pl-23](#pl-23))를 빼고, FAQ 먼저([load.md#pl-41](load.md#pl-41)), `--max-docs`면 그 뒤 앞에서 N건, `--limit`은 시험용(그 전에 자름). `--filter`는 글자·숫자·`_` `,` `.` `-`만, `--seqs`는 숫자와 쉼표만(아니면 종료 2).
   5. 문서마다: 미리 받기(`candidate_ready stage` — 받기 → 중복 → 거르기) → 레인 분류 → 파싱 → 게시 → 원본 삭제 → gold(구조화+적재) → 임시 삭제([pl-24](#pl-24)). 배치 장벽 없이 끝나는 순서대로 흐른다.
   6. 레인·대기열은 [rn-01](#rn-01)·[rn-02](#rn-02), MCP 양보는 [rn-03](#rn-03)·[rn-04](#rn-04), 종료 코드는 [pl-18](#pl-18).
   7. 문서별 값은 컨테이너 명령에 `--set`으로 준다(같은 이름은 뒤 값이 이김):
@@ -34,7 +34,7 @@
   2. "끝난 행" = `parse_status`가 `skipped_dup`, 또는 `ok`·`partial`이면서 `gold_version`이 있음(`gold_version` 칸이 없는 EDW에서는 `parse_status`만 봄). `not_parsed`·실패·행 없음(옛 값 `skipped_disk_cap` 행 포함 — 더 쓰지 않음)은 다시 고른다. 목록은 `common/store/parsing_meta_db.DONE_STATUSES` 한 곳.
   3. 끝난 문서 빼기는 `pipeline/extract/candidate_pick.py` `done_keys` 하나 — 서버는 `candidate_pick list --skip-done`, PC 직접 파싱(`pipeline.cli parse --source`)은 고르기 때. EDW를 한 번 읽는다(읽기 계정, PC는 sqlite 대역). 못 읽으면 RUN_ENV가 local이 아니면 종료 4, 그 밖은 받은 목록 그대로 + 로그 한 줄. 키 = 수집 manifest의 `key`(없으면 이름).
   4. 전체 재파싱은 사람이 전체 e2e를 시작할 때만([pl-54](#pl-54)).
-  5. 새벽 배치: settings.yaml `ops.nightly.nightly_start_time`(시작 HH:MM)·`nightly_max_docs`(새 문서 수 상한, 1 이상)·`nightly_stop_time`(마감 HH:MM, 시작보다 5분 넘게 뒤) — 하나라도 비면 돌지 않는다. systemd `data-pipeline-nightly.timer`(`OnCalendar=*:0/5`)가 `nightly_batch.sh scheduled`를 부르고, 시작 시각부터 5분 안이면 `run_pipeline.py --start-offset 0 --skip-done --max-docs <n> --deadline <hh:mm>`. 형식 오류면 종료 2. 서비스 `TimeoutStartSec=6h`.
+  5. 새벽 배치: settings.yaml `ops.nightly.nightly_start_time`(시작 HH:MM)·`nightly_max_docs`(새 문서 수 상한, 1 이상)·`nightly_stop_time`(마감 HH:MM, 시작보다 5분 넘게 뒤) — 하나라도 비면 돌지 않는다. systemd `data-pipeline-nightly.timer`(`OnCalendar=*:0/5`)가 `nightly_batch.sh scheduled`를 부르고, 시작 시각부터 5분 안이면 applog 파티션 정리(`pipe_exec.sh migrate maintain --target applog` — 실패해도 경고만, 배치는 계속) 뒤 `run_pipeline.py --start-offset 0 --skip-done --max-docs <n> --deadline <hh:mm>`. 형식 오류면 종료 2. 서비스 `TimeoutStartSec=6h`.
 - 파일: `pipeline/extract/candidate_pick.py`(`done_keys`·`list_targets`·`unparsed`), `common/store/parsing_meta_db.py`, `deploy/host/scripts/{run_pipeline.py,nightly_batch.sh}`, `deploy/host/systemd/data-pipeline-nightly.{timer,service}`.
 - QA: `tests/general/deploy/test_trigger_gate.py`·`tests/server/pipeline/test_nightly_time.py`·`test_run_pipeline`(`deadline_at`) · `tests/server/pipeline/test_target_list.py`·`test_parse_pick.py` · 통과. 서버 확인 refactor.md C-72.
 - Status: done
@@ -229,7 +229,7 @@
 - 규칙 — DB(`applog` 스키마, Alembic 갈래 `applog` — `common/store/db/migrations/versions/0001_applog_base.py`):
   1. 표: `mcp_log`(월 파티션, 키 `requested_at`) · `pipe_event`(월 파티션, 키 `ts_start`) · `pipe_run`(`run_id` PK, 시작 running → 종료 UPSERT).
   2. `common/store/logsink.py` `emit(table,row)` → 제한 큐(`tuning.ops.log.log_queue_size` 10000, 차면 즉시 버리고 `dropped`) → 배치 INSERT(`log_batch_size` 200 · `log_flush_sec` 1 · `log_db_timeout_sec` 2). DB 실패면 `ops.log.log_fallback_dir`(기본 `output/logs`) jsonl, 프로세스당 경고 한 번. 파일 로그는 이 예비 한 곳뿐이다 — 실행 출력은 컨테이너 로그(서버 stdout), 실행 기록 파일(`RUNLOG.md`·`runlog.jsonl`·`logs/<시각>_<도구>.log`)·질의 기록 파일은 없다(op-13). 종료 flush는 `log_shutdown_sec` 5초 안.
-  3. 켜기 `ops.log.log_db_enabled` — 서버(두 이미지) 기본 true, PC 기본 false(op-13). 서버는 새 코드를 띄우기 전에 `migrate up --target all`(applog 포함). 보존 `log_retention_days` 90. `dbtool up --target applog`(현재 달 + 2개월 준비), 매일 `dbtool maintain --target applog`(다음 달 준비·만료 파티션 DROP·`pipe_run` DELETE). sink는 DDL을 하지 않는다.
+  3. 켜기 `ops.log.log_db_enabled` — 서버(두 이미지) 기본 true, PC 기본 false(op-13). 서버는 새 코드를 띄우기 전에 `migrate up --target all`(applog 포함). 보존 `log_retention_days` 90. `dbtool up --target applog`(현재 달 + 2개월 준비), 매일 `dbtool maintain --target applog`(다음 달 준비·만료 파티션 DROP·`pipe_run` DELETE — 서버는 새벽 배치가 run_pipeline 앞에 부름, [pl-23](#pl-23)). sink는 DDL을 하지 않는다.
 - 규칙 — MCP 감사(`mcp_server/services/call_log.py`):
   1. 도구 호출마다 `applog.mcp_log` 한 행 — 성공·도구 오류·busy·timeout·HTTP 인증 거부(rpc_method NULL), initialize(rpc_method=initialize, clientInfo 뺌). 칸은 [db_schema.md §6](../architecture/db_schema.md). sink 실패가 도구 응답을 바꾸지 않는다.
   2. 본문: 마스킹 뒤 앞부분만 — 입력 `tuning.search.audit.audit_max_input_bytes` 16384 · 출력 `audit_max_output_bytes` 65536. `*_bytes`·`result_sha256`은 자르기 전 전체 기준. `parse_document`의 `content_b64`는 디코딩한 파일 sha256·바이트 수로 바꿈.
@@ -262,12 +262,13 @@
 5. 레인 분류는 받기 단계 안에서 한다(문서마다 따로 `docker exec` 없음). 분류 캐시는 줄을 덧붙여 쓴다(문서마다 파일 전체를 다시 쓰지 않음).
 
 ### 비고(지금 코드와 다른 점)
-- `parse_cmd`에 `PYTHONPATH`가 없다. 시간 초과 때 끄는 것(`sweep_cmd`)은 파싱만이다.
+- 규칙 1·2는 반영했다(컨테이너 명령 = `run_pipeline.pexec` 한 곳 · 파싱·게시·구조화가 실패·시간 초과면 `doc_sh`가 그 문서의 `sweep_cmd`). 남은 것은 규칙 3~5(아래).
 - 스캔 회전 값이 run_pipeline → `stage --no-scan-rotate` → `stage_batch(scan_rotate)` → `filter_and_rotate --no-scan-rotate` 네 겹으로 전달된다.
 - 분류는 문서마다 `docker exec`(`classify_doc`), 캐시(`docflow_class.json`)는 문서마다 통째로 다시 쓴다.
 
 ### QA
-- 정할 것: 명령 줄 표(`tests/general/deploy/test_run_pipeline.py`)에서 모든 명령의 env가 같음 · 게시 시간 초과 사례 → 정리 명령이 불림(`test_docs_flow`).
+- 규칙 1·2: `tests/general/deploy/test_run_pipeline.py` — 명령 줄 표에서 모든 명령의 앞부분(env)이 같음(`test_one_env_for_every_command`) · 파싱·게시·구조화 실패·시간 초과 사례 → 정리 명령이 불림(`test_failed_stage_sweeps_doc`) · 통과.
+- 정할 것(규칙 3~5): 벌 이름 검사 한 곳 · 스캔 회전 설정 칸 하나 · 받기 안 분류·덧붙이는 캐시.
 - Status: todo
 
 <a id="rn-10"></a>

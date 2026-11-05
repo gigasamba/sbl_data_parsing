@@ -1,6 +1,6 @@
 """nightly_batch.sh scheduled 시각 게이트(pl-32) — settings.yaml ops.nightly.nightly_start_time·nightly_max_docs·nightly_stop_time(NIGHTLY_TIME·
 NIGHTLY_MAX_DOCS·NIGHTLY_DEADLINE) 중 하나라도 비면 조용히 끝, 시작 시각부터 5분 안이면 run_pipeline.py(새벽 배치 = run_pipeline)에
-상한·마감을 넘김, 꼴이 틀리면 종료 2. nightly_batch.sh에서 게이트 블록만 떼어 bash로 돌린다(date·python3은 셸 함수로 바꿔 끼움 — run_pipeline은 돌지 않음, 설정·docker 없음, PC 전용)."""
+상한·마감을 넘김, 꼴이 틀리면 종료 2. nightly_batch.sh에서 게이트 블록만 떼어 bash로 돌린다(date·python3·pipe_exec.sh를 부르는 bash는 셸 함수로 바꿔 끼움 — run_pipeline은 돌지 않음, 설정·docker 없음, PC 전용)."""
 
 import os
 import re
@@ -37,6 +37,7 @@ OTHER = [  # (NIGHTLY_MAX_DOCS, NIGHTLY_DEADLINE, 종료 코드, run_pipeline을
     ("50", "01:00", 2, False),
     ("50", "01:05", 0, True),
 ]
+MAINT = [0, 1]  # applog 파티션 정리(migrate maintain)의 종료 코드 — 실패해도 경고만, run_pipeline은 돈다
 
 
 def _bash():
@@ -59,11 +60,16 @@ def test_scheduled_gate():
         print("[시험] bash 없음 — 건너뜀")
         return
     gate = _gate()
-    cases = [(t, now, "50", "06:00", rc, runs) for t, now, rc, runs in CASES] + [
-        ("01:00", "01:00", n, dl, rc, runs) for n, dl, rc, runs in OTHER
-    ]
-    for t, now, n, dl, rc, runs in cases:
-        script = f'date() {{ echo "{now}"; }}\npython3() {{ echo "RUN_PIPELINE $*"; }}\nmod=scheduled\n{gate}echo "mod=$mod"\n'
+    cases = (
+        [(t, now, "50", "06:00", rc, runs, 0) for t, now, rc, runs in CASES]
+        + [("01:00", "01:00", n, dl, rc, runs, 0) for n, dl, rc, runs in OTHER]
+        + [("01:00", "01:00", "50", "06:00", 0, True, m) for m in MAINT]
+    )
+    for t, now, n, dl, rc, runs, maint in cases:
+        script = (
+            f'date() {{ echo "{now}"; }}\npython3() {{ echo "RUN_PIPELINE $*"; }}\n'
+            f'bash() {{ echo "PIPE_EXEC $*"; return {maint}; }}\nmod=scheduled\n{gate}echo "mod=$mod"\n'
+        )
         r = subprocess.run(
             [bash, "-c", script],
             env={
@@ -83,3 +89,7 @@ def test_scheduled_gate():
             f"RUN_PIPELINE deploy/host/scripts/run_pipeline.py --start-offset 0 --skip-done --max-docs {n.strip()} --deadline {dl.strip()}"
         )
         assert (want in r.stdout) is runs, (t, now, n, dl, r.stdout)
+        maint_cmd = "PIPE_EXEC deploy/host/scripts/pipe_exec.sh migrate maintain --target applog"
+        assert (maint_cmd in r.stdout) is runs, (t, now, r.stdout)  # 배치가 도는 창에서만, run_pipeline 앞에
+        assert not runs or r.stdout.index(maint_cmd) < r.stdout.index(want), r.stdout
+        assert ("파티션 정리" in r.stderr) is (runs and maint != 0), (maint, r.stderr)

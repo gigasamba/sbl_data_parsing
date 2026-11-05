@@ -635,6 +635,7 @@ selftest는 종료 코드가 아니라 `[판정]` 줄로 판정한다. 운영 �
 | 새벽 배치 | systemd `data-pipeline-nightly.timer` → `nightly_batch.sh scheduled` | `ops.nightly.nightly_start_time`에 `run_pipeline.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>` | 정기 운영 |
 | 파싱·게시만 | `bash deploy/host/scripts/pipe_exec.sh parse` · `pipe_exec.sh publish [--dry-run]` | 상주 컨테이너 안에서 한 번 | 단계 확인 |
 
+`run_pipeline.py`는 기본으로 FileStorageMap의 모든 문서를 처음(시작 자리 0)부터 고른다 — 이름으로 좁힐 때만 `--filter <키워드,…>`. 새벽 배치는 run_pipeline 앞에 applog 파티션 정리(`migrate maintain --target applog` — 실패하면 경고만)를 돌린다.
 `run_pipeline.py` 자리·설정·종료 코드: [release-and-patch §5-4](docs/operations/release-and-patch.md#5-4-run_pipelinepy-자리와-설정) · [server-guide §2](docs/operations/server-guide.md#2-일상-실행--run_pipeline문서별-흐름). **PC에서는 실행하지 않는다.**
 
 #### 진행 보기

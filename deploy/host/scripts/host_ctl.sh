@@ -113,12 +113,12 @@ dc_check() {
   _vol() { vol=(); case "$1" in *-runtime:*) vol=(-v "$(pwd):/app/deploy:ro,z") ;; esac; }   # 실행 이미지(개발)는 이 코드 폴더를 붙임
   # shellcheck disable=SC2086 — DOCKER는 낱말 나눔(sudo podman)
   _step check_env "출력의 FAIL 줄 확인(server-guide §2)" bash deploy/host/scripts/pipe_exec.sh check_env || return 1
-  _step ping_models "모델 주소·키(settings.yaml common.models) — 서버는 내부망 모델만" bash deploy/host/scripts/pipe_exec.sh ping_models || return 1
+  _step ping_models "모델 주소·키(settings.yaml required.models) — 서버는 내부망 모델만" bash deploy/host/scripts/pipe_exec.sh ping_models || return 1
   _step "migrate check" "migrate up --target all · master load(§8-3 5)" bash deploy/host/scripts/pipe_exec.sh migrate check --target all || return 1
   _vol "${DATA_PIPELINE_IMAGE:-}"
-  _step "selftest data-pipeline" "FAIL 줄의 시험 이름으로 원인 찾기(release-and-patch §3-3)" bash deploy/release/selftest_gate.sh $DOCKER run --rm ${vol[@]+"${vol[@]}"} "${DATA_PIPELINE_IMAGE:-}" selftest || return 1
+  _step "selftest data-pipeline" "FAIL 줄의 시험 이름으로 원인 찾기(release-and-patch §3)" bash deploy/release/selftest_gate.sh $DOCKER run --rm ${vol[@]+"${vol[@]}"} "${DATA_PIPELINE_IMAGE:-}" selftest || return 1
   _vol "${MCP_SERVER_IMAGE:-}"
-  _step "selftest mcp-server" "FAIL 줄의 시험 이름으로 원인 찾기(release-and-patch §3-3)" bash deploy/release/selftest_gate.sh $DOCKER run --rm ${vol[@]+"${vol[@]}"} "${MCP_SERVER_IMAGE:-}" selftest || return 1
+  _step "selftest mcp-server" "FAIL 줄의 시험 이름으로 원인 찾기(release-and-patch §3)" bash deploy/release/selftest_gate.sh $DOCKER run --rm ${vol[@]+"${vol[@]}"} "${MCP_SERVER_IMAGE:-}" selftest || return 1
   _step "검색 MCP" "\`$DOCKER logs mcp-server$NAME_SUFFIX\` 마지막 줄 — mcp_keepalive.sh가 다시 띄웠는데도 /health 응답 없음" bash deploy/host/scripts/mcp_keepalive.sh || return 1
   echo "[host_ctl check] 통과 — ${n}개"
 }
