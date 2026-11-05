@@ -516,6 +516,11 @@ def _tail(path, n=150):
         return ""
 
 
+def _fail_note(rc, seq, log_name):
+    """실패 안내 꼬리 — 시간 초과(rc 124) 표시 + 그 문서 로그 끝."""
+    return ("시간 초과 · " if rc == 124 else "") + _tail(DOCFLOW / str(seq) / log_name)
+
+
 def now():
     return datetime.datetime.now()
 
@@ -720,7 +725,7 @@ def publish_one(seq):
     mark(seq, "pub_end", ok=ok, sec=round(time.time() - t1, 1))
     log(
         f"doc#{seq} publish {'OK' if ok else 'FAIL'}({(time.time() - t1) / 60:.1f}분)"
-        + ("" if ok else f" — 원본 남김 · {'시간 초과 · ' if rc == 124 else ''}{_tail(DOCFLOW / str(seq) / 'publish.log')}")
+        + ("" if ok else f" — 원본 남김 · {_fail_note(rc, seq, 'publish.log')}")
     )
     return ok
 
@@ -735,11 +740,7 @@ def gold_one(seq, enq_t=None):
     mark(seq, "struct_end", ok=ok, sec=round(time.time() - t0, 1))
     log(
         f"doc#{seq} 구조화+적재 {'OK' if ok else 'FAIL'}(대기 {wait / 60:.1f}분 · 실행 {(time.time() - t0) / 60:.1f}분)"
-        + (
-            ""
-            if ok
-            else f" — silver는 남김(게시됨, gold는 silver에서 다시 만듦) · {'시간 초과 · ' if rc == 124 else ''}{_tail(DOCFLOW / str(seq) / 'structure.log')}"
-        )
+        + ("" if ok else f" — silver는 남김(게시됨, gold는 silver에서 다시 만듦) · {_fail_note(rc, seq, 'structure.log')}")
     )
     # TODO(pl-24 · refactor.md C-81): DB 담당자가 AI.ParsingMeta.gold_status(pending·ok·failed)+이유 칸을 더하면 여기서 실패를 적는다.
     #   지금은 칸이 없어 로그에만. gold_version 칸(C-76 ③)이 있으면 비어 있으므로 다음 --skip-done이 다시 고른다 —

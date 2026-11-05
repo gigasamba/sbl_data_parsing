@@ -3,11 +3,10 @@ manifest 행의 `sha256_stat`(해시한 파일의 [크기, 고친 시각 ns])이
 (회전된 준비 파일·다른 파일·manifest 없음) contract.file_hash로 다시 구한다 — 결과는 바이트 그대로."""
 
 import functools
-import json
 from pathlib import Path
 
 from common.config import settings as C
-from common.core.contract import file_hash
+from common.core.contract import file_hash, jl
 
 
 def stat_of(p):
@@ -19,13 +18,7 @@ def stat_of(p):
 @functools.cache
 def _rows(man, mtime_ns):
     """manifest 경로(+ 고친 시각 — 다시 쓰면 다시 읽음) → {파일 이름: (sha256, sha256_stat)}."""
-    out = {}
-    for ln in Path(man).read_text(encoding="utf-8").splitlines():
-        if ln.strip():
-            r = json.loads(ln)
-            if r.get("sha256") and r.get("sha256_stat"):
-                out[r["file_name"]] = (r["sha256"], r["sha256_stat"])
-    return out
+    return {r["file_name"]: (r["sha256"], r["sha256_stat"]) for r in jl(Path(man)) if r.get("sha256") and r.get("sha256_stat")}
 
 
 def sha_of(p):

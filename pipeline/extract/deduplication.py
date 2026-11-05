@@ -26,14 +26,11 @@ _NOISE = re.compile(
 
 def run_folder(src, out, names=None, write_keep=True):
     """폴더의 파일(names를 주면 그 이름만 — 이번 묶음)을 해시로 묶어 대표만 keep — (keep {대표 이름: sha256}, groups.csv 행, 중복 그룹 수).
-    write_keep=False면 <out>/keep.txt를 쓰지 않는다(부른 쪽이 씀). 파일이 1개 이하면 묶을 것이 없어 sha256만(받기가 manifest에 남긴 값 —
-    srcsha.sha_of) 돌려주고 <out>에 아무것도 쓰지 않는다(keep.txt도).
+    write_keep=False면 <out>/keep.txt를 쓰지 않는다(부른 쪽이 씀). sha256은 받기가 manifest에 남긴 값(srcsha.sha_of).
     지문은 (경로·크기·수정 시각)이 같으면 fingerprints.jsonl 캐시를 다시 쓴다(새·바뀐 파일만 읽음)."""
     files = sorted(
         p for p in Path(src).iterdir() if p.is_file() and not _hidden(p) and p.name != ".gitkeep" and (names is None or p.name in names)
     )
-    if len(files) <= 1:
-        return {p.name: sha_of(p) for p in files}, [], 0
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     cache_path = out / "fingerprints.jsonl"

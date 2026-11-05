@@ -26,12 +26,12 @@ from common.core import span as SP  # 성능 span
 from common.core.console import utf8_stdout
 from common.core.contract import file_hash, jl
 from common.core.contract import safe_path_join as _safe_join  # 경로 잇기(load 단계와 같은 함수)
-from common.core.paths import atomic_write_text
+from common.core.paths import atomic_write_text, tmp_path_for
 from common.store import objectstore
 from pipeline import config as pc
 from pipeline.extract import candidate_pick as CP
 from pipeline.shared.runtrace import skip_event
-from pipeline.shared.srcsha import stat_of
+from pipeline.shared.srcsha import sha_of, stat_of
 
 
 def _read_manifest(state):
@@ -115,7 +115,7 @@ def download(rows, state, workers=1):
             on_wire = False
             os.replace(tmp, p)  # 그 이름으로 보이는 파일은 항상 완전한 내용
             if etag:
-                tag.write_text(etag, encoding="utf-8")
+                atomic_write_text(tag, etag)
             else:
                 tag.unlink(missing_ok=True)
             size = int(actual) if actual is not None else o["size"]
@@ -294,11 +294,14 @@ def _dedup(local, names, dedup_dir, state, seen=None):
     deduplication.run_folder(대표 하나 — 1건 이하면 해시만), 그다음 ParsingMeta에 파싱된 원본 행(ok·partial —
     candidate_pick.done_by_sha)이 같은 sha256을 다른 원본 키로 가지면 뺀다(같은 키면 그 문서의 재처리라 남김), seen이 있으면 이번 실행에서
     다른 원본이 먼저 받은 sha256이면 뺀다(`_claim` — skip_doc_info에도). 원본 키 = manifest의 "key"(없으면 이름 — 게시와 같은 규칙).
-    sha256은 받기가 manifest에 남긴 값(run_folder가 srcsha.sha_of로 — 없으면 한 번 구함).
+    sha256은 받기가 manifest에 남긴 값(srcsha.sha_of — 없으면 한 번 구함).
     keep.txt = 폴더 파일 중 이번에 중복으로 뺀 것만 없는 목록(게시가 빠진 것만 skipped_dup로 쓰고, 앞 실행의 남은 문서는 그대로 둠)."""
     from pipeline.extract import deduplication as dedup
 
-    keep, rows, _ = dedup.run_folder(local, dedup_dir, set(names), write_keep=False)  # keep.txt는 아래에서 한 번
+    if len(names) <= 1:  # 묶을 것이 없음(서버 stage는 문서 하나씩) — 해시만, 지문 캐시·groups.csv 안 씀
+        keep, rows = {n: sha_of(Path(local) / n) for n in names}, []
+    else:
+        keep, rows, _ = dedup.run_folder(local, dedup_dir, set(names), write_keep=False)  # keep.txt는 아래에서 한 번
     rep = {r["group"]: r["file"] for r in rows if r["representative"]}
     dropped = set()
     for r in rows:
@@ -320,23 +323,13 @@ def _dedup(local, names, dedup_dir, state, seen=None):
         if first:
             skip_event(n, "dup_run", dup_of=first)
             dropped.add(n)
-            run_dup.append(n)
+            run_dup.append((n, key))
         else:
             left.append(n)
     if run_dup:  # 같은 내용을 이미 파싱하는 원본이 있음 — 다음 대상 목록에서도 뺌
         from pipeline.extract import skip_docs
 
-        skip_docs.record(
-            [
-                {
-                    "source_key": key_of.get(n, n),
-                    "source_system": CP.source_of(key_of.get(n, n)),
-                    "file_name": n,
-                    "reason": "duplicate_sha256",
-                }
-                for n in run_dup
-            ]
-        )
+        skip_docs.record([_skip_row(k, n, "duplicate_sha256") for n, k in run_dup])
     Path(dedup_dir).mkdir(parents=True, exist_ok=True)
     rest = sorted(
         f.name for f in Path(local).iterdir() if f.is_file() and not CP._hidden(f) and f.name != ".gitkeep" and f.name not in dropped
@@ -351,7 +344,8 @@ def _claim(seen, sha, key):
     같은 원본(받기 다시 시도)이면 None."""
     seen = Path(seen)
     seen.mkdir(parents=True, exist_ok=True)
-    f, tmp = seen / sha, seen / f"{sha}.{os.getpid()}.tmp"
+    f = seen / sha
+    tmp = tmp_path_for(f)
     tmp.write_text(key, encoding="utf-8")
     try:
         os.link(tmp, f)
@@ -361,6 +355,11 @@ def _claim(seen, sha, key):
         return None if first == key else first
     finally:
         tmp.unlink(missing_ok=True)
+
+
+def _skip_row(key, name, reason):
+    """skip_docs.record 행 하나 — 원본 키에서 원천 이름을 얻는다."""
+    return {"source_key": key, "source_system": CP.source_of(key), "file_name": name, "reason": reason}
 
 
 def _record_filtered(prepared, state):
@@ -377,12 +376,7 @@ def _record_filtered(prepared, state):
         rows = list(csv.DictReader(fh))
     man = _read_manifest(state)
     keys = {r["file"]: (man.get(r["file"]) or {}).get("key") or r["file"] for r in rows}
-    skip_docs.record(
-        [
-            {"source_key": keys[r["file"]], "source_system": CP.source_of(keys[r["file"]]), "file_name": r["file"], "reason": r["reason"]}
-            for r in rows
-        ]
-    )
+    skip_docs.record([_skip_row(keys[r["file"]], r["file"], r["reason"]) for r in rows])
 
 
 def _stage_cmd(argv):

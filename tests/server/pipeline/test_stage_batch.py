@@ -20,6 +20,7 @@ from pipeline.extract import candidate_ready as CR
 from pipeline.extract import filter_and_rotate as FR
 from pipeline.extract import skip_docs as SD
 from pipeline.shared import srcsha as SRCSHA
+from tests.server.pipeline.test_candidate import _FakeS3
 
 sha = lambda body: hashlib.sha256(body).hexdigest()
 DONE_KEY = "SFDC/x/old.txt"  # ParsingMeta에 끝난(ok) 다른 원본 키 — old.txt와 같은 내용
@@ -138,19 +139,14 @@ def test_same_night_dup():
     assert skips == [(n, reason, dup_of) for _, n, _, reason, dup_of in RUN_DOCS if reason], skips
 
 
-class _S3:
-    """가짜 Object Storage — {(버킷, 키): (ETag, 내용)} · 받은 횟수(got)."""
+class _S3(_FakeS3):
+    """test_candidate의 가짜 Object Storage + 받은 횟수(got)."""
 
-    def __init__(self, objs):
-        self.objs, self.got = objs, 0
-
-    def head_object(self, Bucket, Key):
-        etag, body = self.objs[(Bucket, Key)]
-        return {"ETag": f'"{etag}"', "ContentLength": len(body)}
+    got = 0
 
     def download_file(self, Bucket, Key, path):
         self.got += 1
-        Path(path).write_bytes(self.objs[(Bucket, Key)][1])
+        super().download_file(Bucket, Key, path)
 
 
 # staging 다시 쓰기는 ETag가 같을 때만(pl-59) — (ETag, 내용, 받기 호출 누적 기대). 둘째 줄 = 크기 같고 ETag 다름 → 다시 받음.

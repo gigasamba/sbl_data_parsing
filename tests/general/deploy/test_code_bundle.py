@@ -10,15 +10,9 @@ import tempfile
 from pathlib import Path
 
 from common.core.paths import DEPLOY_ROOT
+from tests.general.deploy.test_trigger_gate import _bash
 
 ROOT = DEPLOY_ROOT  # 저장소 루트(paths 상수)
-
-
-def _bash():
-    if os.name == "nt":  # System32 bash.exe는 WSL — Git Bash를 씀
-        git = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "bin" / "bash.exe"  # env 남김 — OS 값
-        return str(git) if git.is_file() else None
-    return shutil.which("bash")
 
 
 def _block(rel, pattern):
