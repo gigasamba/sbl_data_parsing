@@ -12,7 +12,7 @@
   문서마다 그 형식의 엔진(stack.json)을 **동시에**(엔진마다 별도 자식 프로세스 `--one` — 세그폴트가 전체를
     멈추지 않음). --workers N: 문서 N개를 동시에. --procs N: 문서를 N조각으로 나눠 프로세스 N개가 동시에(스레드는 코어 ÷ N).
   OCR 엔진(OCR_ENGINES — rapidocr_ko)은 파싱 엔진으로 돌지 않는다 — 이미지·스캔 문서는 VLM 엔진만.
-    글자 PDF 안의 스캔 쪽은 여기서 OCR 엔진을 더하지 않고 대표 결과(build_rep)의 쪽 VLM이 그 쪽만 채운다.
+    글자 PDF 안의 스캔 쪽은 여기서 OCR 엔진을 더하지 않고 대표 결과(doc_represent)의 쪽 VLM이 그 쪽만 채운다.
   진행 현황: 콘솔 큐 줄만.
   엔진 범위는 stack 하나: 문서마다 형식 키
     (.pdf_text/.pdf_image/확장자, stack.json과 같은 키)의 stack.json parse 목록만 돈다. --engines는 그 안에서 더 좁힐 뿐(비교 실험은

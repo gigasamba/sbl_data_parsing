@@ -155,10 +155,10 @@ def scan_pages_detail(path):
     """글자 PDF 안의 스캔 쪽(쪽 번호 1부터) → 걸린 이유(쪽마다 하나, 먼저 맞는 것):
     'chars'  = 글자층 거의 없음(< PAGE_SCAN_CHARS) + 이미지 면적 큼(>= PAGE_SCAN_AREA)
     'hidden' = 숨은 글자층 비율 높음(>= PAGE_HIDDEN_RATIO) + 이미지 면적(>= PAGE_HIDDEN_AREA). 그림과 같은 내용의 양질 OCR
-               글자층(검색 가능 스캔 PDF)도 걸리지만 일부러 후보에 넣는다 — 원래 글을 둘지는 대표 결과(build_rep)가 정한다.
+               글자층(검색 가능 스캔 PDF)도 걸리지만 일부러 후보에 넣는다 — 원래 글을 둘지는 대표 결과(doc_represent)가 정한다.
     'garbage' = 글자층 깨짐 비율 높음(>= PAGE_SCAN_GARBAGE) + 이미지 면적 큼(>= PAGE_SCAN_AREA)
     'hidden_overlap' = 숨은 글자 상자 하나가 그림과 겹침(hidden_over_image) — 쪽 VLM 후보로 넓히되, 쪽 VLM은 글자 상자가
-               없어 국소 확인을 못 하므로 build_rep.fill_scan_pages는 원래 글을 유지한다. 상한 PARSE_HIDDEN_OVERLAP_MAX(0=끔).
+               없어 국소 확인을 못 하므로 doc_represent.fill_scan_pages는 원래 글을 유지한다. 상한 PARSE_HIDDEN_OVERLAP_MAX(0=끔).
     'rotated' = filter_and_rotate가 돌린 쪽(rotation.csv angle≠0) — 회전이 글자층 신뢰도를 낮출 수 있다. 상한 PARSE_ROTATED_MAX(0=끔).
     'vectors' = 쪽 안 벡터 도식 군집 수가 PAGE_VECTORS_MIN 이상 — 글자층만으로 구조를 못 담는 쪽. 상한 PARSE_VECTORS_MAX(0=끔).
     문서 전체가 스캔(is_scan)이면 이 함수를 부르지 않는다."""

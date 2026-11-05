@@ -25,7 +25,7 @@ def load_doc(parse_dir, eng, doc):
 
 
 def build(parse_dir, src, min_fams=2):
-    """문서별 교차 확인 (라벨, 값) — {문서: {pairs, all}}(build_rep이 rep.meta로 씀)."""
+    """문서별 교차 확인 (라벨, 값) — {문서: {pairs, all}}(doc_represent이 rep.meta로 씀)."""
     qa = json.loads((Path(parse_dir) / "qa.json").read_text(encoding="utf-8"))
     route = json.loads((Path(parse_dir) / "route.json").read_text(encoding="utf-8")) if (Path(parse_dir) / "route.json").exists() else {}
     fam = families()

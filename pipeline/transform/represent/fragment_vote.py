@@ -170,15 +170,15 @@ def vote_fragment(candidates, rep_engine=None, tie_bonus=0.5, locale_pref=None, 
 
 
 def _fact_key(f):
-    """라벨:값 조각의 자리 열쇠 — build_rep.row_key와 같은 규칙(정규화한 행 라벨, 없으면 값 전체).
-    build_rep이 이 모듈을 부르므로 순환 import를 피해 따로 둔다 — 규칙이 바뀌면 양쪽 다 고친다."""
+    """라벨:값 조각의 자리 열쇠 — doc_represent.row_key와 같은 규칙(정규화한 행 라벨, 없으면 값 전체).
+    doc_represent이 이 모듈을 부르므로 순환 import를 피해 따로 둔다 — 규칙이 바뀌면 양쪽 다 고친다."""
     label = (f.get("context") or [""])[0]
     return ("row", normalize_value(label)) if label.strip() else ("value", normalize_value(f.get("value") or ""))
 
 
 def fuse_facts(engine_docs, rep_engine, tie_bonus=0.5):
     """문서 하나 — engine_docs: {엔진: {"facts": [...]}}(그 엔진 자신의 원본 facts, 대표가 다른 엔진 것을
-    보충해 만든 rep["facts"] 말고 엔진별 원본 — build_rep이 합치기 전 스냅샷을 넘긴다) → 라벨:값·표 칸
+    보충해 만든 rep["facts"] 말고 엔진별 원본 — doc_represent이 합치기 전 스냅샷을 넘긴다) → 라벨:값·표 칸
     조각(facts, cells 포함) 융합. 자리 맞추기 = _fact_key(라벨 정규화) 같은 키끼리.
     문서 내 교차 언급 + 로캘을 문서 전체(모든 facts) 기준
     한 번만 계산해 매 자리의 vote_fragment에 넘긴다.

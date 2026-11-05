@@ -31,7 +31,7 @@
 - **이미지에 없는 엔진 거부:** `parse` 목록의 엔진마다 등록부(`pipeline/transform/parse/engines`)에 있고 설치(REQUIRES 모듈·도구)됐는지 — 파이프라인 진입점(`pipeline.cli`·`pipeline.parse_service`)이 시작 때 `pipeline.transform.parse.engine_check.resolve()`로 검사한다(어긋나면 종료 2). 모델 주소 설정(REQUIRES_ENV)은 보지 않는다. 검색은 `retrieve`·`k`만 쓴다.
 - `show-stack`은 실행 기록을 `/app/output/logs`에 쓰므로 `/app/output`이 읽기 전용인 `mcp-server` 컨테이너에서는 종료 2다 — `data-pipeline` 컨테이너에서 본다.
 - **파싱과 구조화가 같은 구성:** 호스트 `run_pipeline.py`는 시작 때 `data-pipeline` 컨테이너 안에서 `show-stack`을 한 번 돌려 파일이 읽히는지 확인한다(못 읽으면 멈춤).
-- **층과 code_fp:** 층 파일 `parse_engines`·`mail_attachments`·`build_rep`·`gold_bundle`은 `pipeline.config.stack()`으로 같은 파일을 읽는다. 파일 읽기 코드(`cfgfile`)는 층의 의존이 아니라 구성을 바꿔도 code_fp가 그대로다. `--stack <파일>`(`represent`·`gold_bundle`)은 PC 실험·시험 전용이다. 묶음 `meta.json`의 `stack_conf`에 구성이 남는다.
+- **층과 code_fp:** 층 파일 `parse_engines`·`mail_attachments`·`doc_represent`·`gold_bundle`은 `pipeline.config.stack()`으로 같은 파일을 읽는다. 파일 읽기 코드(`cfgfile`)는 층의 의존이 아니라 구성을 바꿔도 code_fp가 그대로다. `--stack <파일>`(`represent`·`gold_bundle`)은 PC 실험·시험 전용이다. 묶음 `meta.json`의 `stack_conf`에 구성이 남는다.
 - **형식 더하기:** 엔진 `parser.py`의 `FORMATS`는 두고 등록부 `pipeline/transform/parse/engines/registry.py`의 `EXTRA_FORMATS`에 더한 뒤 구성 파일에 형식 키를 넣는다([prd/transform.md#pl-45](../prd/transform.md#pl-45)).
 
 ## 2. AI 지시서(지시서 패키지)

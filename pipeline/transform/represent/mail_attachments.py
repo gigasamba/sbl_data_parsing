@@ -206,7 +206,7 @@ def thread_paragraphs(text):
     return "\n\n".join(paras)
 
 
-# ── build_rep.apply_post가 부르는 진입점 ─────────────────────────────────────────
+# ── doc_represent.apply_post가 부르는 진입점 ─────────────────────────────────────────
 def mail_blocks(doc_path, base_text):
     """.eml·.msg만: 인용 스레드 단락 + 첨부별 `[첨부 <파일명>]` 절 → (덧붙일 블록 목록, 통계{n, parsed, cached, sources}).
     다른 형식·오류는 (빈 목록, 0 통계)."""

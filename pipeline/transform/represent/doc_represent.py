@@ -9,7 +9,7 @@
   후보정(apply_post — vlm_page·figures·charts·supsub·attachments) → 표 제자리 넣기(table_inline).
   표기가 갈린 엔진 충돌은 _rep/conflicts.jsonl에도 모은다.
 산출 = 엔진 공통 출력 계약(text·tables·facts·boxes) + "rep" — 구조화(gold_bundle)는 이것만 읽는다.
-사용: python -m pipeline.transform.represent.build_rep [--stack stack.json] [--parse-dir output/parse]
+사용: python -m pipeline.transform.represent.doc_represent [--stack stack.json] [--parse-dir output/parse]
 """
 
 import argparse

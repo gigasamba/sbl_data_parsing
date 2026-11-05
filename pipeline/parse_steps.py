@@ -71,7 +71,7 @@ def run_group(cmd, env, timeout=None, launch=subprocess.Popen, track=False, **kw
 
 
 def parse_chain(run, prep, parse_dir, truth, engine_args=()):
-    """파싱 단계 사슬 parse_engines(prep → parse_dir) → parse_scoring → build_rep. 준비(filter_and_rotate)는 호출자가 먼저 부른다
+    """파싱 단계 사슬 parse_engines(prep → parse_dir) → parse_scoring → doc_represent. 준비(filter_and_rotate)는 호출자가 먼저 부른다
     (일괄 파싱은 준비와 엔진 사이에 새 문서 상한·VLM 동시 수를 정함). run(args) = 단계 하나(모듈 점 표기 + 인자)를 돌리고 종료 코드를
     돌려줌(작업 서비스는 실패면 run이 바로 RuntimeError). 채점·대표 결과가 실패하면 SystemExit(그 코드).
     반환: parse_engines가 runs.jsonl을 못 남겼으면(돈 문서 0건, 또는 run_all이 죽음) 채점·대표 결과 없이 parse_engines 종료 코드, 끝까지 돌면 None."""
@@ -81,7 +81,7 @@ def parse_chain(run, prep, parse_dir, truth, engine_args=()):
         return rc
     for args in (
         ["pipeline.transform.represent.parse_scoring", "--src", prep, "--parse", parse_dir, "--truth", truth],
-        ["pipeline.transform.represent.build_rep", "--src", prep, "--parse-dir", parse_dir],
+        ["pipeline.transform.represent.doc_represent", "--src", prep, "--parse-dir", parse_dir],
     ):
         rc = run(args)
         if rc != 0:

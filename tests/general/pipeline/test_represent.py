@@ -1,4 +1,4 @@
-"""pipeline.transform.represent.build_rep 시험."""
+"""pipeline.transform.represent.doc_represent 시험."""
 
 import json
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 from common.config.settings import COMMON
 from common.core.contract import source_record
 from pipeline import config as pc
-from pipeline.transform.represent.build_rep import (
+from pipeline.transform.represent.doc_represent import (
     apply_post,
     fill_scan_pages,
     fix_tables,
@@ -394,7 +394,7 @@ def selftest():
     finally:
         _vc.vlm_page = orig_vlm_page
     # covered 판정 표 — 대표가 VLM 엔진·본문 있음·이미지/스캔 형식(run_all과 같은 형식 키)일 때만
-    from pipeline.transform.represent.build_rep import _vlm_transcribed as _vt
+    from pipeline.transform.represent.doc_represent import _vlm_transcribed as _vt
 
     def _r(engine, text):
         return {"rep": {"engine": engine}, "text": text}

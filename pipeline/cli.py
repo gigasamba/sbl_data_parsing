@@ -54,7 +54,7 @@ def show_stack(a=None):
 
 
 # ── 파싱 모듈(run_pipeline이 문서마다 부름) ──────────
-# 파싱 끝 표시(_rep/_DONE.json)는 남김 — 읽고 쓰기는 대표 결과 단계(pipeline.transform.represent.build_rep.write_mark).
+# 파싱 끝 표시(_rep/_DONE.json)는 남김 — 읽고 쓰기는 대표 결과 단계(pipeline.transform.represent.doc_represent.write_mark).
 
 
 _T_STEP: dict = {}
@@ -127,7 +127,7 @@ def parse_module(a):
             raise SystemExit(rc)
         print("[parse] 이번 실행 0건 — 파싱한 문서 없음(runs.jsonl 없음) · 채점·대표 결과·끝 표시 건너뜀", flush=True)
         return
-    from pipeline.transform.represent import build_rep as BR
+    from pipeline.transform.represent import doc_represent as BR
 
     print(f"[docflow-step] {_tdone()}", flush=True)  # resolve~represent 단계별 시간 로그
     idx, digest = BR.rep_digest(OUT / "parse")
