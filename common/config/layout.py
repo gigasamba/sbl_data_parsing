@@ -2,9 +2,9 @@
 파일은 `required`(운영자가 꼭 채울 값) → 역할 절 `common`·`extract`·`transform`·`load`·`search`·`ops`(환경마다 운영자가 정하는 값) →
 `tuning`(거의 안 바꾸는 값 — 분류별) → `dev`(PC 전용 — 서버는 비워 둠) 순서다.
 코드는 모델 경로(`cfg().extract.ocr.dpi` 등)를 그대로 쓰고, read_settings()가 파일을 읽은 직후 to_model()로 모델 배치로 바꾼다.
-  · required: 칸마다 자리를 적은 표(REQUIRED). tuning: 모델 경로 모음(TUNING) — 자리는 `tuning.` + 역할 자리.
-  · PC 전용 칸(LOCAL): 자리는 `dev.` + 역할 자리(앞 `common.` 뺌).
-  · 그 밖: 접두어 규칙(ROLES — 모델 접두 → 파일 접두, 1:1).
+  · required: 칸마다 자리를 적은 표(REQUIRED). 이름·자리를 바꾼 칸: 표(PLACED — 모델 경로 → 파일 자리).
+  · tuning: 모델 경로 모음(TUNING) — 자리는 `tuning.` + 역할 자리. PC 전용 칸(LOCAL): 자리는 `dev.` + 역할 자리(앞 `common.` 뺌).
+  · 그 밖: 접두어 규칙(ROLES — 모델 접두 → 파일 접두, 1:1). 옛 자리도 ROLES로 모델 칸을 찾아 "옛 자리 → 새 자리"로 거부한다.
   · 모델을 모르고도 바꾼다(표준 라이브러리만 — 호스트 스크립트도 이 파일을 읽음). 검증은 앱 설정 객체가 한다.
 모르는 절·모르는 칸·자리가 다른 칸은 시작 거부(칸 자리만 알림, 값은 출력 안 함).
 """
@@ -12,83 +12,99 @@
 # 파일 최상위 절 — 이 순서로 sample에 낸다.
 SECTIONS = ("required", "common", "extract", "transform", "load", "search", "ops", "tuning", "dev")
 
-# required — (카테고리 열쇠, 제목, 쓰는 곳 표시, [(칸 이름, 모델 경로)]). 표시는 카테고리 제목에 한 번.
+# required — (카테고리 열쇠, 제목, [(칸 이름, 모델 경로, 필수 조건)]). 조건은 sample 주석 머리에 그대로 — "필수 · <언제·어느 앱>" 또는 "선택".
+_PG_NEED = "필수 · dev·prd(pipeline·mcp)"
 REQUIRED_GROUPS = (
-    ("env", "실행 환경", "PC·서버", (("run_env", "common.run_env"),)),
+    ("env", "실행 환경", (("run_env", "common.run_env", "필수 · 모두(local·dev·prd)"),)),
     (
         "pg",
-        "PostgreSQL(pgvector · gold)",
-        "PC·서버",
-        tuple((k, f"common.connections.pg.{k}") for k in ("host", "port", "db", "user", "password", "db_schema")),
+        "PostgreSQL(pgvector) — local은 6칸 모두 비우면 sqlite 대역(일부만 적으면 거부)",
+        tuple(
+            (k, f"common.connections.pg.{m}", _PG_NEED)
+            for k, m in (
+                ("host", "host"),
+                ("port", "port"),
+                ("database", "db"),
+                ("user", "user"),
+                ("password", "password"),
+                ("db_schema", "db_schema"),
+            )
+        ),
     ),
-    ("embed", "임베딩 모델", "PC·서버", tuple((k, f"common.models.embed.{k}") for k in ("base_url", "model", "api_key"))),
+    (
+        "embed",
+        "임베딩 모델",
+        (
+            ("base_url", "common.models.embed.base_url", "필수 · 모두(pipeline·mcp)"),
+            ("model", "common.models.embed.model", "필수 · 모두(pipeline·mcp)"),
+            ("api_key", "common.models.embed.api_key", "선택 — 엔드포인트가 키를 요구할 때"),
+        ),
+    ),
     (
         "edw",
         "EDW(회사 DB) — ParsingMeta 표·접속",
-        "서버: 접속 칸 · PC: sqlite 하나",
         (
-            ("parsing_meta_table", "common.connections.parsing_meta.table"),
-            ("host", "common.connections.rdb.host"),
-            ("port", "common.connections.rdb.port"),
-            ("database", "common.connections.rdb.database"),
-            ("read_user", "common.connections.rdb.read.user"),
-            ("read_password", "common.connections.rdb.read.password"),
-            ("write_user", "common.connections.rdb.write.user"),
-            ("write_password", "common.connections.rdb.write.password"),
-            ("sqlite", "common.connections.rdb.sqlite"),
+            ("parsing_meta_table", "common.connections.parsing_meta.table", "선택"),
+            ("host", "common.connections.rdb.host", "필수 · dev·prd(pipeline·mcp) — local은 적으면 시작 거부"),
+            ("port", "common.connections.rdb.port", "선택"),
+            ("database", "common.connections.rdb.database", "필수 · dev·prd(pipeline·mcp)"),
+            ("read_user", "common.connections.rdb.read.user", "필수 · dev·prd(pipeline·mcp)"),
+            ("read_password", "common.connections.rdb.read.password", "필수 · dev·prd(pipeline·mcp)"),
+            ("write_user", "common.connections.rdb.write.user", "필수 · dev·prd(pipeline — 게시할 때)"),
+            ("write_password", "common.connections.rdb.write.password", "필수 · dev·prd(pipeline — 게시할 때)"),
+            ("local_sqlite_file", "common.connections.rdb.sqlite", "필수 · local(pipeline·mcp) — dev·prd는 적으면 거부"),
         ),
     ),
     (
         "publish",
         "게시(silver 적재) 위치",
-        "PC·서버",
-        (("bucket", "pipeline.load.publish.bucket"), ("prefix", "pipeline.load.publish.prefix")),
-    ),
-    (
-        "object_storage",
-        "Object Storage 접속(게시 업로드)",
-        "서버만",
-        tuple((k, f"common.connections.object_storage.{k}") for k in ("endpoint", "region", "access_key", "secret_key", "verify_tls")),
-    ),
-    (
-        "models",
-        "LLM·VLM 모델",
-        "PC·서버",
-        tuple((f"{r}_{k}", f"common.models.{r}.{k}") for r in ("llm", "vlm") for k in ("base_url", "model", "api_key")),
-    ),
-    (
-        "source",
-        "원천 위치",
-        "서버만",
         (
-            ("input_source", "pipeline.extract.input_source"),
-            ("source_bucket", "pipeline.connections.rdb.bucket"),
-            ("source_uri_prefix", "common.text.source_uri_prefix"),
+            ("bucket", "pipeline.load.publish.bucket", "필수 · 모두(pipeline)"),
+            ("prefix", "pipeline.load.publish.prefix", "선택"),
         ),
     ),
     (
-        "tokens",
-        "서비스 토큰",
-        "서버만",
+        "object_storage",
+        "Object Storage 접속",
         (
-            ("mcp", "common.tokens.mcp"),
-            ("fulltext", "mcp.server.fulltext_secret"),
+            ("endpoint", "common.connections.object_storage.endpoint", "필수 · dev·prd(pipeline·mcp) — local은 적으면 시작 거부"),
+            ("access_key", "common.connections.object_storage.access_key", "필수 · dev·prd(pipeline·mcp)"),
+            ("secret_key", "common.connections.object_storage.secret_key", "필수 · dev·prd(pipeline·mcp)"),
+        ),
+    ),
+    *(
+        (
+            r,
+            f"{r.upper()} 모델",
+            (
+                ("base_url", f"common.models.{r}.base_url", "필수 · 모두(pipeline)"),
+                ("model", f"common.models.{r}.model", "필수 · 모두(pipeline)"),
+                ("api_key", f"common.models.{r}.api_key", "선택 — 엔드포인트가 키를 요구할 때"),
+            ),
+        )
+        for r in ("llm", "vlm")
+    ),
+    (
+        "tokens",
+        "서비스 토큰·서명 키",
+        (
+            ("mcp", "common.tokens.mcp", "필수 · dev·prd(mcp·parse MCP 서비스)"),
+            ("fulltext_sign_key", "mcp.server.fulltext_secret", "필수 · dev·prd(mcp — 원문 도구를 쓸 때)"),
         ),
     ),
     (
         "deploy",
         "서버 배포(이미지·호스트 폴더)",
-        "서버만",
         (
-            ("pipeline_image", "pipeline.host.image"),
-            ("mcp_image", "mcp.host.image"),
-            ("doc_src", "common.host.doc_src"),
-            ("output_root", "common.host.output_root"),
-            ("pg_container", "common.host.pg_container"),
+            ("pipeline_image", "pipeline.host.image", "필수 · dev·prd(호스트 compose)"),
+            ("mcp_image", "mcp.host.image", "필수 · dev·prd(호스트 compose)"),
+            ("host_docs_dir", "common.host.doc_src", "필수 · dev·prd(호스트 compose)"),
+            ("pg_container_name", "common.host.pg_container", "필수 · dev·prd(호스트 run_pipeline·백업)"),
         ),
     ),
 )
-REQUIRED = {m: f"required.{g}.{k}" for g, _t, _w, rows in REQUIRED_GROUPS for k, m in rows}
+REQUIRED = {m: f"required.{g}.{k}" for g, _t, rows in REQUIRED_GROUPS for k, m, _n in rows}
+NEED = {m: n for _g, _t, rows in REQUIRED_GROUPS for _k, m, n in rows}
 # 역할 절 — (모델 접두, 파일 접두). 긴 접두가 먼저 맞는다. 파일 접두도 서로 1:1(거꾸로 바꿀 때 가장 긴 파일 접두).
 ROLES = (
     ("common.runtime.", "ops.runtime."),
@@ -115,6 +131,206 @@ ROLES = (
     ("mcp.host.", "ops.mcp_host."),
     ("mcp.dev.", "dev.mcp."),
 )
+
+# 이름·자리를 바꾼 칸 — {모델 경로: 파일 자리}. 모델 경로·옛 env 이름·--set 이름은 그대로(코드는 안 바뀜), 파일 자리만 다르다.
+# 이름은 줄임 없이 뜻이 보이게(단위·꼴을 끝에 — _sec·_file·_dir·max_…). 표에 없는 칸은 LOCAL·TUNING·ROLES 규칙대로.
+_RUN = "pipeline.host.run_pipeline."
+_T = "tuning."
+PLACED = {
+    # required 밖으로 옮긴 선택 칸
+    "common.connections.object_storage.region": "common.connections.object_storage.region",
+    "common.connections.object_storage.verify_tls": "common.connections.object_storage.verify_tls",
+    "pipeline.extract.input_source": "extract.source.input_location",
+    "pipeline.connections.rdb.bucket": "extract.source.default_bucket",
+    "common.text.source_uri_prefix": "extract.source.uri_prefix",
+    "common.host.output_root": "ops.host.output_dir",
+    # common
+    "common.connections.rdb.connect_kwargs": "common.connections.edw.extra_connect_args",
+    "common.models.embed.query_cache": "common.models.embed.query_cache_file",
+    "common.models.embed.query_prefix": "common.models.embed.query_instruction",
+    "common.models.llm.cache_dir": "common.models.llm.response_cache_dir",
+    "common.models.llm.extra_body": "common.models.llm.extra_request_body",
+    "common.models.llm.rpm": "common.models.llm.max_calls_per_minute",
+    "common.models.vlm.concurrency": "common.models.vlm.requests_per_doc",
+    "common.models.vlm.extra_body": "common.models.vlm.extra_request_body",
+    "common.models.vlm.max_concurrency": "common.models.vlm.max_total_requests",
+    "common.models.vlm.timeout": "common.models.vlm.timeout_sec",
+    # extract
+    "pipeline.connections.secure_doc.passwords_file": "extract.secure_doc.passwords_file",
+    "pipeline.extract.max_new": "extract.max_new_docs_per_run",
+    "pipeline.extract.skipped_log": "extract.skipped_docs_log",
+    "pipeline.extract.source.fetch_workers": "extract.source.fetch_threads",
+    "pipeline.extract.source.staging": "extract.source.staging_dir",
+    "pipeline.extract.prepare.rotate": "extract.prepare.rotate_pages",
+    "pipeline.extract.rapidocr_page_workers": "extract.ocr.rapidocr_page_threads",
+    "pipeline.extract.ocr.dpi": "extract.page_render_dpi",
+    "pipeline.extract.ocr.max_pages": "extract.ocr.max_pages_per_doc",
+    "pipeline.extract.ocr.threads": "extract.ocr.onnx_threads",
+    # transform
+    "pipeline.extract.doc_parallel": "transform.represent.parallel_docs",
+    "pipeline.transform.represent.post": "transform.represent.post_steps",
+    "pipeline.transform.represent.qa_light": "transform.represent.skip_full_qa",
+    "pipeline.transform.represent.rep_select": "transform.represent.engine_pick",
+    "pipeline.transform.vlm.figures_max": "transform.vlm.max_figures_per_doc",
+    "pipeline.transform.vlm.page_max": "transform.vlm.max_pages_per_doc",
+    "pipeline.transform.structure.embed_cache": "transform.structure.embed_cache_file",
+    # load
+    "pipeline.load.edw_path_prefix": "load.stored_path_prefix",
+    # search
+    "mcp.server.host": "search.server.bind_host",
+    "mcp.server.manifest": "search.server.manifest_file",
+    "mcp.server.max_concurrency": "search.server.max_concurrent_tools",
+    "mcp.edw_meta.dir": "search.edw_meta.catalog_dir",
+    # ops
+    "common.runtime.lib_env": "ops.runtime.library_env",
+    "common.runtime.pipe_procs": "ops.runtime.engine_processes",
+    "common.runtime.pipe_workers": "ops.runtime.vlm_parallel_docs",
+    "common.runtime.parse_max_mb": "ops.services.data_parsing.max_file_mb",
+    "common.runtime.data_parsing_port": "ops.services.data_parsing.port",
+    "pipeline.service.data_parsing.roots": "ops.services.data_parsing.allowed_roots",
+    "common.log.dir": "ops.log.json_dir",
+    "common.paths.doc_dir": "ops.paths.docs_dir",
+    "common.paths.doc_dir_prepared": "ops.paths.prepared_docs_dir",
+    "common.paths.draft_terms_out": "ops.paths.glossary_draft_file",
+    "common.paths.edw_chain": "ops.paths.edw_chain_file",
+    "common.paths.source_manifest": "ops.paths.source_manifest_file",
+    "pipeline.paths.images_root": "ops.paths.figure_images_dir",
+    "pipeline.paths.out_root": "ops.paths.output_dir",
+    "pipeline.paths.parse_tmp": "ops.paths.parse_temp_dir",
+    "pipeline.paths.raw_root": "ops.paths.raw_cache_dir",
+    "pipeline.paths.soffice_bin": "ops.paths.soffice_path",
+    "common.host.docker": "ops.host.container_cli",
+    "common.host.instance": "ops.host.instance_name",
+    "common.host.image_stage_dir": "ops.host.prune_stage_dir",
+    "common.host.prune_keep": "ops.host.prune_keep_versions",
+    "pipeline.host.parse_cpus": "ops.containers.pipeline.cpus",
+    "pipeline.host.parse_mem_limit": "ops.containers.pipeline.mem_limit",
+    "pipeline.host.data_parsing_cpus": "ops.containers.data_parsing.cpus",
+    "pipeline.host.data_parsing_mem_limit": "ops.containers.data_parsing.mem_limit",
+    "pipeline.host.data_parsing_cpu_shares": "ops.containers.data_parsing.cpu_shares",
+    "mcp.host.cpus": "ops.containers.mcp.cpus",
+    "mcp.host.mem_limit": "ops.containers.mcp.mem_limit",
+    "pipeline.host.nightly.time": "ops.nightly.start_time",
+    "pipeline.host.nightly.deadline": "ops.nightly.stop_time",
+    # ops.run_pipeline — 단계·레인별로 묶음
+    "pipeline.host.run_pipeline_dir": "ops.run_pipeline.work_dir",
+    **{
+        _RUN + m: "ops.run_pipeline." + y
+        for m, y in (
+            ("staging", "staging.max_docs"),
+            ("staging_workers", "staging.workers"),
+            ("fetch_workers", "staging.fetch_threads"),
+            ("struct_workers", "structure.workers"),
+            ("struct_backlog", "structure.max_backlog"),
+            ("embed_concurrency", "structure.embed_concurrency"),
+            ("embed_batch", "structure.embed_batch_size"),
+            ("bm25_threads", "structure.bm25_threads"),
+            ("light_dedicated", "light_lane.dedicated_workers"),
+            ("light_shared", "light_lane.shared_workers"),
+            ("light_cpu_gate", "light_lane.max_cpu_load"),
+            ("medium_dedicated", "medium_lane.dedicated_workers"),
+            ("medium_shared", "medium_lane.shared_workers"),
+            ("vlm_dedicated", "vlm_lane.dedicated_workers"),
+            ("vlm_shared", "vlm_lane.shared_workers"),
+            ("vlm_cap", "vlm_lane.max_concurrent_docs"),
+            ("vlm_lane_concurrency", "vlm_lane.vlm_requests_per_doc"),
+            ("vlm_lane_post", "vlm_lane.post_steps"),
+            ("vlm_concurrency", "parse.vlm_requests_per_doc"),
+            ("parse_post", "parse.post_steps"),
+            ("figures_max", "parse.max_figures_per_doc"),
+            ("rapidocr_page_workers", "parse.rapidocr_page_threads"),
+            ("ocr_threads", "parse.onnx_threads"),
+            ("pipe_procs", "parse.engine_processes"),
+            ("rep_select", "parse.engine_pick"),
+            ("qa_light", "parse.skip_full_qa"),
+            ("scan_rotate", "parse.rotate_scans"),
+            ("cpu_gate", "parse.max_cpu_load"),
+        )
+    },
+    # tuning
+    "common.connections.pg.connect_timeout": _T + "common.connections.pg.connect_timeout_sec",
+    "common.connections.pg.pool_max": _T + "common.connections.pg.pool_max_connections",
+    "common.models.embed.query_cache_max": _T + "common.models.embed.query_cache_max_rows",
+    "common.models.embed.timeout": _T + "common.models.embed.timeout_sec",
+    "common.models.llm.empty_retry_max": _T + "common.models.llm.empty_retry_max_tokens",
+    "common.models.llm.timeout": _T + "common.models.llm.timeout_sec",
+    "common.models.transport.connect_timeout": _T + "common.models.transport.connect_timeout_sec",
+    "common.models.transport.down_after": _T + "common.models.transport.down_after_failures",
+    "common.models.transport.down_cooldown": _T + "common.models.transport.down_cooldown_sec",
+    "common.models.vlm.retry": _T + "common.models.vlm.retries",
+    "common.text.draft_terms_max": _T + "common.text.glossary_draft_max_rows",
+    "common.text.search_en_stem": _T + "common.text.english_singularize",
+    "common.text.token_num_norm": _T + "common.text.number_unit_normalize",
+    "pipeline.connections.rdb.increment_col": _T + "extract.source_columns.increment",
+    "pipeline.connections.rdb.columns.content_version": _T + "extract.source_columns.content_version",
+    "pipeline.connections.rdb.columns.doc_id": _T + "extract.source_columns.doc_id",
+    "pipeline.connections.rdb.columns.filename": _T + "extract.source_columns.filename",
+    "pipeline.connections.rdb.columns.key": _T + "extract.source_columns.storage_key",
+    "pipeline.connections.rdb.columns.size": _T + "extract.source_columns.file_size",
+    "pipeline.extract.engine_retry": _T + "extract.engine_retries",
+    "pipeline.extract.fill_merged": _T + "extract.fill_merged_cells",
+    "pipeline.extract.hidden_overlap_max": _T + "extract.max_hidden_overlap_pages",
+    "pipeline.extract.isolate_overhead": _T + "extract.isolate_startup_sec",
+    "pipeline.extract.low_priority": _T + "extract.low_priority_engines",
+    "pipeline.extract.rotated_max": _T + "extract.max_rotated_pages",
+    "pipeline.extract.text_page_sec": _T + "extract.text_engine_page_timeout_sec",
+    "pipeline.extract.warmup_sec": _T + "extract.first_doc_min_timeout_sec",
+    "pipeline.extract.attach.max_n": _T + "extract.attach.max_count",
+    "pipeline.extract.attach.timeout": _T + "extract.attach.timeout_sec",
+    "pipeline.extract.cache.parse_cache_max_gb": _T + "extract.cache.max_gb",
+    "pipeline.extract.ocr.table_grid": _T + "extract.ocr.table_grid_from_boxes",
+    "pipeline.transform.figures.ocr_parallel": _T + "transform.figures.ocr_threads",
+    "pipeline.transform.figures.pptx_convert_sec": _T + "transform.figures.soffice_timeout_sec",
+    "pipeline.transform.figures.pptx_render_max": _T + "transform.figures.pptx_max_rendered_slides",
+    "pipeline.transform.figures.pptx_shapes_max": _T + "transform.figures.pptx_max_shape_slides",
+    "pipeline.transform.figures.pptx_smartart_max": _T + "transform.figures.pptx_max_smartart_slides",
+    "pipeline.transform.figures.vectors_max": _T + "transform.figures.max_vector_pages",
+    "pipeline.transform.vlm.fig_min_px": _T + "transform.figures.min_side_px",
+    "pipeline.transform.vlm.fig_ocr_max": _T + "transform.figures.max_ocr_per_doc",
+    "pipeline.transform.vlm.fig_photo_area_min": _T + "transform.figures.photo_min_area_ratio",
+    "pipeline.transform.vlm.fig_photo_max_tokens": _T + "transform.figures.photo_max_tokens",
+    "pipeline.transform.vlm.fig_photo_ocr_max": _T + "transform.figures.photo_max_ocr_chars",
+    "pipeline.transform.vlm.fig_text_ocr_min": _T + "transform.figures.text_image_min_ocr_chars",
+    "pipeline.transform.structure.chunk_size": _T + "transform.structure.chunk_target_chars",
+    "pipeline.transform.structure.chunk_table": _T + "transform.structure.split_tables",
+    "pipeline.transform.structure.chunk_table_rows": _T + "transform.structure.table_rows_per_chunk",
+    "pipeline.transform.structure.embed_batch": _T + "transform.structure.embed_batch_size",
+    "pipeline.transform.structure.embed_retry": _T + "transform.structure.embed_retries",
+    "mcp.edw_meta.max_bytes": _T + "search.edw_meta.max_response_bytes",
+    "mcp.edw_query.max_bytes": _T + "search.edw_query.max_response_bytes",
+    "mcp.output.max_chars": _T + "search.output.max_response_bytes",
+    "mcp.search.methods": _T + "search.default_methods",
+    "mcp.search.pg.filter_exact_max": _T + "search.pg.exact_search_max_chunks",
+    "mcp.server.max_queue": _T + "search.server.max_queued_tools",
+    "common.runtime.cpu_max_load": _T + "ops.runtime.max_cpu_load",
+    "common.runtime.draft_terms_lock_timeout": _T + "ops.runtime.glossary_lock_timeout_sec",
+    "common.runtime.mem_settle_margin": _T + "ops.runtime.mem_settle_margin_pct",
+    "common.runtime.pipe_max_procs": _T + "ops.runtime.max_engine_processes",
+    "common.runtime.pipe_proc_gb": _T + "ops.runtime.gb_per_engine_process",
+    "common.runtime.pipe_reserve_cpus": _T + "ops.runtime.reserved_cpus",
+    "common.runtime.pipe_reserve_gb": _T + "ops.runtime.reserved_gb",
+    "common.runtime.pipe_threads": _T + "ops.runtime.threads_per_process",
+    "pipeline.service.data_parsing.procs": _T + "ops.services.data_parsing.engine_processes",
+    "pipeline.service.data_parsing.queue_max": _T + "ops.services.data_parsing.max_queued_jobs",
+    "pipeline.service.data_parsing.text_page_sec": _T + "ops.services.data_parsing.text_engine_page_timeout_sec",
+    "pipeline.service.data_parsing.warmup_sec": _T + "ops.services.data_parsing.first_try_min_timeout_sec",
+    # dev(PC 전용)
+    "common.models.embed.est_usd": "dev.models.embed.est_usd_per_call",
+    "common.models.llm.est_usd": "dev.models.llm.est_usd_per_turn",
+    "common.models.vlm.est_usd": "dev.models.vlm.est_usd_per_call",
+    "common.models.llm.price_in": "dev.models.llm.price_in_usd_per_mtok",
+    "common.models.llm.price_out": "dev.models.llm.price_out_usd_per_mtok",
+    "common.models.guard.budget_usd": "dev.models.guard.daily_budget_usd",
+    "common.models.guard.spend_file": "dev.models.guard.spend_ledger_file",
+    "common.connections.pg.standin_dir": "dev.pg_standin.dir",
+    "common.connections.pg.standin_schema": "dev.pg_standin.schema",
+    "common.dev.llm_fake": "dev.fake_llm",
+    "mcp.dev.mcp_url": "dev.search_ui.mcp_url",
+    "mcp.dev.ui_port": "dev.search_ui.port",
+    "common.dev.docker.smoke_settings": "dev.docker.smoke_settings_file",
+    "common.dev.docker.smoke_keep": "dev.docker.smoke_keep_pg",
+    "common.dev.docker.smoke_limit": "dev.docker.smoke_max_docs",
+}
 
 # tuning — 거의 안 바꾸는 값(sample 아래쪽에 분류별로 모음 — 비우면 코드 기본값).
 TUNING_INTERNAL = (  # 내부 조정값 — 재시도·내부 대기·묶음 크기·출력 상한
@@ -273,10 +489,25 @@ def _role(model_path):
     raise LayoutError(f"역할 절 규칙에 없는 모델 칸: {model_path}")
 
 
+def _lookup(path, table):
+    """표에서 경로 또는 그 앞부분(사전 값 칸 — library_env 아래 TZ 등)을 찾아 바꾼다. 없으면 None."""
+    head, rest = path, ""
+    while head:
+        if head in table:
+            return table[head] + rest
+        head, _, leaf = head.rpartition(".")
+        rest = f".{leaf}{rest}"
+    return None
+
+
+_FWD = REQUIRED | PLACED
+
+
 def to_yaml(model_path):
     """모델 경로 → 파일 자리."""
-    if model_path in REQUIRED:
-        return REQUIRED[model_path]
+    y = _lookup(model_path, _FWD)
+    if y is not None:
+        return y
     if model_path in LOCAL:
         return "dev." + _role(model_path).removeprefix("common.")
     if model_path in TUNING:
@@ -284,7 +515,7 @@ def to_yaml(model_path):
     return _role(model_path)
 
 
-_REQ_BACK = {y: m for m, y in REQUIRED.items()} | {to_yaml(m): m for m in LOCAL}
+_REQ_BACK = {y: m for m, y in _FWD.items()} | {to_yaml(m): m for m in LOCAL}
 _LOCAL_PARENTS = {to_yaml(m).rpartition(".")[0] for m in LOCAL}  # PC 전용 칸이 든 절(dev.models.guard 등) — 그 안의 다른 이름은 모르는 칸
 _ROLES_BACK = sorted(((y, m) for m, y in ROLES), key=lambda r: -len(r[0]))
 
@@ -292,8 +523,9 @@ _ROLES_BACK = sorted(((y, m) for m, y in ROLES), key=lambda r: -len(r[0]))
 def to_model_path(yaml_path):
     """파일 자리 → 모델 경로. 모르는 절·required/tuning에 없는 칸이면 None. 자리가 바뀐 칸(다른 절에 있어야 함)도 그대로 돌려준다 —
     판정은 to_model이(to_yaml로 되돌려 견줌)."""
-    if yaml_path in _REQ_BACK:
-        return _REQ_BACK[yaml_path]
+    m = _lookup(yaml_path, _REQ_BACK)
+    if m is not None:
+        return m
     rest = yaml_path.removeprefix("tuning.")
     for y, m in _ROLES_BACK:
         if rest.startswith(y):

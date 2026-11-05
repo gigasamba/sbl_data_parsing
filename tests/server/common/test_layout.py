@@ -14,7 +14,7 @@ PC_NEW = """required:
   pg:
     host: 127.0.0.1
     port: 55433
-    db: rag
+    database: rag
     user: rag
     password: dummy-pg
     db_schema: rag_test
@@ -24,30 +24,32 @@ PC_NEW = """required:
     api_key: dummy-key
 search:
   server:
-    host: 127.0.0.1
+    bind_host: 127.0.0.1
     port: 8765
 tuning:
   ops:
     runtime:
-      cpu_max_load: 4
+      max_cpu_load: 4
 dev:
   models:
     guard:
-      budget_usd: 1.5
-  mcp:
+      daily_budget_usd: 1.5
+  search_ui:
     mcp_url: http://127.0.0.1:8765/mcp
 """
 
 # 거부하는 칸 — (파일 본문, 읽는 앱, 오류에 나와야 하는 글자). 옛 자리는 새 자리를 알려 주고, 지운 칸·오타는 칸 이름만.
 REFUSED = (
     ("common:\n  connections:\n    pg: {host: h}\n", "pipeline", "common.connections.pg.host → required.pg.host"),
-    ("common:\n  models:\n    guard: {spend_file: x}\n", "pipeline", "common.models.guard.spend_file → dev.models.guard.spend_file"),
+    ("common:\n  models:\n    guard: {spend_file: x}\n", "pipeline", "common.models.guard.spend_file → dev.models.guard.spend_ledger_file"),
+    ("ops:\n  runtime: {pipe_procs: 2}\n", "pipeline", "ops.runtime.pipe_procs → ops.runtime.engine_processes"),  # 옛 이름 → 새 이름
+    ("required:\n  models: {llm_model: m}\n", "pipeline", "required.models.llm_model"),
     (
         "common:\n  models:\n    embed: {allow_external: true}\n",
         "pipeline",
         "common.models.embed.allow_external → dev.models.embed.allow_external",
     ),
-    ("dev:\n  connections:\n    pg: {host: h}\n", "pipeline", "dev.connections.pg.host"),  # dev 절은 PC 전용 칸만
+    ("dev:\n  pg_standin: {host: h}\n", "pipeline", "dev.pg_standin.host"),  # dev 절은 PC 전용 칸만
     ("search:\n  weights: {bm25: 3}\n", "mcp", "search.weights.bm25 → tuning.search.weights.bm25"),
     ("required:\n  source: {publish_bucket: b}\n", "pipeline", "required.source.publish_bucket"),
     ("required:\n  deploy: {mcp_store: pg}\n", "pipeline", "required.deploy.mcp_store"),
@@ -124,7 +126,7 @@ def test_duplicate_key_rejected():
         assert _raises(lambda: read_settings(f), "같은 칸 두 번: search", "5행")
         f.write_text("required:\n  env: {run_env: local, run_env: dev}\n", encoding="utf-8")
         assert _raises(lambda: read_settings(f), "같은 칸 두 번: run_env")
-        f.write_text("required:\n  env: {run_env: local}\ndev:\n  mcp:\n    <<: {ui_port: 1}\n", encoding="utf-8")
+        f.write_text("required:\n  env: {run_env: local}\ndev:\n  search_ui:\n    <<: {port: 1}\n", encoding="utf-8")
         assert read_settings(f)[0]["mcp"]["dev"]["ui_port"] == "1"  # 병합 열쇠는 거부하지 않음
         f.write_text("required:\n  env: {run_env: local}\n? [a]\n: 1\n", encoding="utf-8")
         assert _raises(lambda: read_settings(f), "YAML 형식 오류")  # 못 쓰는 열쇠도 TypeError가 아닌 설정 오류

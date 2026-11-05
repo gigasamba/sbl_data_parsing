@@ -1,6 +1,6 @@
 # 새벽 배치 — run_pipeline.py(문서별 flow — 서버 입구 하나)를 NIGHTLY_TIME 시각에.
 # 설치: 코드 폴더에서 `sudo bash deploy/host/scripts/host_ctl.sh timers`(@CODE_DIR@를 채워 쓰고 타이머를 켬 — 이 파일을 그대로 복사하지 않는다).
-#   스케줄 = NIGHTLY_TIME(settings.yaml ops.nightly.time, HH:MM — 비우면 새벽 배치 없음, pl-32) — 타이머가 5분마다 깨우고
+#   스케줄 = NIGHTLY_TIME(settings.yaml ops.nightly.start_time, HH:MM — 비우면 새벽 배치 없음, pl-32) — 타이머가 5분마다 깨우고
 #   nightly_batch.sh scheduled가 그 시각부터 5분 안일 때만 `run_pipeline.py --start-offset 0 --skip-done`을 부름(그 밖에는 말없이 끝).
 #   상한: run_pipeline --max-docs·--deadline(ops.nightly.max_docs·deadline) + TimeoutStartSec(아래 — 마지막 안전판). 사람이 따로 돌린 run_pipeline과는
 #   run_pipeline 잠금(batch_progress/run_pipeline.lock — 도는 중이면 종료 코드 75)으로 겹치지 않는다(pl-18).

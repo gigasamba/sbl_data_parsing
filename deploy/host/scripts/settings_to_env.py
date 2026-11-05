@@ -49,12 +49,7 @@ def render(value, kind):
     if isinstance(value, dict):
         return json.dumps(value, ensure_ascii=False)
     s = str(value)
-    if not s.strip() or s.strip() in (
-        "~",
-        "null",
-        "Null",
-        "NULL",
-    ):  # 글자 로더라 YAML 널도 글자로 옴 — 앱처럼 "값 없음"(compose 기본값이 걸림)
+    if not s.strip() or s.strip() in _NULL:  # 비운 글자·YAML 널 — 앱처럼 "값 없음"(compose 기본값이 걸림)
         return None
     if kind == "bool":
         b = s.strip().lower()
@@ -83,7 +78,19 @@ def load_model(path):
     doc = yaml.load(Path(path).read_text(encoding="utf-8"), Loader=loader) or {}
     if not isinstance(doc, dict):
         raise NotSections("맨 위는 절 사전이어야 함")
-    return lay.to_model(doc, str(path))
+    return lay.to_model(_nulls(doc), str(path))
+
+
+_NULL = ("~", "null", "Null", "NULL")
+
+
+def _nulls(v):
+    """글자 로더라 YAML 널(`null`·`~`)도 글자로 온다 — 앱처럼 None(비움)으로 바꾼다(sample의 null 칸을 그대로 복사해도 비운 것과 같게)."""
+    if isinstance(v, dict):
+        return {k: _nulls(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_nulls(x) for x in v]
+    return None if isinstance(v, str) and v.strip() in _NULL else v
 
 
 def load_or_error(path):

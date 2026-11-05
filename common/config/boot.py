@@ -3,7 +3,7 @@
   ② 셸 칸: 이 셸이 쓰는 칸(env 이름 — DOC_DIR·DOC_DIR_PREPARED·PARSE_SOURCE·PG_HOST)을 설정에서 꺼내 `N='값'` 줄로(export 아님 — 셸 변수만,
      앱 env에 설정 이름이 새지 않게). 비밀 칸은 거부. 이 이미지 절에 없는 이름(mcp 이미지의 PARSE_SOURCE)은 건너뜀. env에 이미 있으면 내지 않음(사용자 env).
      값이 없으면 내지 않음(셸 기본값).
-  ③ 라이브러리 env(settings.yaml ops.runtime.lib_env — 허용 목록만): `export N='값'` 줄 — 사용자 env는 안 덮고, 이미지 ENV 값(빌드 때 기록한
+  ③ 라이브러리 env(settings.yaml ops.runtime.library_env — 허용 목록만): `export N='값'` 줄 — 사용자 env는 안 덮고, 이미지 ENV 값(빌드 때 기록한
      --image-env 파일 /app/docker/image_env.txt의 값과 같으면 이미지 값)은 덮는다(B-2와 같은 원칙 — settings.yaml > 이미지 기본값).
 표준 출력 = eval할 export 줄만(값은 셸 따옴표 — 출력은 entrypoint가 eval만 하고 찍지 않음). 안내·오류는 표준 오류(값 없음).
 사용: python -m common.config.boot [--gate] [--image-env 파일] <셸 칸 이름>...

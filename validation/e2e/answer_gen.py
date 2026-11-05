@@ -291,7 +291,7 @@ def main(argv=None):
     else:
         prof = profile("llm")
         if prof is None:
-            raise SystemExit("LLM 모델 설정 없음 — settings.yaml required.models.llm_base_url·llm_model·llm_api_key 또는 --fake")
+            raise SystemExit("LLM 모델 설정 없음 — settings.yaml required.llm.base_url·model·api_key 또는 --fake")
     token = mc.token_text(mc.common_cfg().tokens.mcp)  # 공백만이면 토큰 없음(C-42·C-44) — 출력하지 않음
     contracts = asyncio.run(_mcp(a.url, token, None))
     missing = [n for n in MCP_TOOLS if n not in contracts]

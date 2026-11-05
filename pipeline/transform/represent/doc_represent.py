@@ -434,7 +434,7 @@ from pipeline.transform.represent import fragment_vote as fuse_mod  # noqa: E402
 from pipeline.transform.represent import table_inline  # noqa: E402
 
 
-# 후보정 기능 — transform.represent.post: 없음/"all" = 전부 · "none" = 꺼짐 · 콤마 목록("supsub,charts") = 그것만.
+# 후보정 기능 — transform.represent.post_steps: 없음/"all" = 전부 · "none" = 꺼짐 · 콤마 목록("supsub,charts") = 그것만.
 # "context"는 "figures" 없이는 효과 없음(그림 기록이 있어야 캡션·값 확인을 붙임).
 def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_pages=None, page_covered=False):
     """후보정 패키지 적용 — base 본문에 쪽 VLM 옮기기·차트·그림 기록 블록을 덧붙이고, 첨자(supsub)는 그 줄만 base 안에서

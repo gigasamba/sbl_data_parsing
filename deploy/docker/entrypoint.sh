@@ -56,7 +56,7 @@ esac
 # (tool ping_models는 외부 모델을 부르므로 빼지 않음 — RUN_ENV가 외부 모델 허용을 정함).
 # python 한 번(common.config.boot)으로: ① 관문(--gate — 서버면 설정 파일을 못 읽거나 이 이미지 절
 # 검증에 실패해도 이유만 찍고 종료 2) ② 이 셸이 쓰는 칸(DOC_DIR·DOC_DIR_PREPARED·PARSE_SOURCE·PG_HOST — settings.yaml, 비면 이미지 기본값(common/config/settings.py IMAGE_PATHS — 셸에는 기본값 없음)) ③ 라이브러리 env
-# (settings.yaml ops.runtime.lib_env — 사용자 env는 안 덮고 이미지 ENV 값(/app/docker/image_env.txt)은 덮음). 값은 출력하지 않는다(eval만).
+# (settings.yaml ops.runtime.library_env — 사용자 env는 안 덮고 이미지 ENV 값(/app/docker/image_env.txt)은 덮음). 값은 출력하지 않는다(eval만).
 gate=1
 case "$cmd" in
   help|selftest|check|check-modules|resources|services) gate=0;;

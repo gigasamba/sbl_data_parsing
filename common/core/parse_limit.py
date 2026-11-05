@@ -1,4 +1,4 @@
-"""parse_document 파일 크기 상한 — 검색 MCP(프록시)와 파싱 작업 서비스가 같은 칸(ops.runtime.parse_max_mb)을 같은 식으로 쓴다."""
+"""parse_document 파일 크기 상한 — 검색 MCP(프록시)와 파싱 작업 서비스가 같은 칸(ops.services.data_parsing.max_file_mb)을 같은 식으로 쓴다."""
 
 from common.config.settings import cfg
 
@@ -18,5 +18,5 @@ def body_cap():
 def too_big(n):
     """n바이트가 상한을 넘으면 안내 글자(크기·상한 MB), 아니면 None."""
     if n > max_bytes():
-        return f"파일이 크기 상한({cfg().runtime.parse_max_mb:g}MB)보다 큼({n / MB:.1f}MB) — ops.runtime.parse_max_mb"
+        return f"파일이 크기 상한({cfg().runtime.parse_max_mb:g}MB)보다 큼({n / MB:.1f}MB) — ops.services.data_parsing.max_file_mb"
     return None

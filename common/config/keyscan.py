@@ -112,7 +112,7 @@ NOT_SETTINGS = {
     ),
     "NAME_SUFFIX": (
         "인자",
-        "호스트 스크립트 변수 — 여러 벌 이름 끝 -<ops.host.instance>(load_settings.sh가 구해 compose container_name·묶음 이름·타이머에, op-15)",
+        "호스트 스크립트 변수 — 여러 벌 이름 끝 -<ops.host.instance_name>(load_settings.sh가 구해 compose container_name·묶음 이름·타이머에, op-15)",
     ),
     "POSTGRES_DB": ("env로 남김", "PG 컨테이너 env — compose가 PG_DB로 채움(설정 칸은 op-08에 지움)"),
     "POSTGRES_USER": ("env로 남김", "PG 컨테이너 env — compose가 PG_USER로 채움(설정 칸은 op-08에 지움)"),

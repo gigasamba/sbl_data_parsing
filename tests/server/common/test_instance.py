@@ -1,4 +1,4 @@
-"""여러 벌(ops.host.instance) — 벌 이름 하나로 PG 스키마·EDW 기록 표·개발 서버 게시 경로가 갈리고, prd·기본 포트는 시작 거부."""
+"""여러 벌(ops.host.instance_name) — 벌 이름 하나로 PG 스키마·EDW 기록 표·개발 서버 게시 경로가 갈리고, prd·기본 포트는 시작 거부."""
 
 import contextlib
 import io
@@ -67,9 +67,9 @@ def test_instance_gate():
             ("dev", "hong", True, None),
             ("dev", None, False, None),  # 한 벌은 기본 포트 그대로
             ("dev", "hong", False, "port"),
-            ("prd", "hong", True, "ops.host.instance"),
-            ("dev", "Hong_1", True, "ops.host.instance"),  # 영소문자·숫자·-만(load_settings.sh와 같은 꼴)
-            ("dev", "-a", True, "ops.host.instance"),
+            ("prd", "hong", True, "ops.host.instance_name"),
+            ("dev", "Hong_1", True, "ops.host.instance_name"),  # 영소문자·숫자·-만(load_settings.sh와 같은 꼴)
+            ("dev", "-a", True, "ops.host.instance_name"),
         ):
             path.write_text(yaml.safe_dump(layout.to_file(_doc(run, inst, ports=ports))), encoding="utf-8")
             errors = io.StringIO()

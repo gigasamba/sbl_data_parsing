@@ -21,7 +21,7 @@ NO_SOURCE = "source_system is required — exactly one of SFDC, CRMS, LAS, FAQ, 
 
 
 def chain():
-    """검색이 쓰는 EDW 사슬 — 설정 ops.paths.edw_chain(적재와 같은 칸), 비우면 기본 파일. 파일이 바뀌면(수정 시각) 다시 읽음.
+    """검색이 쓰는 EDW 사슬 — 설정 ops.paths.edw_chain_file(적재와 같은 칸), 비우면 기본 파일. 파일이 바뀌면(수정 시각) 다시 읽음.
     틀린 파일은 ValueError(common.store.edw_chain.load)."""
     p = EC.chain_path()
     try:

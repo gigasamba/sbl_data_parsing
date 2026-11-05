@@ -19,8 +19,8 @@ if [ -n "${DC_ROOT:-}" ]; then RAG_ROOT=$DC_ROOT; fi   # 시험 루트(init) —
 #   코드 폴더(이 스크립트의 폴더 — zip을 푼 sbl_data_parsing-<판>): chmod -R a+rX(컨테이너 UID 10001이 읽게)
 #   settings.yaml: 코드 폴더의 settings.sample.yaml을 <루트>/settings.yaml로 — **없을 때만**(있으면 절대 덮지 않음), 10001:<그룹> 640.
 #   edw_chain.yaml: resources/config/edw_chain.yaml을 <루트>/edw_chain.yaml로 — 같은 규칙(없을 때만, 10001:<그룹> 640). data-pipeline·mcp-server가 이 파일을
-#     /etc/rag/edw_chain.yaml로 붙이므로(compose.pipeline.yml·compose.mcp-server.yml) 파일이 늘 있어야 함 — 앱은 ops.paths.edw_chain(적재·검색 같은 칸)을 적었을 때만 씀.
-#   결과 폴더: RAG_OUT(settings.yaml ops.host.output_root > <루트>/output) · 작업 폴더: <결과 폴더>/_mcp_parse/jobs.
+#     /etc/rag/edw_chain.yaml로 붙이므로(compose.pipeline.yml·compose.mcp-server.yml) 파일이 늘 있어야 함 — 앱은 ops.paths.edw_chain_file(적재·검색 같은 칸)을 적었을 때만 씀.
+#   결과 폴더: RAG_OUT(settings.yaml ops.host.output_dir > <루트>/output) · 작업 폴더: <결과 폴더>/_mcp_parse/jobs.
 #     DC_ROOT=<폴더>는 루트 대신(시험용 — 주인 바꾸기·코드 폴더 a+rX를 건너뜀).
 #   root가 아니면 거부(종료 코드 3 — 주인을 10001로 못 바꿔 반쯤 만든 폴더가 남지 않게).
 #   끝에 settings.yaml `required:` 중 빈 칸 이름(값은 안 찍음). 종료 코드: 0 · 2 인자 틀림 · 3 root 아님 · 4 edw_chain.yaml 자리에 폴더(init 전에 컨테이너를 띄움).
@@ -64,7 +64,7 @@ dc_init() {
   if [ -d "$chain" ]; then   # docker가 init 전에 띄운 마운트로 빈 폴더를 만든 경우 — 지우지 않고 멈춤(앱은 IsADirectoryError)
     echo "[host_ctl init] $chain 자리에 폴더가 있음 — 컨테이너를 init 전에 띄운 흔적: 비어 있으면 rmdir 뒤 다시(종료 4 — 지우지 않음)" >&2; return 4
   fi
-  _cp resources/config/edw_chain.yaml "$chain"   # 앱은 ops.paths.edw_chain을 적었을 때만 씀
+  _cp resources/config/edw_chain.yaml "$chain"   # 앱은 ops.paths.edw_chain_file을 적었을 때만 씀
   echo "[host_ctl init] settings.yaml에서 아직 비어 있는 필수 칸(값을 채울 것 — 이름만):"
   PYTHONIOENCODING=utf-8 "${PY:-python3}" - "$sf" <<'PY' || echo "  (확인 못 함 — 호스트 python3에 PyYAML 필요)"
 import sys

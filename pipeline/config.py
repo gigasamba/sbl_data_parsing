@@ -62,7 +62,9 @@ class PipelineExtractCache(Section):
 class PipelineExtractOcr(Section):
     dpi: int | None = F(150, "OCR_DPI", "쪽·그림 이미지 렌더링 해상도(DPI, OCR 엔진·VLM 엔진·쪽 VLM·그림 VLM·pptx 슬라이드·prepare 공용)")
     max_pages: int | None = F(
-        0, "OCR_MAX_PAGES", "문서당 OCR 엔진(rapidocr 등 — VLM 아님) 쪽 수 상한(쪽, 0=제한 없음 · VLM 쪽 수 상한은 transform.vlm.page_max)"
+        0,
+        "OCR_MAX_PAGES",
+        "문서당 OCR 엔진(rapidocr 등 — VLM 아님) 쪽 수 상한(쪽, 0=제한 없음 · VLM 쪽 수 상한은 transform.vlm.max_pages_per_doc)",
     )
     table_grid: bool | None = F(True, "OCR_TABLE_GRID", "OCR 박스 좌표로 표 격자를 추정할지(=0이면 끔)")
     threads: int | None = F(

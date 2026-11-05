@@ -15,7 +15,7 @@ cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트
 # 서버 설정은 코드 폴더 밖 <루트>/settings.yaml(env-guide.md) — compose 치환 값은 셸 env로(--env-file 없음)
 . deploy/host/scripts/load_settings.sh && load_settings || exit $?   # 컨테이너는 같은 파일을 붙여 읽음(compose x-settings)
 mod=${1:?scheduled}; shift || true
-# scheduled = systemd 타이머가 5분마다 부름 — settings.yaml ops.nightly.time·max_docs·deadline
+# scheduled = systemd 타이머가 5분마다 부름 — settings.yaml ops.nightly.start_time·max_docs·stop_time
 # (NIGHTLY_TIME·NIGHTLY_MAX_DOCS·NIGHTLY_DEADLINE) 중 하나라도 비면 조용히 끝(새벽 배치 없음), 지금이 시작 시각부터 5분 안이면 run_pipeline.py를 부름
 # (이미지 확인 전 — 5분마다 도는 몫을 가볍게).
 if [ "$mod" = "scheduled" ]; then

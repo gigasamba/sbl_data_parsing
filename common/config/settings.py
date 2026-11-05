@@ -85,7 +85,7 @@ def image_default(env, pc=None):
     return IMAGE_DEFAULTS.get(env, pc)
 
 
-# settings.yaml ops.runtime.lib_env로 줄 수 있는 라이브러리 env 이름(비밀 아님 — 이 목록 밖은 거부).
+# settings.yaml ops.runtime.library_env로 줄 수 있는 라이브러리 env 이름(비밀 아님 — 이 목록 밖은 거부).
 # 컨테이너 entrypoint(common.config.boot)가 시작 때 env로 낸다 — 사용자 env는 안 덮고, 이미지 ENV 값(/app/docker/image_env.txt)은 덮는다.
 # 담은 것: 스레드·캐시·오프라인 신호(OMP_NUM_THREADS·HF_HUB_OFFLINE·TZ 등) + Dockerfile ENV(TZ·LANG·HF_*·DO_NOT_TRACK·
 # SCARF_NO_ANALYTICS) + 코드가 자식·라이브러리에 넘기는 이름(OMP·MKL·OPENBLAS·NUMEXPR·TORCH, PIPELINE_VERSION, TESSDATA_PREFIX·HF_HOME).
@@ -866,7 +866,7 @@ def require_run_env(app="", environ=None, sections=None):
 
 
 def instance_problems(st):
-    """여러 벌(ops.host.instance) 시작 거부 사유 — prd에 벌 이름, 벌 이름이 있는데 포트가 코드 기본값(다른 벌과 겹침)."""
+    """여러 벌(ops.host.instance_name) 시작 거부 사유 — prd에 벌 이름, 벌 이름이 있는데 포트가 코드 기본값(다른 벌과 겹침)."""
     c = st.common
     if not c.host.instance:
         return []
@@ -1508,7 +1508,7 @@ class CommonHost(Section):
         "INSTANCE",
         "한 서버에 여러 벌(개발자별 등) 띄울 때 이 루트의 이름(영소문자·숫자·-) — 컨테이너 이름·compose 묶음·systemd 타이머 이름 끝에 -<이름>으로 붙음."
         " 비우면 이름 그대로(한 벌). 적으면 PG 스키마·EDW 기록 표 끝에 _<이름>(-는 _로), 개발 서버(dev) 게시 경로에 <접두>/<이름>."
-        " 포트(search.server.port · ops.runtime.data_parsing_port)는 벌마다 다르게(기본값 그대로면 시작 거부) · prd에서는 쓰지 않음(시작 거부)",
+        " 포트(search.server.port · ops.services.data_parsing.port)는 벌마다 다르게(기본값 그대로면 시작 거부) · prd에서는 쓰지 않음(시작 거부)",
     )
     image_stage_dir: str | None = F(None, "IMAGE_STAGE_DIR", "prune_images.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값)")
     output_root: str | None = F(
