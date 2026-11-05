@@ -205,3 +205,46 @@ def selftest():
 
 def test_main():  # 옛 `if a.selftest:` 갈래(main() 안)
     selftest()
+
+
+def test_stage_dropped_docs():
+    """pl-02 — 받기(stage)가 뺀 문서만 든 문서 폴더(run_pipeline의 건너뜀 — parse/_rep·요약 없음): 중복(keep.txt에 없음)은 EDW에
+    skipped_dup 행, DRM은 행 없이 보고서로만. sha256은 중복 거르기와 같은 함수(contract.file_hash — 소문자 16진 64자)."""
+    import re
+    import shutil
+    import sqlite3
+    import tempfile
+
+    from common.core.contract import file_hash
+
+    cases = [  # (파일, 내용, keep.txt에 있음, skipped.jsonl 이유, 기대 EDW parse_status(None = 행 없음))
+        ("dup.pdf", "same-as-done", False, None, "skipped_dup"),
+        ("drm.pdf", "<## FASOO", True, "drm_fasoo", None),
+    ]
+    for name, body, in_keep, reason, want in cases:
+        d = Path(tempfile.mkdtemp())
+        out = d / "output"
+        for sub in ("_source_files", "parse/_source", "dedup", "prepared/_records"):
+            (out / sub).mkdir(parents=True)
+        (out / "_source_files" / name).write_text(body, encoding="utf-8")
+        man = {"file_name": name, "doc_id": "1", "key": f"docs/{name}", "uri": f"s3://bkt/docs/{name}", "original_filename": name}
+        (out / "parse" / "_source" / "manifest.jsonl").write_text(json.dumps(man) + "\n", encoding="utf-8")
+        (out / "dedup" / "keep.txt").write_text((name if in_keep else "") + "\n", encoding="utf-8")
+        if reason:
+            (out / "prepared" / "_records" / "skipped.jsonl").write_text(
+                json.dumps({"file": name, "reason": reason}) + "\n", encoding="utf-8"
+            )
+        a = A()
+        a.out, a.manifest, a.source_dir, a.rep, a.summary, a.skipped, a.keep = str(out), None, None, None, None, None, None
+        a.source_system, a.version, a.parse_date, a.reparse, a.apply = "FileStorageMap", "v1", "2026-11-05", None, True
+        db_path = d / "edw.sqlite"
+        with pc.PIPE.env(PM_BUCKET=f"file://{d / 'os'}"), COMMON.env(RDB_SQLITE=str(db_path), RUN_ENV="local"):
+            r = run(a)
+        rows = sqlite3.connect(db_path).execute("select parse_status, sha256 from ParsingMeta").fetchall()
+        if want is None:
+            assert rows == [] and r["result"]["edw_excluded_drm_failed"] == 1, (name, rows, r)
+        else:
+            sha = file_hash(out / "_source_files" / name)
+            assert rows == [(want, sha)] and re.fullmatch(r"[0-9a-f]{64}", sha), (name, rows)
+        assert r["result"]["uploaded"] == 0, (name, r)
+        shutil.rmtree(d, ignore_errors=True)

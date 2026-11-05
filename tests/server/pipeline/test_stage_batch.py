@@ -26,9 +26,15 @@ CASES = [
     ("z.zip", b"PK\x03\x04zip", "unsupported_archive", None),  # 지원 안 함(압축)
     ("n.txt", b"normal", None, None),  # ParsingMeta에 같은 원본 키(n.txt)로 끝남 — 그 문서의 재처리라 남음
     ("f.txt", b"failed", None, None),  # ParsingMeta에 다른 키로 있지만 실패(끝난 상태 아님) — 남음
+    ("s.txt", b"dupped", None, None),  # ParsingMeta에 같은 내용이 skipped_dup 행으로만 있음 — 그 행은 원본이 아니라 남음
 ]
 # ParsingMeta 행 (원본 키, 내용, parse_status, gold_version 있음?)
-PM = [(DONE_KEY, b"old", "ok", True), ("n.txt", b"normal", "ok", True), ("SFDC/y/f.txt", b"failed", "failed", False)]
+PM = [
+    (DONE_KEY, b"old", "ok", True),
+    ("n.txt", b"normal", "ok", True),
+    ("SFDC/y/f.txt", b"failed", "failed", False),
+    ("SFDC/w/s.txt", b"dupped", "skipped_dup", False),
+]
 # 이번 묶음 밖(앞 실행이 폴더에 남긴 파일) — a.txt와 같은 내용·더 늦은 수정 시각이지만 해시 대상이 아니라 a.txt를 밀어내지 않음
 LEFTOVER = ("zz_left.txt", b"same")
 

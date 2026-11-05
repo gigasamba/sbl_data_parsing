@@ -309,7 +309,7 @@ def stage_batch(source, out, prepared, limit, run_step, done=frozenset(), scan_r
 
 def _dedup(local, names, dedup_dir, state):
     """받은 파일의 sha256으로 중복 제외 → 남은 이름(names 순서). 같은 묶음 안(이번 names만 해시 — 폴더에 남은 앞 실행 파일은 안 봄)은
-    deduplication.run_folder(대표 하나), 그다음 ParsingMeta에 끝난 행(candidate_pick.done_by_sha)이 같은 sha256을 다른 원본 키로
+    deduplication.run_folder(대표 하나), 그다음 ParsingMeta에 파싱된 원본 행(ok·partial — candidate_pick.done_by_sha)이 같은 sha256을 다른 원본 키로
     가지면 뺀다(같은 키면 그 문서의 재처리라 남김). 원본 키 = manifest의 "key"(없으면 이름 — 게시와 같은 규칙).
     keep.txt = 폴더 파일 중 이번에 중복으로 뺀 것만 없는 목록(게시가 빠진 것만 skipped_dup로 쓰고, 앞 실행의 남은 문서는 그대로 둠)."""
     from pipeline.extract import deduplication as dedup

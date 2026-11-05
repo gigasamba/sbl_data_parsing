@@ -527,12 +527,25 @@ def write_doc_csv(row, path):
 _stage_reused: set = set()  # 이미 받아 둔 파일이라 컨테이너를 부르지 않은 문서(소요 기록의 reused)
 
 
+def _staged_for(d, row):
+    """문서 폴더 d가 이 행을 받은 결과인가 — seq는 실행마다 바뀌므로 그 폴더 manifest의 원본 키(key)가 이 행의 s3_key인지 본다."""
+    try:
+        lines = (d / "parse" / "_source" / "manifest.jsonl").read_text(encoding="utf-8").splitlines()
+        return any(json.loads(ln).get("key") == row["s3_key"] for ln in lines if ln.strip())
+    except (OSError, ValueError):
+        return False
+
+
 def stage_one(seq, row):
-    """문서 1개 미리 받기(candidate_ready stage — 상주 컨테이너 env 그대로). 실패하면 그 문서 파싱이 실패로 끝난다(따로 받는 길 없음)."""
+    """문서 1개 미리 받기(candidate_ready stage — 상주 컨테이너 env 그대로). 실패하면 그 문서 파싱이 실패로 끝난다(따로 받는 길 없음).
+    앞 실행의 _docflow/<seq>는 같은 원본일 때만 다시 쓰고(받은 표지 .staged·staging 원본·manifest 키), 다른 문서 것이면 지우고 새로 받는다."""
     d = DOCFLOW / f"{seq}"
+    reuse = (STAGING / _staging_bin(row)).exists() and (d / ".staged").exists() and _staged_for(d, row)
+    if not reuse and d.exists():
+        _wipe(seq)
     d.mkdir(parents=True, exist_ok=True)
     write_doc_csv(row, d / "batch.csv")
-    if (STAGING / _staging_bin(row)).exists() and (d / ".staged").exists():
+    if reuse:
         _stage_reused.add(seq)
         return True
     rc, _, err = sh(stage_cmd(seq), timeout=900, log=PROG / "stage.log")
@@ -679,11 +692,17 @@ def downloader(rows, order):
 def parse_one(seq, row):
     """문서 1개 파싱 — 공유 상주 컨테이너(PIPE_C) 안에서 워커별 분리(경로 격리).
     문서마다 출력 루트(PIPE_OUT_ROOT·DOC_DIR_PREPARED — --set으로 넘김)를 따로 둔다.
-    VLM·OCR·후처리 값은 settings.yaml ops.run_pipeline, 쪽 해상도는 extract.page_render_dpi."""
+    VLM·OCR·후처리 값은 settings.yaml ops.run_pipeline, 쪽 해상도는 extract.page_render_dpi.
+    → True(성공) · False(실패) · SKIP(받기가 중복·DRM·암호로 빼서 파싱할 것 없음 — 실패 아님, 게시가 skipped_* 상태를 씀 — pl-02)."""
     d = DOCFLOW / f"{seq}"  # stage_one이 만든 문서 폴더(batch.csv 포함)
     doc_log = PROG / f"doc_{seq}.log"
     t0 = time.time()
     mark(seq, "parse_start")
+    only = d / "parse" / "_source" / "only.txt"  # stage가 쓴 파싱할 이름 목록(거르기를 지난 것)
+    if (d / ".staged").exists() and only.exists() and not only.read_text(encoding="utf-8").strip():
+        mark(seq, "parse_end", ok=True, skip=True, rep=0, sec=0)
+        log(f"doc#{seq} 파싱 건너뜀 — 받기가 중복·DRM·암호로 뺌(게시가 상태를 씀) — {row['original_filename'][:44]}")
+        return SKIP
     print(f"[{now():%H:%M:%S}] doc#{seq} 파싱 시작 — {row['original_filename'][:44]}", flush=True)
     chan = _class.get(seq) or "light"
     gate = cpu_gate(chan)
@@ -696,6 +715,9 @@ def parse_one(seq, row):
     mark(seq, "parse_end", ok=ok, rep=n, sec=round(time.time() - t0, 1))
     log(f"doc#{seq} 파싱 {'OK' if ok else 'FAIL'}({(time.time() - t0) / 60:.1f}분) · rep {n}건 — {row['original_filename'][:44]}")
     return ok
+
+
+SKIP = "skip"  # parse_one — 받기가 뺀 문서(파싱 없이 게시만)
 
 
 def publish_one(seq):
@@ -753,6 +775,11 @@ def drop_temp(seq):
     """문서 끝 — docflow 임시 폴더만 지움(어느 길이든). 원본(staging)은 drop_original만 지운다 — 파싱·게시 실패면 남음."""
     if NO_CLEANUP:
         return
+    _wipe(seq)
+
+
+def _wipe(seq):
+    """_docflow/<seq> 통째로 지움 — 컨테이너(uid 10001)가 만든 파일은 docker exec로, 잔여는 호스트가."""
     sh(f"{DOCKER} exec {PIPE_C} bash -c 'rm -rf {_inside(seq)}'", timeout=60)
     shutil.rmtree(DOCFLOW / f"{seq}", ignore_errors=True)
 
@@ -778,7 +805,7 @@ def pick_targets(a):
     """대상 목록 — 컨테이너 list 명령을 부르고 목록 파일을 읽음 → (rows {seq: 행}, order, total, start). 실패면 None(로그)."""
     res = DOCFLOW / "targets.json"
     res.unlink(missing_ok=True)
-    rc, out, err = sh(list_cmd(a))
+    rc, out, err = sh(list_cmd(a), timeout=2400)  # 안쪽 FAQ 맞추기(candidate_pick — 1800초)가 먼저 끊기게 더 길게
     for ln in (out or "").splitlines():  # 컨테이너가 낸 판단 줄(skip-done·FAQ·max-docs)을 진행 기록에
         if ln.strip() and not ln.lstrip().startswith("{"):
             log(ln.strip())
@@ -954,7 +981,14 @@ def main():
 
     # 문서별 순서: 파싱 → silver 게시(pub_q, 게시 스레드) → 원본 삭제 → gold(struct_q, 구조화 스레드) → 임시 삭제.
     # 게시를 따로 두어 구조화가 업로드·EDW 쓰기를 기다리지 않는다. 파싱 실패·게시 실패면 원본을 남기고 gold로 가지 않는다.
-    cnt = {"ok": 0, "parse_fail": 0, "pub_fail": 0, "gold_fail": 0, "thread_err": 0}  # thread_err — 집계 전에 스레드 예외(종료 코드 1로)
+    cnt = {
+        "ok": 0,
+        "skipped": 0,
+        "parse_fail": 0,
+        "pub_fail": 0,
+        "gold_fail": 0,
+        "thread_err": 0,
+    }  # thread_err — 집계 전에 스레드 예외(종료 코드 1로)
 
     def _queue_loop(q, stage, work):
         """q에서 꺼내 work(*item)를 돌리는 스레드 — None이면 끝. 예외 처리·기록 중 예외(디스크 가득 등)도 스레드를 죽이지 않게 —
@@ -976,7 +1010,7 @@ def main():
             finally:
                 q.task_done()
 
-    def _publish(seq, row):
+    def _publish(seq, row, skip=False):
         ok = _ran("publish", publish_one, seq)
         if not ok:
             with _flow_lock:
@@ -984,6 +1018,12 @@ def main():
             _safe(drop_temp, seq)
             return
         _safe(drop_original, seq, row)  # 게시 성공 뒤에만
+        if skip:  # 받기가 뺀 문서 — 게시가 skipped_* 상태를 썼고 gold는 없음
+            with _flow_lock:
+                cnt["skipped"] += 1
+            _safe(drop_temp, seq)
+            mark(seq, "done")
+            return
         _struct_q.put((seq, row, time.time()))
         depth("struct_put")
 
@@ -1004,8 +1044,9 @@ def main():
         threading.Thread(target=_queue_loop, args=(_struct_q, "struct", _gold), daemon=True).start()
 
     def _one(doc_seq, row_doc):
-        if _ran("파싱", parse_one, doc_seq, row_doc):
-            _pub_q.put((doc_seq, row_doc))
+        res = _ran("파싱", parse_one, doc_seq, row_doc)
+        if res:  # SKIP도 게시로(실패 아님 — 게시가 skipped_dup 등을 써야 다음 밤에 다시 안 고름)
+            _pub_q.put((doc_seq, row_doc, res == SKIP))
             depth("pub_put")
         else:
             with _flow_lock:
@@ -1076,10 +1117,10 @@ def main():
     nd, nc = pg_count()
     cnt["thread_err"] += _STAGE_ERR[0]
     failed = cnt["parse_fail"] + cnt["pub_fail"] + cnt["gold_fail"] + cnt["thread_err"]
-    done = cnt["ok"] + failed
+    done = cnt["ok"] + cnt["skipped"] + failed
     rc = EXIT_FAIL if failed else (EXIT_DEADLINE if _deadline_hit.is_set() else 0)
     log(
-        f"=== 문서별 flow 끝: {done}건(완료 {cnt['ok']} · 파싱실패 {cnt['parse_fail']} · 게시실패 {cnt['pub_fail']} · gold실패 {cnt['gold_fail']} · 스레드 예외 {cnt['thread_err']}) · "
+        f"=== 문서별 flow 끝: {done}건(완료 {cnt['ok']} · 건너뜀 {cnt['skipped']} · 파싱실패 {cnt['parse_fail']} · 게시실패 {cnt['pub_fail']} · gold실패 {cnt['gold_fail']} · 스레드 예외 {cnt['thread_err']}) · "
         f"{(time.time() - t_all) / 60:.1f}분 · PG doc={nd} chunk={nc} · 문서당 평균 {(time.time() - t_all) / max(done, 1) / 60:.1f}분 · 종료 코드 {rc} ==="
     )
     return rc
