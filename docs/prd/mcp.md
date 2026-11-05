@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md)의 카테고리 하나 — 이미지 `mcp-server`. 도구 계약(이름, 입력, 출력, `tools/list` 순서)은 고정이다 — 협의와 새 판으로만 바꾼다([CLAUDE.md](../../CLAUDE.md) §4). 도구별 입출력 표는 [operations/mcp-guide.md](../operations/mcp-guide.md)(시험 `tests/general/mcp/test_mcp_guide.py`가 코드와 대조).
 
-순서: `search` mc-01·mc-16·mc-02·mc-05·mc-19 → 문서 키·기록 mc-10·mc-13·mc-15 → 원문 mc-17 → 다른 도구 mc-06·mc-07·mc-08·mc-18 → 서버 mc-09 → 코드와 다른 점.
+순서: `search` mc-01·mc-16·mc-02·mc-05·mc-19 → 문서 키·기록 mc-10·mc-13·mc-15 → 원문 mc-17 → 다른 도구 mc-06·mc-07·mc-08·mc-18 → 서버 mc-09 → 권한 mc-20 → 코드와 다른 점.
 
 <a id="mc-01"></a>
 ## mc-01 · `search` 도구 — 적재된 문서에서 근거 찾기
@@ -176,6 +176,19 @@
 - 규칙: FastMCP streamable HTTP(`/mcp`, 기본 `search.server.bind_host` 127.0.0.1 · `port` 8765) 또는 `--stdio`. loopback이 아닌 주소는 `required.tokens.mcp` 필요(상수 시간 비교), 0.0.0.0 거부, DNS 리바인딩 가드(`search.server.allowed_hosts`). `/health`(준비 중이면 503). 도구 동시 8(`search.server.max_concurrent_tools`) + 대기열, 도구 한 번 30초. 새 적재 판이면 다시 읽는다. 호출 감사 기록은 [ops.md#op-01](ops.md#op-01).
 - 파일: `mcp_server/main.py`, `mcp_server/services/tool_runner.py`, `mcp_server/config.py`.
 - Status: done
+
+<a id="mc-20"></a>
+## mc-20 · 요청 권한 관리 — 누가 보냈는지 확인하고 볼 수 있는 문서만
+- 이유: 요청에 적힌 user id·agent id는 보낸 쪽이 적은 값이라 그대로 믿을 수 없다. 신원을 먼저 확인해야 권한 표로 볼 수 있는 범위를 정할 수 있다. 내부망 안에서도 부서·고객 담당에 따라 볼 문서가 다르다.
+- 규칙:
+  1. 두 단계로 판정한다 — ① 신원 확인(누가 보냈나) ② 권한 확인(그 신원이 무엇을 볼 수 있나). ②는 ①이 확인한 신원으로만 한다(요청 본문의 user id·agent id만으로는 권한을 주지 않는다).
+  2. 신원 확인은 요청 머리글 `Authorization`으로만 받는다 — agent별 토큰(권한 표에 토큰 해시 → agent id → 허용 범위), 사람 단위 권한이 필요하면 사내 로그인(SSO)이 서명한 사용자 증표(OAuth·JWT — MCP 표준의 HTTP 인증 방식)를 서명 검증해 사용자 id·부서를 읽는다.
+  3. 권한 표는 DB에 두고(신원 → 허용 범위: 도구, 원천 시스템, 고객, 부서 등) 요청마다 조회한다. 표는 Alembic 마이그레이션으로만 만든다.
+  4. 도구를 쓸 수 있는지에 더해 **결과에 나오는 문서**를 거른다 — `search`·원문 도구·`query_edw`가 권한 밖 문서·행을 돌려주지 않는다. 검색 DB 청크에 거르기 칸(원천 시스템, 고객, 부서 등)이 있어야 한다.
+  5. 도구 계약(이름·입력·출력)은 바꾸지 않는다 — 신원은 머리글로만 받는다.
+  6. 호출 감사 기록([ops.md#op-01](ops.md#op-01))에 확인된 신원(agent id·사용자 id)을 남긴다. 토큰·증표 원문은 남기지 않는다.
+- 비고(현재와 다른 점): 코드에 없다. 지금은 공용 토큰 하나(`required.tokens.mcp`)로 "허용된 클라이언트인지"만 확인하고, 신원·권한 표·결과 거르기는 없다. 정할 것: agent별 토큰만 할지 사내 로그인 증표까지 할지, 권한 범위의 단위(원천·고객·부서), 검색 DB 거르기 칸(DB 담당자 협의·사람 검토).
+- Status: todo
 
 ## 코드와 다른 점 · 지울 코드
 
