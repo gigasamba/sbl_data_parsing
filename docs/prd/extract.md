@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md) 카테고리. 원천에서 문서를 받아(pl-01·pl-48) 준비(중복·회전·DRM — pl-02)하기까지와 FAQ 원천(pl-39). 다음 단계는 [transform.md](transform.md).
 
-순서: pl-01 · pl-02 · pl-48 · pl-39.
+순서: pl-01 · pl-02 · pl-58 · pl-48 · pl-39.
 
 <a id="pl-01"></a>
 ## pl-01 · 원천과 가져오기
@@ -36,11 +36,28 @@
 5. 켜져 있으면 이미지·스캔 PDF 쪽마다 4방향(0·90·180·270도) RapidOCR 점수를 스레드 4개로 동시에 재고 가장 높은 방향으로 돌린다 — 같으면 0도, 모두 0이면 그대로. 기록은 `output/prepared/rotation.csv`(파일·쪽·각도·네 방향 점수·회전 전 원본 sha256 `orig_sha256`).
 6. DRM·암호 파일은 감지해서 표시하고 건너뛴다(상태 `skipped_drm`, `prepared/_records/skipped.jsonl`). 복호화는 흐름 안에서 하지 않고 수동 명령 `python -m pipeline.extract.protected_docs decrypt`로만 한다.
 7. 압축 파일(zip)은 지원하지 않는다고 표시한다. 처리 엔진 없는 확장자(`registry.engines_for`가 빈 것)는 두 곳에서만 거른다 — 받기 전 `candidate_pick.rdb_pick`(`_filter_unsupported_rows` — rdb:csv 대상 고르기), 받은 뒤 `filter_and_rotate`(`unsupported_*`). 파일 크기 상한(`extract.max_source_file_mb`)은 파싱(`parse_engines`)이 본다.
-8. 중복·DRM·암호·미지원으로 건너뛴 문서는 문서마다 `applog.pipe_event`에 한 행을 남긴다(`candidate_ready.skip_event` — 단계 `extract.skip`, `doc_id` = 파일 이름, `status=skip`, `err_kind=doc`, `err`·`metrics.reason` = 이유 `dup_batch`·`dup_done`·`drm_*`·`encrypted_*`·`unsupported_*`, 중복이면 `metrics.dup_of` = 남긴 문서 — 같은 묶음은 파일 이름, ParsingMeta는 원본 키). 새 표는 없다.
+8. 중복·DRM·암호·미지원으로 건너뛴 문서는 문서마다 `applog.pipe_event`에 한 행을 남긴다(`candidate_ready.skip_event` — 단계 `extract.skip`, `doc_id` = 파일 이름, `status=skip`, `err_kind=doc`, `err`·`metrics.reason` = 이유 `dup_batch`·`dup_done`·`drm_*`·`encrypted_*`·`unsupported_*`, 중복이면 `metrics.dup_of` = 남긴 문서 — 같은 묶음은 파일 이름, ParsingMeta는 원본 키). 받기 전(`rdb_pick`)에 뺀 지원 안 하는 확장자도 같은 행을 남긴다. 함수는 `pipeline/shared/runtrace.py` `skip_event`. 다시 받아도 같은 결과인 문서는 [pl-58](#pl-58).
 
 ### QA
 - `tests/server/pipeline/test_stage_batch.py`(받기 → 중복 제외 → 거르기 사례 표: 같은 묶음 중복·ParsingMeta 중복(SQLite EDW 대역)·`skipped_dup` 행만 있는 내용·같은 키 재처리·DRM·미지원·보통 문서, 건너뜀 행) · `tests/server/common/test_pm_versions.py::test_done_by_sha` · `tests/server/pipeline/test_publish_parse.py::test_stage_dropped_docs`(받기가 뺀 문서 → `skipped_dup` 행·DRM은 행 없음) · `tests/server/pipeline/test_prepare.py`(`test_rotation_off_by_default` 등) · `tests/general/pipeline/test_dedup.py`(`run_folder` 대표 고르기).
 - Status: done
+
+<a id="pl-58"></a>
+## pl-58 · 영구 건너뜀 문서는 다시 고르지 않음
+
+### 무엇·왜
+지원 안 하는 확장자·확장자 없음·DRM·암호 문서는 다시 받아도 파싱할 수 없다. 기록이 없으면 밤마다 같은 문서를 다시 받고 `--max-docs` 자리를 차지한다(사용자 11-05).
+
+### 규칙
+1. 건너뛴 이유가 `unsupported_*`·`drm_*`·`encrypted_*`이면 → `applog.skip_doc_info`에 원본 키(`source_key` — `s3_key`, 폴더 원천은 상대 경로·이름)당 한 행을 쓴다. 칸: `source_system`(키 첫 마디가 원천 이름일 때만)·`file_name`·`reason`(확장자 없는 이름의 지원 안 함은 `no_extension`)·`level`(`error`)·`first_seen`·`last_seen`·`count`. 같은 키가 다시 오면 `last_seen`·`count`·이유만 바꾼다(`pipeline/extract/skip_docs.py` `record`).
+2. 쓰는 곳은 두 곳이다 — 받기 전 `candidate_pick.rdb_pick`(`_record_source_skipped`), 받은 뒤 `candidate_ready.stage_batch`(`_record_filtered` — `filter_and_rotate`의 `prepared/_records/skipped.csv`).
+3. 중복(`dup_*` — 게시가 `skipped_dup`로 씀)과 파싱 실패(다음 실행이 다시 시도)는 쓰지 않는다.
+4. `candidate_pick list --skip-done`은 ParsingMeta에 끝난 키와 함께 이 표의 키를 뺀다(`skipped_keys`). `--skip-done`이 없으면 빼지 않는다(사람이 다시 돌려 볼 때).
+5. 표는 applog 판 `0002_applog`(Alembic)가 만든다 — 앱은 DDL을 실행하지 않는다. PG 접속 정보가 없으면(PC) 대역 sqlite `<standin_dir>/applog.sqlite`에 표 정의로 바로 만든다. 서버(dev·prd)는 대역을 쓰지 않고 멈춘다. `ops.log.log_db_enabled`와 관계없이 쓴다.
+
+### QA
+- `tests/server/pipeline/test_skip_docs.py`(이유 사례 표 → 쓴 행·횟수 · rdb:csv가 모두 지원 안 함이면 0건으로 끝남 · `list --skip-done`이 뺌) · `tests/server/pipeline/test_stage_batch.py`(거르기가 뺀 DRM·압축이 표에 들어감) · `dbtool check --target applog`(판과 실제 DB).
+- Status: dev
 
 <a id="pl-48"></a>
 ## pl-48 · 병렬 다운로드

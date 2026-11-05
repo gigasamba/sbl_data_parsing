@@ -22,9 +22,8 @@ DDL은 실행하지 않는다(표는 사람이 만듦). SQL은 식별자 화이�
 ⑥ DRM·파싱 실패(`EDW_EXCLUDED_STATUSES`)는 EDW에 넣지 않고 `render_excluded_report()`로 마크다운 보고서만.
 
 상태(parse_status) = ok · partial(교차 정확도 < criteria.json run.cross_acc_full) · failed · skipped_drm(DRM·암호 래핑) ·
-skipped_dup(dedup keep.txt에서 빠짐) · not_parsed(이번 파싱 대상 아님) · skipped_disk_cap(원본이 먼저 지워짐 — manifest의
-disk_cap_sha256으로 행만 씀). 원본은 파싱이 끝나면 바로 지워지므로 ok·partial도 로컬 원본이 없을 수 있다 — 그때는
-manifest의 "sha256"(candidate_ready가 지우기 전에 남김)으로 대체한다(parse_status는 그대로).
+skipped_dup(dedup keep.txt에서 빠짐) · not_parsed(이번 파싱 대상 아님). 원본은 게시 뒤 지워지므로 ok·partial도 로컬 원본이 없을 수
+있다 — 그때는 manifest의 "sha256"(candidate_ready가 남김)으로 대체한다(parse_status는 그대로).
 
 쓰기 대상: PM_TABLE(기본 AI.ParsingMeta) · PM_BUCKET(업로드 버킷, "file://<폴더>"면 로컬 폴더를 가짜 Object Storage로) ·
 PM_PREFIX(버킷 안 경로 접두, 선택) · common.connections.rdb 쓰기 계정(RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_WRITE_USER·
@@ -66,7 +65,7 @@ from common.store.parsing_meta_db import (  # noqa: E402,F401
     make_db,
 )
 
-STATUSES = ("ok", "partial", "failed", "skipped_drm", "skipped_dup", "not_parsed", "skipped_disk_cap")
+STATUSES = ("ok", "partial", "failed", "skipped_drm", "skipped_dup", "not_parsed")
 DEFAULT_UPLOAD_STATUSES = ("ok", "partial")  # 안전 기본값 — DRM·실패·중복·미파싱은 EDW 행만(업로드 안 함)
 EDW_EXCLUDED_STATUSES = ("skipped_drm", "failed")  # ⑥ EDW에 안 넣고 render_excluded_report()로만(소음 방지)
 
@@ -392,13 +391,10 @@ def plan(
             continue
         source_key = e.get("key") or name  # 원본 Object Storage 전체 키(경로 포함); 없으면(폴더 직접 소스) 상대 경로(이름)
         f = Path(source_dir) / name
-        cap_sha, gen_sha = e.get("disk_cap_sha256"), e.get("sha256")
+        gen_sha = e.get("sha256")
         st, reason, rep = status_of(name, rep_by_doc, summary, skipped, keep)
         if f.exists():
             sha, file_size, local_path = sha256_of(f), f.stat().st_size, f
-        elif cap_sha:  # PARSE_KEEP_MAX_GB 상한으로 원본이 먼저 지워짐 — 이 상태만 강제로 덮어씀
-            sha, file_size, local_path = cap_sha, e.get("size"), None
-            st, reason = "skipped_disk_cap", "원본 없음(PARSE_KEEP_MAX_GB 상한으로 publish 전에 지워짐)"
         elif gen_sha:  # 파싱이 끝나면 원본을 바로 지움(기본) — 상태는 그대로(ok/partial/failed/…), 로컬만 없음
             sha, file_size, local_path = gen_sha, e.get("size"), None
         else:
@@ -632,8 +628,6 @@ def _no_upload_reason(e):
     if e["upload"]:
         return None
     status = e["row"]["parse_status"]
-    if status == "skipped_disk_cap":  # 원본이 없어서(상태 제외가 아니라) 못 올림
-        return e["row"]["status_reason"]
     if status in EDW_EXCLUDED_STATUSES:
         return f"상태={status} — EDW에도 안 들어감(SI39⑥, excluded_<날짜>.md 보고서로만)"
     return f"상태={status}(PM_UPLOAD_STATUSES 밖) — EDW 행만"

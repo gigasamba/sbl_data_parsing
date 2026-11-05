@@ -28,6 +28,7 @@ from common.core.contract import jl
 from common.core.contract import safe_path_join as _safe_join  # 경로 잇기(load 단계와 같은 함수)
 from pipeline import config as pc
 from pipeline.extract import candidate_pick as CP
+from pipeline.shared.runtrace import skip_event
 
 
 def _s3():
@@ -182,6 +183,7 @@ def resolve(source, out, limit=0, done=frozenset()):
         raise ValueError(f"[source] {source} — s3:// 폴더 가져오기는 11-01에 지움(사용자) — 폴더 또는 rdb:csv:<경로>")
     if str(source).startswith("rdb:"):
         local = Path(out) / "_source_files"
+        local.mkdir(parents=True, exist_ok=True)  # 대상 0건(모두 지원 안 함 등)이어도 중복 제외가 훑을 폴더
         names, fetch_one, state = _rdb_plan(source[len("rdb:") :], state, limit, done)
         ok = []
         nw = max(1, int(pc.cfg().extract.source.fetch_workers))  # 기본 1) · 2026-10-22 — 문서별 병렬 다운로드(기본 1=기존 순차
@@ -287,7 +289,8 @@ def stage_batch(source, out, prepared, limit, run_step, done=frozenset(), scan_r
     2. 중복 제외 — `_dedup`: 받은 파일의 sha256으로 같은 묶음 안 같은 내용은 대표 하나만, 남은 것 중 ParsingMeta에 끝난 다른 원본과
        sha256이 같으면 뺀다. <out>/dedup/keep.txt = 남은 이름(게시가 빠진 문서를 skipped_dup로 씀).
     3. 거르기 — filter_and_rotate(only.txt의 이름만 → prepared/): DRM·암호·지원 안 함은 건너뜀 기록만(처리하지 않음), 방향 보정.
-    건너뛴 문서는 문서마다 `skip_event` 1행(applog.pipe_event — status=skip, err_kind=doc).
+    건너뛴 문서는 문서마다 `skip_event` 1행(applog.pipe_event — status=skip, err_kind=doc). 거르기가 뺀 영구 이유(지원 안 함·DRM·암호)는
+    applog.skip_doc_info에도(`_record_filtered` — 다음 대상 목록이 뺌, pl-58).
     → (원본 폴더, 남은 이름 목록(받은 순서), 상태 폴더, 남은 이름 목록 파일 only.txt). run_step(args) → 종료 코드(자식 프로세스).
     scan_rotate=False면 이미지 PDF는 돌리지 않는다(run_pipeline의 스캔 문서 정책)."""
     out = Path(out)
@@ -302,6 +305,7 @@ def stage_batch(source, out, prepared, limit, run_step, done=frozenset(), scan_r
     rc = run_step(["pipeline.extract.filter_and_rotate", "--src", local, "--out", prepared, "--only", only, *extra])  # 3. 거르기
     if rc != 0:
         raise SystemExit(rc)
+    _record_filtered(prepared, state)
     left = [n for n in keep_names if (Path(prepared) / n).exists()]  # 거르기를 지난 것만 파싱
     only.write_text("\n".join(left) + "\n", encoding="utf-8")
     return local, left, state, only
@@ -339,14 +343,27 @@ def _dedup(local, names, dedup_dir, state):
     return left
 
 
-def skip_event(name, reason, **metrics):
-    """건너뛴 문서 1건 = extract.skip span 1행(applog.pipe_event): status=skip, err_kind=doc, err·metrics.reason = 이유
-    (dup_batch·dup_done·drm_*·encrypted_*·unsupported_*), 중복이면 metrics.dup_of = 남긴 문서(이름 또는 ParsingMeta 원본 키)."""
-    with SP.span("extract.skip", "extract", doc_id=name, ext=Path(name).suffix.lower()) as sp:
-        sp.add(reason=reason, **metrics)
-        sp.result("skip", "doc", SP.safe(reason))
-    if metrics.get("dup_of"):
-        print(f"[dedup] {name}: {reason} — {metrics['dup_of']}와 같은 내용, 건너뜀", flush=True)
+def _record_filtered(prepared, state):
+    """거르기(filter_and_rotate)가 이번에 뺀 문서(`prepared/_records/skipped.csv`)를 skip_doc_info에(영구 이유만 — skip_docs.record).
+    원본 키 = manifest의 "key"(없으면 이름 — 게시와 같은 규칙)."""
+    import csv
+
+    from pipeline.extract import skip_docs
+
+    f = Path(prepared) / "_records" / "skipped.csv"
+    if not f.exists():
+        return
+    with f.open(encoding="utf-8-sig", newline="") as fh:
+        rows = list(csv.DictReader(fh))
+    man_f = state / "manifest.jsonl"
+    key_of = {r["file_name"]: r.get("key") for r in jl(man_f)} if man_f.exists() else {}
+    keys = {r["file"]: key_of.get(r["file"]) or r["file"] for r in rows}
+    skip_docs.record(
+        [
+            {"source_key": keys[r["file"]], "source_system": CP.source_of(keys[r["file"]]), "file_name": r["file"], "reason": r["reason"]}
+            for r in rows
+        ]
+    )
 
 
 def _stage_cmd(argv):

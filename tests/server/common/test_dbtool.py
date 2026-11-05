@@ -17,7 +17,7 @@ def selftest():
         and head("search") == "0005_search"
         and known("search") == ["0005_search", "0004_search", "0003_search", "0002_search", "0001_search"]
     )
-    assert head("applog") == "0001_applog" and known("applog") == ["0001_applog"]
+    assert head("applog") == "0002_applog" and known("applog") == ["0002_applog", "0001_applog"]
     assert head("master") == "0001_master" and known("master") == ["0001_master"]
     assert not list((MIGRATIONS / "versions").glob("*struct*"))  # struct 갈래 없음(엔진 구성·원천 목록은 파일)
     print("[selftest] dbtool — 판 폴더 갈래 search 하나·끝 판·HNSW 2000 같음 통과")

@@ -293,7 +293,7 @@ def struct_cmd(seq):
     return (
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && "
         f"PYTHONPATH={_img('code_root')} {LIB_ENV} "
-        f"python -m pipeline.transform.structure.gold_bundle{st} --parse-dir {inside}/parse"
+        f"python -m pipeline.transform.structure.gold_bundle{st} --parse-dir {inside}/parse --src {inside}/prepared"
         f" --out {inside}/bundle && "
         f"{LIB_ENV} python -m pipeline.load.pgvector_load{st} load --bundle {inside}/bundle --rep-dir {inside}/parse/_rep "
         f">> {inside}/structure.log 2>&1'"
@@ -507,6 +507,16 @@ def sh(cmd, timeout=1800, log=None):
             f.close()
 
 
+def _tail(path, n=150):
+    """실패 안내용 — 로그 파일 끝 n자(못 읽으면 빈 글자). sh(log=…)는 출력을 파일로 보내 오류 글자가 없다(None)."""
+    try:
+        with open(path, "rb") as f:
+            f.seek(max(0, f.seek(0, 2) - 4 * n))
+            return f.read().decode("utf-8", "replace")[-n:]
+    except OSError:
+        return ""
+
+
 def now():
     return datetime.datetime.now()
 
@@ -552,7 +562,7 @@ def stage_one(seq, row):
     if rc == 0:
         (d / ".staged").touch()
     else:
-        log(f"doc#{seq} 받기(stage) 실패 — 이 문서는 파싱 실패로 끝남 ({str(err)[-100:]})")
+        log(f"doc#{seq} 받기(stage) 실패 — 이 문서는 파싱 실패로 끝남 ({err or _tail(PROG / 'stage.log', 100)})")
     return rc == 0
 
 
@@ -728,7 +738,8 @@ def publish_one(seq):
     ok = rc == 0
     mark(seq, "pub_end", ok=ok, sec=round(time.time() - t1, 1))
     log(
-        f"doc#{seq} publish {'OK' if ok else 'FAIL'}({(time.time() - t1) / 60:.1f}분)" + ("" if ok else f" — 원본 남김 · {str(err)[-150:]}")
+        f"doc#{seq} publish {'OK' if ok else 'FAIL'}({(time.time() - t1) / 60:.1f}분)"
+        + ("" if ok else f" — 원본 남김 · {err or _tail(DOCFLOW / str(seq) / 'publish.log')}")
     )
     return ok
 
@@ -743,7 +754,7 @@ def gold_one(seq, enq_t=None):
     mark(seq, "struct_end", ok=ok, sec=round(time.time() - t0, 1))
     log(
         f"doc#{seq} 구조화+적재 {'OK' if ok else 'FAIL'}(대기 {wait / 60:.1f}분 · 실행 {(time.time() - t0) / 60:.1f}분)"
-        + ("" if ok else f" — silver는 남김(게시됨, gold는 silver에서 다시 만듦) · {str(err)[-150:]}")
+        + ("" if ok else f" — silver는 남김(게시됨, gold는 silver에서 다시 만듦) · {err or _tail(DOCFLOW / str(seq) / 'structure.log')}")
     )
     # TODO(pl-24 · refactor.md C-81): DB 담당자가 AI.ParsingMeta.gold_status(pending·ok·failed)+이유 칸을 더하면 여기서 실패를 적는다.
     #   지금은 칸이 없어 로그에만. gold_version 칸(C-76 ③)이 있으면 비어 있으므로 다음 --skip-done이 다시 고른다 —

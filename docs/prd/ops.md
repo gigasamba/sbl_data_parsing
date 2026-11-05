@@ -31,7 +31,7 @@
 - 이유: 핑거프린트가 바뀌어도 밤 작업이 전체 재파싱으로 시간을 넘기지 않게.
 - 규칙:
   1. "새 문서" = `AI.FileStorageMap`에 있고 `AI.ParsingMeta`에 끝난 행이 없는 것. 키 = `s3_key`(갱신 시각은 보지 않음).
-  2. "끝난 행" = `parse_status`가 `skipped_dup`, 또는 `ok`·`partial`이면서 `gold_version`이 있음(`gold_version` 칸이 없는 EDW에서는 `parse_status`만 봄). `not_parsed`·`skipped_disk_cap`·실패·행 없음은 다시 고른다. 목록은 `common/store/parsing_meta_db.DONE_STATUSES` 한 곳.
+  2. "끝난 행" = `parse_status`가 `skipped_dup`, 또는 `ok`·`partial`이면서 `gold_version`이 있음(`gold_version` 칸이 없는 EDW에서는 `parse_status`만 봄). `not_parsed`·실패·행 없음(옛 값 `skipped_disk_cap` 행 포함 — 더 쓰지 않음)은 다시 고른다. 목록은 `common/store/parsing_meta_db.DONE_STATUSES` 한 곳.
   3. 끝난 문서 빼기는 `pipeline/extract/candidate_pick.py` `done_keys` 하나 — 서버는 `candidate_pick list --skip-done`, PC 직접 파싱(`pipeline.cli parse --source`)은 고르기 때. EDW를 한 번 읽는다(읽기 계정, PC는 sqlite 대역). 못 읽으면 RUN_ENV가 local이 아니면 종료 4, 그 밖은 받은 목록 그대로 + 로그 한 줄. 키 = 수집 manifest의 `key`(없으면 이름).
   4. 전체 재파싱은 사람이 전체 e2e를 시작할 때만([pl-54](#pl-54)).
   5. 새벽 배치: settings.yaml `ops.nightly.nightly_start_time`(시작 HH:MM)·`nightly_max_docs`(새 문서 수 상한, 1 이상)·`nightly_stop_time`(마감 HH:MM, 시작보다 5분 넘게 뒤) — 하나라도 비면 돌지 않는다. systemd `data-pipeline-nightly.timer`(`OnCalendar=*:0/5`)가 `nightly_batch.sh scheduled`를 부르고, 시작 시각부터 5분 안이면 `run_pipeline.py --start-offset 0 --skip-done --max-docs <n> --deadline <hh:mm>`. 형식 오류면 종료 2. 서비스 `TimeoutStartSec=6h`.

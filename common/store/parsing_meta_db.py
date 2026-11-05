@@ -16,7 +16,7 @@ TABLE_ID_RE = re.compile(
     r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$"
 )  # roster_from_edw.py TABLE_ID_RE와 같은 규칙(SQL 삽입 방지)
 # 이 parse_status 행이 있으면 "파싱 끝난 문서" — skipped_dup(완전 중복)도 매일 밤 다시 고르지 않는다
-# (not_parsed·skipped_disk_cap·실패는 다시 고름 · 통째 실패는 ParsingMeta에 안 씀)
+# (not_parsed·실패는 다시 고름 · 통째 실패는 ParsingMeta에 안 씀)
 DONE_STATUSES = ("ok", "partial", "skipped_dup")
 # ok·partial은 gold에도 올라가야(gold_version) 끝난 문서 — 적재(분류 포함)가 실패하면 다음 실행이 다시 고름.
 # skipped_dup(완전 중복)은 gold에 안 올리므로 그대로 끝. gold_version 칸이 생기기 전(C-76 ③)에는 parse_status만 본다.

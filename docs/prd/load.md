@@ -100,7 +100,7 @@
 1. 올리는 것: 대표 결과 `.md`(`render_md` — 본문 + 표) + 같은 폴더에 대표 결과 JSON(`<이름>_<날짜>.json`)·엔진별 원결과(`engine/<엔진>_<판>_<이름>.json`)·그림 기록(`engine/vlm_<모델>_<이름>.jsonl`). 원본 파일은 올리지 않는다. `.md`를 마지막에 써서 완료 표시로 삼는다.
 2. 대표 결과 키 = `<required.publish.publish_prefix>/<source_system>/<원본 키 폴더들>/<원본 파일 이름(확장자 뺌)>_<parse_date>.md`. 조각마다 파일 이름에 쓸 수 없는 글자를 정리하고, 정리로 원본 키와 달라지면 마지막 조각에 `__h<원본 키 sha1 앞 10자>`를 붙인다. `parse_date` = `YYYY-MM-DD_HHMMSS`. 같은 키가 이미 있으면 `<parse_date>-2`, `-3` …으로 새 폴더 — 덮어쓰지 않는다. ParsingMeta `rep_key`는 그 폴더(끝 `/`).
 3. ParsingMeta에는 INSERT만 한다 — 키(`source_system`, `source_key` = 원본 전체 키)가 이미 있으면 건너뛴다. UPDATE 예외는 [pl-12](#pl-12) 규칙 3뿐.
-4. 상태 `parse_status` = `ok` · `partial`(교차 정확도 < 0.95 — [transform.md#pl-04](transform.md#pl-04)) · `failed` · `skipped_drm` · `skipped_dup` · `not_parsed` · `skipped_disk_cap`. 올리는 상태는 `tuning.load.publish.publish_upload_statuses`(기본 `ok`·`partial`).
+4. 상태 `parse_status` = `ok` · `partial`(교차 정확도 < 0.95 — [transform.md#pl-04](transform.md#pl-04)) · `failed` · `skipped_drm` · `skipped_dup` · `not_parsed`(옛 값 `skipped_disk_cap`은 더 쓰지 않는다 — EDW에 남은 행만 있을 수 있음). 올리는 상태는 `tuning.load.publish.publish_upload_statuses`(기본 `ok`·`partial`).
 5. `skipped_drm`·`failed`는 EDW에 쓰지 않고 `output/publish/excluded_<날짜>.md` 보고서에만.
 6. 게시 버킷이 원천 원본 버킷과 같은지는 검사하지 않는다(rn-07 — `run_pipeline`가 늘 끄던 검사를 지움). `required.publish.publish_bucket`을 원천 버킷과 다르게 두는 것은 운영자 몫.
 

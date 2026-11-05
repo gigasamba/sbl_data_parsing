@@ -117,7 +117,7 @@ bash deploy/host/scripts/pipe_exec.sh migrate master load                # 마�
 bash deploy/host/scripts/pipe_exec.sh migrate check --target all         # 기대: 갈래마다 "비교: 차이 없음"
 bash deploy/host/scripts/pipe_exec.sh show-stack                         # 엔진 구성 파일(이름·sha·경로) — 못 읽으면 종료 2
 ```
-- `--target`: `search`·`applog`·`master`·`all`(셋 모두). 끝 판: search `0005_search` · applog `0001_applog` · master `0001_master`.
+- `--target`: `search`·`applog`·`master`·`all`(셋 모두). 끝 판: search `0005_search` · applog `0002_applog` · master `0001_master`.
 - 기존 스키마인데 버전 기록이 없을 때: 차이 0이면 `migrate stamp --target search`(실행 없이 기록), 차이가 "표·색인·뷰 없음·뷰 칸 다름"뿐이면 `up`(없는 것만 만듦). 컬럼 이름·형식·NULL·기본값·키가 다르거나 남는 표·컬럼·색인이 있으면 `stamp`·`up` 모두 종료 2 — 멈추고 출력(이름만)을 DB 담당과 협의한다.
 - ⚠ **0.1.0이 만든 스키마에 `up`하면 `0002_search`가 옛 표를 지운다** — 0.2.0은 새 `db_schema`로 올린다(§8-3).
 - 적재(`pgvector_load`)는 새 스키마면 만들고 기록, 기록이 있으면 `up`, 기록 없는 기존 스키마면 경고만 하고 계속한다. DB 판이 코드보다 낮으면 종료 2(`migrate up` 안내), 코드가 모르는 리비전이 있으면(옛 이미지로 되돌린 뒤 등) 적재·`up`·`stamp` 모두 종료 2. 검색 MCP는 버전을 보지 않는다.
@@ -253,7 +253,7 @@ bash deploy/host/scripts/host_ctl.sh up -d data-pipeline                        
 bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 새 스키마는 "표 없음(새 스키마 — up으로 만듦)", 종료 코드 1이 정상
 bash deploy/host/scripts/pipe_exec.sh migrate up --target all --dim <임베딩 차원>   # 종료 코드 0 — 기대:
 #   [migrate] search <NEW_SCHEMA>: 판 ['0005_search'] (끝 0005_search)
-#   [migrate] applog applog: 판 ['0001_applog'] (끝 0001_applog)
+#   [migrate] applog applog: 판 ['0002_applog'] (끝 0002_applog)
 #   [migrate] master <NEW_SCHEMA>_master: 판 ['0001_master'] (끝 0001_master)
 #   "올린 뒤에도 차이:"가 나오면 멈추고 DB 담당과
 bash deploy/host/scripts/pipe_exec.sh migrate master load                     # 기대: "[migrate] master <NEW_SCHEMA>_master: CSV로 채움 · 해시 <8자>"

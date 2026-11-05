@@ -193,3 +193,15 @@ class Progress:
                 )
         except Exception as ex:  # done() 등 진행 계산 실패 — 다음 주기에 다시
             span.soft_fail("progress.emit", ex)
+
+
+def skip_event(name, reason, **metrics):
+    """건너뛴 문서 1건 = extract.skip span 1행(applog.pipe_event): status=skip, err_kind=doc, err·metrics.reason = 이유
+    (dup_batch·dup_done·drm_*·encrypted_*·unsupported_*), 중복이면 metrics.dup_of = 남긴 문서(이름 또는 ParsingMeta 원본 키)."""
+    from pathlib import Path
+
+    with span.span("extract.skip", "extract", doc_id=name, ext=Path(name).suffix.lower()) as sp:
+        sp.add(reason=reason, **metrics)
+        sp.result("skip", "doc", span.safe(reason))
+    if metrics.get("dup_of"):
+        print(f"[dedup] {name}: {reason} — {metrics['dup_of']}와 같은 내용, 건너뜀", flush=True)

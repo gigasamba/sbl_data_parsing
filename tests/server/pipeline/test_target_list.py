@@ -103,6 +103,7 @@ def test_target_list():
             with (
                 COMMON.env(RUN_ENV="local", RDB_SQLITE=str(edw)),
                 mock.patch.object(CP, "faq_sync", lambda r, _p, so=sync_out, rs=resets: rs.append(r) or so),
+                mock.patch("pipeline.extract.skip_docs.skipped_keys", set),  # 영구 건너뜀 없음 — 빼기는 test_skip_docs
             ):
                 assert CP._list_cmd(argv) == 0
             got = json.loads(out.read_text(encoding="utf-8"))

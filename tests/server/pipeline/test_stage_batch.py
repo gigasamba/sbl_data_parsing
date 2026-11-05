@@ -11,9 +11,11 @@ from unittest import mock
 
 from common.config.settings import COMMON
 from common.core import jsonlog, span
+from common.store import pg as PGC
 from common.store.parsing_meta_db import SqliteStore
 from pipeline.extract import candidate_ready as CR
 from pipeline.extract import filter_and_rotate as FR
+from pipeline.extract import skip_docs as SD
 
 sha = lambda body: hashlib.sha256(body).hexdigest()
 DONE_KEY = "SFDC/x/old.txt"  # ParsingMeta에 끝난(ok) 다른 원본 키 — old.txt와 같은 내용
@@ -59,15 +61,18 @@ def test_stage_batch_order_and_skip_log():
         db.cn.commit()
         db.close()
         with (
-            COMMON.env(RUN_ENV="local", RDB_SQLITE=str(root / "edw.sqlite")),
+            COMMON.env(RUN_ENV="local", RDB_SQLITE=str(root / "edw.sqlite"), PG_STANDIN_DIR=str(root / "pg")),
+            mock.patch.object(PGC, "has_conn", return_value=False),
             mock.patch.object(span, "_emit", lambda row, level=None: rows.append(row)),
             jsonlog.context(run_id=str(uuid.uuid4())),
         ):
             _, left, only, keep_txt = _run(root)
+            never = SD.skipped_keys()
     want_left = [n for n, _, reason, _ in CASES if reason is None]
     assert sorted(left) == sorted(want_left) and only == left, left
     assert "old.txt" not in keep_txt and "a(1).txt" not in keep_txt and "drm.pdf" in keep_txt  # 게시가 중복을 skipped_dup로 씀
     assert LEFTOVER[0] in keep_txt  # 묶음 밖 파일은 중복으로 표시하지 않음(앞 실행 문서가 skipped_dup로 굳지 않게)
+    assert never == {n for n, _, reason, _ in CASES if SD.reason_of(n, reason)}, never  # 영구 이유(DRM·지원 안 함)만 skip_doc_info(pl-58)
     skips = {r["doc_id"]: r for r in rows if r["stage"] == "extract.skip"}
     assert set(skips) == {n for n, _, reason, _ in CASES if reason}, skips
     for name, _, reason, dup_of in CASES:

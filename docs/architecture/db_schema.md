@@ -333,7 +333,7 @@ ID 모양 정규식(계약 번호·제품 코드 등). 읽는 곳: `common.core.
 
 gold·EDW와 별개인 로그 표다. 서버 적용 절차는 refactor.md C-79.
 
-판: `common/store/db/migrations/versions/0001_applog_base.py`(브랜치 `applog`) · 파티션 관리: `common/store/db/migrations/applog_parts.py` · 모델: `common/store/db/models/log_tables.py` · 쓰기: `common/store/logsink.py`(큐 → 배치 INSERT, 실패하면 `output/logs/*.jsonl`, 앱이 DDL을 실행하지 않음). 켜는 설정: 파일 자리 `ops.log.log_db_enabled`(모델 `ops.log.log_db_enabled`, 서버 이미지 기본 켬·PC 기본 꺼짐 — op-13). `tests/server/common/test_db_schema.py`는 이 절을 대조하지 않는다 — 판과 실제 DB 대조는 `dbtool check --target applog`.
+판: `common/store/db/migrations/versions/0001_applog_base.py`(브랜치 `applog`)·`0002_applog_skip.py`(`skip_doc_info`) · 파티션 관리: `common/store/db/migrations/applog_parts.py` · 모델: `common/store/db/models/log_tables.py` · 쓰기: `common/store/logsink.py`(큐 → 배치 INSERT, 실패하면 `output/logs/*.jsonl`, 앱이 DDL을 실행하지 않음). 켜는 설정: 파일 자리 `ops.log.log_db_enabled`(모델 `ops.log.log_db_enabled`, 서버 이미지 기본 켬·PC 기본 꺼짐 — op-13). `tests/server/common/test_db_schema.py`는 이 절을 대조하지 않는다 — 판과 실제 DB 대조는 `dbtool check --target applog`.
 
 - **파티션:** `mcp_log`(`requested_at`)·`pipe_event`(`ts_start`)는 월 단위(UTC). 이름은 `<표>_YYYYMM`. `dbtool up`과 `dbtool maintain`이 현재 달부터 3개월 치를 만든다.
 - **보존:** `dbtool maintain --target applog`를 매일 실행한다. `ops.log.log_retention_days`(기본 90)가 지난 달의 파티션을 DROP하고 `pipe_run`은 DELETE한다. 달이 통째로 지나야 DROP되므로 파티션 표의 행은 약 90~120일 남는다.
@@ -444,3 +444,18 @@ MCP 요청 1건당 1행. 인증 실패와 `initialize`도 행으로 남는다. �
 | err_kind | TEXT CHECK | env·timeout·doc·external·db | 〃 | 〃 | 새로 |
 | err | TEXT | 예외 타입과 고정 문구만. 외부 예외 원문은 저장 안 함 | 〃 | 없음 | 새로 |
 | app_version | TEXT | 앱 버전 | 〃 | perf | 새로 |
+
+### applog.skip_doc_info
+
+다시 받아도 파싱할 수 없는 원본(지원 안 하는 확장자·확장자 없음·DRM·암호) 1개당 1행([pl-58](../prd/extract.md#pl-58)). 기본 키 `source_key`. 일반 표(파티션·보존 DELETE 없음 — 지우면 그 문서를 다시 고름). 판: `common/store/db/migrations/versions/0002_applog_skip.py`. 쓰는 곳: `pipeline/extract/skip_docs.py` `record()`(받기 전 `candidate_pick._record_source_skipped`·받은 뒤 `candidate_ready._record_filtered` — 같은 키면 `last_seen`·`count`만 갱신). 읽는 곳: `candidate_pick.list_targets`(`--skip-done`이면 이 키를 뺌). 중복(`dup_*`)과 파싱 실패는 쓰지 않는다. PC(PG 접속 없음)는 대역 sqlite `<standin_dir>/applog.sqlite`.
+
+| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
+|---|---|---|---|---|---|
+| source_key | TEXT PK | 원본 키(Object Storage `s3_key`, 폴더 원천은 상대 경로·이름) | skip_docs | candidate_pick | 새로 |
+| source_system | TEXT | 원천 이름(키 첫 마디가 SFDC·CRMS·LAS·FAQ일 때만) | 〃 | 없음 | 새로 |
+| file_name | TEXT | 파일 이름 | 〃 | 없음 | 새로 |
+| reason | TEXT NOT NULL | 이유(`unsupported_archive`·`unsupported_format`·`no_extension`·`drm_*`·`encrypted_*`) | 〃 | 없음 | 새로 |
+| level | TEXT NOT NULL | 수준(기본 `error`) | 〃 | 없음 | 새로 |
+| first_seen | TIMESTAMPTZ NOT NULL | 처음 건너뛴 시각(기본 now) | 〃 | 없음 | 새로 |
+| last_seen | TIMESTAMPTZ NOT NULL | 마지막으로 건너뛴 시각(기본 now) | 〃 | 없음 | 새로 |
+| count | INTEGER NOT NULL | 건너뛴 횟수(기본 1) | 〃 | 없음 | 새로 |

@@ -163,7 +163,19 @@ def _filter_unsupported_rows(rows, name_of):
 def _record_source_skipped(state, skipped):
     """건너뛴 행 기록(state/source_skipped.jsonl, {file,key,reason} — filter_and_rotate.py skipped.jsonl과 같은 사유 말) +
     다시 받을 길이 없으므로(지원 안 하는 형식) 바로 처리 완료로 표시(watermark가 이 파일 때문에 영영 안 전진하는
-    것을 막음 — finish()가 파싱 성공분을 기록하는 것과 같은 자리 `_processed_path`)."""
+    것을 막음 — finish()가 파싱 성공분을 기록하는 것과 같은 자리 `_processed_path`) + 문서마다 extract.skip 1행(skip_event) +
+    applog.skip_doc_info(skip_docs.record — 다음 대상 목록이 뺌, pl-58)."""
+    from pipeline.extract import skip_docs
+    from pipeline.shared.runtrace import skip_event
+
+    for s in skipped:
+        skip_event(s["file"], s["reason"])
+    skip_docs.record(
+        [
+            {"source_key": s["row"]["key"], "source_system": source_of(s["row"]["key"]), "file_name": s["file"], "reason": s["reason"]}
+            for s in skipped
+        ]
+    )
     with (state / "source_skipped.jsonl").open("a", encoding="utf-8") as f:
         for s in skipped:
             f.write(json.dumps({"file": s["file"], "key": s["row"]["key"], "reason": s["reason"]}, ensure_ascii=False) + "\n")
@@ -175,6 +187,11 @@ def _record_source_skipped(state, skipped):
 
 def _hidden(p):
     return p.name.startswith(".") or p.name == "__MACOSX"
+
+
+def source_of(key):
+    """원본 키 → 원천 이름(첫 마디가 원천 이름일 때만, 아니면 None) — skip_doc_info.source_system."""
+    return _known_source(str(key).split("/", 1)[0]) if key else None
 
 
 def _known_source(seg):
@@ -362,7 +379,8 @@ def faq_first(rows, order, faq_rows, status, seen_f, sync):
 
 
 def list_targets(keywords, start, limit=0, seqs=(), skip_done=False, max_docs=0, faq_seen=None, sync=None):
-    """이번 실행의 대상 → (rows, order, start, total). rows = 목록 행(FAQ 덧붙임 포함), order = 처리할 rows 자리 순서,
+    """이번 실행의 대상 → (rows, order, start, total). skip_done이면 ParsingMeta에 끝난 키와 영구 건너뜀 키(skip_doc_info — pl-58)를 뺀다.
+    rows = 목록 행(FAQ 덧붙임 포함), order = 처리할 rows 자리 순서,
     total = 키워드 목록 행 수. faq_seen(교체를 마친 FAQ 키 파일)을 주면 FAQ 먼저 — sync(reset) = faq_sync 자리."""
     from common.store import mssql
 
@@ -380,11 +398,18 @@ def list_targets(keywords, start, limit=0, seqs=(), skip_done=False, max_docs=0,
     order = sorted(seqs) if seqs else list(range(start, len(rows) if not limit else min(len(rows), start + limit)))
     if skip_done:
         from common.store.parsing_meta_db import DONE_STATUSES
+        from pipeline.extract import skip_docs
 
-        done = done_keys()
+        done, never = done_keys(), skip_docs.skipped_keys()
         before = len(order)
         order = [s for s in order if rows[s]["s3_key"] not in done]
-        print(f"skip-done: {before - len(order)}건 이미 완료({'·'.join(DONE_STATUSES)}) — 남은 {len(order)}건 처리", flush=True)
+        n_done = before - len(order)
+        order = [s for s in order if rows[s]["s3_key"] not in never]
+        print(
+            f"skip-done: {n_done}건 이미 완료({'·'.join(DONE_STATUSES)}) · {before - n_done - len(order)}건 영구 건너뜀(skip_doc_info) — "
+            f"남은 {len(order)}건 처리",
+            flush=True,
+        )
     if use_faq:
         order = faq_first(rows, order, faq_rows, faq_status(), Path(faq_seen), sync)
     elif faq_seen is not None:
@@ -403,7 +428,11 @@ def _list_cmd(argv):
     ap.add_argument("--start-offset", type=int, default=0)
     ap.add_argument("--limit", type=int, default=0, help="시험 — 이 개수만")
     ap.add_argument("--seqs", default="", help="목록 자리(쉼표) — 주면 연속 범위 대신 이것만")
-    ap.add_argument("--skip-done", action="store_true", help="ParsingMeta에 끝난(ok·partial — gold_version도, skipped_dup) 문서 뺌")
+    ap.add_argument(
+        "--skip-done",
+        action="store_true",
+        help="ParsingMeta에 끝난(ok·partial — gold_version도, skipped_dup) 문서와 영구 건너뜀(skip_doc_info) 문서 뺌",
+    )
     ap.add_argument("--max-docs", type=int, default=0, help="앞에서 이 개수만(0 = 상한 없음)")
     ap.add_argument("--faq-seen", default=None, help="교체를 마친 FAQ 키 파일 — 주면 FAQ 먼저(--seqs·--limit 실행은 건너뜀)")
     ap.add_argument("--out", required=True, help="목록 파일(JSON)")

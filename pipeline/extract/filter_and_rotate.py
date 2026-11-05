@@ -282,8 +282,8 @@ _sha256 = file_hash
 
 def _record_skip(p, reason, skipped, skipped_log):
     """건너뛴 문서 기록 — skipped.csv(이번 실행 전체, 호환)용 리스트에 더하고, skipped.jsonl(누적, 이어쓰기)에
-    파일 sha256·시각과 함께 바로 씀 + extract.skip span 1행(candidate_ready.skip_event)."""
-    from pipeline.extract.candidate_ready import skip_event
+    파일 sha256·시각과 함께 바로 씀 + extract.skip span 1행(runtrace.skip_event)."""
+    from pipeline.shared.runtrace import skip_event
 
     skipped.append({"file": p.name, "reason": reason})
     skip_event(p.name, reason)
