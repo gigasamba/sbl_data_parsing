@@ -1,5 +1,5 @@
 """PostgreSQL(pgvector) 연결 — 적재·검색·서비스 탐색 공통. 비밀번호는 settings.yaml에만.
-접속: PG_HOST · PG_PORT · PG_DB · PG_USER · PG_PASSWORD · PG_SCHEMA — 모두 필수, 코드 기본값 없음.
+접속: PG_HOST · PG_PORT · PG_DB · PG_USER · PG_PASSWORD — 모두 필수, 코드 기본값 없음 · PG_SCHEMA는 비우면 data_parsing.
 PG_CONNECT_TIMEOUT(기본 10초) — 공유 PG가 방화벽·주소 문제로 안 보일 때 수십 초씩 매달리지 않게.
 PG_POOL_MAX(기본 8, PGPool) — 공유 PG의 max_connections 여유 안에서 잡을 것(다른 팀 서비스도 같은 PG를 씀).
 connect()는 적재(pipeline/load/pgvector_load.py — 단일 연결), connect_pool()은 검색 MCP(mcp_server/services/search/server_state.py —
@@ -25,6 +25,7 @@ def conf():
         v = given(k)
         if v is not None:
             c[k] = str(reveal(v))
+    c["PG_SCHEMA"] = cfg().connections.pg.db_schema or ""  # 스키마는 코드 기본값(data_parsing — 여러 벌이면 _<벌>)이 있음
     missing = [k for k in _PG_KEYS if not c.get(k)]  # 코드 기본값(127.0.0.1·5432 등) 없음, 빈 칸이면 거부
     if missing:
         from common.config.layout import to_yaml
@@ -48,7 +49,7 @@ def has_conn():
 
 def _standin_schema(pg_schema=None):
     st = cfg().connections.pg
-    s = pg_schema or st.db_schema or st.standin_schema  # 기본값은 설정 모델
+    s = pg_schema or (st.db_schema if given("PG_SCHEMA") else None) or st.standin_schema  # pg_schema를 적었으면 그것, 아니면 대역 스키마
     if not re.fullmatch(r"[a-z_][a-z0-9_]{0,62}", s):
         raise SystemExit("PG_SCHEMA는 소문자·숫자·_ 만")
     return s

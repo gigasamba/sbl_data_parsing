@@ -693,6 +693,46 @@ def _warn_once(msg):
         print(msg, file=sys.stderr)
 
 
+# PC(local)가 읽지 않는 서버 전용 칸(op-14) — 설정 파일·덮기 파일에 적혀 있어도 설정 객체에서 비우고 경고 한 줄(칸 자리만, 값 없음).
+# local이 실제 EDW·Object Storage에 닿지 않게: EDW 주소·계정, Object Storage 주소·키, 원천 버킷, 서버 게시 버킷(DB 이름·추가 인자는 주소 없이 못 씀 — 둠).
+LOCAL_IGNORED = (
+    "common.connections.rdb.host",
+    "common.connections.rdb.read.user",
+    "common.connections.rdb.read.password",
+    "common.connections.rdb.write.user",
+    "common.connections.rdb.write.password",
+    "common.connections.object_storage.endpoint",
+    "common.connections.object_storage.access_key",
+    "common.connections.object_storage.secret_key",
+    "pipeline.connections.rdb.bucket",
+    "pipeline.load.publish.bucket",
+)
+
+
+def _drop_server_keys(merged, from_file):
+    """local — 파일·덮기 파일에 적힌 서버 전용 칸(LOCAL_IGNORED)을 비우고 경고(칸 자리만). 시험 names·data는 이 뒤에 얹혀 남는다."""
+    gone = [p for p in LOCAL_IGNORED if _peek(merged, p) not in (None, "")]
+    for p in gone:
+        _drop_path(merged, p)
+        from_file.discard(p)
+    if gone:
+        _warn_once(f"[settings] local(PC) — 서버 전용 칸을 무시함(비움): {', '.join(map(L.to_yaml, gone))}")
+
+
+def _local_values(settings):
+    """local — PC 전용 칸으로 채움(op-14): 게시 = dev 게시 폴더(file://), 원본 = dev 원본 폴더(안 적었으면), 새 문서 상한 = dev 상한(안 적었으면)."""
+    pipe = getattr(settings, "pipeline", None)
+    if pipe is None:
+        return
+    pub, ex = pipe.load.publish, pipe.extract
+    if not pub.bucket and pub.local_dir:
+        pub.bucket = repo_path("file://" + pub.local_dir)
+    if not ex.input_source and ex.local_source:
+        ex.input_source = repo_path(ex.local_source)
+    if ex.max_new is None:
+        ex.max_new = ex.local_max_new
+
+
 def load(
     app_cls,
     *,
@@ -744,20 +784,24 @@ def load(
             raise SettingsError(f"{msg} — {path}")
         _warn_once(f"[settings] {msg} — 무시(local)")
     from_file = set()  # 덮기 파일 overrides 값이 마지막으로 얹힌 칸(시험 names가 덮으면 빠짐)
-    for name, value in {**over, **(names or {})}.items():
-        p = emap.get(name)
-        if p is None or name == "RUN_ENV":
-            continue
-        if p not in before:
-            before[p] = _peek(merged, p)
-        if value is None:
-            _drop_path(merged, p)
-        else:
-            L.set_path(merged, p, value)
-        from_names[p] = name
-        from_file.discard(p)
-        if name in over and name not in (names or {}):
-            from_file.add(p)
+    local = str(file_run) == "local"
+    for phase in (over, names or {}):  # 덮기 파일 → (local이면 서버 칸 비움) → 시험 names 순서
+        for name, value in phase.items():
+            p = emap.get(name)
+            if p is None or name == "RUN_ENV":
+                continue
+            if p not in before:
+                before[p] = _peek(merged, p)
+            if value is None:
+                _drop_path(merged, p)
+            else:
+                L.set_path(merged, p, value)
+            from_names[p] = name
+            from_file.discard(p)
+            if phase is over:
+                from_file.add(p)
+        if phase is over and local:
+            _drop_server_keys(merged, from_file)
     if env_run is not None:
         L.set_path(merged, "common.run_env", env_run)
     elif unknown_run_env is not None:
@@ -782,6 +826,8 @@ def load(
             raise SettingsError(_format_errors(e2, path or "설정 없음")) from None
         settings._dropped = frozenset(from_names[b] for b in bad)
     settings._unknown_run_env = unknown_run_env
+    if local:
+        _local_values(settings)
     common = getattr(settings, "common", None)  # 앱 절만 든 뿌리(PIPE·MCP)는 common 절이 없음
     run_env = common.run_env if common is not None else env_run
     if run_env in SERVER_ENVS and path is None and require_file:
@@ -810,7 +856,7 @@ def resolve_run_env(environ=None, file=None):
 def require_run_env(app="", environ=None, sections=None):
     """앱 시작 관문 — RUN_ENV가 없거나 모르는 값이면 안내를 찍고 종료 코드 2. 값을 돌려준다.
     설정 파일을 읽고 sections(앱 절 — 없으면 이 이미지 절, image_sections)를 검증한다 — 모르는 칸·자리가 다른 칸·형식 오류면 이유(칸 경로·
-    오류 종류만, 값 없음)를 찍고 종료 2. 서버(dev·prd)는 파일이 없어도 거부하고 비밀 칸 길이·가짜 LLM·여러 벌도 본다, local은 실제 접속 칸을 거부."""
+    오류 종류만, 값 없음)를 찍고 종료 2. 서버(dev·prd)는 파일이 없어도 거부하고 비밀 칸 길이·가짜 LLM·여러 벌도 본다, local은 서버 전용 칸을 비우고 경고(op-14)."""
     environ = os.environ if environ is None else environ  # env 남김 — RUN_ENV 신호
     tag = f"[설정] {app + ': ' if app else ''}"
     try:
@@ -828,18 +874,10 @@ def require_run_env(app="", environ=None, sections=None):
     names = image_sections(environ) if sections is None else ("common", *sections)
     if value == "local":
         try:
-            real = pc_real_targets(load(section_class(names)[0], environ=environ))
-        except SettingsError as e:  # 모르는 칸·자리가 다른 칸 등 — 칸 자리만 알림
+            load(section_class(names)[0], environ=environ)  # 모르는 칸·자리가 다른 칸 등 — 서버 전용 칸은 비우고 경고(op-14)
+        except SettingsError as e:  # 칸 자리만 알림
             print(f"{tag}설정을 읽지 못해 시작하지 않음: {e}", file=sys.stderr)
             raise SystemExit(2) from None
-        if real:
-            print(
-                f"{tag}PC(RUN_ENV=local)는 가짜 대상만 — 실제 접속 칸이 적혀 있어 시작하지 않음: {', '.join(map(L.to_yaml, real))}. "
-                f"PC는 저장소 루트 기준 상대 경로로 적는다 — {L.to_yaml('common.connections.rdb.sqlite')}: valid_env/edw/edw.sqlite 사본, "
-                f"{L.to_yaml('pipeline.load.publish.bucket')}: file://output/object_storage/silver",
-                file=sys.stderr,
-            )
-            raise SystemExit(2)
     if value in SERVER_ENVS:
         try:
             st = load(section_class(names)[0], environ=environ, require_file=True)
@@ -890,19 +928,6 @@ def publish_prefix(prefix):
     if c.run_env != "dev" or not inst:
         return prefix
     return f"{prefix.rstrip('/')}/{inst}" if prefix else inst
-
-
-def pc_real_targets(st):
-    """PC(local)가 거부하는 실제 외부 대상 칸(점 경로 목록) — 가짜/실제 판정은 이 한 곳(op-14). 가짜 = EDW sqlite 파일
-    (connections.rdb.sqlite)·file:// 게시 폴더. 실제 = EDW 호스트·Object Storage 엔드포인트·원천 버킷·file://가 아닌 게시 버킷."""
-    c = st.common.connections
-    found = {"common.connections.rdb.host": c.rdb.host, "common.connections.object_storage.endpoint": c.object_storage.endpoint}
-    pipe = getattr(st, "pipeline", None)
-    if pipe is not None:
-        bucket = pipe.load.publish.bucket or ""
-        found["pipeline.connections.rdb.bucket"] = pipe.connections.rdb.bucket
-        found["pipeline.load.publish.bucket"] = "" if bucket.startswith("file://") else bucket
-    return [k for k, v in found.items() if v]
 
 
 def section_class(names):
@@ -1353,7 +1378,8 @@ class CommonConnectionsRdb(Section):
     sqlite: str | None = F(
         None,
         "RDB_SQLITE",
-        "시험용 가짜 EDW(SQLite 파일 하나 — 모든 표) — 있으면 실제 EDW 대신 씀 · PC(RUN_ENV=local) 전용, 서버에서는 시작 거부",
+        "PC 가짜 EDW(SQLite 파일 하나 — 모든 표) — PC(RUN_ENV=local) 전용(서버에서는 거부) · local은 비우면 valid_env/edw/edw_copy.sqlite"
+        "(없으면 valid_env/edw/edw.sqlite를 복사해 만듦 — op-14)",
         repo=True,
     )
     read: CommonConnectionsRdbRead = Field(default_factory=CommonConnectionsRdbRead)
@@ -1374,9 +1400,11 @@ class CommonConnectionsPg(Section):
     password: SecretStr | None = F(None, "PG_PASSWORD", "PostgreSQL 비밀번호")
     pool_max: int | None = F(8, "PG_POOL_MAX", "검색 MCP PostgreSQL 연결 풀 최대 연결 수")
     port: Port | None = F(None, "PG_PORT", "PostgreSQL 포트(필수 — op-09)")
-    db_schema: str | None = F(None, "PG_SCHEMA", "pgvector 기본 스키마 이름(소문자·숫자·_ — 필수, op-09)")
+    db_schema: str | None = F("data_parsing", "PG_SCHEMA", "pgvector 기본 스키마 이름(소문자·숫자·_ — 여러 벌이면 끝에 _<벌>, op-09)")
     standin_dir: str | None = F(None, "PG_STANDIN_DIR", "PG 접속 정보가 없을 때 쓰는 로컬 대체 DB(sqlite) 폴더", repo=True)
-    standin_schema: str | None = F("ai", "PG_STANDIN_SCHEMA", "로컬 대체 DB(sqlite)의 스키마 이름 — PG_SCHEMA가 비었을 때(PC 전용, op-09)")
+    standin_schema: str | None = F(
+        "data_parsing", "PG_STANDIN_SCHEMA", "로컬 대체 DB(sqlite)의 스키마 이름 — PG_SCHEMA가 비었을 때(PC 전용, op-09)"
+    )
     user: str | None = F(None, "PG_USER", "PostgreSQL 접속 계정 이름(필수 — op-09)")
 
 

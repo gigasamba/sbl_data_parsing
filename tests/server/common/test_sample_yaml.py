@@ -30,7 +30,7 @@ def _code():
 
 
 def test_copied_sample_starts_with_defaults():
-    text = sample.build().replace("\n    run_env: null", "\n    run_env: dev ", 1)
+    text = sample.build().replace("\n    run_env:  ", "\n    run_env: dev", 1)
     tree = yaml.safe_load(text)
     assert tree["required"]["env"]["run_env"] == "dev"
     code = list(_code())

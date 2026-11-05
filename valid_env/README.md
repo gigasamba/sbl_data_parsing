@@ -9,5 +9,5 @@
 | `answer_test/rag_qa/` | 서빙 Answer Agent(PC 답변 점검) | `python -m validation.e2e.answer_gen`이 쓰는 agent 묶음 | 추적 |
 | `docker/` | 서버 컨테이너 | PC 시험 compose(`compose.pg.yml`, `compose.test.yml`, `smoke_test.sh`) | 추적 |
 
-- 여기 있는 것은 모두 합성 데이터다. 실행 중에는 여기에 쓰지 않는다 — 결과는 `output/` 아래로 간다(게시 폴더 `file://output/object_storage/silver`, EDW 대역은 `edw.sqlite`를 `output/`에 복사해 쓴다 — README §4-4).
+- 여기 있는 것은 모두 합성 데이터다. 실행 중에는 여기에 쓰지 않는다 — 결과는 `output/` 아래로 간다. 예외 둘(PC `local` 기본값 — git이 무시함): 가짜 EDW 사본 `edw/edw_copy.sqlite`(없으면 `edw/edw.sqlite`를 복사해 만듦 — 원본은 그대로)와 게시 폴더 `object_storage/Parsing_Result/`(원본 목록에서 빠짐).
 - `--src`는 폴더를 받는다. 몇 건만 돌릴 때는 고른 문서를 한 폴더에 복사해 넘긴다(README §4-4).

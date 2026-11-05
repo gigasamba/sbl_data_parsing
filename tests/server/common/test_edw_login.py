@@ -22,6 +22,7 @@ CASES = [
     (FULL, "write", "wu", []),
     ({**FULL, "RDB_WRITE_PASSWORD": None}, "write", "wu", ["RDB_WRITE_PASSWORD"]),
     ({**FULL, "RDB_WRITE_PASSWORD": None}, "read", "ru", []),  # 쓰기 계정이 없어도 읽기는 됨(검색 MCP 서버)
+    ({**FULL, "RDB_WRITE_USER": None, "RDB_WRITE_PASSWORD": None}, "write", "ru", []),  # 쓰기 계정을 둘 다 비우면 읽기 계정(op-03)
     ({**FULL, "RDB_HOST": None, "RDB_READ_USER": None}, "read", None, ["RDB_HOST", "RDB_READ_USER"]),
 ]
 
@@ -91,7 +92,10 @@ def test_mcp_paths_use_read_account_only():
 
 
 def test_publish_uses_write_and_sqlite_wins():
-    with COMMON.env(**FULL), mock.patch.object(PM, "MssqlStore", lambda table, role: ("store", table, role)):
+    with (
+        COMMON.env(**FULL, RUN_ENV="dev"),
+        mock.patch.object(PM, "MssqlStore", lambda table, role: ("store", table, role)),
+    ):  # local은 늘 가짜 EDW(op-14)
         assert PM.make_db("write") == ("store", "AI.ParsingMeta", "write")
     with COMMON.env(RDB_SQLITE=":memory:", RUN_ENV="local"):  # 가짜 EDW는 local 전용 — 이미지에서도 시험 안에서만
         db = PM.make_db("write")

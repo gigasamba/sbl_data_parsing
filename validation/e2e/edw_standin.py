@@ -1,6 +1,6 @@
 """PC 가짜 EDW sqlite 하나 만들기 — valid_env/edw/*.sql(스키마마다 한 파일: ai·crms·las·sfdc)을 파일 하나에 넣는다
 (docs/prd/ops.md#op-03). 코드는 이 파일을 스키마 이름마다 ATTACH해 `AI.FileStorageMap` 같은 이름으로 읽는다
-(common.store.mssql.standin). 쓰려면 settings.yaml `required.edw.edw_local_sqlite_file`에 경로를 적는다.
+(common.store.mssql.standin). PC(local)는 비워 두면 이 파일의 사본(valid_env/edw/edw_copy.sqlite)을 쓴다 — 다른 파일은 settings.yaml `dev.local.local_edw_sqlite_file`.
 사용: python -m validation.e2e.edw_standin [--out valid_env/edw/edw.sqlite]
 """
 

@@ -77,7 +77,11 @@ def app_selftest(app_cls, top):
         app_leaf = next(
             p
             for p, fi, _ in rows
-            if p.startswith(top + ".") and not S.is_host(p) and S.type_label(fi.annotation) == "str" and not S.is_secret(fi)
+            if p.startswith(top + ".")
+            and not S.is_host(p)
+            and S.type_label(fi.annotation) == "str"
+            and not S.is_secret(fi)
+            and p not in S.LOCAL_IGNORED  # local이 비우는 서버 전용 칸은 빼고(op-14)
         )
         env_app = S.env_name(dict((p, fi) for p, fi, _ in rows)[app_leaf])
         g = Path(td) / "app.yaml"

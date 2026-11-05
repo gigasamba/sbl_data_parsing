@@ -118,6 +118,11 @@ class PipelineLoadPublish(Section):
     bucket: str | None = F(
         None, "PM_BUCKET", "publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소)", repo="file://"
     )
+    local_dir: str | None = F(
+        "valid_env/object_storage/Parsing_Result",
+        "LOCAL_PM_DIR",
+        "PC(RUN_ENV=local) 게시 폴더(저장소 기준 상대 가능 — 처음 게시할 때 만듦) — local은 서버 게시 버킷(PM_BUCKET) 대신 이 폴더를 씀(op-14)",
+    )
     prefix: str | None = F(None, "PM_PREFIX", "버킷 안 업로드 경로 접두")
     upload_statuses: CsvList | None = F(
         ["ok", "partial"], "PM_UPLOAD_STATUSES", "원본을 업로드할 파싱 상태 목록(쉼표 — ok·partial·failed 등 parsing_meta.STATUSES 중에서)"
@@ -209,7 +214,19 @@ class PipelineExtract(Section):
         off=("0",),
     )
     max_file_mb: float | None = F(0.0, "MAX_FILE_MB", "이 크기(MB)를 넘는 문서는 파싱에서 건너뜀(0=제한 없음)")
-    max_new: int | None = F(0, "PARSE_MAX_NEW", "이번 실행에서 처음 파싱할 새 문서 수 상한(개, 0=제한 없음)")
+    max_new: int | None = F(
+        None, "PARSE_MAX_NEW", "이번 실행에서 처음 파싱할 새 문서 수 상한(개, 0=제한 없음) — 비우면 제한 없음(local은 local_max_new)"
+    )
+    local_max_new: int | None = F(
+        5,
+        "LOCAL_PARSE_MAX_NEW",
+        "PC(RUN_ENV=local) 한 번에 처음 파싱할 새 문서 수 상한(개, 0=제한 없음) — PARSE_MAX_NEW를 안 적었을 때(op-14)",
+    )
+    local_source: str | None = F(
+        "valid_env/object_storage",
+        "LOCAL_PARSE_SOURCE",
+        "PC(RUN_ENV=local) 파싱 원본 폴더(저장소 기준 상대 가능) — PARSE_SOURCE를 안 적었을 때(op-14). 게시 폴더(local_dir)는 원본으로 읽지 않음",
+    )
     rapidocr_page_workers: int | None = F(1, "RAPIDOCR_PAGE_WORKERS", "rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개)")
     rotated_max: int | None = F(20, "PARSE_ROTATED_MAX", "쪽 VLM 후보로 올릴 '회전된 쪽' 상한(쪽 수) — 0이면 rotation.csv를 안 읽음")
     skipped_log: str | None = F(None, "PARSE_SKIPPED_LOG", "건너뛴 문서(암호 PDF 등) 기록 jsonl 경로")

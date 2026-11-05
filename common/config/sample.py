@@ -20,7 +20,7 @@ OUT = S.REPO_ROOT / "settings.sample.yaml"
 HEAD = """# settings.sample.yaml — 설정 파일 구조와 설명. 생성: python -m common.config.sample (손으로 고치지 않음)
 # 복사해 [필수] 칸을 채우면 시작된다 — PC: 저장소 루트 settings.yaml(권한 600) · 서버: <루트>/settings.yaml(루트 = 코드 폴더의 부모 · UID 10001·권한 640).
 # 순서: required(사람이 채울 값) → common·extract·transform·load·search·ops(환경마다 정하는 값) → tuning(거의 안 바꾸는 값) → dev(PC 전용 — 서버는 비움).
-#   값 자리 = 코드 기본값. null = 비움(코드 기본값·계산값을 씀 — 주석의 "null = …"). 사람이 채울 값은 required의 [필수] 칸뿐.
+#   빈 칸(`이름:` 뒤가 비어 있음) = 사람이 꼭 적을 값([필수] — 주석에 예). null = 비워 두면 코드 기본값·계산값·끔(주석의 "null = …"). 그 밖의 값 = 코드 기본값.
 #   복사할 때는 [필수] 칸과 바꿀 칸만 옮기기를 권장 — 적힌 값은 코드 기본값보다 이겨서, 나중에 코드 기본값이 바뀌어도 반영되지 않는다.
 #   [필수 · 언제(어느 앱)] — 언제 = 모두·local(PC)·dev·prd(서버), 앱 = pipeline·mcp·호스트 스크립트. [선택] = 비워도 됨. [비밀] = settings.yaml에만(출력·로그에 안 나옴).
 #   각 앱은 자기 칸만 읽는다(pipeline: required·common·extract·transform·load·ops·dev · mcp: required·common·search·ops·dev — tuning은 둘 다).
@@ -64,6 +64,7 @@ CATEGORIES = {
         ("run_pipeline — 단계·레인", ("ops.run_pipeline",)),
     ),
     "dev": (
+        ("local(PC) 전용 — 가짜 EDW·게시 폴더·원본 폴더·새 문서 상한(서버 전용 칸 대신)", ("dev.local",)),
         ("외부 모델 — 허용·지출 상한·단가", ("dev.models",)),
         ("로컬 대체 PG(sqlite)", ("dev.pg_standin",)),
         ("가짜 LLM", ("dev.fake_llm",)),
@@ -92,8 +93,8 @@ NOTES = {
     "common.connections.pg.port": "PG 포트 · 예 55433",
     "common.connections.pg.db": "PG 데이터베이스 이름 · 예 rag",
     "common.connections.pg.user": "PG 계정 · 예 rag_app",
-    "common.connections.pg.password": "PG 비밀번호 · 서버는 8자 이상",
-    "common.connections.pg.db_schema": "검색 스키마 · 예 sbl_test — 벌 이름을 적으면 <스키마>_<벌>",
+    "common.connections.pg.password": "PG 비밀번호 · 서버는 8자 이상 · 예 DB 담당이 준 값",
+    "common.connections.pg.db_schema": "검색 스키마(소문자·숫자·_)",
     "common.models.embed.base_url": "임베딩 주소(OpenAI 호환) · 예 http://10.0.0.5:8000/v1",
     "common.models.embed.model": "임베딩 모델 이름(색인과 같게) · 예 bge-m3",
     "common.models.embed.api_key": "임베딩 API 키 (null = 키 안 보냄)",
@@ -101,16 +102,19 @@ NOTES = {
     "common.connections.rdb.host": "EDW(SQL Server) 주소 · 예 edw.corp.local",
     "common.connections.rdb.port": "EDW 포트 · 1~65535",
     "common.connections.rdb.database": "EDW 데이터베이스 이름 · 예 EDW",
-    "common.connections.rdb.read.user": "EDW 읽기 계정(원천 목록·ParsingMeta 조회·query_edw)",
-    "common.connections.rdb.read.password": "EDW 읽기 비밀번호 · DB 담당이 줌",
+    "common.connections.rdb.read.user": "EDW 읽기 계정(원천 목록·ParsingMeta 조회·query_edw) · 예 svc_parse_r",
+    "common.connections.rdb.read.password": "EDW 읽기 비밀번호 · 예 DB 담당이 준 값",
     "common.connections.rdb.write.user": "EDW 쓰기 계정(ParsingMeta INSERT만) · 예 svc_parse_w",
-    "common.connections.rdb.write.password": "EDW 쓰기 비밀번호 · DB 담당이 줌",
-    "common.connections.rdb.sqlite": "가짜 EDW sqlite 파일(저장소 기준 상대 가능) · 예 output/edw.sqlite",
-    "pipeline.load.publish.bucket": "게시 버킷(원본 버킷과 다르게) · 예 rag-silver · local 예 file://output/silver",
+    "common.connections.rdb.write.password": "EDW 쓰기 비밀번호 · 예 DB 담당이 준 값",
+    "common.connections.rdb.sqlite": "가짜 EDW sqlite 파일(저장소 기준 상대 가능) (null = valid_env/edw/edw_copy.sqlite — 없으면 edw.sqlite를 복사)",
+    "pipeline.load.publish.local_dir": "게시 폴더(저장소 기준 상대 가능 — 처음 게시할 때 만듦) · 서버 publish_bucket 대신",
+    "pipeline.extract.local_source": "파싱 원본 폴더(저장소 기준 상대 가능 — 게시 폴더는 원본에서 뺌) · source_input_location·--source가 없을 때",
+    "pipeline.extract.local_max_new": "한 번에 새로 파싱할 문서 수 상한 · 0 = 제한 없음 · max_new_docs_per_run을 안 적었을 때",
+    "pipeline.load.publish.bucket": "게시 버킷(원본 버킷과 다르게) · 예 rag-silver",
     "pipeline.load.publish.prefix": "버킷 안 경로 접두 · 예 parse (null = 버킷 맨 위)",
     "common.connections.object_storage.endpoint": "S3 호환 주소 · 예 https://os.corp.local:9000",
-    "common.connections.object_storage.access_key": "S3 액세스 키",
-    "common.connections.object_storage.secret_key": "S3 시크릿 키",
+    "common.connections.object_storage.access_key": "S3 액세스 키 · 예 스토리지 담당이 준 값",
+    "common.connections.object_storage.secret_key": "S3 시크릿 키 · 예 스토리지 담당이 준 값",
     "common.models.llm.base_url": "LLM 주소(OpenAI 호환) · 예 http://10.0.0.6:8000/v1 — 적재 분류(doc_classify)가 씀",
     "common.models.llm.model": "LLM 모델 이름 · 예 qwen3-32b",
     "common.models.llm.api_key": "LLM API 키 (null = 키 안 보냄)",
@@ -144,7 +148,7 @@ NOTES = {
     "common.text.source_uri_prefix": "원본 주소 접두 · 예 s3://sfdc-files/docs (null = file://<docs_dir>)",
     "pipeline.extract.source.fetch_workers": "원본 받기 스레드 수",
     "pipeline.extract.source.staging": "미리 받기 폴더 (null = 미리 받기 끔 — rdb:csv 원본을 못 받음)",
-    "pipeline.extract.max_new": "이번 실행에서 새로 파싱할 문서 수 상한 · 0 = 제한 없음",
+    "pipeline.extract.max_new": "이번 실행에서 새로 파싱할 문서 수 상한 · 0 = 제한 없음 (null = 제한 없음 · local은 local_max_new_docs_per_run)",
     "pipeline.extract.max_file_mb": "이 크기(MB)를 넘는 문서는 건너뜀 · 0 = 제한 없음",
     "pipeline.extract.skipped_log": "건너뛴 문서 기록 jsonl (null = 준비 기록 폴더/skipped.jsonl)",
     "pipeline.connections.secure_doc.passwords_file": "암호 문서용 암호 목록(한 줄에 하나) (null = 암호 문서 건너뜀)",
@@ -343,7 +347,7 @@ NOTES = {
     "common.models.guard.budget_usd": "하루 외부 모델 지출 상한($)",
     "common.models.guard.spend_file": "지출 장부 (null = output/_llm_spend/<날짜>.txt)",
     "common.connections.pg.standin_dir": "PG 없을 때 쓰는 sqlite 폴더 (null = output/pg_standin)",
-    "common.connections.pg.standin_schema": "대역 스키마 이름 · 예 sbl_local",
+    "common.connections.pg.standin_schema": "대역 스키마 이름(pg_schema를 비웠을 때)",
     "common.dev.llm_fake": "가짜 LLM 응답(서버면 시작 거부)",
     "mcp.dev.mcp_url": "검증 페이지가 붙을 검색 MCP 주소 · 예 http://127.0.0.1:8765/mcp",
     "mcp.dev.ui_port": "검증 페이지 포트",
@@ -435,7 +439,9 @@ def _emit(node, depth, path, lines, last):
             _emit(v, depth + 1, y, lines, last)
             continue
         p, f = v
-        lines.append(f"{f'{pad}{name}: {_value(p, f)}'.ljust(NOTE_COL - 2)}  # {_note(p, f)}")  # 주석을 한 열로
+        value = _value(p, f)
+        head = f"{pad}{name}:" + (f" {value}" if value else "")
+        lines.append(f"{head.ljust(NOTE_COL - 2)}  # {_note(p, f)}")  # 주석을 한 열로
 
 
 def _first_leaf(y, node):
@@ -450,7 +456,10 @@ SET_MATTERS = {"PIPE_PROCS", "PIPE_THREADS", "PM_BUCKET"}
 
 
 def _value(p, f):
-    """칸에 적을 값(YAML 한 줄) — 코드 기본값. null: 기본 없음·비밀·빈 글자·이미지 기본값 칸(이미지·PC 값이 다름)·SET_MATTERS·저장소 경로가 든 기본값."""
+    """칸에 적을 값(YAML 한 줄) — 코드 기본값. 빈 글자: 사람이 꼭 적을 [필수] 칸(layout.NEED가 "필수"). null: 기본 없음·비밀·빈 글자·
+    이미지 기본값 칸(이미지·PC 값이 다름)·SET_MATTERS·저장소 경로가 든 기본값. YAML에서 빈 칸과 null은 같다(둘 다 비움)."""
+    if L.NEED.get(p, "").startswith("필수"):
+        return ""
     d = f.get_default(call_default_factory=True)
     if S.is_secret(f) or d is None or d == "" or S.env_name(f) in _IMAGE_ENVS | SET_MATTERS:
         return "null"

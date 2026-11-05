@@ -62,14 +62,17 @@ def login(role, extra=True):
     """EDW 접속 인자(pymssql.connect 그대로)와 빠진 칸 이름 목록 — common.connections.rdb의 서버·DB + role 계정
     ("read" | "write" — docs/prd/ops.md#op-03). extra=False면 connect_kwargs를 안 넘김(gen_roster).
     형식 틀린 포트는 연결 전에 실패(checked — 1433으로 조용히 붙지 않게). 값은 출력하지 않는다.
-    role은 둘 중 하나만(오타가 쓰기 계정으로 새지 않게) · connect_kwargs는 계정·서버 칸을 덮지 못함."""
+    role은 둘 중 하나만(오타가 쓰기 계정으로 새지 않게) · connect_kwargs는 계정·서버 칸을 덮지 못함.
+    쓰기 계정 이름·비밀번호가 둘 다 비면 "write"도 읽기 계정을 쓴다(op-03) — 검색 MCP(읽기 전용 프로세스)는 예외로 빠진 칸."""
     import json
 
-    from common.config.settings import cfg, checked, reveal
+    from common.config.settings import _EDW_READ_ONLY, cfg, checked, reveal
 
     if role not in ("read", "write"):
         raise ValueError(f"EDW 계정 역할은 read·write만 — {role!r}")
     c = cfg().connections.rdb
+    if role == "write" and not c.write.user and not reveal(c.write.password) and not _EDW_READ_ONLY[0]:
+        role = "read"
     acct = c.read if role == "read" else c.write
     checked("RDB_PORT")
     kw = {
@@ -103,13 +106,26 @@ def rdb_connect(extra_kwargs=True):
 
 def standin_path():
     """PC 가짜 EDW 경로(common.connections.rdb.sqlite) — RUN_ENV=local 전용. 서버 설정에 남아 있으면 실패한다
-    (원천 조회·게시·query_edw가 한꺼번에 가짜 파일로 가지 않게). 없으면 None."""
+    (원천 조회·게시·query_edw가 한꺼번에 가짜 파일로 가지 않게). 서버는 비면 None.
+    local은 비면 valid_env/edw/edw_copy.sqlite — 없으면 git의 valid_env/edw/edw.sqlite를 복사해 만든다(원본에는 쓰지 않음, op-14)."""
+    import os
+    import shutil
+
     from common.config.settings import cfg, guard_run_env
+    from common.core import paths
 
     p = cfg().connections.rdb.sqlite
-    if p and guard_run_env() != "local":
+    local = guard_run_env() == "local"
+    if p and not local:
         raise ValueError("common.connections.rdb.sqlite(RDB_SQLITE)는 PC(RUN_ENV=local) 전용 — 서버 설정에서 지울 것")
-    return p
+    if p or not local:
+        return p
+    copy, seed = paths.LOCAL_EDW_COPY, paths.LOCAL_EDW_SEED
+    if not copy.exists() and seed.is_file():  # 원본이 없는 곳(이미지)은 그대로 — 여는 쪽이 실패를 알림
+        tmp = copy.with_name(f"{copy.name}.{os.getpid()}.tmp")
+        shutil.copyfile(seed, tmp)
+        os.replace(tmp, copy)  # 다른 프로세스가 반쯤 쓴 사본을 열지 않게(한 번에 바꿈)
+    return copy.as_posix()
 
 
 CHUNK = 500  # IN 목록 크기

@@ -177,21 +177,25 @@ tuning:
     runtime: {max_cpu_load: 5}                   # 부하가 높은 PC라면(기본 0.9에서는 계속 대기함)
 ```
 
+- `settings.sample.yaml`을 그대로 복사해 시작해도 된다 — **빈 칸**(`pg_host:` 뒤가 비어 있음)은 꼭 적을 값(주석의 `[필수 · 모드]`와 예), **`null`**은 비워 두면 코드 기본값을 쓰는 칸이다. **PC(local)에 꼭 필요한 칸은 `run_env: local`과 모델 접속(`embed_base_url`·`embed_model`·`llm_base_url`·`llm_model`·`vlm_base_url`·`vlm_model`)뿐이다.** PG는 접속 칸을 채우면 그 PG, 모두 비우면 SQLite 대역을 쓴다(`pg_schema`는 비우면 `data_parsing`). EDW·Object Storage·토큰·배포 칸은 PC에서 채우지 않는다.
 - 옛 배치(최상위 `common`·`pipeline`·`mcp`)·옛 자리·지운 칸·모르는 칸이 있으면 시작하지 않고 그 칸 이름만 알린다 — `settings.sample.yaml`과 대조해 고친다(자리 찾기 `python -m common.config.sample --where <이름>`).
 - PC 전용 칸(외부 모델 허용·지출 상한·단가, 로컬 대체 DB, 시험 하네스)은 `dev` 절에 모여 있다(sample 맨 아래).
 - **외부 임베딩은 `allow_external: true`이고 `run_env: local`일 때만** 호출된다(서버 dev·prd는 늘 거부).
 - **LLM·VLM도 같다:** `required.models`의 `llm_*`·`vlm_*`(주소·모델·키)를 채우고 `dev.models.llm.llm_allow_external`·`dev.models.vlm.vlm_allow_external`을 `true`로 두면 PC에서 분류(SFDC·LAS)와 그림·스캔 쪽 VLM이 외부 모델을 부른다(`run_env: local`일 때만). 비우면 분류가 실패해 SFDC·LAS 문서는 적재되지 않는다. OpenRouter 하나로 임베딩·LLM·VLM을 모두 쓸 수 있다(같은 주소·키, 모델만 다름 — 단가표 `common/ai/llm.py` `PRICES`에 있는 모델이어야 예산 상한이 걸림).
 - **VLM 설정은 한 벌:** 스캔·이미지 문서의 VLM 엔진(`qwen_vlm`)·쪽 VLM·그림 VLM이 같은 호출과 같은 칸(`common.models.vlm.*` — 동시 수·제한 시간·재시도·`vlm_extra_request_body`, 해상도 `extract.page_render_dpi` 150, 쪽 상한 `transform.vlm.vlm_max_pages_per_doc`)을 쓴다. 생각(추론) 모델이면 `common.models.vlm.vlm_extra_request_body`에 생각 끄기를 넣는다(OpenRouter는 `{"reasoning": {"enabled": false}}`) — 칸 설명은 [env-guide §2](docs/operations/env-guide.md), 규칙은 PRD [pl-43](docs/prd/transform.md#pl-43).
 - **내부망 서버(dev·prd)에서 시험·운영할 때는 세 칸 `embed_allow_external`·`llm_allow_external`·`vlm_allow_external`을 모두 `false`(0)로 둔다.** 서버는 `run_env`가 dev·prd라 켜 두어도 외부 호출을 거부하지만, 서버 settings.yaml에는 외부 허용을 남기지 않는다.
-- **게시(silver)·EDW·원본 — PC는 가짜 대상만 적는다.** 경로는 저장소 루트 기준 상대 경로로 써도 된다(절대 경로도 됨):
+- **게시(silver)·EDW·원본 — PC는 가짜 대상만 쓴다.** 값은 `dev.local` 묶음에 기본값으로 들어 있어 적지 않아도 된다(바꿀 때만 — 저장소 루트 기준 상대 경로 또는 절대 경로):
   ```yaml
-  required:
-    publish: {publish_bucket: "file://output/object_storage/silver", publish_prefix: parse}   # 가짜 Object Storage 폴더
-    edw: {edw_local_sqlite_file: output/edw.sqlite}   # 가짜 EDW(ParsingMeta 포함) — valid_env/edw/edw.sqlite 사본(파싱·게시가 씀)
+  dev:
+    local:
+      local_edw_sqlite_file: null                          # 가짜 EDW(ParsingMeta 포함) — 비우면 valid_env/edw/edw_copy.sqlite(없으면 edw.sqlite를 복사해 만듦)
+      local_publish_dir: valid_env/object_storage/Parsing_Result   # 게시 폴더(가짜 Object Storage) — 처음 게시할 때 만듦
+      local_source_dir: valid_env/object_storage           # 파싱 원본 — --source·source_input_location이 없을 때
+      local_max_new_docs_per_run: 5                        # 한 번에 새로 파싱할 문서 수 — --max-new·max_new_docs_per_run이 없을 때
   ```
-  `file://` 뒤 폴더에 `<prefix>/<출처>/<원본 경로>/<파일명>_<날짜>.md`로 쓴다. 원본 폴더(`ops.paths.source_docs_dir`)·파싱 원본(`extract.source.source_input_location` — 폴더 또는 `rdb:csv:<경로>`)·PG 대체 폴더(`dev.pg_standin.pg_standin_dir`)도 상대 경로를 받는다(예 `valid_env/object_storage`).
-  `run_env: local`에서 실제 대상(`required.edw.edw_host`, `required.object_storage.object_storage_endpoint`, 원천 버킷, `file://`가 아닌 게시 버킷)이 적혀 있으면 앱이 시작하지 않는다. 서버(dev·prd)는 실제 접속 칸을 쓴다.
-- PG 접속 칸(`required.pg`의 여섯 칸)은 **모두 채우거나 모두 비운다.** 일부만 채우면 채울 자리를 알려 주고 멈춘다. PC에서 host·password가 둘 다 비면 SQLite 대역(`output/pg_standin/`)으로 돌고 첫 줄에 `WARNING: PG 접속 정보 없음`을 찍는다(서버는 멈춤).
+  게시 폴더에 `<prefix>/<출처>/<원본 경로>/<파일명>_<날짜>.md`로 쓴다(게시 폴더는 원본 목록에서 빠진다). 원본 폴더(`ops.paths.source_docs_dir`)·파싱 원본(`extract.source.source_input_location` — 폴더 또는 `rdb:csv:<경로>`)·PG 대체 폴더(`dev.pg_standin.pg_standin_dir`)도 상대 경로를 받는다.
+  `run_env: local`은 서버 전용 칸(`required.edw.edw_host`·EDW 계정, `required.object_storage.*`, 원천 버킷, `required.publish.publish_bucket`)을 **무시한다** — 적혀 있어도 비우고 `[settings] local(PC) — 서버 전용 칸을 무시함(비움): …` 한 줄에 칸 이름만 찍은 뒤 시작한다. 그래서 PC는 실제 EDW·Object Storage에 닿지 않는다. 서버(dev·prd)는 이 칸들을 쓰고 `dev.local`은 읽지 않는다.
+- PG 접속 칸(`required.pg`의 `pg_host`·`pg_port`·`pg_database`·`pg_user`·`pg_password` 다섯 칸)은 **모두 채우거나 모두 비운다.** 일부만 채우면 채울 자리를 알려 주고 멈춘다. PC에서 host·password가 둘 다 비면 SQLite 대역(`output/pg_standin/`)으로 돌고 첫 줄에 `WARNING: PG 접속 정보 없음`을 찍는다(서버는 멈춤).
 
 ### 4-3. 점검
 
@@ -217,7 +221,7 @@ for s in SFDC CRMS; do mkdir -p output/demo/src/$s; for d in $(ls -d valid_env/o
 SRC=output/demo/src     # <원천>/<uuid>/<파일> 그대로 — 파싱이 상대 키로 원천을 알아본다
 ```
 
-- 문서는 `valid_env/object_storage/<원천>/<uuid>/<파일>`에 있다(목록·목적: [valid_env/object_storage/test_doc_purpose.md](valid_env/object_storage/test_doc_purpose.md)). `valid_env`에는 쓰지 않는다(결과는 모두 `ops.paths.container_output_dir` 아래).
+- 문서는 `valid_env/object_storage/<원천>/<uuid>/<파일>`에 있다(목록·목적: [valid_env/object_storage/test_doc_purpose.md](valid_env/object_storage/test_doc_purpose.md)). `valid_env`에는 쓰지 않는다 — 예외 둘: 가짜 EDW 사본 `valid_env/edw/edw_copy.sqlite`와 게시 폴더 `valid_env/object_storage/Parsing_Result/`(둘 다 PC 실행이 만들고 git이 무시함). 그 밖의 결과는 모두 `ops.paths.container_output_dir` 아래.
 
 **② 파싱 — 문서 → 대표 결과**
 
@@ -227,7 +231,7 @@ cp valid_env/edw/edw.sqlite output/demo/edw.sqlite   # EDW 대역 사본 — 파
 ```
 
 - `--source`는 원본 폴더, `--src`는 준비된 파일이 놓이는 곳(`--src`만 주면 준비된 폴더로 보고 가져오기·중복 제거를 건너뜀).
-- EDW(`AI.ParsingMeta`)를 못 읽으면 서버는 종료 4, PC(local)는 받은 목록 그대로 — PC는 위처럼 `--set RDB_SQLITE=<사본>`을 준다.
+- EDW(`AI.ParsingMeta`)를 못 읽으면 서버는 종료 4, PC(local)는 받은 목록 그대로. PC는 `--set RDB_SQLITE`를 빼면 `valid_env/edw/edw_copy.sqlite`를 쓴다(위처럼 주면 그 사본).
 - 돌 문서가 없으면 `[parse] 이번 실행 0건 …` 한 줄을 남기고 종료 0.
 - 결과: `output/demo/parse/<엔진>/`, `output/demo/parse/_rep/`(문서마다 하나 + `_DONE.json`).
 
@@ -524,13 +528,13 @@ bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp   
 | 칸 | 무엇 | 어디서 받나 | 형식 예(가짜) | 환경 | 틀리면 어디서 잡나 |
 |---|---|---|---|---|---|
 | `required.env.run_env` | 실행 환경 | 정해진 값 | `dev` · `prd` | PC·dev·prd | 모든 명령이 시작 거부 |
-| `required.pg.pg_host`·`pg_port`·`pg_database`·`pg_user`·`pg_password`·`pg_schema` | 검색 DB(pgvector) | DB 담당 | `pg.example.local` · `5432` · `rag` · `rag_app` · `<비밀>` · `ai` | PC·dev·prd | `host_ctl.sh check` ① check_env · ③ migrate check |
+| `required.pg.pg_host`·`pg_port`·`pg_database`·`pg_user`·`pg_password`·`pg_schema` | 검색 DB(pgvector) — `pg_schema`는 비우면 `data_parsing` | DB 담당 | `pg.example.local` · `5432` · `rag` · `rag_app` · `<비밀>` · (비움) | PC·dev·prd | `host_ctl.sh check` ① check_env · ③ migrate check |
 | `required.models.embed_base_url`·`embed_model`·`embed_api_key` | 임베딩 모델(`embed_model`은 적재·검색 때 같아야 함) | 모델 담당(내부망 주소) | `http://llm.example.local:8000/v1` · `<모델>` · `<비밀>` | PC·dev·prd | `host_ctl.sh check` ② ping_models |
 | `required.models.llm_*`·`vlm_*` | LLM·VLM 모델 | 모델 담당 | `http://llm.example.local:8001/v1` · `<모델>` | dev·prd | `host_ctl.sh check` ② ping_models |
-| `required.edw.edw_host`·`edw_port`·`edw_database`·`read_*`·`write_*` | 회사 DB(EDW) 접속 — 읽기 계정(원천 목록·ParsingMeta 조회·`query_edw`), 쓰기 계정(ParsingMeta 게시) · `edw_port`는 비우면 1433 | DB 담당 | `edw.example.local` · (비움) · `EDW` · `<계정>` · `<비밀>` | dev·prd | `run_pipeline` 시작(빠지면 칸 이름을 찍고 멈춤) · `pipe_exec.sh publish --dry-run`(④) |
+| `required.edw.edw_host`·`edw_port`·`edw_database`·`read_*`·`write_*` | 회사 DB(EDW) 접속 — 읽기 계정(원천 목록·ParsingMeta 조회·`query_edw`), 쓰기 계정(ParsingMeta 게시 — 둘 다 비우면 읽기 계정으로 게시) · `edw_port`는 비우면 1433 | DB 담당 | `edw.example.local` · (비움) · `EDW` · `<계정>` · `<비밀>` | dev·prd | `run_pipeline` 시작(빠지면 칸 이름을 찍고 멈춤) · `pipe_exec.sh publish --dry-run`(④) |
 | `required.edw.parsing_meta_table` | 게시 행을 쓸 EDW 표 — 비우면 `AI.ParsingMeta` | DB 담당 | (비움) | dev·prd | publish `--apply` |
-| `required.edw.edw_local_sqlite_file` | PC 가짜 EDW 파일 — **서버는 비움**(적혀 있으면 EDW를 쓸 때 거부) | — | (비움) | PC만 | — |
-| `required.publish.publish_bucket`·`publish_prefix` | silver 게시 위치 — 버킷(원천 원본 버킷과 달라야 함)과 그 안 경로 접두 | 운영 담당 | `rag-silver` · `parse` | PC·dev·prd | `run_pipeline` 시작 · publish 미리보기 |
+| `dev.local.*` | PC 전용 값(가짜 EDW·게시 폴더·원본 폴더·새 문서 상한) — **서버는 읽지 않음**(`local_edw_sqlite_file`이 적혀 있으면 EDW를 쓸 때 거부) | — | (sample 그대로) | PC만 | — |
+| `required.publish.publish_bucket`·`publish_prefix` | silver 게시 위치 — 버킷(원천 원본 버킷과 달라야 함)과 그 안 경로 접두(PC는 `publish_bucket` 대신 `dev.local.local_publish_dir`) | 운영 담당 | `rag-silver` · `parse` | dev·prd | `run_pipeline` 시작 · publish 미리보기 |
 | `required.object_storage.object_storage_endpoint`·`object_storage_region`·`object_storage_access_key`·`object_storage_secret_key`·`object_storage_verify_tls` | Object Storage(S3 호환) 접속 — `object_storage_region`은 비우면 `us-east-1`, `object_storage_verify_tls`는 비우면 `1`(사내 CA면 CA 파일 경로) | 스토리지 담당 | `https://os.example.local:9000` · (비움) · `<비밀>` · `<비밀>` · (비움) | dev·prd | `run_pipeline` 시작 · publish `--apply` |
 | `extract.source.source_input_location`·`source_default_bucket`·`source_uri_prefix` | 원본 위치 | 운영 담당 | `rdb:csv:<루트>/list.csv` · `<버킷>` · `s3://<버킷>/<접두>` | dev·prd | 첫 `run_pipeline` |
 | `required.tokens.mcp_token` | MCP 토큰 하나 — 검색 MCP와 `parse_document` 작업 서비스가 함께 씀 | `openssl rand -hex 24` | 48자 16진수 | dev·prd(밖에서 붙을 때 필수) | `host_ctl.sh check` ⑥ `/health` · `parse_document` 호출이 토큰 오류 |

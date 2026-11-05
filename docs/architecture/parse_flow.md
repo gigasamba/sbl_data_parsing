@@ -197,7 +197,7 @@ PC에서는 `run_pipeline.py`를 돌리지 않는다(운영 EDW·Object Storage�
 | 적재 | `python -m pipeline.load.pgvector_load load --bundle …` | §5-2 |
 | 검색 | `python -m mcp_server.cli.search_ask ask --source CRMS --q "…"` 또는 `mcp_server.main` | §6 |
 
-게시(`publish_parse_result`)는 PC에서 `required.publish.publish_bucket`에 `file://<절대 경로 폴더>`(로컬 폴더를 가짜 Object Storage로)를, `required.edw.edw_local_sqlite_file`(`RDB_SQLITE`)에 가짜 EDW sqlite 파일을 두고 시험한다(§5-1).
+게시(`publish_parse_result`)는 PC(`run_env: local`)에서 `dev.local.local_publish_dir`(비우면 `valid_env/object_storage/Parsing_Result` — 로컬 폴더를 가짜 Object Storage로)와 `dev.local.local_edw_sqlite_file`(`RDB_SQLITE` — 비우면 `valid_env/edw/edw_copy.sqlite`, 없으면 `edw.sqlite`를 복사)로 시험한다. local은 서버 전용 칸(EDW·Object Storage·게시 버킷)을 비우고 경고만 한다(§5-1).
 
 ---
 
@@ -407,16 +407,16 @@ flowchart TD
 | 기록 | `common/store/parsing_meta_db.py` | `AI.ParsingMeta` INSERT만(UPDATE 없음), 쓰기 계정. DDL은 실행하지 않음 | → EDW |
 | 접속 | `common/store/objectstore.py`·`common/store/mssql.py` | S3 호환 Object Storage(boto3)·SQL Server 접속, PC 가짜 EDW sqlite | — |
 
-게시 설정(모두 `settings.yaml`의 `required` 묶음):
+게시 설정(서버는 `settings.yaml`의 `required` 묶음, PC는 `dev.local` 묶음):
 
 | 칸(옛 이름) | 서버 | PC(local) |
 |---|---|---|
-| `required.publish.publish_bucket`(`PM_BUCKET`) | 게시용 Object Storage 버킷 이름(원천 버킷과 다르게 — 검사는 없음) | `file://<절대 경로 폴더>` — 로컬 폴더를 가짜 Object Storage로 |
+| `required.publish.publish_bucket`(`PM_BUCKET`) | 게시용 Object Storage 버킷 이름(원천 버킷과 다르게 — 검사는 없음) | 쓰지 않음 — `dev.local.local_publish_dir` 폴더(비우면 `valid_env/object_storage/Parsing_Result`) |
 | `required.publish.publish_prefix`(`PM_PREFIX`) | 버킷 안 결과 경로 접두 | 같음 |
-| `required.object_storage.*`(`object_storage_endpoint`·`object_storage_region`·`object_storage_access_key`·`object_storage_secret_key`·`object_storage_verify_tls`) | S3 호환 접속 | 비움 |
+| `required.object_storage.*`(`object_storage_endpoint`·`object_storage_access_key`·`object_storage_secret_key`) · `common.connections.object_storage.*`(`object_storage_region`·`object_storage_verify_tls` — 기본값 있음) | S3 호환 접속 | 쓰지 않음(적혀 있어도 비움) |
 | `required.edw.parsing_meta_table`(`PM_TABLE`) | 비우면 `AI.ParsingMeta` | 비움 |
-| `required.edw.edw_host`·`edw_port`·`edw_database`·`edw_write_user`·`edw_write_password` | ParsingMeta INSERT용 EDW 접속(쓰기 계정) | 비움 |
-| `required.edw.edw_local_sqlite_file`(`RDB_SQLITE`) | 비움(서버에 있으면 실패) | 가짜 EDW sqlite 파일 하나(모든 표) |
+| `required.edw.edw_host`·`edw_port`·`edw_database`·`edw_write_user`·`edw_write_password` | ParsingMeta INSERT용 EDW 접속 — 쓰기 계정 두 칸을 비우면 읽기 계정을 씀 | 쓰지 않음(적혀 있어도 비움) |
+| `dev.local.local_edw_sqlite_file`(`RDB_SQLITE`) | 비움(서버에 있으면 실패) | 가짜 EDW sqlite 파일 하나(모든 표) — 비우면 `valid_env/edw/edw_copy.sqlite` |
 
 `--apply`인데 `required.publish.publish_bucket`이 비면 멈춘다(dry-run은 미리보기 값으로 표만 냄).
 
@@ -441,7 +441,7 @@ sequenceDiagram
 | 단계 | 파일·함수 | 하는 일 | 입력 → 출력 |
 |---|---|---|---|
 | 진입·검사 | `pipeline.load.pgvector_load.load()` | 판 기록(`alembic_version`) 확인, 임베딩 없는 묶음·다른 모델 묶음 거부 | `bundle/` → — |
-| EDW 메타 | `pipeline.load.edw_doc_meta.fetch()` · `common/store/edw_chain.py` | 사슬 파일(`ops.paths.edw_chain_file` — 비우면 `resources/config/edw_chain.yaml`)을 따라 원본 경로마다 `client_edw`·`created_at`·원천 메타(`attrs`). EDW를 못 열면 메타를 비운 채 계속 | EDW(읽기 계정 `required.edw.edw_read_user`·`edw_read_password`, PC는 `required.edw.edw_local_sqlite_file`) → 문서 칸 |
+| EDW 메타 | `pipeline.load.edw_doc_meta.fetch()` · `common/store/edw_chain.py` | 사슬 파일(`ops.paths.edw_chain_file` — 비우면 `resources/config/edw_chain.yaml`)을 따라 원본 경로마다 `client_edw`·`created_at`·원천 메타(`attrs`). EDW를 못 열면 메타를 비운 채 계속 | EDW(읽기 계정 `required.edw.edw_read_user`·`edw_read_password`, PC는 `dev.local.local_edw_sqlite_file`) → 문서 칸 |
 | 분류 | `pipeline.load.doc_classify.apply()` → `pipeline.load.doc_classify.classify_one()` | SFDC·LAS 문서에 `doc_class`(지시서 `resources/prompts/pipeline/classify_sfdc`·`classify_las`). 실패한 문서는 이번에 적재 안 함 → 다음 실행이 다시 고름 | `_rep` 본문 → 라벨, `classify_audit.jsonl` |
 | 쓰기 | `pipeline.load.pgvector_load._load_src()` | 문서의 source_system으로 원천 스키마(SFDC·CRMS·LAS·FAQ·other)를 고르고 `doc`·`chunk`·용어 행. 묶음에 없는 문서는 지우지 않음 | → PG |
 | 기록 | `pipeline.load.pgvector_load._mark_loaded()` → `common.store.parsing_meta_db.mark_loaded()` | `gold_version` = `<VERSION>+m<마스터 해시 앞 8자>` | → EDW |
