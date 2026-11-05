@@ -52,7 +52,7 @@ load_settings() {   # 위 설명(source) — 성공 0 · 설정 파일 없음·�
   if [ "${SETTINGS_LOADED:-}" != "$SETTINGS_FILE" ]; then   # 같으면 이 셸(또는 부른 부모 스크립트)이 같은 파일로 이미 냄
     local out line name
     out=$(settings_export sh) || { echo "[설정] 설정 파일에서 호스트 값을 읽지 못함($SETTINGS_FILE) — 위 안내 확인" >&2; return 2; }
-    # 벌 이름은 settings.yaml 하나에서(run_docs.py와 같게) · 앞선 load_settings가 다른 파일에서 낸 값도 지움(셸 env는 사람이 준 값만 이김)
+    # 벌 이름은 settings.yaml 하나에서(run_pipeline.py와 같게) · 앞선 load_settings가 다른 파일에서 낸 값도 지움(셸 env는 사람이 준 값만 이김)
     # shellcheck disable=SC2086 — 이름 목록 낱말 나눔
     unset INSTANCE ${_SETTINGS_KEYS:-}
     _SETTINGS_KEYS=

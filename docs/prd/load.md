@@ -102,7 +102,7 @@
 3. ParsingMeta에는 INSERT만 한다 — 키(`source_system`, `source_key` = 원본 전체 키)가 이미 있으면 건너뛴다. UPDATE 예외는 [pl-12](#pl-12) 규칙 3뿐.
 4. 상태 `parse_status` = `ok` · `partial`(교차 정확도 < 0.95 — [transform.md#pl-04](transform.md#pl-04)) · `failed` · `skipped_drm` · `skipped_dup` · `not_parsed` · `skipped_disk_cap`. 올리는 상태는 `tuning.load.publish.upload_statuses`(기본 `ok`·`partial`).
 5. `skipped_drm`·`failed`는 EDW에 쓰지 않고 `output/publish/excluded_<날짜>.md` 보고서에만.
-6. 게시 버킷이 원천 원본 버킷과 같은지는 검사하지 않는다(rn-07 — `run_docs`가 늘 끄던 검사를 지움). `required.publish.bucket`을 원천 버킷과 다르게 두는 것은 운영자 몫.
+6. 게시 버킷이 원천 원본 버킷과 같은지는 검사하지 않는다(rn-07 — `run_pipeline`가 늘 끄던 검사를 지움). `required.publish.bucket`을 원천 버킷과 다르게 두는 것은 운영자 몫.
 
 ### QA
 - `tests/server/pipeline/test_publish_parse.py` · `tests/server/common/test_no_deleted.py`.
@@ -112,13 +112,13 @@
 ## pl-26 · 늘 게시하고 게시 대상은 필수
 
 ### 규칙
-1. 게시(silver → Object Storage + EDW)는 기본이자 유일한 방식이다 — 끄는 선택지가 없다. `run_docs`는 문서마다 늘 게시한다([ops.md#pl-24](ops.md#pl-24) — gold 전).
+1. 게시(silver → Object Storage + EDW)는 기본이자 유일한 방식이다 — 끄는 선택지가 없다. `run_pipeline`는 문서마다 늘 게시한다([ops.md#pl-24](ops.md#pl-24) — gold 전).
 2. 게시·EDW 칸은 settings.yaml `required` 한곳에 있다 — 게시 위치 `required.publish.bucket`·`prefix`, Object Storage 접속 `required.object_storage`(`endpoint`·`region`·`access_key`·`secret_key`·`verify_tls`), EDW `required.edw`(`parsing_meta_table`·`host`·`port`·`database`·`read_*`·`write_*`·`sqlite`). 칸마다 주석에 서버·PC에 넣을 값을 적는다. 옛 자리(`required.source.publish_*`·`dev.connections.rdb.sqlite`·`common.connections.…`)도 경고 한 번 뒤 읽는다.
-3. 서버(`run_docs`)는 게시 버킷·접두, Object Storage 주소·키, EDW 주소·읽기·쓰기 계정이 비면 칸 이름을 찍고 시작을 거부한다(종료 2). `region`·`verify_tls`·`port`·`parsing_meta_table`은 비우면 코드 기본값(`us-east-1`·`1`·1433·`AI.ParsingMeta`).
+3. 서버(`run_pipeline`)는 게시 버킷·접두, Object Storage 주소·키, EDW 주소·읽기·쓰기 계정이 비면 칸 이름을 찍고 시작을 거부한다(종료 2). `region`·`verify_tls`·`port`·`parsing_meta_table`은 비우면 코드 기본값(`us-east-1`·`1`·1433·`AI.ParsingMeta`).
 4. PC(`local`)는 로컬 대역만 적는다 — 게시 버킷 `file://<가짜 Object Storage 폴더 절대 경로>`(S3 접속 칸 비움), EDW `required.edw.sqlite`(가짜 EDW 파일 — 접속 칸 비움). 가짜 EDW는 `local`에서만 열린다(서버 설정에 있으면 EDW를 쓸 때 거부). PC에서는 운영 EDW·Object Storage에 접속하지 않는다(CLAUDE.md §4).
 
 ### QA
-- 칸 자리·옛 자리: `tests/server/common/test_layout.py::test_publish_edw_keys_in_required`. 서버 시작 검사는 `run_docs.py` `SETTINGS_REQUIRED`(자동 시험 없음).
+- 칸 자리·옛 자리: `tests/server/common/test_layout.py::test_publish_edw_keys_in_required`. 서버 시작 검사는 `run_pipeline.py` `SETTINGS_REQUIRED`(자동 시험 없음).
 - Status: done
 
 <a id="pl-41"></a>
@@ -128,16 +128,16 @@
 FAQ는 판을 잇지 않는다. 새 FAQ가 오면 gold faq를 비우고 FAQ 전체를 다시 넣는다 — [pl-13](#pl-13)("지우지 않음")의 FAQ 한정 예외. 검토 등급 A.
 
 ### 규칙
-1. 새 FAQ = FileStorageMap의 `FAQ/…` 키 중 호스트 진행 폴더의 `faq_seen.txt`(교체를 마친 키 목록)에 없는 것. ParsingMeta는 판정에 쓰지 않는다. 파일이 없으면(처음) FAQ 전체를 한 번 교체한다.
-2. `run_docs.py` `faq_first`(처리 순서를 정한 뒤 — `--skip-done` 뒤, `--max-docs` 앞): FAQ 목록은 `--filter`와 상관없이 FileStorageMap에서 따로 읽는다(대상에 없는 FAQ는 목록 뒤에 덧붙임). `--start-offset`이 대상 수보다 커도 확인한다.
-3. 새 FAQ가 있으면 → 구조화 컨테이너에서 `pgvector_load faq-sync --reset`으로 gold faq의 문서·청크·키워드 색인을 한 트랜잭션에서 지우고, FAQ 전체를 이번 처리 맨 앞에 넣는다(이미 끝난 FAQ도). `faq_seen.txt`는 `faq-sync` 결과(`--out` JSON — 지운 수·남은 `file_path`)를 읽은 **뒤에만** 적는다.
+1. 새 FAQ = FileStorageMap의 `FAQ/…` 키 중 결과 폴더의 `_faq_seen.txt`(교체를 마친 키 목록)에 없는 것. ParsingMeta는 판정에 쓰지 않는다. 파일이 없으면(처음) FAQ 전체를 한 번 교체한다.
+2. 컨테이너 안 `candidate_pick list --faq-seen <파일>`의 `faq_first`(처리 순서를 정한 뒤 — `--skip-done` 뒤, `--max-docs` 앞): FAQ 목록은 `--filter`와 상관없이 FileStorageMap에서 따로 읽는다(대상에 없는 FAQ는 목록 뒤에 덧붙임). `--start-offset`이 대상 수보다 커도 확인한다.
+3. 새 FAQ가 있으면 → 자식 프로세스 `pgvector_load faq-sync --reset`으로 gold faq의 문서·청크·키워드 색인을 한 트랜잭션에서 지우고, FAQ 전체를 이번 처리 맨 앞에 넣는다(이미 끝난 FAQ도). `_faq_seen.txt`는 `faq-sync` 결과(`--out` JSON — 목록 파일 옆 `faq_sync.json` — 지운 수·남은 `file_path`)를 읽은 **뒤에만** 적는다.
 4. 새 FAQ가 없으면 → 지우지 않고 gold에 없는 FAQ만 넣는다(`skipped_dup`은 뺌) — 중간에 멈춘 교체와 파싱 실패를 다음 실행이 채운다.
-5. 만약 `faq-sync` 결과를 못 읽으면(실패·시간 초과 1,800초) → 경고(오류 끝 200자)와 함께 FAQ 전체를 넣고 `faq_seen.txt`는 그대로 둔다.
+5. 만약 `faq-sync` 결과를 못 읽으면(실패·시간 초과 1,800초) → 경고와 함께 FAQ 전체를 넣고 `_faq_seen.txt`는 그대로 둔다.
 6. `--seqs`·`--limit` 실행에서는 FAQ 교체를 하지 않는다(로그 한 줄).
 7. 한계: 같은 실행 안에서 지우고 다시 넣는 사이에는 검색에 FAQ가 일부만 보인다. FileStorageMap에서 사라진 FAQ는 다음 교체 때 함께 빠진다.
 
 ### QA
-- `tests/server/pipeline/test_faq_rows.py::test_faq_sync`(SQLite 대역) · `tests/general/deploy/test_run_docs.py::test_faq_first`.
+- `tests/server/pipeline/test_faq_rows.py::test_faq_sync`(SQLite 대역) · `tests/server/pipeline/test_target_list.py`(FAQ 순서 사례).
 - Status: done
 
 <a id="pl-08"></a>

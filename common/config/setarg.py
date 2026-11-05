@@ -131,5 +131,5 @@ def apply(argv=None, module=None):
     sys.stderr.flush()
     if os.name == "posix":
         env[_OWNED] = "1"  # env 남김 — 내부 신호: exec 뒤에는 atexit가 안 돌아 새 프로세스가 덮기 파일을 맡음
-        os.execve(sys.executable, cmd, env)  # 같은 PID — docker exec·고아 정리(run_docs)가 보는 프로세스 그대로
+        os.execve(sys.executable, cmd, env)  # 같은 PID — docker exec·고아 정리(run_pipeline)가 보는 프로세스 그대로
     raise SystemExit(subprocess.call(cmd, env=env))  # Windows(PC) — exec가 새 프로세스라 기다려 종료 코드를 넘김

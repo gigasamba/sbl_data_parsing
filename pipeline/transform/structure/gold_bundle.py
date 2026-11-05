@@ -602,7 +602,7 @@ def main(argv=None):
 if __name__ == "__main__":
     import importlib  # 문자열 import — 층 s 파일이 setarg.py를 code_fp 의존으로 끌어오지 않게(CLI 도우미를 고칠 때 서버 전체 재구조화 방지)
 
-    importlib.import_module("common.config.setarg").apply()  # --set 이름=값(호스트 run_docs.py 구조화가 임베딩 동시 수 등을 넘김)
+    importlib.import_module("common.config.setarg").apply()  # --set 이름=값(호스트 run_pipeline.py 구조화가 임베딩 동시 수 등을 넘김)
     utf8_stdout()
     with runtrace.run("gold_bundle", sys.argv[1:]):  # 직접 실행이면 자기 run_id(부모가 이어줬으면 그대로)
         main()

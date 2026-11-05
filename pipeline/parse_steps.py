@@ -46,10 +46,12 @@ def run_step(args, env, timeout=None, launch=subprocess.Popen, track=False, log=
     return p
 
 
-def place_inputs(run, src, out, names, only):
-    """준비 단계 — 파일 이름 목록을 only 파일에 적고 filter_and_rotate(src → out, 그 이름만)를 돌린다. 반환: run의 종료 코드."""
+def place_inputs(run, src, out, names, only, scan_rotate=True):
+    """준비 단계 — 파일 이름 목록을 only 파일에 적고 filter_and_rotate(src → out, 그 이름만)를 돌린다. scan_rotate=False면
+    이미지 PDF는 돌리지 않음. 반환: run의 종료 코드."""
     Path(only).write_text("\n".join(names) + "\n", encoding="utf-8")
-    return run(["pipeline.extract.filter_and_rotate", "--src", src, "--out", out, "--only", only])
+    extra = [] if scan_rotate else ["--no-scan-rotate"]
+    return run(["pipeline.extract.filter_and_rotate", "--src", src, "--out", out, "--only", only, *extra])
 
 
 def run_group(cmd, env, timeout=None, launch=subprocess.Popen, track=False, **kw):

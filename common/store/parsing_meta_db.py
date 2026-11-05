@@ -159,6 +159,12 @@ def _done_keys_rows(cur, table, kc="source_key", gold=False):
     return {r[0] for r in cur.fetchall()}
 
 
+def _status_like(cur, table, ph, prefix, kc="source_key"):
+    """원본 키가 prefix로 시작하는 행의 키 → parse_status(한 번이라도 기록된 것) — 읽기만. FAQ 교체 판단(candidate_pick)이 쓴다."""
+    cur.execute(f"SELECT {kc}, parse_status FROM {table} WHERE {kc} LIKE {ph}", (prefix + "%",))
+    return {k: st for k, st in cur.fetchall()}
+
+
 def pick_rep(rows, source_system):
     """같은 원본(source_key)의 행들 → 쓸 행 하나 또는 None(원문 도구가 부를 때 읽음).
     연결 키는 source_system + source_key. 재파싱으로 여러 행이면 status='active'인 것 중(없으면 전체 중) parse_date가 가장 늦은 행.
@@ -296,6 +302,9 @@ class MssqlStore:
             self._available_columns(self.cn.cursor())
         return _done_keys_rows(self.cn.cursor(), self.ident, self.key_col(), "gold_version" in self._found)
 
+    def status_like(self, prefix):
+        return _status_like(self.cn.cursor(), self.ident, "%s", prefix, self.key_col())
+
     def set_loaded(self, ids, version, kept=False):
         """loaded_at = SYSUTCDATETIME()·gold_version = version(칸은 DB 담당자가 더함, C-76). loaded_at이 없으면 예외(호출부가 경고),
         gold_version이 없으면 그 칸만 빼고 씀. kept — mark_loaded 참고."""
@@ -362,6 +371,9 @@ class SqliteStore:
     def done_source_keys(self):
         cols = self._colset()
         return _done_keys_rows(self.cn.cursor(), self.table, renames(cols).get("source_key", "source_key"), "gold_version" in cols)
+
+    def status_like(self, prefix):
+        return _status_like(self.cn.cursor(), self.table, "?", prefix, self.key_col())
 
     def set_loaded(self, ids, version, kept=False):
         cols = self._colset()

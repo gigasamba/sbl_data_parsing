@@ -81,7 +81,7 @@ def _selftest_rdb_cols():
     p.write_text("doc_id,object_key,size_bytes\n" + "".join(f"d{i},s3://rag-docs/clients/d{i}.pdf,4\n" for i in range(3)), encoding="utf-8")
     M._s3 = lambda: _FakeS3({("rag-docs", f"clients/d{i}.pdf"): ("unused", b"docA") for i in range(3)})
     try:
-        with pc.PIPE.env(RDB_COL_DOC_ID="doc_id", RDB_COL_KEY="object_key", RDB_COL_SIZE="size_bytes"):
+        with pc.PIPE.env(RDB_COL_DOC_ID="doc_id", RDB_COL_KEY="object_key", RDB_COL_SIZE="size_bytes", SOURCE_STAGING=str(d / "staging")):
             # ParsingMeta에 끝난 키는 받기 전에 빠짐(다운로드·manifest 없음)
             assert resolve(f"rdb:csv:{p}", d / "pre", done={"clients/d1.pdf"})[1] == ["d0", "d2"]
             _, names, state = resolve(f"rdb:csv:{p}", d)
@@ -120,7 +120,7 @@ def _selftest_filestoragemap():
     objs = {("fsm-bucket", f"docs/{c}.pdf"): (f"etag-unused-{c}", b"docA") for c in "abcde"}  # 4바이트 = file_size와 일치
     M._s3 = lambda: _FakeS3(objs)
     env = contextlib.ExitStack()
-    env.enter_context(pc.PIPE.env(RDB_BUCKET="fsm-bucket"))  # S7c — 설정 객체 덮어쓰기(os.environ은 안 바뀜)
+    env.enter_context(pc.PIPE.env(RDB_BUCKET="fsm-bucket", SOURCE_STAGING=str(state_root / "staging")))  # S7c — 설정 객체 덮어쓰기
     try:
         table = f"csv:{csv_path}"
         local_dir, names1, state = resolve(f"rdb:{table}", state_root)
@@ -182,7 +182,7 @@ def _selftest_same_key_new_version():
     objs = {("fsm-bucket", "docs/same.pdf"): ("etag-unused", b"docA")}  # 4바이트 = file_size
     M._s3 = lambda: _FakeS3(objs)
     env = contextlib.ExitStack()
-    env.enter_context(pc.PIPE.env(RDB_BUCKET="fsm-bucket"))  # S7c — 설정 객체 덮어쓰기(os.environ은 안 바뀜)
+    env.enter_context(pc.PIPE.env(RDB_BUCKET="fsm-bucket", SOURCE_STAGING=str(state_root / "staging")))  # S7c — 설정 객체 덮어쓰기
     try:
         table = f"csv:{csv_path}"
         _, names1, state = resolve(f"rdb:{table}", state_root)
@@ -262,32 +262,41 @@ def test_folder_tree():
     assert resolve(str(odd), root / "out3")[:2] == (odd, [])
 
 
-def test_prepare_batch():
-    """파싱 전 extract — ParsingMeta에 끝난 문서(done_keys)는 고를 때(받기 전) 빠지고, 같은 내용은 하나만 · pick_new는 상한·목록 안에서만."""
+def test_stage_batch():
+    """파싱 전 extract 한 번 — ParsingMeta에 끝난 문서(done)는 고를 때(받기 전) 빠지고, 같은 내용은 하나만, 거르기(filter_and_rotate)를 지난 것만
+    only.txt에 남음 · pick_new는 상한·목록 안에서만."""
     import tempfile
-    from unittest import mock
 
     from pipeline.extract import deduplication as dedup
 
     root = Path(tempfile.mkdtemp())
     src = root / "src"
     src.mkdir()
-    for name, body in (("a.txt", "same"), ("b.txt", "same"), ("c.txt", "done")):
+    for name, body in (("a.txt", "same"), ("b.txt", "same"), ("c.txt", "done"), ("d.zip", "zip")):
         (src / name).write_text(body, encoding="utf-8")
+    prepared = root / "prepared"
     steps = []
 
-    def run_step(args):  # 여러 건 중복 확인은 자식 대신 같은 함수로
+    def run_step(args):  # 자식 대신 — 중복 확인은 같은 함수, 거르기는 그 결과를 흉내(압축은 건너뜀)
         steps.append(args[0])
-        dedup.run_folder(src, root / "out" / "dedup")
+        if args[0] == "pipeline.extract.deduplication":
+            dedup.run_folder(src, root / "out" / "dedup")
+        else:
+            prepared.mkdir(exist_ok=True)
+            names = Path(args[args.index("--only") + 1]).read_text(encoding="utf-8").split()
+            for n in names:
+                if not n.endswith(".zip"):
+                    (prepared / n).write_text("x", encoding="utf-8")
         return 0
 
-    with mock.patch.object(CP, "done_keys", lambda: {"c.txt"}):
-        local, keep, state = M.prepare_batch(str(src), root / "out", 0, run_step)
-        assert steps == ["pipeline.extract.deduplication"] and Path(local) == src
-        assert len(keep) == 1 and keep[0] in ("a.txt", "b.txt"), keep
-        assert (state / "selected.txt").read_text(encoding="utf-8").split() == ["a.txt", "b.txt"]  # 끝난 c.txt는 고를 때 빠짐
-        only = root / "only.txt"
-        only.write_text("b.txt\n", encoding="utf-8")
-        for max_new, sel, want in ((1, None, ["a.txt"]), (5, only, ["b.txt"])):
-            f = CP.pick_new(src, root / "out", max_new, sel)
-            assert f.read_text(encoding="utf-8").split() == want, (max_new, want)
+    local, left, state, only = M.stage_batch(str(src), root / "out", prepared, 0, run_step, done={"c.txt"})
+    assert steps == ["pipeline.extract.deduplication", "pipeline.extract.filter_and_rotate"] and Path(local) == src
+    assert (state / "selected.txt").read_text(encoding="utf-8").split() == ["a.txt", "b.txt", "d.zip"]  # 끝난 c.txt는 고를 때 빠짐
+    assert len(left) == 1 and left[0] in ("a.txt", "b.txt") and only.read_text(encoding="utf-8").split() == left, (
+        left
+    )  # zip은 거르기에서 빠짐
+    sel = root / "only.txt"
+    sel.write_text("b.txt\n", encoding="utf-8")
+    for max_new, pick, want in ((1, None, ["a.txt"]), (5, sel, ["b.txt"])):
+        f = CP.pick_new(src, root / "out", max_new, pick)
+        assert f.read_text(encoding="utf-8").split() == want, (max_new, want)

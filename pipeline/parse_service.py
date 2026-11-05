@@ -70,7 +70,7 @@ PROCS = str(
 ROOTS = [Path(p).resolve() for p in (_PM.roots or [str(SERVICE_DIR / "inbox")])]  # 쉼표 목록은 객체가 strip·빈 것 버림
 JOB_TIMEOUT = _PM.job_timeout_sec
 QUEUE_MAX = _PM.queue_max
-JOBS_DIR = SERVICE_DIR / "jobs"  # 호스트 <결과 폴더>/_mcp_parse/jobs — run_docs.py가 같은 자리를 봄
+JOBS_DIR = SERVICE_DIR / "jobs"  # 호스트 <결과 폴더>/_mcp_parse/jobs — run_pipeline.py가 같은 자리를 봄
 
 
 MAX_JOBS_KEPT = 30

@@ -379,7 +379,7 @@ def selftest():
         with pc.PIPE.env(PARSE_POST="figures"):  # 쪽 VLM 꺼짐 — 덮지 않으면 쪽 전체 그림은 그림 VLM 대상
             assert not any(f["loc"].get("page_vlm") for f in _figures(scan6) if f["loc"].get("page_render"))
             assert all(f["loc"].get("page_vlm") for f in _figures(scan6, page_covered=True) if f["loc"].get("page_render"))
-        # run_docs light 레인처럼 vlm_page 없이 figures만 — VLM 엔진이 옮긴 문서의 쪽 전체 그림은 그림 VLM 0회
+        # run_pipeline light 레인처럼 vlm_page 없이 figures만 — VLM 엔진이 옮긴 문서의 쪽 전체 그림은 그림 VLM 0회
         from pipeline.transform.figures import figure_extract as _fig_mod
 
         fig_calls = []

@@ -83,8 +83,8 @@ class PipelineExtractPrepare(Section):
 
 
 class PipelineExtractSource(Section):
-    fetch_workers: int | None = F(1, "SOURCE_FETCH_WORKERS", "원본 문서 병렬 다운로드 스레드 수(개) — rdb:csv 받기·미리받기(warm) 공용")
-    warm: str | None = F(None, "SOURCE_WARM", "미리받기(warm) 저장 폴더 — 비면 warm 기능 꺼짐")
+    fetch_workers: int | None = F(1, "SOURCE_FETCH_WORKERS", "원본 문서 병렬 다운로드 스레드 수(개) — 미리 받기(candidate_ready stage)")
+    staging: str | None = F(None, "SOURCE_STAGING", "미리 받기(staging) 폴더 — 원본을 받는 유일한 자리, 비면 rdb:csv 원본을 받지 못함")
 
 
 class PipelineHostNightly(Section):
@@ -226,55 +226,57 @@ class PipelineExtract(Section):
     source: PipelineExtractSource = Field(default_factory=PipelineExtractSource)
 
 
-class PipelineHostRunDocs(Section):
-    """문서별 flow 러너(deploy/host/scripts/run_docs.py — 호스트에서 글자 그대로 읽음) 레인·대기열(사용자 10-29, docs/prd/runner.md rn-01·rn-02).
-    기본값은 run_docs.py RUN_DOCS_DEFAULTS와 같다(tests/general/deploy/test_run_docs.py가 대조)."""
+class PipelineHostRunPipeline(Section):
+    """문서별 flow 러너(deploy/host/scripts/run_pipeline.py — 호스트에서 글자 그대로 읽음) 레인·대기열(사용자 10-29, docs/prd/runner.md rn-01·rn-02).
+    기본값은 run_pipeline.py RUN_PIPELINE_DEFAULTS와 같다(tests/general/deploy/test_run_pipeline.py가 대조)."""
 
-    warm: int | None = F(20, "RUN_DOCS_WARM", "진입 대기열 — 미리 받아 둘 문서 수(받는 중 포함·파싱 중 제외, 명령 인자 --warm이 덮음)")
-    warm_workers: int | None = F(
-        2, "RUN_DOCS_WARM_WORKERS", "미리 받기 동시 수 — 실제 동시 받기 = min(이 값, 대기열 빈자리)(pl-48, 사용자 11-02)"
+    staging: int | None = F(
+        20, "RUN_PIPELINE_STAGING", "진입 대기열 — 미리 받아 둘 문서 수(받는 중 포함·파싱 중 제외, 명령 인자 --staging이 덮음)"
     )
-    struct_workers: int | None = F(2, "RUN_DOCS_STRUCT_WORKERS", "구조화·적재 스레드 수(명령 인자 --struct-workers가 덮음)")
+    staging_workers: int | None = F(
+        2, "RUN_PIPELINE_STAGING_WORKERS", "미리 받기 동시 수 — 실제 동시 받기 = min(이 값, 대기열 빈자리)(pl-48, 사용자 11-02)"
+    )
+    struct_workers: int | None = F(2, "RUN_PIPELINE_STRUCT_WORKERS", "구조화·적재 스레드 수(명령 인자 --struct-workers가 덮음)")
     struct_backlog: int | None = F(
-        None, "RUN_DOCS_STRUCT_BACKLOG", "중간 대기열 상한(파싱 끝·구조화 대기 문서 수) — 비우면 구조화 스레드 × 2, 0이면 상한 없음"
+        None, "RUN_PIPELINE_STRUCT_BACKLOG", "중간 대기열 상한(파싱 끝·구조화 대기 문서 수) — 비우면 구조화 스레드 × 2, 0이면 상한 없음"
     )
-    vlm_cap: int | None = F(2, "RUN_DOCS_VLM_CAP", "vlm 레인 문서 동시 파싱 상한(gpu 예산)")
-    light_dedicated: int | None = F(1, "RUN_DOCS_LIGHT_DEDICATED", "light 레인 전담 워커 수(light 문서만)")
-    light_shared: int | None = F(1, "RUN_DOCS_LIGHT_SHARED", "light 레인 공유 워커 수(light 먼저, 비면 가장 긴 다른 레인에서 가져옴)")
-    medium_dedicated: int | None = F(1, "RUN_DOCS_MEDIUM_DEDICATED", "medium 레인 전담 워커 수(MCP 업로드 처리 중에는 쉼)")
-    medium_shared: int | None = F(1, "RUN_DOCS_MEDIUM_SHARED", "medium 레인 공유 워커 수(medium 먼저, 비면 다른 레인)")
-    vlm_dedicated: int | None = F(1, "RUN_DOCS_VLM_DEDICATED", "vlm 레인 전담 워커 수(vlm 문서만)")
-    vlm_shared: int | None = F(1, "RUN_DOCS_VLM_SHARED", "vlm 레인 공유 워커 수(vlm 먼저, 비면 다른 레인)")
+    vlm_cap: int | None = F(2, "RUN_PIPELINE_VLM_CAP", "vlm 레인 문서 동시 파싱 상한(gpu 예산)")
+    light_dedicated: int | None = F(1, "RUN_PIPELINE_LIGHT_DEDICATED", "light 레인 전담 워커 수(light 문서만)")
+    light_shared: int | None = F(1, "RUN_PIPELINE_LIGHT_SHARED", "light 레인 공유 워커 수(light 먼저, 비면 가장 긴 다른 레인에서 가져옴)")
+    medium_dedicated: int | None = F(1, "RUN_PIPELINE_MEDIUM_DEDICATED", "medium 레인 전담 워커 수(MCP 업로드 처리 중에는 쉼)")
+    medium_shared: int | None = F(1, "RUN_PIPELINE_MEDIUM_SHARED", "medium 레인 공유 워커 수(medium 먼저, 비면 다른 레인)")
+    vlm_dedicated: int | None = F(1, "RUN_PIPELINE_VLM_DEDICATED", "vlm 레인 전담 워커 수(vlm 문서만)")
+    vlm_shared: int | None = F(1, "RUN_PIPELINE_VLM_SHARED", "vlm 레인 공유 워커 수(vlm 먼저, 비면 다른 레인)")
     # 컨테이너 안 파싱·구조화 명령에 --set으로 넘기는 값(문서 하나씩 도는 서버 배치 — 앱 기본값과 다름)
     vlm_concurrency: int | None = F(
-        8, "RUN_DOCS_VLM_CONCURRENCY", "light·medium 문서 하나의 VLM 동시 요청 수(VLM_MAX_CONCURRENCY·VLM_CONCURRENCY로 넘김)"
+        8, "RUN_PIPELINE_VLM_CONCURRENCY", "light·medium 문서 하나의 VLM 동시 요청 수(VLM_MAX_CONCURRENCY·VLM_CONCURRENCY로 넘김)"
     )
     vlm_lane_concurrency: int | None = F(
-        6, "RUN_DOCS_VLM_LANE_CONCURRENCY", "vlm 레인 문서 하나의 VLM 동시 요청 수(vlm_cap 문서가 GPU 서버를 나눔)"
+        6, "RUN_PIPELINE_VLM_LANE_CONCURRENCY", "vlm 레인 문서 하나의 VLM 동시 요청 수(vlm_cap 문서가 GPU 서버를 나눔)"
     )
-    figures_max: int | None = F(10, "RUN_DOCS_FIGURES_MAX", "문서당 그림 VLM 상한(VLM_FIGURES_MAX)")
+    figures_max: int | None = F(10, "RUN_PIPELINE_FIGURES_MAX", "문서당 그림 VLM 상한(VLM_FIGURES_MAX)")
     parse_post: str | None = F(
-        "supsub,charts,figures,context,attachments", "RUN_DOCS_PARSE_POST", "light·medium 문서의 후처리 목록(PARSE_POST)"
+        "supsub,charts,figures,context,attachments", "RUN_PIPELINE_PARSE_POST", "light·medium 문서의 후처리 목록(PARSE_POST)"
     )
     vlm_lane_post: str | None = F(
         "supsub,charts,figures,context,attachments,vlm_page",
-        "RUN_DOCS_VLM_LANE_POST",
+        "RUN_PIPELINE_VLM_LANE_POST",
         "vlm 레인 문서의 후처리 목록(PARSE_POST — vlm_page는 스캔 쪽만 VLM 전사, 쪽 상한 없음)",
     )
-    rapidocr_page_workers: int | None = F(2, "RUN_DOCS_RAPIDOCR_PAGE_WORKERS", "rapidocr 쪽 병렬 스레드 수(RAPIDOCR_PAGE_WORKERS)")
-    ocr_threads: int | None = F(1, "RUN_DOCS_OCR_THREADS", "rapidocr onnxruntime 스레드 수(OCR_THREADS)")
-    pipe_procs: int | None = F(4, "RUN_DOCS_PIPE_PROCS", "문서 하나의 엔진 묶음 병렬 프로세스 수(PIPE_PROCS)")
-    fetch_workers: int | None = F(2, "RUN_DOCS_FETCH_WORKERS", "원본 받기 스레드 수(SOURCE_FETCH_WORKERS)")
-    rep_select: str | None = F("first", "RUN_DOCS_REP_SELECT", "대표 엔진 선택 방식(PARSE_REP_SELECT — first·acc·best)")
-    qa_light: bool | None = F(True, "RUN_DOCS_QA_LIGHT", "풀문서 CER·순서 비교 생략(PARSE_QA_LIGHT)")
+    rapidocr_page_workers: int | None = F(2, "RUN_PIPELINE_RAPIDOCR_PAGE_WORKERS", "rapidocr 쪽 병렬 스레드 수(RAPIDOCR_PAGE_WORKERS)")
+    ocr_threads: int | None = F(1, "RUN_PIPELINE_OCR_THREADS", "rapidocr onnxruntime 스레드 수(OCR_THREADS)")
+    pipe_procs: int | None = F(4, "RUN_PIPELINE_PIPE_PROCS", "문서 하나의 엔진 묶음 병렬 프로세스 수(PIPE_PROCS)")
+    fetch_workers: int | None = F(2, "RUN_PIPELINE_FETCH_WORKERS", "원본 받기 스레드 수(SOURCE_FETCH_WORKERS)")
+    rep_select: str | None = F("first", "RUN_PIPELINE_REP_SELECT", "대표 엔진 선택 방식(PARSE_REP_SELECT — first·acc·best)")
+    qa_light: bool | None = F(True, "RUN_PIPELINE_QA_LIGHT", "풀문서 CER·순서 비교 생략(PARSE_QA_LIGHT)")
     scan_rotate: bool | None = F(
-        False, "RUN_DOCS_SCAN_ROTATE", "스캔 PDF 쪽 방향 바로잡기 — false면 스캔 문서는 PREPARE_ROTATE=0으로 회전 OCR 생략"
+        False, "RUN_PIPELINE_SCAN_ROTATE", "이미지 PDF 쪽 방향 바로잡기 — false면 받기(stage)에 --no-scan-rotate를 붙여 회전 OCR 생략"
     )
-    cpu_gate: float | None = F(1.3, "RUN_DOCS_CPU_GATE", "light 밖 레인의 파싱 CPU 게이트(CPU_MAX_LOAD — 명령 인자 --cpu-gate가 덮음)")
-    light_cpu_gate: float | None = F(9.0, "RUN_DOCS_LIGHT_CPU_GATE", "light 레인 CPU 게이트(CPU_MAX_LOAD — 높게 두어 바로 소화)")
-    embed_concurrency: int | None = F(6, "RUN_DOCS_EMBED_CONCURRENCY", "구조화·적재 임베딩 호출 병렬 수(EMBED_CONCURRENCY)")
-    embed_batch: int | None = F(32, "RUN_DOCS_EMBED_BATCH", "임베딩 한 번에 보내는 청크 수(EMBED_BATCH)")
-    bm25_threads: int | None = F(3, "RUN_DOCS_BM25_THREADS", "BM25 계산 스레드 수(BM25_THREADS)")
+    cpu_gate: float | None = F(1.3, "RUN_PIPELINE_CPU_GATE", "light 밖 레인의 파싱 CPU 게이트(CPU_MAX_LOAD — 명령 인자 --cpu-gate가 덮음)")
+    light_cpu_gate: float | None = F(9.0, "RUN_PIPELINE_LIGHT_CPU_GATE", "light 레인 CPU 게이트(CPU_MAX_LOAD — 높게 두어 바로 소화)")
+    embed_concurrency: int | None = F(6, "RUN_PIPELINE_EMBED_CONCURRENCY", "구조화·적재 임베딩 호출 병렬 수(EMBED_CONCURRENCY)")
+    embed_batch: int | None = F(32, "RUN_PIPELINE_EMBED_BATCH", "임베딩 한 번에 보내는 청크 수(EMBED_BATCH)")
+    bm25_threads: int | None = F(3, "RUN_PIPELINE_BM25_THREADS", "BM25 계산 스레드 수(BM25_THREADS)")
 
 
 class PipelineHost(Section):
@@ -298,13 +300,13 @@ class PipelineHost(Section):
         "DATA_PARSING_CPU_SHARES",
         "parse_document 작업 컨테이너 CPU 나눔 비율(data-pipeline 1024의 4배 — CPU가 모자랄 때 먼저 받음, rn-03)",
     )
-    run_docs_dir: str | None = F(
+    run_pipeline_dir: str | None = F(
         None,
-        "RUN_DOCS_DIR",
-        "문서별 flow 러너(deploy/host/scripts/run_docs.py) 작업 폴더(호스트 — 진행 기록 batch_progress/·batches/) — 비우면 스크립트 옆 test_space/(C-29 ⑨, S7e1)",
+        "RUN_PIPELINE_DIR",
+        "문서별 flow 러너(deploy/host/scripts/run_pipeline.py) 작업 폴더(호스트 — 진행 기록 batch_progress/·batches/) — 비우면 스크립트 옆 test_space/(C-29 ⑨, S7e1)",
     )
     nightly: PipelineHostNightly = Field(default_factory=PipelineHostNightly)
-    run_docs: PipelineHostRunDocs = Field(default_factory=PipelineHostRunDocs)
+    run_pipeline: PipelineHostRunPipeline = Field(default_factory=PipelineHostRunPipeline)
 
 
 class PipelineLoad(Section):

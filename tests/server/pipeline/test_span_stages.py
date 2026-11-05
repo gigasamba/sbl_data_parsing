@@ -22,7 +22,7 @@ def _capture():
     return rows, mock.patch.object(span, "_emit", lambda row, level=None: rows.append(row))
 
 
-def test_warm_span_counts():
+def test_staging_span_counts():
     from pipeline.extract import candidate_ready as source
 
     class Client:
@@ -36,23 +36,19 @@ def test_warm_span_counts():
 
     rows, patched = _capture()
     with tempfile.TemporaryDirectory() as tmp, patched, jsonlog.context(run_id=str(uuid.uuid4())):
-        batch = Path(tmp) / "batch.csv"
-        cols = {"size": "size", "filename": "name"}
-        batch.write_text("size,name,key\n1,a,ok\n1,b,bad\n", encoding="utf-8")
+        targets = [{"doc_id": n, "bucket": "b", "key": k, "size": 1, "filename": n} for n, k in (("a", "ok"), ("b", "bad"))]
         with (
-            mock.patch.object(source, "_warm_dir", lambda: Path(tmp)),
-            mock.patch.object(source.CP, "_rdb_cols", lambda: cols),
-            mock.patch.object(source.CP, "_rdb_bucket_and_key", lambda c, r: ("b", r["key"])),
+            mock.patch.object(source, "_staging_dir", lambda: Path(tmp)),
             mock.patch.object(source, "_s3", Client),
         ):
-            assert source._warm_cmd(["--csv", str(batch), "--workers", "2"]) == 0
-    row = next(r for r in rows if r["stage"] == "extract.warm")
+            assert source.download(targets, Path(tmp), workers=2) == 1  # 받지 못한 1건
+    row = next(r for r in rows if r["stage"] == "extract.staging")
     assert row["layer"] == "extract" and row["total"] == 2 and row["metrics"] == {"done": 1, "failed": 1}
     # 이슈 #117 — 파일(=문서)마다 extract.download 1행: 순수 전송 시간·속도, 실패는 external
     dl = {r["doc_id"]: r for r in rows if r["stage"] == "extract.download"}
     assert set(dl) == {"a", "b"}
     assert dl["a"]["status"] == "ok" and dl["a"]["file_bytes"] == 1
-    assert {"head_ms", "download_ms", "lock_wait_ms"} <= set(dl["a"]["metrics"])
+    assert {"head_ms", "download_ms"} <= set(dl["a"]["metrics"])
     assert dl["b"]["status"] == "fail" and dl["b"]["err_kind"] == "external" and "mbps" not in (dl["b"]["metrics"] or {})
     assert all(r["parent_id"] == row["span_id"] for r in dl.values())  # 풀 스레드(workers>1)에서도 부모 이어짐
 

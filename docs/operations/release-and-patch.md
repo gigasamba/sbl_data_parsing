@@ -72,7 +72,7 @@ PC 명령은 [README §5-2](../../README.md#5-2-pc에서--이미지-만들기와
 ### 5-2. 서버에서
 
 - 이미지 불러오기는 `load.sh` 하나다(개발: README §5-0 2번 · 운영: §1-2 3).
-- **이미지·코드 폴더·`run_docs.py`는 같은 때에 바꾼다**(서로 맞아야 함). 순서: 새벽 배치·상주 컨테이너 멈춤 → 이미지 적재 → 새 루트에 새 코드 폴더(§1-1) → 새 이미지로 다시 띄움(`run_docs.py`는 새 코드 폴더 안의 것 — §5-4).
+- **이미지·코드 폴더·`run_pipeline.py`는 같은 때에 바꾼다**(서로 맞아야 함). 순서: 새벽 배치·상주 컨테이너 멈춤 → 이미지 적재 → 새 루트에 새 코드 폴더(§1-1) → 새 이미지로 다시 띄움(`run_pipeline.py`는 새 코드 폴더 안의 것 — §5-4).
 - 이미지 이름은 settings.yaml `required.deploy.pipeline_image`·`required.deploy.mcp_image`에 적는다.
 - 배포 뒤, 컨테이너 안 코드가 있는지 파일로 본다(bind 마운트 원본이 없으면 빈 폴더가 붙어 `test -d`는 통과하므로):
 ```bash
@@ -84,21 +84,21 @@ for c in data-pipeline mcp-data-parsing; do   # 여러 벌이면 이름 끝 -<op
 
 | 서비스(`host_ctl.sh`) | 컨테이너 | compose 파일(실행 이미지면 + 코드 폴더 파일) | 하는 일 |
 |---|---|---|---|
-| `data-pipeline` | `data-pipeline` | `compose.pipeline.yml`(+ `compose.code.yml`) | 일 없이 떠 있음(entrypoint `idle`) — `run_docs.py`·`pipe_exec.sh`가 `exec` |
+| `data-pipeline` | `data-pipeline` | `compose.pipeline.yml`(+ `compose.code.yml`) | 일 없이 떠 있음(entrypoint `idle`) — `run_pipeline.py`·`pipe_exec.sh`가 `exec` |
 | `mcp-data-parsing` | `mcp-data-parsing` | `compose.data-parsing.yml`(+ `compose.code.data-parsing.yml`) | `parse_document` 작업 서비스(entrypoint `parse-service`) |
 | `mcp` | `mcp-server` | `compose.mcp-server.yml`(+ `compose.code.mcp-server.yml`) | 검색 MCP |
 
 - 모두 `bash deploy/host/scripts/host_ctl.sh …`로 다룬다(compose 직접 호출 금지 — README §5-3 ①). 죽으면 `restart: unless-stopped`, 꺼져 있으면 keepalive 타이머(`mcp_keepalive.sh`)가 `mcp-data-parsing`·`mcp`를 다시 띄운다.
 - `parse_document` 작업 서비스 토큰은 settings.yaml `required.tokens.mcp`(검색 MCP와 같은 칸).
 
-### 5-4. `run_docs.py` 자리와 설정
+### 5-4. `run_pipeline.py` 자리와 설정
 
-- 코드 폴더에서 `python3 deploy/host/scripts/run_docs.py …`로 실행한다(다른 자리에 복사해 돌리면 `--code <코드 폴더>`).
+- 코드 폴더에서 `python3 deploy/host/scripts/run_pipeline.py …`로 실행한다(다른 자리에 복사해 돌리면 `--code <코드 폴더>`).
 - 설정은 서버 settings.yaml(`--settings` · `SETTINGS_FILE` · `<루트>/settings.yaml` 순)에서 읽는다 — 호스트 python에 PyYAML 필요. 필요한 칸이 없으면 칸 경로만 찍고 종료 2.
-  - 작업 폴더 `ops.pipeline_host.run_docs_dir`(비우면 스크립트 옆 `test_space/` — 진행 기록 `batch_progress/`)
+  - 작업 폴더 `ops.pipeline_host.run_pipeline_dir`(비우면 스크립트 옆 `test_space/` — 진행 기록 `batch_progress/`)
   - 결과 폴더 `required.deploy.output_root`(컨테이너 `/app/output`의 원본 — 비우면 `<루트>/output`)
   - MCP 업로드 작업 폴더는 `<결과 폴더>/_mcp_parse/jobs`(고정)
-  - 레인·동시 수 값 `ops.run_docs.*`(비우면 코드 기본값)
+  - 레인·동시 수 값 `ops.run_pipeline.*`(비우면 코드 기본값)
   - `required.env.run_env`가 `dev`·`prd`가 아니면 시작하지 않는다.
 - **PC에서 실행하지 않는다**(운영 EDW·Object Storage에 접속).
 
@@ -199,11 +199,11 @@ OLD_SCHEMA=<지금 required.pg.db_schema 값>  NEW_SCHEMA=<새 스키마 이름 
 mkdir -p "$ROOT" && TS=$(date +%Y%m%d-%H%M); BK=$ROOT/backup/0.2.0-$TS; mkdir -p "$BK" && chmod 700 "$ROOT/backup" "$BK"
 ```
 
-**1. 멈추기** — 타이머를 멈추고, 도는 `run_docs.py`가 끝나길 기다린 뒤(죽이지 않는다) 옛 상주 컨테이너를 멈춘다.
+**1. 멈추기** — 타이머를 멈추고, 도는 `run_pipeline.py`가 끝나길 기다린 뒤(죽이지 않는다) 옛 상주 컨테이너를 멈춘다.
 ```bash
 systemctl stop data-pipeline-nightly.timer mcp-server-keepalive.timer
 systemctl is-active data-pipeline-nightly.timer mcp-server-keepalive.timer   # 기대: inactive 두 줄
-pgrep -af run_docs.py                                                         # 기대: 아무것도 안 나옴(나오면 끝날 때까지 기다림)
+pgrep -af run_pipeline.py                                                         # 기대: 아무것도 안 나옴(나오면 끝날 때까지 기다림)
 $DOCKER stop data-pipeline-parse data-pipeline-structure mcp-server          # 기대: 이름 세 줄
 ```
 
@@ -296,15 +296,15 @@ $DOCKER exec data-pipeline python -c "import sys; from common.store.objectstore 
 ```
 
 **9. 첫 실행 — FAQ 교체와 전체 재처리**
-- **FAQ:** 첫 `run_docs.py` 실행은 FAQ 교체 기록(`<작업 폴더>/batch_progress/faq_seen.txt`)이 없으므로 gold `faq`를 **한 번** 비운 뒤 FAQ 전체를 맨 앞에서 처리한다. `progress.log` 기대 줄: `FAQ 교체: 새 FAQ <N>건 — gold faq 문서 <M>건을 지우고 지금 FAQ <K>건 전체를 맨 앞에서 다시 처리`(새 스키마라 M=0). `--seqs`·`--limit` 실행은 교체를 건너뛴다.
+- **FAQ:** 첫 `run_pipeline.py` 실행은 FAQ 교체 기록(`<결과 폴더>/_faq_seen.txt`)이 없으므로 gold `faq`를 **한 번** 비운 뒤 FAQ 전체를 맨 앞에서 처리한다. `progress.log` 기대 줄: `FAQ 교체: 새 FAQ <N>건 — gold faq 문서 <M>건을 지우고 지금 FAQ <K>건 전체를 맨 앞에서 다시 처리`(새 스키마라 M=0). `--seqs`·`--limit` 실행은 교체를 건너뛴다.
 - **[dev]** settings.yaml이 가리키는 대상으로 e2e 한 번(`--limit <N>`). **[prd]** 전체 문서를 새 스키마로:
 ```bash
 cd "$ROOT/<코드>"
-nohup python3 deploy/host/scripts/run_docs.py --start-offset 0 > "$ROOT/run_docs.0.2.0.out" 2>&1 &
+nohup python3 deploy/host/scripts/run_pipeline.py --start-offset 0 > "$ROOT/run_pipeline.0.2.0.out" 2>&1 &
 tail -f <작업 폴더>/batch_progress/progress.log                               # 기대: 처음에 FAQ 교체 줄, 그다음 문서마다 "doc#<seq> …" 줄
 ```
 - 이 전체 실행에는 `--skip-done`을 주지 않는다 — ParsingMeta에 `gold_version` 칸이 생기기 전(C-76)에는 0.1.0이 끝낸 문서를 "끝남"으로 보고 건너뛴다.
-- 끝나면(종료 코드 0, 실패가 있으면 1 — [server-guide §2](server-guide.md#2-일상-실행--run_docs문서별-흐름)) `systemctl start mcp-server-keepalive.timer`(새벽 배치는 8-4 3).
+- 끝나면(종료 코드 0, 실패가 있으면 1 — [server-guide §2](server-guide.md#2-일상-실행--run_pipeline문서별-흐름)) `systemctl start mcp-server-keepalive.timer`(새벽 배치는 8-4 3).
 
 ### 8-4. 배포 뒤
 

@@ -38,7 +38,7 @@
 ## op-08 · 설정 배치 — 필수 묶음 + 역할별 파라미터 + tuning
 - 이유: 운영자가 꼭 넣을 값을 맨 위에 모으고 나머지를 역할별로 나눈다.
 - 규칙:
-  1. 최상위 절 순서: `required` → `common` · `extract` · `transform` · `load` · `search`(MCP 검색) · `ops`(실행 자원·스케줄·서비스·서버 컨테이너·경로) — 역할 절에는 환경마다 운영자가 정하는 값(주소·TLS·포트·경로·상한·서버 크기에 맞춘 병렬 수·기능 스위치·호스트 스크립트와 `run_docs.py --set`이 쓰는 칸)만 → `tuning`(거의 안 바꾸는 값 — 결과 파라미터·내부 제한 시간·대기열·자원 세부값, 사용자 11-04: 코드로 내리지 않고 sample 아래쪽에 공통·추출·변환·적재·검색·로그·실행 자원·새벽 배치·상주 서비스 분류 제목으로, 비우면 코드 기본값) → `dev`(PC 전용 — 외부 모델·로컬 대체 DB·시험 하네스, op-05 8).
+  1. 최상위 절 순서: `required` → `common` · `extract` · `transform` · `load` · `search`(MCP 검색) · `ops`(실행 자원·스케줄·서비스·서버 컨테이너·경로) — 역할 절에는 환경마다 운영자가 정하는 값(주소·TLS·포트·경로·상한·서버 크기에 맞춘 병렬 수·기능 스위치·호스트 스크립트와 `run_pipeline.py --set`이 쓰는 칸)만 → `tuning`(거의 안 바꾸는 값 — 결과 파라미터·내부 제한 시간·대기열·자원 세부값, 사용자 11-04: 코드로 내리지 않고 sample 아래쪽에 공통·추출·변환·적재·검색·로그·실행 자원·새벽 배치·상주 서비스 분류 제목으로, 비우면 코드 기본값) → `dev`(PC 전용 — 외부 모델·로컬 대체 DB·시험 하네스, op-05 8).
   2. `required` = 운영자가 꼭 정할 값(연결 주소·계정·비밀·게시 위치·이미지 태그) — `env`·`pg`·`embed`·`edw`·`publish`·`object_storage`·`models`·`source`·`tokens`·`deploy`. 카테고리 제목에 `[PC·서버]`·`[서버만]`·`[PC만]`.
   3. 파일 자리 ↔ 설정 모델 경로(`common.*`·`pipeline.*`·`mcp.*`)의 표는 `common/config/layout.py` 하나. `read_settings`가 파일을 모델 배치로 바꿔 읽는다.
   4. 옛 배치 파일(최상위 앱 절)은 시작 거부. 모델에 있는 칸을 다른 자리에 쓰면 "자리가 다른 칸 … → 새 자리"로, 모델에 없는 칸(지운 칸·오타)은 "모르는 칸 …"으로 거부한다 — 칸 이름만 알리고 값은 안 찍는다. 옛 자리를 읽어 주는 표·옮기는 도구는 없다(rn-07 — 사용자 11-05).
@@ -53,8 +53,8 @@
 - 규칙:
   1. 설정 값은 settings.yaml(코드 기본값은 설정 모델에 한 번) 또는 이미지 기본값 표 `common/config/settings.py` `IMAGE_PATHS` 하나에서만 온다. 저장소 안 경로는 `common/core/paths.py` 상수로만.
   2. 환경마다 다른 경로·접속(게시 대상·Object Storage·EDW·PG·호스트 경로)은 필수 — 코드 기본값이 없고 비면 시작 거부. PG 자동 찾기는 없다.
-  3. 컨테이너 안 경로(`output_root` `/app/output` · `code_root` `/app/deploy` 등)는 `IMAGE_PATHS`가 원본이다. `deploy/release/gen_host_keys.py`가 이 표를 `deploy/host/scripts/host_settings.tsv`(`image.<이름>`·`APP_<이름>` 줄)로 내고, `load_settings.sh`가 `APP_*` env로 내준다 — compose는 `${APP_OUTPUT_ROOT}`·`${APP_CODE_ROOT}`·`${APP_DOCS_MOUNT}`, `run_docs.py`는 코드 폴더의 표를 읽는다. 생성: `PYTHONPATH=. python deploy/release/gen_host_keys.py`.
-  4. 호스트 스크립트는 `load_settings.sh`(`settings_to_env.py` — PyYAML만)가 내준 값만 쓴다. 컨테이너 명령 = settings.yaml `ops.host.docker` > podman > docker(벌 이름 `INSTANCE`와 함께 셸 env로 덮지 않음 — `run_docs.py`와 같게, rn-07).
+  3. 컨테이너 안 경로(`output_root` `/app/output` · `code_root` `/app/deploy` 등)는 `IMAGE_PATHS`가 원본이다. `deploy/release/gen_host_keys.py`가 이 표를 `deploy/host/scripts/host_settings.tsv`(`image.<이름>`·`APP_<이름>` 줄)로 내고, `load_settings.sh`가 `APP_*` env로 내준다 — compose는 `${APP_OUTPUT_ROOT}`·`${APP_CODE_ROOT}`·`${APP_DOCS_MOUNT}`, `run_pipeline.py`는 코드 폴더의 표를 읽는다. 생성: `PYTHONPATH=. python deploy/release/gen_host_keys.py`.
+  4. 호스트 스크립트는 `load_settings.sh`(`settings_to_env.py` — PyYAML만)가 내준 값만 쓴다. 컨테이너 명령 = settings.yaml `ops.host.docker` > podman > docker(벌 이름 `INSTANCE`와 함께 셸 env로 덮지 않음 — `run_pipeline.py`와 같게, rn-07).
   5. 앱은 env에서 설정을 읽지 않는다 — 남은 env 줄은 분류 주석 필수(`python -m common.check.check_modules` ⑩·⑪).
 - 파일: `common/config/settings.py`(`IMAGE_PATHS`), `common/config/keyscan.py`, `deploy/release/gen_host_keys.py`, `deploy/host/scripts/{load_settings.sh,settings_to_env.py,host_settings.tsv}`.
 - QA: `python -m common.check.check_modules` · "모듈 경계 통과". `tests/general/deploy/test_host_env.py` · 통과. 서버 확인 refactor.md C-70.
@@ -76,11 +76,11 @@
 - 이유(사용자 11-04): 개발 서버에 개발자마다 컨테이너를 따로 띄운다. 컨테이너 이름(`data-pipeline` 등)·compose 묶음 이름·systemd 타이머 이름이 고정이라 두 번째 벌이 첫 벌을 덮었다.
 - 규칙:
   1. 루트 하나 = 한 벌. 새 칸 `ops.host.instance`(`common.host.instance`, 영소문자·숫자·`-`) — 적으면 컨테이너 3개·compose 묶음(`compose-<이름>`)·systemd 단위 4개 이름 끝에 `-<이름>`. 비우면 이름 그대로(한 벌 — 지금 서버와 같음).
-  2. 이름을 붙이는 곳은 `load_settings.sh load_settings`(`NAME_SUFFIX` — 틀린 꼴이면 종료 2) 한 곳, 호스트 스크립트(`host_ctl.sh`·`mcp_keepalive.sh`·`nightly_batch.sh`·`pipe_exec.sh`)와 compose 파일은 그 값을 쓴다. `run_docs.py`는 같은 규칙으로 `configure()`에서.
-  3. 벌 이름 하나로 갈림(rn-07): PG 스키마 `<db_schema>_<벌>` · EDW 기록 표 `<parsing_meta_table>_<벌>`(이미 붙어 있으면 그대로 — `layout.per_instance` 한 곳, 앱 `CommonSettings`·`run_docs.py`가 같이 씀) · 게시 경로는 dev에서만 `<prefix>/<벌>`(`settings.publish_prefix`). 버전에는 붙이지 않음.
-  4. 포트 두 칸(`search.server.port` · `ops.runtime.data_parsing_port` — 작업 서비스와 검색 MCP가 같은 칸)은 벌마다 다르게 — 벌 이름이 있는데 기본값이면 시작 거부. `prd`에서 벌 이름이면 시작 거부. 거부는 앱 시작 관문(`instance_problems`)·`load_settings.sh`·`run_docs.py configure()` 셋 — server-guide §1-3.
-- 파일: `common/config/settings.py` · `deploy/host/scripts/{load_settings.sh,host_ctl.sh,mcp_keepalive.sh,nightly_batch.sh,pipe_exec.sh,run_docs.py,host_settings.tsv}` · `deploy/host/compose/compose.{pipeline,data-parsing,mcp-server}.yml`.
-- QA: `tests/server/common/test_instance.py`(스키마·표·게시 경로·prd·기본 포트 거부) · `tests/general/deploy/test_run_docs.py`(`test_instance_names`) · `tests/general/deploy/test_dc.py`(묶음 이름 `compose`·`compose-hong` · 틀린 이름·기본 포트·prd 종료 2) · `test_dc_init.py`(타이머 단위 이름 끝) · `test_compose.py`(컨테이너 이름 끝 `${NAME_SUFFIX:-}`) · 통과.
+  2. 이름을 붙이는 곳은 `load_settings.sh load_settings`(`NAME_SUFFIX` — 틀린 꼴이면 종료 2) 한 곳, 호스트 스크립트(`host_ctl.sh`·`mcp_keepalive.sh`·`nightly_batch.sh`·`pipe_exec.sh`)와 compose 파일은 그 값을 쓴다. `run_pipeline.py`는 같은 규칙으로 `configure()`에서.
+  3. 벌 이름 하나로 갈림(rn-07): PG 스키마 `<db_schema>_<벌>` · EDW 기록 표 `<parsing_meta_table>_<벌>`(이미 붙어 있으면 그대로 — `layout.per_instance` 한 곳, 앱 `CommonSettings`·`run_pipeline.py`가 같이 씀) · 게시 경로는 dev에서만 `<prefix>/<벌>`(`settings.publish_prefix`). 버전에는 붙이지 않음.
+  4. 포트 두 칸(`search.server.port` · `ops.runtime.data_parsing_port` — 작업 서비스와 검색 MCP가 같은 칸)은 벌마다 다르게 — 벌 이름이 있는데 기본값이면 시작 거부. `prd`에서 벌 이름이면 시작 거부. 거부는 앱 시작 관문(`instance_problems`)·`load_settings.sh`·`run_pipeline.py configure()` 셋 — server-guide §1-3.
+- 파일: `common/config/settings.py` · `deploy/host/scripts/{load_settings.sh,host_ctl.sh,mcp_keepalive.sh,nightly_batch.sh,pipe_exec.sh,run_pipeline.py,host_settings.tsv}` · `deploy/host/compose/compose.{pipeline,data-parsing,mcp-server}.yml`.
+- QA: `tests/server/common/test_instance.py`(스키마·표·게시 경로·prd·기본 포트 거부) · `tests/general/deploy/test_run_pipeline.py`(`test_instance_names`) · `tests/general/deploy/test_dc.py`(묶음 이름 `compose`·`compose-hong` · 틀린 이름·기본 포트·prd 종료 2) · `test_dc_init.py`(타이머 단위 이름 끝) · `test_compose.py`(컨테이너 이름 끝 `${NAME_SUFFIX:-}`) · 통과.
 - Status: done
 
 <a id="pl-21"></a>

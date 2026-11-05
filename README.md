@@ -48,7 +48,7 @@
                           list_doc_fulltext · get_doc_fulltext
 ```
 
-서버에서는 `run_docs.py`가 문서마다 이 순서로 흘려 보낸다. DAG 엔진은 없다. MCP 도구 6개의 이름과 입출력은 외부 클라이언트와의 계약이다([mcp-guide](docs/operations/mcp-guide.md)).
+서버에서는 `run_pipeline.py`가 문서마다 이 순서로 흘려 보낸다. DAG 엔진은 없다. MCP 도구 6개의 이름과 입출력은 외부 클라이언트와의 계약이다([mcp-guide](docs/operations/mcp-guide.md)).
 
 ### 1-2. 실행 단위
 
@@ -59,13 +59,13 @@
 | **structure** | 청킹 · 임베딩 → 번들 | `python -m pipeline.transform.structure.gold_bundle` | 번들 폴더 |
 | **load** | 번들 → pgvector | `python -m pipeline.load.pgvector_load` | (PostgreSQL 안) |
 
-`run_docs` 종료 코드: 0 끝 · 1 실패 문서 있음 · 2 설정 문제 · 75 마감 도달·다른 run_docs 실행 중.
+`run_pipeline` 종료 코드: 0 끝 · 1 실패 문서 있음 · 2 설정 문제 · 75 마감 도달·다른 run_pipeline 실행 중.
 
 ### 1-3. 서버 이미지 2개와 버전
 
 | 이미지 | 역할 | 상주 컨테이너 |
 |---|---|---|
-| `data-pipeline` | parse · publish · structure · load | 일괄 `data-pipeline`(일 없이 떠 있음 — `run_docs.py`·`pipe_exec.sh`가 exec) · `parse_document` 전용 `mcp-data-parsing` |
+| `data-pipeline` | parse · publish · structure · load | 일괄 `data-pipeline`(일 없이 떠 있음 — `run_pipeline.py`·`pipe_exec.sh`가 exec) · `parse_document` 전용 `mcp-data-parsing` |
 | `mcp-server` | 검색 MCP | `mcp-server` |
 
 버전은 저장소 루트 `VERSION` 하나이고 두 이미지가 함께 쓴다(태그 `data-pipeline:<버전>` — 규칙: [release-and-patch §4](docs/operations/release-and-patch.md#4-버전)).
@@ -349,7 +349,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 │   ├── settings.yaml  edw_chain.yaml        ← settings.sample.yaml·기본 사슬을 host_ctl.sh init이 없을 때만 복사(새 판이면 앞 루트에서 복사해 옴)
 │   ├── sbl_data_parsing-<판>/               ← 코드 폴더(VERSION · CODE_COMMIT · deploy/docker/DEPS_HASH)
 │   ├── output/                              ← 결과 폴더(host_ctl.sh init이 만듦 — 아래 _ 붙은 폴더는 임시 자리)
-│   │   ├── _docflow/<번호>/  _warm/  _mcp_parse/jobs/  _llm_spend/
+│   │   ├── _docflow/<번호>/  _staging/  _faq_seen.txt  _mcp_parse/jobs/  _llm_spend/
 │   │   └── logs/                            ← DB 로그를 못 쓸 때의 예비 파일만
 │   └── backup/                              ← pg_dump 백업·설정 사본(700)
 └── <다른 루트>/                              ← 개발자별 벌(예 dev-hong/ — 아래 "한 서버에 여러 벌")
@@ -515,12 +515,12 @@ bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp   
 | `required.pg.host`·`port`·`db`·`user`·`password`·`db_schema` | 검색 DB(pgvector) | DB 담당 | `pg.example.local` · `5432` · `rag` · `rag_app` · `<비밀>` · `ai` | PC·dev·prd | `host_ctl.sh check` ① check_env · ③ migrate check |
 | `required.embed.base_url`·`model`·`api_key` | 임베딩 모델(`model`은 적재·검색 때 같아야 함) | 모델 담당(내부망 주소) | `http://llm.example.local:8000/v1` · `<모델>` · `<비밀>` | PC·dev·prd | `host_ctl.sh check` ② ping_models |
 | `required.models.llm_*`·`vlm_*` | LLM·VLM 모델 | 모델 담당 | `http://llm.example.local:8001/v1` · `<모델>` | dev·prd | `host_ctl.sh check` ② ping_models |
-| `required.edw.host`·`port`·`database`·`read_*`·`write_*` | 회사 DB(EDW) 접속 — 읽기 계정(원천 목록·ParsingMeta 조회·`query_edw`), 쓰기 계정(ParsingMeta 게시) · `port`는 비우면 1433 | DB 담당 | `edw.example.local` · (비움) · `EDW` · `<계정>` · `<비밀>` | dev·prd | `run_docs` 시작(빠지면 칸 이름을 찍고 멈춤) · `pipe_exec.sh publish --dry-run`(④) |
+| `required.edw.host`·`port`·`database`·`read_*`·`write_*` | 회사 DB(EDW) 접속 — 읽기 계정(원천 목록·ParsingMeta 조회·`query_edw`), 쓰기 계정(ParsingMeta 게시) · `port`는 비우면 1433 | DB 담당 | `edw.example.local` · (비움) · `EDW` · `<계정>` · `<비밀>` | dev·prd | `run_pipeline` 시작(빠지면 칸 이름을 찍고 멈춤) · `pipe_exec.sh publish --dry-run`(④) |
 | `required.edw.parsing_meta_table` | 게시 행을 쓸 EDW 표 — 비우면 `AI.ParsingMeta` | DB 담당 | (비움) | dev·prd | publish `--apply` |
 | `required.edw.sqlite` | PC 가짜 EDW 파일 — **서버는 비움**(적혀 있으면 EDW를 쓸 때 거부) | — | (비움) | PC만 | — |
-| `required.publish.bucket`·`prefix` | silver 게시 위치 — 버킷(원천 원본 버킷과 달라야 함)과 그 안 경로 접두 | 운영 담당 | `rag-silver` · `parse` | PC·dev·prd | `run_docs` 시작 · publish 미리보기 |
-| `required.object_storage.endpoint`·`region`·`access_key`·`secret_key`·`verify_tls` | Object Storage(S3 호환) 접속 — `region`은 비우면 `us-east-1`, `verify_tls`는 비우면 `1`(사내 CA면 CA 파일 경로) | 스토리지 담당 | `https://os.example.local:9000` · (비움) · `<비밀>` · `<비밀>` · (비움) | dev·prd | `run_docs` 시작 · publish `--apply` |
-| `required.source.input_source`·`source_bucket`·`source_uri_prefix` | 원본 위치 | 운영 담당 | `rdb:csv:<루트>/list.csv` · `<버킷>` · `s3://<버킷>/<접두>` | dev·prd | 첫 `run_docs` |
+| `required.publish.bucket`·`prefix` | silver 게시 위치 — 버킷(원천 원본 버킷과 달라야 함)과 그 안 경로 접두 | 운영 담당 | `rag-silver` · `parse` | PC·dev·prd | `run_pipeline` 시작 · publish 미리보기 |
+| `required.object_storage.endpoint`·`region`·`access_key`·`secret_key`·`verify_tls` | Object Storage(S3 호환) 접속 — `region`은 비우면 `us-east-1`, `verify_tls`는 비우면 `1`(사내 CA면 CA 파일 경로) | 스토리지 담당 | `https://os.example.local:9000` · (비움) · `<비밀>` · `<비밀>` · (비움) | dev·prd | `run_pipeline` 시작 · publish `--apply` |
+| `required.source.input_source`·`source_bucket`·`source_uri_prefix` | 원본 위치 | 운영 담당 | `rdb:csv:<루트>/list.csv` · `<버킷>` · `s3://<버킷>/<접두>` | dev·prd | 첫 `run_pipeline` |
 | `required.tokens.mcp` | MCP 토큰 하나 — 검색 MCP와 `parse_document` 작업 서비스가 함께 씀 | `openssl rand -hex 24` | 48자 16진수 | dev·prd(밖에서 붙을 때 필수) | `host_ctl.sh check` ⑥ `/health` · `parse_document` 호출이 토큰 오류 |
 | `required.tokens.fulltext` | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키 — 비우면 두 도구가 `not_configured`, 바꾸면 이미 발급한 sfid가 모두 무효 | 같은 명령 | 48자 16진수 | dev·prd | 원문 도구 호출이 `not_configured` |
 | `required.deploy.pipeline_image` · `mcp_image` | 띄울 이미지 태그(같은 배포 묶음) | §5-0 2번 `load.sh` | dev: `data-pipeline-runtime:0.1.0` · prd: `data-pipeline:0.2.0` | dev·prd | `host_ctl.sh up`이 이미지 없음으로 멈춤 |
@@ -574,18 +574,18 @@ selftest는 종료 코드가 아니라 `[판정]` 줄로 판정한다. 운영 �
 
 | 방법 | 명령 | 순서 | 언제 |
 |---|---|---|---|
-| 문서별 흐름 | `python3 deploy/host/scripts/run_docs.py …`(코드 폴더에서, nohup) | 문서마다 파싱 → publish → 원본 삭제(게시 성공 뒤) → 구조화·적재 | 대량 처리 |
-| 새벽 배치 | systemd `data-pipeline-nightly.timer` → `nightly_batch.sh scheduled` | `ops.nightly.time`에 `run_docs.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>` | 정기 운영 |
+| 문서별 흐름 | `python3 deploy/host/scripts/run_pipeline.py …`(코드 폴더에서, nohup) | 문서마다 파싱 → publish → 원본 삭제(게시 성공 뒤) → 구조화·적재 | 대량 처리 |
+| 새벽 배치 | systemd `data-pipeline-nightly.timer` → `nightly_batch.sh scheduled` | `ops.nightly.time`에 `run_pipeline.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>` | 정기 운영 |
 | 파싱·게시만 | `bash deploy/host/scripts/pipe_exec.sh parse` · `pipe_exec.sh publish [--dry-run]` | 상주 컨테이너 안에서 한 번 | 단계 확인 |
 
-`run_docs.py` 자리·설정·종료 코드: [release-and-patch §5-4](docs/operations/release-and-patch.md#5-4-run_docspy-자리와-설정) · [server-guide §2](docs/operations/server-guide.md#2-일상-실행--run_docs문서별-흐름). **PC에서는 실행하지 않는다.**
+`run_pipeline.py` 자리·설정·종료 코드: [release-and-patch §5-4](docs/operations/release-and-patch.md#5-4-run_pipelinepy-자리와-설정) · [server-guide §2](docs/operations/server-guide.md#2-일상-실행--run_pipeline문서별-흐름). **PC에서는 실행하지 않는다.**
 
 #### 진행 보기
 
 ```bash
 bash deploy/host/scripts/host_ctl.sh logs -f data-pipeline                  # 상주 컨테이너 로그(Ctrl+C로 멈춤 — 컨테이너는 그대로)
-tail -f <run_docs 작업 폴더>/batch_progress/progress.log              # 문서별 줄("doc#<seq> 구조화+적재 OK|FAIL")
-tail -n 50 <결과 폴더>/_docflow/<seq>/structure.log                    # 그 문서의 구조화·적재 출력 — 문서가 끝나면 지워짐(남기려면 run_docs --no-cleanup)
+tail -f <run_pipeline 작업 폴더>/batch_progress/progress.log              # 문서별 줄("doc#<seq> 구조화+적재 OK|FAIL")
+tail -n 50 <결과 폴더>/_docflow/<seq>/structure.log                    # 그 문서의 구조화·적재 출력 — 문서가 끝나면 지워짐(남기려면 run_pipeline --no-cleanup)
 ```
 
 **로그는 Postgres(`applog` 스키마)에 남는다.** 서버(두 이미지)는 `ops.log.db_enabled` 기본 켬이라 `migrate up --target all`(applog 포함)이 먼저다. DB에 못 쓰면 그 행만 `<결과 폴더>/logs/`에 JSON Lines로 남는다. 사람이 보는 실행 출력은 컨테이너 로그(`podman logs <컨테이너>`·`host_ctl.sh logs`), MCP 호출(질문·SQL 포함)은 `applog.mcp_log`이다.
@@ -635,7 +635,7 @@ sudo systemctl enable --now podman-restart
 |---|---|---|
 | `<결과 폴더>/edw/embed_cache.sqlite` | 임베딩 캐시 | 지우면 다음 적재 때 임베딩을 모두 다시 부른다 — 지우지 않는다 |
 | `<결과 폴더>/logs/*.jsonl` | DB 로그를 못 쓸 때의 예비 기록(`ops.log.fallback_dir`) | 문서 본문·질문이 들어갈 수 있다 — 밖으로 내보내지 않는다. DB가 돌아온 뒤 확인하고 지운다 |
-| `<결과 폴더>/_docflow/` · `_warm/` | 문서 하나의 파싱 → 구조화·적재 작업 · 미리 받은 원본 | 문서가 끝나면 지워진다 |
+| `<결과 폴더>/_docflow/` · `_staging/` | 문서 하나의 파싱 → 구조화·적재 작업 · 미리 받은 원본 | 문서가 끝나면 지워진다 |
 | `<결과 폴더>/_mcp_parse/jobs/` | `parse_document` 작업 | 최근 30개만 남는다 |
 | `<결과 폴더>/_llm_spend/` | 외부 모델 하루 지출 장부(PC만 — 서버에는 생기지 않음) | 지난 날짜는 지워도 된다 |
 | `<루트>/settings.yaml` | 서버 설정 | **비밀값이 들어 있다** — 권한 640, 옛 루트를 지울 때 함께 지운다 |

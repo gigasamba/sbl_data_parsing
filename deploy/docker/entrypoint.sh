@@ -4,7 +4,7 @@
 #   docker run --rm --init -v <settings.yaml>:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=<dev|prd> \
 #     -v <원본>:/data/docs:ro -v <결과>:/app/output data-pipeline:<버전> <명령>
 # 명령: help · check · resources · services · check-modules · tool <이름> [인자] · mcp ·
-#       ask --q …  (서버 입구는 run_docs 하나)
+#       ask --q …  (서버 입구는 run_pipeline 하나)
 #
 #   tool <이름> = 고정 표의 도구 하나(check_env·ping_models·check_modules·cli·rdb_discover·gen_roster·glossary_suggest — pipe_exec.sh가 쓰는 자리)
 #     이름만 받는다(다른 형태는 종료 64).
@@ -130,7 +130,7 @@ case "$cmd" in
   show-stack|selftest)   # pipeline.cli 점검 명령 — 두 이미지 모두(mcp-server에도 pipeline/cli.py가 있음 — selftest_gate.sh가 이미지마다 부름)
     preflight; exec python -m pipeline.cli "$cmd" "$@";;
   # idle — 상주 컨테이너 data-pipeline은 일을 하지 않고 떠 있기만 한다.
-  # run_docs.py가 그 안에서 docker exec로 문서별 작업을 돌린다. MCP parse_document 작업 서비스는 위 parse-service(전용 컨테이너 mcp-data-parsing — 여기에 띄우지 않음, 8766 겹침).
+  # run_pipeline.py가 그 안에서 docker exec로 문서별 작업을 돌린다. MCP parse_document 작업 서비스는 위 parse-service(전용 컨테이너 mcp-data-parsing — 여기에 띄우지 않음, 8766 겹침).
   parse-service)   # MCP parse_document 작업 서비스(127.0.0.1:8766), 전용 상주 컨테이너 mcp-data-parsing의 주 프로세스
     preflight; exec python -u -m pipeline.parse_service;;
   idle)

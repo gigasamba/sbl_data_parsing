@@ -122,10 +122,10 @@
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
-| id | (EDW) | 행 번호 — 증분 수집 기준 | EDW | extract/candidate_pick `_rdb_rows`, run_docs `edw_list` | 유지 |
-| s3_key | (EDW) | 원본 전체 키 = 문서 키 | EDW | source `_rdb_rows`(매니페스트 `key`), run_docs | 유지 |
-| original_filename | (EDW) | 원본 파일 이름 | EDW | source, run_docs | 유지 |
-| file_size | (EDW) | 크기 | EDW | source, run_docs | 유지 |
+| id | (EDW) | 행 번호 — 증분 수집 기준 | EDW | extract/candidate_pick `_rdb_rows`·`edw_rows` | 유지 |
+| s3_key | (EDW) | 원본 전체 키 = 문서 키 | EDW | source `_rdb_rows`(매니페스트 `key`), candidate_pick `edw_rows` | 유지 |
+| original_filename | (EDW) | 원본 파일 이름 | EDW | source, candidate_pick `edw_rows` | 유지 |
+| file_size | (EDW) | 크기 | EDW | source, candidate_pick `edw_rows` | 유지 |
 | content_version_id | (EDW) | 판 id | EDW | source `_rdb_rows` | 유지 |
 | source_system | (EDW) | 원천 — 코드는 읽지 않는다. 원천은 `s3_key` 첫 마디로 정한다(§1 원천) | EDW | 없음 | 유지 |
 | created_at | (EDW) | 원천 등록 시각 — 같은 `s3_key` 여러 행 중 기준 행 고르기, 원천 표에 등록 시각이 없을 때 gold `doc.created_at`의 대체값(KST). 실제 EDW에 있는지는 D-1 | EDW | 적재 `edw_meta`(사슬 `file.created_at`) · (기준 행 고르기) | 유지 |
@@ -160,8 +160,8 @@ PC 대역 EDW(`valid_env/edw/sfdc.sql`)에만 있는 **예시 칸**이다. 서�
 |---|---|---|---|---|---|
 | parse_meta_id | BIGINT IDENTITY PK | 행 번호 | DB | 없음(기본 키) | 유지 |
 | source_system | NVARCHAR(64) | 원천 | publish_parse_result `plan` | parsing_meta_db 겹침 확인·`pick_rep`(원문 도구·`set_loaded` 행 고르기) | 유지 |
-| source_key | NVARCHAR(1024) | 원본 전체 경로 = `AI.FileStorageMap.s3_key` 값 = gold `doc.file_path`. 원본과의 연결 키는 `source_system` + 이 칸. 이름을 `s3_key`로 바꾼다(아래 `s3_key` 줄 — DB 담당자 DDL, C-76) | publish_parse_result `plan` | 〃, run_docs `edw_done_keys`, mcp `fulltext_svc` | 유지 |
-| s3_key | NVARCHAR(1024) | 위 `source_key`의 새 이름 — DB 담당자가 이름을 바꾸면 계산 칸 `source_key_hash`·유일 색인 `UQ_ParsingMeta_key`도 다시 만든다(C-76). 코드는 연결할 때 `s3_key`가 있으면 그것, 없으면 `source_key`를 쓴다(`parsing_meta_db` `key_col`·run_docs) | publish_parse_result `plan` → parsing_meta_db `insert_new`(칸이 생기면 이 이름으로 — `RENAMES`) | parsing_meta_db `key_col`(겹침 확인·`pick_rep`·`done_source_keys`), run_docs `_pm_key_col`(`edw_done_keys`), mcp `fulltext_svc` | 새로 |
+| source_key | NVARCHAR(1024) | 원본 전체 경로 = `AI.FileStorageMap.s3_key` 값 = gold `doc.file_path`. 원본과의 연결 키는 `source_system` + 이 칸. 이름을 `s3_key`로 바꾼다(아래 `s3_key` 줄 — DB 담당자 DDL, C-76) | publish_parse_result `plan` | 〃, candidate_pick `done_keys`, mcp `fulltext_svc` | 유지 |
+| s3_key | NVARCHAR(1024) | 위 `source_key`의 새 이름 — DB 담당자가 이름을 바꾸면 계산 칸 `source_key_hash`·유일 색인 `UQ_ParsingMeta_key`도 다시 만든다(C-76). 코드는 연결할 때 `s3_key`가 있으면 그것, 없으면 `source_key`를 쓴다(`parsing_meta_db` `key_col`·run_pipeline) | publish_parse_result `plan` → parsing_meta_db `insert_new`(칸이 생기면 이 이름으로 — `RENAMES`) | parsing_meta_db `key_col`(겹침 확인·`pick_rep`·`done_source_keys`), parsing_meta_db `key_col`, mcp `fulltext_svc` | 새로 |
 | source_uri | NVARCHAR(2048) | 원본 주소 | 〃 | 없음 | 삭제 |
 | original_filename | NVARCHAR(512) | 원본 파일 이름 | 〃 | 없음 | 삭제 |
 | file_format | NVARCHAR(32) | 형식 | 〃 | 없음 | 삭제 |
@@ -170,7 +170,7 @@ PC 대역 EDW(`valid_env/edw/sfdc.sql`)에만 있는 **예시 칸**이다. 서�
 | rep_bucket | NVARCHAR(256) | 대표 결과 버킷 | publish_parse_result `plan` | mcp `fulltext_svc`(`parsing_meta_db.rows_where`·`pick_rep` — 원문 도구가 부를 때 읽음) | 유지 |
 | rep_key | NVARCHAR(2048) | 대표 결과 폴더 | publish_parse_result `apply` | 〃(목록 `rep_uri`·sfid 발급, 등록 시각 가드의 폴더 → 원본 찾기) | 유지 |
 | rep_etag | NVARCHAR(128) | 대표 결과 etag | 〃 | 없음 | 삭제 |
-| parse_status | NVARCHAR(32) | ok·partial | publish_parse_result `plan` | run_docs `edw_done_keys` | 유지 |
+| parse_status | NVARCHAR(32) | ok·partial | publish_parse_result `plan` | candidate_pick `done_keys`·`faq_status` | 유지 |
 | status_reason | NVARCHAR(2000) | 상태 이유 | 〃 | 없음 | 삭제 |
 | rep_engine | NVARCHAR(128) | 대표 엔진(gold에도 두지 않음) | publish_parse_result `plan` | 없음 | 삭제 |
 | rep_acc | FLOAT | 대표 정확도 | 〃 | 없음 | 삭제 |
@@ -185,11 +185,11 @@ PC 대역 EDW(`valid_env/edw/sfdc.sql`)에만 있는 **예시 칸**이다. 서�
 | engines_summary | NVARCHAR(512) | 엔진 한 줄 요약 | 〃 | 없음 | 삭제 |
 | parsed_at | DATETIME2(0) | 넣은 때(기본 SYSUTCDATETIME — UTC) | DB 기본값 | mcp `fulltext_svc`(`list_doc_fulltext` `since`/`until`) | 유지 |
 | source_key_hash | BINARY(32) 계산 칸 | `source_key` sha256 — 유일 색인 키(1700바이트 상한 우회) | DB | 유일 색인 | 유지 |
-| gold_status | NVARCHAR(32) | gold(검색 DB) 적재 상태 | (run_docs·적재) | (운영자) | 새로 |
-| gold_reason | NVARCHAR(2000) | gold 상태 이유(실패 원인 등) | (run_docs·적재) | (운영자) | 새로 |
+| gold_status | NVARCHAR(32) | gold(검색 DB) 적재 상태 | (run_pipeline·적재) | (운영자) | 새로 |
+| gold_reason | NVARCHAR(2000) | gold 상태 이유(실패 원인 등) | (run_pipeline·적재) | (운영자) | 새로 |
 | engines_failed | NVARCHAR(MAX) | 실패한 엔진(JSON — 이름·이유·걸린 시간), 없으면 NULL | (파싱 단계) | (운영자) | 새로 |
 | loaded_at | DATETIME2(0) | gold에 적재한 시각(UTC) — 적재가 PG 커밋 뒤 쓸 행(active 중 최신)에 UPDATE. 칸이 없으면 그 칸만 빼고 쓰고, 쓰기 계정이 없거나 실패하면 경고와 건수만(적재는 그대로) | pgvector_load `_mark_loaded` → parsing_meta_db `mark_loaded`·`set_loaded` | (운영자 — 적재 확인) | 새로 |
-| gold_version | NVARCHAR(64) | 이 문서를 gold에 올린 코드 판 — `<VERSION>+m<마스터 해시 앞 8자>`. `loaded_at`과 같은 UPDATE로 쓴다. 칸이 없으면 그 칸만 빼고 `loaded_at`만 | pgvector_load `_mark_loaded` → parsing_meta_db `set_loaded` | parsing_meta_db `done_source_keys`·run_docs `edw_done_keys`(비면 다시 대상 — ok·partial만) | 새로 |
+| gold_version | NVARCHAR(64) | 이 문서를 gold에 올린 코드 판 — `<VERSION>+m<마스터 해시 앞 8자>`. `loaded_at`과 같은 UPDATE로 쓴다. 칸이 없으면 그 칸만 빼고 `loaded_at`만 | pgvector_load `_mark_loaded` → parsing_meta_db `set_loaded` | parsing_meta_db `done_source_keys`(candidate_pick `done_keys` — 비면 다시 대상 — ok·partial만) | 새로 |
 ## 4. master — 마스터 표 (검색 PG, 스키마 `<PG_SCHEMA>_master`)
 
 원본은 git CSV `resources/vocab/glossary/<표>.csv`(샘플 데이터). 실행 중에는 이 표만 읽는다 — `dbtool up --target master`로 표를 만들고 `dbtool master load`가 CSV로 내용을 한 트랜잭션에 통째로 바꾼다(초기화 순서: `dbtool up`(search·applog·master) → `dbtool master load`). CSV 하나 = 표 하나 — 칸은 CSV 머리글 그대로(모두 `TEXT`) + 파일 순서 `row_no`(`INTEGER`, 기본 키), 목록 칸은 지금처럼 `;`·`|` 글자. 머리글을 바꾸면 새 Alembic 판(갈래 `master`). 판: `common/store/db/migrations/versions/0001_master_base.py` · 모델: `common/store/db/models/master_tables.py` · 읽기·채우기: `common/store/master.py`(프로세스마다 한 번 — 서버(dev·prd)는 못 읽으면 멈춤, PC는 같은 CSV로 채운 SQLite 대역). `tests/server/common/test_db_schema.py`가 이 절의 칸을 모델과 대조한다.
@@ -323,7 +323,7 @@ ID 모양 정규식(계약 번호·제품 코드 등). 읽는 곳: `common.core.
 | D-3 | `AI.ParsingMeta` 칸 정리(ALTER) — §3 `삭제` 칸 지우기, `gold_status`·`gold_reason`·`engines_failed`·`loaded_at`·`gold_version` 더하기, `source_key` → `s3_key`·`pipeline_version` → `silver_version` 이름 바꾸기, `engines_used` 뜻 바꿈(성공한 엔진만), 운영이 더한 분류·고객 칸(`doc_class`·`doc_class_low_conf`·`doc_class_at`·`doc_class_model`·`sf_op_id`·`created_at`·`sf_acc_name` 등) 지우기 | 이 프로젝트 밖에서 그 칸을 읽는 곳이 있는지 모름 · 운영 분류 스크립트가 멈추므로 운영 담당자에게 알린다 |
 | D-4 | `ParsingMeta.doc_key` 삭제 때 `UQ_ParsingMeta_dockey`·`IX_ParsingMeta_doc_key` 색인 처리 · `source_key`를 필수(NOT NULL)로 | 지금 `source_key`가 비면 `doc_key`가 겹침 키 |
 | D-6 | 원천별 gold 스키마 5벌 + 기준 스키마의 공용 `doc_id_seq`(§2) — 기존 서버 데이터는 백업 뒤 다시 적재 | 첫 적재가 전체 e2e와 함께 · refactor.md C-74·C-76 |
-| D-8 | FAQ 원천 등록 — Object Storage `FAQ/<uuid>/<파일>`을 `AI.FileStorageMap`에 등록(run_docs는 `s3_key LIKE 'FAQ/%'`로 고름) | FAQ 행을 누가 어떻게 넣나 |
+| D-8 | FAQ 원천 등록 — Object Storage `FAQ/<uuid>/<파일>`을 `AI.FileStorageMap`에 등록(candidate_pick list는 `s3_key LIKE 'FAQ/%'`로 고름) | FAQ 행을 누가 어떻게 넣나 |
 | D-9 | 밀려난 `FileStorageMap` 행의 예외 이력 표(§3 `edw.SupersededRow` 안) — 표 이름·칸·누가 쓰나 | 요건 [pl-32](../prd/load-schema.md#pl-32) |
 | D-10 | `applog` 스키마 추가(§6) — `up`의 `CREATE SCHEMA`, `maintain`의 파티션 생성·DROP, 앱의 INSERT와 `pipe_run` UPDATE 권한. 호출량 기준 용량(`mcp_log` 행 본문 최대 약 80KB) | 새 스키마이고 로그 쓰기가 기존 PG 접속 정보를 함께 씀 |
 | D-11 | `applog.mcp_log`의 `args`·`result` 읽기 권한 분리 | 문서 본문·EDW 결과가 들어가는데(`get_doc_fulltext` 응답은 문서 원문 전체) 판에 GRANT가 없어 지금은 앱 계정이 읽을 수 있음 |

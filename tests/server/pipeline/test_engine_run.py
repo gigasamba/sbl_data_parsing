@@ -295,11 +295,11 @@ def test_retry_doubles_limit():
     assert err and other.call_count == 1  # 시간 초과가 아니면 다시 안 함
 
 
-def test_run_docs_engines_concurrent():
+def test_run_pipeline_engines_concurrent():
     """10-29 — 한 문서의 엔진 2개는 동시에(둘이 같이 기다려야 풀리는 장벽 — 차례로 돌면 시간 초과로 깨짐)."""
     import threading
 
-    from pipeline.transform.parse.parse_engines import _run_docs
+    from pipeline.transform.parse.parse_engines import _run_pipeline
 
     barrier = threading.Barrier(2, timeout=10)
     ran = []
@@ -309,7 +309,7 @@ def test_run_docs_engines_concurrent():
         ran.append(j[1])
 
     d = Path("one.pdf")
-    _run_docs([(d, "pymupdf", None, "s"), (d, "kreuzberg", None, "s")], job, workers=1)
+    _run_pipeline([(d, "pymupdf", None, "s"), (d, "kreuzberg", None, "s")], job, workers=1)
     assert sorted(ran) == ["kreuzberg", "pymupdf"]
 
 

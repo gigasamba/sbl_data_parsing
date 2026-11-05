@@ -54,7 +54,7 @@ IN_IMAGE = REPO_ROOT.name == "deploy"  # 코드가 이미지 배치(/app/deploy/
 # ── 이미지 배치 약속 경로 — 코드에 둔 컨테이너 안 자리는 이 두 표에만(CLAUDE.md 경로 규칙의 예외) ──
 # 이미지(Dockerfile·compose 마운트·entrypoint)가 만드는 자리라 서버 설정 값이 아니라 이미지와 함께 바뀐다.
 IMAGE_PATHS = {
-    # 컨테이너 안 약속 경로는 이 표 하나(두 이미지 공통). 호스트 쪽(compose·run_docs·스크립트)은 deploy/release/gen_host_keys.py가
+    # 컨테이너 안 약속 경로는 이 표 하나(두 이미지 공통). 호스트 쪽(compose·run_pipeline·스크립트)은 deploy/release/gen_host_keys.py가
     # 이 표로 만든 deploy/host/scripts/image_paths.json을 읽는다(호스트 python엔 pydantic이 없음 — load_settings.sh가 APP_* env로도 냄).
     "output_root": "/app/output",  # 결과 폴더를 붙이는 자리(compose RAG_OUT → 이 자리)
     "code_root": "/app/deploy",  # 코드 자리(PYTHONPATH — 실행 이미지는 서버 코드 폴더를 여기에 붙임)
@@ -1519,7 +1519,7 @@ class CommonHost(Section):
     pg_container: str | None = F(
         None,
         "PG_CONTAINER",
-        "호스트에서 psql을 docker exec할 PostgreSQL(pgvector) 컨테이너 이름 — run_docs.py 문서 수 세기(S7e1 — 옛 코드 고정값)",
+        "호스트에서 psql을 docker exec할 PostgreSQL(pgvector) 컨테이너 이름 — run_pipeline.py 문서 수 세기(S7e1 — 옛 코드 고정값)",
     )
     prune_keep: int | None = F(2, "PRUNE_KEEP", "prune_images.sh가 남길 이미지 판 수(지금 판 포함, --keep 기본값)")
 

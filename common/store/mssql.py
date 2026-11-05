@@ -112,6 +112,41 @@ def standin_path():
     return p
 
 
+CHUNK = 500  # IN 목록 크기
+
+
+class EdwReader:
+    """EDW 읽기 연결 — PC는 가짜 EDW sqlite(common.connections.rdb.sqlite), 서버는 읽기 계정 MSSQL. q(sql, 값) → dict 행(자리표시 `?`).
+    원천 목록 고르기(pipeline.extract.candidate_pick)와 적재 메타(pipeline.load.edw_doc_meta)가 함께 쓴다."""
+
+    def __init__(self):
+        p = standin_path()
+        if p:
+            self.cn, self.ph = standin(p, readonly=True), "?"
+        else:
+            kw, miss = login("read")
+            if miss:
+                raise RuntimeError(f"EDW 읽기 계정 없음: {', '.join(miss)}")
+            self.cn, self.ph = raw(**kw), "%s"
+
+    def q(self, sql, params=()):
+        cur = self.cn.cursor()
+        cur.execute(sql.replace("?", self.ph), tuple(params))
+        cols = [d[0] for d in cur.description]
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+    def q_in(self, sql, values, pre=()):
+        """sql 안의 `{IN}`을 값 목록 자리표시로 — CHUNK개씩 나눠 묻고 행을 합친다. pre = `{IN}` 앞 자리표시 값(고정 조건)."""
+        out, values = [], sorted(set(v for v in values if v not in (None, "")))
+        for k in range(0, len(values), CHUNK):
+            part = values[k : k + CHUNK]
+            out += self.q(sql.replace("{IN}", ", ".join(["?"] * len(part))), [*pre, *part])
+        return out
+
+    def close(self):
+        self.cn.close()
+
+
 STANDIN_SCHEMAS = ("AI", "CRMS", "LAS", "SFDC")  # PC 가짜 EDW sqlite 하나에 든 스키마(valid_env/edw/*.sql — validation/e2e/edw_standin.py)
 
 

@@ -64,7 +64,7 @@
 
 ### 현재 상태(11-04)
 - 지운 칸(남아 있으면 시작 거부): `extract.vlm_page_sec`·`tuning.ops.services.data_parsing.vlm_page_sec` → `common.models.vlm.timeout` · `tuning.transform.vlm.deadline` → `timeout` · `transform.vlm.global_concurrency` → `max_concurrency` · `tuning.transform.vlm.page_concurrency`·`tuning.transform.figures.vlm_parallel`·`tuning.ops.nightly_run.vlm_concurrency`(명령 인자 `--vlm-concurrency`) → `concurrency` · `transform.vlm.page_slow`·`tuning.transform.vlm.page_min_concurrency` → 코드 상수.
-- 고친 결함: run_docs가 `--set VLM_CONCURRENCY=8`(vlm 레인 6)을 줘도 `--workers` 기본 4로 나눠 문서 1건 실행의 엔진 자식이 늘 2였다(`8 ÷ 4`). 이제 동시 문서 수(문서 1건이면 1)로 나눈다.
+- 고친 결함: run_pipeline이 `--set VLM_CONCURRENCY=8`(vlm 레인 6)을 줘도 `--workers` 기본 4로 나눠 문서 1건 실행의 엔진 자식이 늘 2였다(`8 ÷ 4`). 이제 동시 문서 수(문서 1건이면 1)로 나눈다.
 - 결과가 바뀜: 엔진 `qwen_vlm` 지문이 바뀌어 스캔·이미지 문서는 다시 파싱된다(지시문이 쪽 VLM과 같은 `page_transcribe`로, 해상도 200 → 150). 그림 해상도 200 → 150이라 그림 캐시도 새로 만든다. 서버 확인은 [refactor.md C-93](../refactoring/refactor.md).
 
 ### QA
@@ -197,7 +197,7 @@
 
 ### 규칙
 1. 모델은 `llm.chat`(역할 llm — 예산 장부)으로 부른다. effort는 `common.models.llm.extra_body`(서버는 `{"reasoning_effort": "high"}`), 답 길이 상한 4,096 토큰.
-2. 본문 근거 = 대표 결과 `.md`(`render_md` — 게시본과 같은 글)의 앞 8,000자. `run_docs`가 적재에 `--rep-dir <문서 폴더>/parse/_rep`를 넘긴다(없으면 묶음의 본문). 본문이 없으면 부르지 않고 실패.
+2. 본문 근거 = 대표 결과 `.md`(`render_md` — 게시본과 같은 글)의 앞 8,000자. `run_pipeline`가 적재에 `--rep-dir <문서 폴더>/parse/_rep`를 넘긴다(없으면 묶음의 본문). 본문이 없으면 부르지 않고 실패.
 3. **SFDC 지시문**(`resources/prompts/pipeline/classify_sfdc/`, 공용 꼬리 없음 `common_tail: false`): 라벨 `RFI`·`RFP`·`RFI+RFP`·`Proposal`·`Other`, 경계 규칙 6개(내부 입찰 평가 자료는 Other · 우리가 채운 RFI 질문서는 RFI · 견적 보조 파일은 제안 묶음일 때만 Proposal · `RFI+RFP`는 한 문서가 두 요청을 정말 함께 담을 때만 · 작성자는 파일 이름이 아니라 문서 안의 머리·표지로 · 고객 RFP에 답하는 우리 제안은 Proposal).
 4. **SFDC 문서 정보** = gold `<기준>_sfdc.doc.attrs`의 분류 힌트 키([db_schema.md](../architecture/db_schema.md) gold.doc.attrs 키 — 적재 때 EDW 조인, 표·칸 이름은 `resources/config/edw_chain.yaml` `sfdc.fields`) + 원본 파일 이름 + 형식·대표 엔진(대표 결과의 `format`·`engine`) + 제목 키워드 묶음(`classify.fams`). 제목이 비면 원본 파일 이름. 서버 EDW에 힌트 칸이 없으면 그 힌트만 빈다(경고 한 줄).
 5. **LAS 지시문**(`resources/prompts/pipeline/classify_las/`, PSA = Product Specific Agreement): 라벨 `MSA`·`PSA`·`QAG`·`LOI`·`Amendment`·`Assignment Letter`·`Other`.

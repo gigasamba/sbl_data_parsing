@@ -558,7 +558,7 @@ def main():
             )  # 큐 진행(콘솔)
 
     with runtrace.Progress(total=len(jobs), done=lambda: done[0], unit="doc_engine"):  # 60초마다 run.progress
-        _run_docs(jobs, run_job, a.workers)
+        _run_pipeline(jobs, run_job, a.workers)
     for doc, eng, dst, sha, first in deferred:  # 사본: 먼저 돈 결과가 성공이면 복사, 아니면 사본은 기록 안 함(다음 실행에서 다시 판단)
         if first.exists():
             dst.write_bytes(first.read_bytes())
@@ -616,7 +616,7 @@ def run_procs(a, docs):
         list(ex.map(SP.carry(one), range(k)))
 
 
-def _run_docs(jobs, run_job, workers):
+def _run_pipeline(jobs, run_job, workers):
     """문서 workers개를 동시에, 한 문서의 엔진들도 모두 동시에(엔진마다 별도 프로세스 — run_job)."""
     by_doc = {}
     for job in jobs:

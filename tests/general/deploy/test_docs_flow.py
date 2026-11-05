@@ -1,6 +1,6 @@
-"""호스트 flow 러너 run_docs.py의 main() 흐름 배선 — main()이 레인 스레드를 띄우고 끝까지 기다리며 구조화 센티널·마지막 로그까지
+"""호스트 flow 러너 run_pipeline.py의 main() 흐름 배선 — main()이 레인 스레드를 띄우고 끝까지 기다리며 구조화 센티널·마지막 로그까지
 도는지 고정한다(refactor.md C-59).
-run_docs.py는 로컬에서 실행하지 않는다(CLAUDE.md §4) — 설정·docker·EDW·다운로드·파싱·구조화 함수를 가짜로 바꾸고 문서 2건으로 main()만 돌린다
+run_pipeline.py는 로컬에서 실행하지 않는다(CLAUDE.md §4) — 설정·docker·EDW·다운로드·파싱·구조화 함수를 가짜로 바꾸고 문서 2건으로 main()만 돌린다
 (운영 접속·docker·DB 없음). 끝 대기가 5초 간격이라 몇 초 걸린다. main()이 umask·모듈 상태를 바꾸므로 자식 프로세스로 돈다(INPROCESS 아님)."""
 
 import importlib.util
@@ -17,7 +17,7 @@ ROOT = DEPLOY_ROOT  # 저장소 루트(paths 상수)
 
 
 def _load():
-    spec = importlib.util.spec_from_file_location("run_docs_flow_under_test", ROOT / "deploy" / "host" / "scripts" / "run_docs.py")
+    spec = importlib.util.spec_from_file_location("run_pipeline_flow_under_test", ROOT / "deploy" / "host" / "scripts" / "run_pipeline.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)  # 모듈 맨 위는 정의만(configure()·docker 호출 없음)
     return mod
@@ -37,7 +37,7 @@ def _run_main(work, rows, parse_one, gold_one=_ok_gold, publish_one=_ok_pub, dro
     M = _load()
     rec = drops if drops is not None else []
 
-    class _FastTime:  # run_docs의 5초 대기 고리(_mcp_pause_monitor·흐름 끝 기다림)를 짧게 — 다른 time 기능은 그대로
+    class _FastTime:  # run_pipeline의 5초 대기 고리(_mcp_pause_monitor·흐름 끝 기다림)를 짧게 — 다른 time 기능은 그대로
         def __getattr__(self, name):
             return getattr(time, name)
 
@@ -50,17 +50,17 @@ def _run_main(work, rows, parse_one, gold_one=_ok_gold, publish_one=_ok_pub, dro
     def configure(_settings):  # 설정 파일 대신 — 작업 폴더만 임시 폴더로
         M.TEST, M.PROG = work, work / "batch_progress"
         M.DOCSPACE = work / "out"
-        M.DOCFLOW, M.WARM = M.DOCSPACE / "_docflow", M.DOCSPACE / "_warm"
+        M.DOCFLOW, M.STAGING = M.DOCSPACE / "_docflow", M.DOCSPACE / "_staging"
         M.MCP_JOBS_DIR = work / "jobs"
         if setup:
             setup(M)
         return []
 
     M.configure = configure
-    M.edw_list = lambda keywords=(), where=None: rows
-    M.faq_first = lambda rows, order: order  # FAQ 교체는 test_run_docs.test_faq_first에서
+    # 대상 목록(컨테이너 candidate_pick list) 대신 — 고르기·FAQ 순서는 tests/server/pipeline/test_target_list.py
+    M.pick_targets = lambda a: (dict(enumerate(rows)), list(range(len(rows))), len(rows), 0)
     M.stack_check = lambda: None  # 엔진 구성 파일 확인(docker exec) 대신
-    M.warm_one = lambda seq, row: True
+    M.stage_one = lambda seq, row: True
     M.classify_doc = lambda seq, row, cache=None: M._class.setdefault(seq, "light")  # 레인 분류(docker exec) 대신 — 규칙은 test_doc_group
     M.parse_one, M.publish_one, M.gold_one = parse_one, publish_one, gold_one
     M.drop_original = lambda seq, row: rec.append(("orig", seq))
@@ -69,7 +69,7 @@ def _run_main(work, rows, parse_one, gold_one=_ok_gold, publish_one=_ok_pub, dro
     M.pg_count = lambda: (0, 0)
     M.rc = None
     argv = sys.argv
-    sys.argv = ["run_docs.py", "--start-offset", "0", "--settings", str(work / "unused.yaml"), *args]
+    sys.argv = ["run_pipeline.py", "--start-offset", "0", "--settings", str(work / "unused.yaml"), *args]
     # 가짜로 바꾸지 않은 외부 명령(docker exec·셸)이 불리면 바로 실패 — main()에 새 부작용이 생겨도 운영 쪽으로 새지 않게
     no_shell = AssertionError("시험 중 외부 명령 호출 — 가짜로 바꾸지 않은 부작용")
     try:
@@ -158,24 +158,24 @@ def test_thread_error_fails_the_run():
         assert M.rc == 1
 
 
-def test_warm_error_does_not_hang():
-    """받기 워커에서 예외가 나도 main()이 끝나고(_warming에 남지 않음) 실패로 세어 종료 코드 1."""
+def test_stage_error_does_not_hang():
+    """받기 워커에서 예외가 나도 main()이 끝나고(_fetching에 남지 않음) 실패로 세어 종료 코드 1."""
     rows = [{"id": i, "s3_key": f"k{i}", "original_filename": f"doc{i}.txt", "file_size": 10} for i in range(2)]
-    with tempfile.TemporaryDirectory(prefix="orca_warm_") as tmp:
+    with tempfile.TemporaryDirectory(prefix="orca_stage_") as tmp:
         work = Path(tmp)
 
         def setup(M):
-            def warm_one(seq, row):
+            def stage_one(seq, row):
                 if seq == 0:
                     raise OSError("받기 실패(시험 — 디스크 가득 흉내)")
                 return True
 
-            M.warm_one = warm_one
+            M.stage_one = stage_one
 
         M = _run_main(work, rows, lambda seq, row: True, setup=setup)
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
         assert "완료 1 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 1" in log, log
-        assert M.rc == 1 and not M._warming
+        assert M.rc == 1 and not M._fetching
 
 
 def test_depth_write_error_does_not_hang():
@@ -350,7 +350,7 @@ class _Rec(list):
 
 
 def test_exit_codes():
-    """pl-18: 대상 0건 = 0 · 마감 도달(실패 없음) = 75 · 다른 run_docs가 도는 중 = 75."""
+    """pl-18: 대상 0건 = 0 · 마감 도달(실패 없음) = 75 · 다른 run_pipeline이 도는 중 = 75."""
     rows = [{"id": i, "s3_key": f"k{i}", "original_filename": f"doc{i}.txt", "file_size": 10} for i in range(2)]
     ok_parse = lambda seq, row: True  # 시험 한 줄
 
@@ -363,7 +363,7 @@ def test_exit_codes():
     cases = [  # (rows, setup, args, 기대 종료 코드, 로그에 있어야 할 글자)
         ([], None, (), 0, "종료"),
         (rows, past_deadline, ("--deadline", "05:00"), 75, "마감 — 남은 2건"),
-        (rows, locked, (), 75, "다른 run_docs가 도는 중"),
+        (rows, locked, (), 75, "다른 run_pipeline이 도는 중"),
     ]
     for rws, setup, args, want, text in cases:
         with tempfile.TemporaryDirectory(prefix="orca_pl18_") as tmp:
@@ -383,13 +383,13 @@ def test_lock_blocks_second_run():
 
     M = _load()
     with tempfile.TemporaryDirectory(prefix="orca_pl18_") as tmp:
-        lock = Path(tmp) / "run_docs.lock"
+        lock = Path(tmp) / "run_pipeline.lock"
         held = M.take_lock(lock)
         assert held is not None
         # flock은 같은 프로세스 안 다른 열기도 막지만, 실제 상황(다른 프로세스)으로 확인
         code = (
             "import importlib.util,sys;"
-            f"s=importlib.util.spec_from_file_location('rd',{str(ROOT / 'deploy' / 'host' / 'scripts' / 'run_docs.py')!r});"
+            f"s=importlib.util.spec_from_file_location('rd',{str(ROOT / 'deploy' / 'host' / 'scripts' / 'run_pipeline.py')!r});"
             "m=importlib.util.module_from_spec(s);s.loader.exec_module(m);"
             f"sys.exit(0 if m.take_lock({str(lock)!r}) is None else 1)"
         )

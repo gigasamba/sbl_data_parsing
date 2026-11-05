@@ -731,7 +731,7 @@ def represent(stack, parse_dir, src=None):
         doc_path = Path(source["path"]) if source else None
         # 쪽 VLM은 PARSE_POST에 vlm_page가 있을 때만, 문서당 한 번만.
         # 이미지·스캔 문서를 VLM 엔진이 이미 옮겼으면 쪽 VLM을 안 부르고 쪽 전체 그림 VLM도 생략(쪽마다 VLM 한 번)
-        # covered는 vlm_page 기능과 무관하게(그림 VLM 생략에도 씀 — run_docs light 레인처럼 vlm_page 없이 figures만 켠 경우)
+        # covered는 vlm_page 기능과 무관하게(그림 VLM 생략에도 씀 — run_pipeline light 레인처럼 vlm_page 없이 figures만 켠 경우)
         covered, vp_pages = _vlm_transcribed(rep, dd), None
         if "vlm_page" in feats and doc_path and Path(doc_path).exists():
             from pipeline.transform.figures import scan_page_vlm as vp_mod

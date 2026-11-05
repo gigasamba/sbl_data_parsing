@@ -6,7 +6,7 @@ PC·단독 시험용 PG: valid_env/docker/compose.pg.yml(pgvector/pgvector:pg16)
 
 명령: check · deploy · load(묶음 → 한 트랜잭션, 같은 문서 건너뜀, --replace) · faq-sync — 검색은 mcp_server.services.search.pgsearch.
 load는 더하고 고치기만 한다 — 이번 묶음에 없는 문서를 지우지 않는다(원천에서 지운 문서·파싱 실패는 로컬 기록만).
-예외 faq-sync --reset: 새 FAQ가 올라오면 gold faq를 통째로 비우고 run_docs가 FAQ 전체를 다시 넣는다.
+예외 faq-sync --reset: 새 FAQ가 올라오면 gold faq를 통째로 비우고 run_pipeline이 FAQ 전체를 다시 넣는다.
 deploy는 확인(vector 확장·남의 스키마·차원) 뒤 migrate(common.store.db.dbtool up --target search — Alembic 기준판)를 부른다.
 load는 판 기록을 먼저 본다(없으면 경고 뒤 계속, 끝보다 낮거나 모르는 판이면 종료 2).
 """
@@ -325,7 +325,7 @@ def _corpus_stat_sql(s):
 
 def faq_sync(db, reset):
     """FAQ는 판을 잇지 않고 통째로 바꾼다. reset이면 gold faq 스키마의 문서·청크·키워드 색인을 한 트랜잭션에서
-    모두 지운다(새 FAQ가 올라온 실행 — 그 뒤 run_docs가 지금 FAQ 파일 전체를 다시 파싱·적재). 반환 = (지운 문서 수, 남은 gold faq file_path 목록).
+    모두 지운다(새 FAQ가 올라온 실행 — 그 뒤 run_pipeline이 지금 FAQ 파일 전체를 다시 파싱·적재). 반환 = (지운 문서 수, 남은 gold faq file_path 목록).
     검토 등급 A(gold 지우기)."""
     sdb = src_dbs(db)["faq"]
     if not reset:
@@ -567,7 +567,7 @@ def pg_connect(c=None, pg_schema=None):
 if __name__ == "__main__":
     from common.config import setarg
 
-    setarg.apply()  # --set 이름=값(호스트 run_docs.py 적재가 BM25_THREADS를 넘김)
+    setarg.apply()  # --set 이름=값(호스트 run_pipeline.py 적재가 BM25_THREADS를 넘김)
     utf8_stdout()
     with runtrace.run("pgvector_load", sys.argv[1:]):  # 직접 실행이면 자기 run_id(부모가 이어줬으면 그대로)
         main()

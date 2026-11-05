@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""문서 처리 그룹 판별 — 받은 원본 하나를 light·medium·vlm 중 하나로 가른다(run_docs 레인 배분, PRD rn-01).
+"""문서 처리 그룹 판별 — 받은 원본 하나를 light·medium·vlm 중 하나로 가른다(run_pipeline 레인 배분, PRD rn-01).
 
 사용: python3 pipeline/extract/doc_lane_group.py <파일> <원본 이름> <크기(바이트)>  → 그룹 한 줄
-표준 라이브러리 + pymupdf(PDF일 때만)만 쓴다 — run_docs가 컨테이너 안에서 파일 경로로 바로 실행한다."""
+표준 라이브러리 + pymupdf(PDF일 때만)만 쓴다 — run_pipeline이 컨테이너 안에서 파일 경로로 바로 실행한다."""
 
 import os
 import sys
@@ -42,7 +42,7 @@ def doc_lane_group(path, name=None, size=None):
 
             d = pymupdf.Document(path)
             n = min(3, max(len(d), 1))
-            # 레인 고르기(run_docs 작업자 배분)용 — 엔진 고르기(.pdf_text·.pdf_image)는 pipeline.shared.pdf_kind.pdf_kind(쪽당 20자)
+            # 레인 고르기(run_pipeline 작업자 배분)용 — 엔진 고르기(.pdf_text·.pdf_image)는 pipeline.shared.pdf_kind.pdf_kind(쪽당 20자)
             heavy = sum(len(p.get_text() or "") for p in d[:n]) < 300 * n
         else:
             heavy = False
@@ -55,8 +55,8 @@ def doc_lane_group(path, name=None, size=None):
 
 
 def main(argv):
-    """<파일> [<원본 이름> [<크기>]] → 그룹을 stdout 마지막 줄로(run_docs가 거꾸로 읽음).
-    원본 이름을 주면(run_docs) 판별 1건을 applog.pipe_event(stage=extract.classify, doc_id=원본 이름, metrics.group)에 남긴다(이슈 #117).
+    """<파일> [<원본 이름> [<크기>]] → 그룹을 stdout 마지막 줄로(run_pipeline이 거꾸로 읽음).
+    원본 이름을 주면(run_pipeline) 판별 1건을 applog.pipe_event(stage=extract.classify, doc_id=원본 이름, metrics.group)에 남긴다(이슈 #117).
     기록은 fail-soft — 코드 폴더가 PYTHONPATH에 없거나 DB가 꺼져도 그룹과 마지막 줄은 같다."""
     path = argv[0]
     name = argv[1] if len(argv) > 1 else None

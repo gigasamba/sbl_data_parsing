@@ -110,7 +110,7 @@ extract:
   source_limit: 0                         # 원본에서 처리할 문서 건수 상한(0=제한 없음) · 비우면 0 · 값: 0 이상 정수 (0 = 제한 없음)
   source:
     fetch_workers: 1                      # 원본 문서 병렬 다운로드 스레드 수(개) · 비우면 1 · 값: 0 이상 정수
-    warm:                                 # 미리받기(warm) 저장 폴더 · 비우면 미리받기 꺼짐 · 값: 경로
+    staging:                              # 미리 받기(staging) 폴더 · 비우면 rdb:csv 원본을 받지 못함 · 값: 경로
   # ─── 회전 준비(prepare) ───
   prepare:
     rotate: false                         # 이미지·스캔 PDF 쪽 방향 바로잡기 켬/끔 · 비우면 false · 값: true·false
@@ -200,7 +200,7 @@ ops:
     data_parsing_cpus: 3.0                # parse_document 작업 컨테이너(mcp-data-parsing — #107) CPU 개수 상한(개) · 비우면 3.0 · 값: 0 이상
     data_parsing_mem_limit: 8g            # parse_document 작업 컨테이너(mcp-data-parsing) 메모리·스왑 상한(docker 형식) · 비우면 8g · 값: 글자
     data_parsing_cpu_shares: 4096         # parse_document 작업 컨테이너 CPU 나눔 비율(data-pipeline 1024의 4배 — CPU가 모자랄 때 먼저 받음, rn-03) · 비우면 4096 · 값: 0~1
-    run_docs_dir:                         # 문서별 flow 러너(deploy/host/scripts/run_docs.py) 작업 폴더(호스트 — 진행 기록 batch_progress/·batches/) · 비우면 run_docs.py 옆 test_space/ · 값: 경로
+    run_pipeline_dir:                     # 문서별 flow 러너(deploy/host/scripts/run_pipeline.py) 작업 폴더(호스트 — 진행 기록 batch_progress/·batches/) · 비우면 run_pipeline.py 옆 test_space/ · 값: 경로
   mcp_host:
     cpus: 1.0                             # mcp-server 컨테이너 CPU 한도(compose cpus) · 비우면 1.0 · 값: 0 이상
     mem_limit: 4g                         # mcp-server 컨테이너 메모리 한도(compose mem_limit) · 비우면 4g · 값: 글자
@@ -213,10 +213,10 @@ ops:
     time:                                 # 새벽 배치 시작 시각(HH:MM, 서버 시간) · 비우면 새벽 배치 없음 · 값: HH:MM · 예: 01:30
     max_docs:                             # 새벽 배치 한 번에 처리할 새 문서 수 상한(이미 끝난 문서 뺀 뒤) · 비우면 새벽 배치 없음 · 값: 1 이상 정수
     deadline:                             # 새벽 배치 마감 시각(HH:MM, 서버 시간) · 비우면 새벽 배치 없음 · 값: HH:MM · 예: 06:00
-  # ─── run_docs 레인 ───
-  run_docs:
-    warm: 20                              # 진입 대기열 · 비우면 20 · 값: 0 이상 정수
-    warm_workers: 2                       # 미리 받기 동시 수 · 비우면 2 · 값: 0 이상 정수
+  # ─── run_pipeline 레인 ───
+  run_pipeline:
+    staging: 20                           # 진입 대기열 · 비우면 20 · 값: 0 이상 정수
+    staging_workers: 2                    # 미리 받기 동시 수 · 비우면 2 · 값: 0 이상 정수
     struct_workers: 2                     # 구조화·적재 스레드 수(명령 인자 --struct-workers가 덮음) · 비우면 2 · 값: 0 이상 정수
     struct_backlog:                       # 중간 대기열 상한(파싱 끝·구조화 대기 문서 수) · 비우면 구조화 스레드 × 2(0이면 상한 없음) · 값: 0 이상 정수 (0 = 상한 없음)
     vlm_cap: 2                            # vlm 레인 문서 동시 파싱 상한(gpu 예산) · 비우면 2 · 값: 0 이상 정수
@@ -237,7 +237,7 @@ ops:
     fetch_workers: 2                      # 원본 받기 스레드 수(SOURCE_FETCH_WORKERS) · 비우면 2 · 값: 0 이상 정수
     rep_select: first                     # 대표 엔진 선택 방식(PARSE_REP_SELECT — first·acc·best) · 비우면 first · 값: 글자
     qa_light: true                        # 풀문서 CER·순서 비교 생략(PARSE_QA_LIGHT) · 비우면 true · 값: true·false
-    scan_rotate: false                    # 스캔 PDF 쪽 방향 바로잡기 · 비우면 false · 값: true·false
+    scan_rotate: false                    # 이미지 PDF 쪽 방향 바로잡기 · 비우면 false · 값: true·false
     cpu_gate: 1.3                         # light 밖 레인의 파싱 CPU 게이트(CPU_MAX_LOAD — 명령 인자 --cpu-gate가 덮음) · 비우면 1.3 · 값: 0 이상
     light_cpu_gate: 9.0                   # light 레인 CPU 게이트(CPU_MAX_LOAD — 높게 두어 바로 소화) · 비우면 9.0 · 값: 0 이상
     embed_concurrency: 6                  # 구조화·적재 임베딩 호출 병렬 수(EMBED_CONCURRENCY) · 비우면 6 · 값: 0 이상 정수

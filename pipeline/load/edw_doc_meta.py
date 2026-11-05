@@ -17,42 +17,10 @@ from pathlib import Path
 
 from common.core.paths import RES_ROOT
 from common.store import edw_chain as EC
+from common.store import mssql
 from common.store.db.models import search_tables as ST
 
-CHUNK = 500  # IN 목록 크기
-
-
-class _Edw:
-    """읽기 연결 — PC는 가짜 EDW sqlite(common.connections.rdb.sqlite), 서버는 읽기 계정 MSSQL. q(sql, 값) → dict 행(자리표시 `?`)."""
-
-    def __init__(self):
-        from common.store import mssql
-
-        p = mssql.standin_path()
-        if p:
-            self.cn, self.ph = mssql.standin(p, readonly=True), "?"
-        else:
-            kw, miss = mssql.login("read")
-            if miss:
-                raise RuntimeError(f"EDW 읽기 계정 없음: {', '.join(miss)}")
-            self.cn, self.ph = mssql.raw(**kw), "%s"
-
-    def q(self, sql, params=()):
-        cur = self.cn.cursor()
-        cur.execute(sql.replace("?", self.ph), tuple(params))
-        cols = [d[0] for d in cur.description]
-        return [dict(zip(cols, r)) for r in cur.fetchall()]
-
-    def q_in(self, sql, values, pre=()):
-        """sql 안의 `{IN}`을 값 목록 자리표시로 — CHUNK개씩 나눠 묻고 행을 합친다. pre = `{IN}` 앞 자리표시 값(고정 조건)."""
-        out, values = [], sorted(set(v for v in values if v not in (None, "")))
-        for k in range(0, len(values), CHUNK):
-            part = values[k : k + CHUNK]
-            out += self.q(sql.replace("{IN}", ", ".join(["?"] * len(part))), [*pre, *part])
-        return out
-
-    def close(self):
-        self.cn.close()
+_Edw = mssql.EdwReader  # 읽기 연결(PC 대역 sqlite · 서버 읽기 계정) — 원천 목록 고르기와 같은 것
 
 
 def load_chain(path=None):

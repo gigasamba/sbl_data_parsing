@@ -75,7 +75,7 @@ CATEGORIES = {
         ("서버 컨테이너 — CPU·메모리 한도·폴더", ("ops.pipeline_host", "ops.mcp_host")),
         ("상주 서비스 — 트리거·parse MCP", ("ops.services",)),
         ("새벽 배치", ("ops.nightly", "ops.nightly_run")),
-        ("run_docs 레인", ("ops.run_docs",)),
+        ("run_pipeline 레인", ("ops.run_pipeline",)),
     ),
     "dev": (
         ("외부 모델 — 허용·지출 상한·단가", ("dev.models",)),
@@ -100,7 +100,7 @@ NOTE_COL = 42  # 칸 설명 주석이 시작하는 열(값 자리와 주석을 �
 SPLIT = {"common", "extract", "transform", "load", "search"}  # [파라미터] 표시를 다는 절(결과를 바꾸는 값 — _kind 0)
 _OPS = re.compile(
     r"concurrency|parallel|workers|procs|threads|timeout|_sec$|^sec$|deadline|retry|batch$|cache|_gb$|warn|port$|dir$|root|path|"
-    r"file$|_bin$|url$|host$|queue|lock|log|^keep_|fetch|warm|slow|rpm|budget|est_usd|price|token$|_mb$|max_bytes|max_chars|"
+    r"file$|_bin$|url$|host$|queue|lock|log|^keep_|fetch|staging|slow|rpm|budget|est_usd|price|token$|_mb$|max_bytes|max_chars|"
     r"^dim$|^user$|^account$|^root$|^prefix$|^bucket$|^sqlite$|^server$|^database$|^images$|^manifest$|instructions|warmup|^store$|"
     r"stale|max_new|source_limit|^limit$|^tables$|max_rows$|max_px$|parse_date|source_system|text_max|catalog|vocab_file|agg_today"
 )
@@ -164,12 +164,12 @@ BLANK = {
     "pipeline.connections.secure_doc.passwords_file": "암호 걸린 문서는 못 열고 건너뜀",
     "pipeline.extract.skipped_log": "<결과 폴더>/…/skipped.jsonl(준비 기록 폴더)",
     "pipeline.extract.ocr.threads": "OMP_NUM_THREADS 또는 CPU 몫",
-    "pipeline.extract.source.warm": "미리받기 꺼짐",
-    "pipeline.host.run_docs_dir": "run_docs.py 옆 test_space/",
+    "pipeline.extract.source.staging": "rdb:csv 원본을 받지 못함",
+    "pipeline.host.run_pipeline_dir": "run_pipeline.py 옆 test_space/",
     "pipeline.host.nightly.time": "새벽 배치 없음",
     "pipeline.host.nightly.max_docs": "새벽 배치 없음",
     "pipeline.host.nightly.deadline": "새벽 배치 없음",
-    "pipeline.host.run_docs.struct_backlog": "구조화 스레드 × 2(0이면 상한 없음)",
+    "pipeline.host.run_pipeline.struct_backlog": "구조화 스레드 × 2(0이면 상한 없음)",
     "pipeline.load.edw_path_prefix": "원본 파일의 실제 경로 그대로",
     "pipeline.paths.images_root": "<출력 루트>/parse/_images",
     "pipeline.paths.out_root": "<루트>/output",
@@ -391,7 +391,7 @@ def _note(p, f):
 
 
 _CHOICES = re.compile(r"(?<![\w/.<])([a-z][a-z0-9_]*(?: ?\| ?[a-z][a-z0-9_:]*)+)(?![\w/])")
-_PATHY = re.compile(r"(dir|root|path|file|_bin|_out|cache|log|manifest|snapshot|roster|catalog|images|conf|font|warm|sqlite|db)$")
+_PATHY = re.compile(r"(dir|root|path|file|_bin|_out|cache|log|manifest|snapshot|roster|catalog|images|conf|font|staging|sqlite|db)$")
 
 
 # 설명 글자로는 선택지를 못 뽑는 칸 — 코드가 받는 값(읽는 코드·설명 기준).

@@ -103,7 +103,7 @@ ROLES = (
     ("pipeline.load.", "load."),
     ("pipeline.paths.", "ops.pipeline_paths."),
     ("pipeline.host.nightly.", "ops.nightly."),
-    ("pipeline.host.run_docs.", "ops.run_docs."),
+    ("pipeline.host.run_pipeline.", "ops.run_pipeline."),
     ("pipeline.host.", "ops.pipeline_host."),
     ("pipeline.service.", "ops.services."),
     ("mcp.search.", "search."),
@@ -242,7 +242,7 @@ DUP_KEY = "같은 칸 두 번"
 
 
 def reject_dup_keys(loader_cls):
-    """YAML Loader 클래스가 같은 절·칸을 두 번 쓴 파일을 거부하게(앞 것이 조용히 사라지므로 — 값은 안 찍음). 앱(settings)·호스트(run_docs)가 같이 쓴다."""
+    """YAML Loader 클래스가 같은 절·칸을 두 번 쓴 파일을 거부하게(앞 것이 조용히 사라지므로 — 값은 안 찍음). 앱(settings)·호스트(run_pipeline)가 같이 쓴다."""
     import yaml
 
     def no_dup(loader, node):  # 글자 열쇠만 견줌(병합 `<<`·사전 열쇠는 construct_mapping이 처리 — 못 쓰는 열쇠도 YAML 오류로)
@@ -259,7 +259,7 @@ def reject_dup_keys(loader_cls):
 
 
 def per_instance(name, instance):
-    """여러 벌 — 이름 끝에 `_<벌>`(`-`는 `_`로). 벌 이름이 없거나 이미 붙어 있으면(따로 적은 값) 그대로. 앱(settings)·호스트(run_docs)가 같이 쓴다."""
+    """여러 벌 — 이름 끝에 `_<벌>`(`-`는 `_`로). 벌 이름이 없거나 이미 붙어 있으면(따로 적은 값) 그대로. 앱(settings)·호스트(run_pipeline)가 같이 쓴다."""
     if not name or not instance:
         return name
     tail = "_" + str(instance).replace("-", "_")

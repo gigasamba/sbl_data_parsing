@@ -4,8 +4,8 @@
 단계 2 · 고정 스택(정해진 기술로 실제 파이프라인 + 기본 테스트)
   show-stack  지금 엔진 구성(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 오버레이 패치 —
                   docs/architecture/resources.md §1)
-  parse           파싱 모듈 1회(run_docs가 문서마다 부름) — 끝 표시 _rep/_DONE.json
-  (서버 입구는 run_docs 하나 — 구조화·적재는 run_docs가 모듈을 직접 부름. 검색 명령은 python -m mcp_server.cli.ask)
+  parse           파싱 모듈 1회(run_pipeline이 문서마다 부름) — 끝 표시 _rep/_DONE.json
+  (서버 입구는 run_pipeline 하나 — 구조화·적재는 run_pipeline이 모듈을 직접 부름. 검색 명령은 python -m mcp_server.cli.ask)
 산출 위치: output/parse(파싱) · output/parse/_rep(대표) · output/edw/bundle(구조화) · output/report(보고서) · output/stack_test.md
 """
 
@@ -53,7 +53,7 @@ def show_stack(a=None):
     print(f"청킹 {st['chunk']} · 임베딩 {st['embed']} · 그래프 {st['graph']} · 검색 {st['retrieve']} · 상위 k {st['k']}")
 
 
-# ── 파싱 모듈(run_docs가 문서마다 부름) ──────────
+# ── 파싱 모듈(run_pipeline이 문서마다 부름) ──────────
 # 파싱 끝 표시(_rep/_DONE.json)는 남김 — 읽고 쓰기는 대표 결과 단계(pipeline.transform.represent.build_rep.write_mark).
 
 
@@ -77,8 +77,8 @@ def _tdone():
 
 
 def parse_module(a):
-    """파싱 모듈: (--source면) 가져오기·시험 표본 → 중복 확인 → 방향 보정 → 파싱 → 채점 → 대표 결과 → 끝 표시 → (s3) 원본 정리.
-    임베딩·DB 연결 없음 — 수집 서버에 이것만 보낼 수 있음. --source 없으면 --src(이미 준비된 폴더)를 그대로."""
+    """파싱 모듈: extract(--staged = candidate_ready stage가 끝낸 목록 · --source = 같은 stage_batch를 여기서) → 파싱 → 채점 → 대표 결과 →
+    끝 표시 → (s3) 원본 정리. 임베딩·DB 연결 없음. 둘 다 없으면 --src(이미 준비된 폴더)를 그대로."""
     from common.core.paths import child_env
     from pipeline.extract import candidate_pick as PICK
     from pipeline.extract import candidate_ready as SRC
@@ -94,16 +94,21 @@ def parse_module(a):
 
     runtrace.info(stack=st.get("name"), workers=int(a.workers) if str(a.workers).isdigit() else None)
     engines = a.engines or ",".join(engine_check.engines_of(st))  # parse 엔진(정렬)
-    lim, src_info = [], None
-    if a.source:
-        local, keep, state = SRC.prepare_batch(a.source, OUT, a.source_limit, lambda args: _run_step(args, child_env()))
-        src_info = (state, local)
-        _tstep("t_dedup")
-        only = OUT / "parse" / "_source" / "only.txt"
-        rc = parse_steps.place_inputs(lambda args: _run_step(args, child_env()), local, a.src, keep, only)
+    lim, src_info, remote = [], None, False
+    if getattr(a, "staged", False):  # extract는 candidate_ready stage가 이 결과 폴더에 끝냄 — 남은 이름 목록만 읽는다
+        state = OUT / "parse" / "_source"
+        only = state / "only.txt"
+        if not only.exists():
+            raise SystemExit(f"[parse] 받아 둔 문서 목록 없음({only}) — candidate_ready stage를 먼저")
+        C.put(SOURCE_MANIFEST=str(state / "manifest.jsonl"))  # 원본 위치 주소(s3://) — stage가 쓴 manifest
+        src_info, remote = (state, OUT / "_source_files"), True
+        lim = ["--docs-from", only]
+    elif a.source:
+        local, _, state, only = SRC.stage_batch(
+            a.source, OUT, a.src, a.source_limit, lambda args: _run_step(args, child_env()), done=PICK.done_keys()
+        )
+        src_info, remote = (state, local), PICK.is_remote(a.source)
         _tstep("t_prepare")
-        if rc != 0:
-            raise SystemExit(rc)
         lim = ["--docs-from", only]
     if a.max_new:
         lim = ["--docs-from", PICK.pick_new(a.src, OUT, a.max_new, lim[1] if lim else None)]
@@ -139,9 +144,8 @@ def parse_module(a):
         run_id=run_id,
     ):
         return
-    if src_info:
-        if PICK.is_remote(a.source):
-            SRC.finish(src_info[0], src_info[1], OUT / "parse" / "_rep" / "index.json")
+    if src_info and remote:
+        SRC.finish(src_info[0], src_info[1], OUT / "parse" / "_rep" / "index.json")
 
 
 # ── 운영자 자기 점검(selftest) ──────────────────────────────────
@@ -301,13 +305,18 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     src = C.cfg().paths.doc_dir_prepared or "output/prepared"
-    p = sub.add_parser("parse", help="파싱 모듈 1회(run_docs가 문서마다 부름): 파싱 → 채점 → 대표 결과 → 끝 표시 · 임베딩·DB 없음")
+    p = sub.add_parser("parse", help="파싱 모듈 1회(run_pipeline이 문서마다 부름): 파싱 → 채점 → 대표 결과 → 끝 표시 · 임베딩·DB 없음")
     p.add_argument("--src", default=src)
     p.add_argument(
         "--source",
         default=pc.cfg().extract.input_source or None,
-        help="파싱할 원본 위치 — 폴더(같은 서버 샘플) · rdb:csv:<경로>(문서 위치 표 — run_docs가 만듦, AD44). "
+        help="파싱할 원본 위치 — 폴더(같은 서버 샘플) · rdb:csv:<경로>(문서 위치 표 — run_pipeline이 만듦, AD44). "
         "주면 가져오기·중복 확인·방향 보정부터(11-01 s3://·rdb:*·rdb:<이름>·rdb:<표> 지움)",
+    )
+    p.add_argument(
+        "--staged",
+        action="store_true",
+        help="extract(받기·중복·거르기)는 candidate_ready stage가 이 결과 폴더에 끝냄 — parse/_source/only.txt의 문서만 파싱(run_pipeline)",
     )
     p.add_argument("--source-limit", type=int, default=pc.cfg().extract.source_limit, help="원본 몇 건만(Object Storage 시험)")
     p.add_argument("--engines", default="")
@@ -339,7 +348,7 @@ def main(argv=None):
 if __name__ == "__main__":
     from common.config import setarg
 
-    setarg.apply()  # --set 이름=값(한 번 실행 덮기, 서버 포함 · 호스트 run_docs.py 문서별 파싱이 결과 폴더 등을 넘김)
+    setarg.apply()  # --set 이름=값(한 번 실행 덮기, 서버 포함 · 호스트 run_pipeline.py 문서별 파싱이 결과 폴더 등을 넘김)
     utf8_stdout()
     subcommand = next((x for x in sys.argv[1:] if not x.startswith("-")), "")
     trace: contextlib.AbstractContextManager = contextlib.nullcontext()
