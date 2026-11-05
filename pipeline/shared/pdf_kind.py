@@ -1,4 +1,6 @@
-"""스캔 PDF 판정 — 글자층이 쪽당 평균 20자 미만이면 pdf_image."""
+"""PDF 쪽 수(doc_pages)와 스캔 PDF 판정(pdf_kind — 글자층이 쪽당 평균 20자 미만이면 pdf_image)."""
+
+from pathlib import Path
 
 
 def pdf_kind(path):
@@ -25,3 +27,16 @@ def pdf_kind(path):
     if n == 0:
         return "pdf_image", 0
     return ("pdf_image" if chars < 20 * n else "pdf_text"), n
+
+
+def doc_pages(path):
+    """문서 쪽 수 — PDF는 실제 쪽 수, 그 밖은 1. 못 세면(손상 등) None(호출부가 정함)."""
+    p = Path(path)
+    if p.suffix.lower() != ".pdf":
+        return 1
+    try:
+        import pypdfium2 as pdfium
+
+        return len(pdfium.PdfDocument(str(p)))
+    except Exception:
+        return None

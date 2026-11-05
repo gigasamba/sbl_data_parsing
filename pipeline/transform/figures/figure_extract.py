@@ -24,7 +24,7 @@ from pipeline import config as pc
 from pipeline.shared import vlmcall as V  # VLM 호출 한 길(ask)·렌더 해상도(dpi)
 from pipeline.shared.ext_groups import IMG_EXTS
 from pipeline.shared.raw_cache import prompt_id, raw_root, raw_vlm_path  # raw_root: PARSE_RAW_ROOT(이중 raw/ 방지)
-from pipeline.shared.vlmcall import sha
+from pipeline.shared.vlmcall import _host, _model_dir, _png, sha  # 캐시 경로·PNG 축소(nested_figures와 같은 함수)
 from pipeline.transform.figures import chart_values as CV  # 벡터 차트 결정적 값·추세
 from pipeline.transform.figures import diagram_edges as diag_edges  # PDF 벡터·텍스트 글자 화살표 결정적 edges
 from pipeline.transform.figures.nested_figures import find_children  # page_render 안의 자식 그림 찾기·자르기
@@ -687,23 +687,6 @@ def _ocr_fallback(f, prov, ocr_fn, ocr_budget):
     return json.dumps(rec, ensure_ascii=False), new_prov
 
 
-def _png(img, max_side=2000):
-    from PIL import Image
-
-    im = Image.open(io.BytesIO(img))
-    if im.mode not in ("RGB", "L"):
-        im = im.convert("RGB")
-    im.thumbnail((max_side, max_side))
-    buf = io.BytesIO()
-    im.save(buf, "PNG")
-    return buf.getvalue(), f"{im.width}x{im.height}"
-
-
-def _model_dir(model):
-    """P0 폴더 이름 — 기존 캐시와 같은 정리 규칙(모델 이름의 '/' 등은 '_')이라야 기존 캐시를 그대로 재사용한다."""
-    return re.sub(r"[^\w.-]+", "_", model or "unset")
-
-
 def _open_image(data):
     """Pillow가 열 수 있으면 Image, 못 열면 None — Linux Pillow는 WMF/EMF(윈도 메타파일)를 못 엶(Windows는 엶),
     그 밖의 깨진 바이트도 같게 처리. 그림 1건만 영향(호출부가 skip 사유로 기록하고 문서는 계속)."""
@@ -843,12 +826,6 @@ def vlm_fig_overlay(img_bytes):
     return vlm_fig(img_bytes, prompt_text=P_FIGOVERLAY, cache_name="figoverlay", agent="figure_overlay")
 
 
-def _host(url):
-    import urllib.parse
-
-    return urllib.parse.urlparse(url).hostname or url
-
-
 def parse_json(t):
     t = re.sub(r"^```(?:json)?|```$", "", t.strip(), flags=re.M).strip()
     m = re.search(r"\{.*\}", t, re.S)
@@ -930,7 +907,7 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, ocr_fn=Non
     재사용한다. ocr_fn — crop OCR 재사용 지점(없으면 _crop_ocr, 테스트는 가짜 OCR 주입).
     VLM 응답이 빈 경우(미설정·오류·빈 응답)만 같은 crop의 OCR 글자로 채운다(_ocr_fallback). VLM 응답이
     있으면(비어 있지 않으면) 그대로.
-    figures_max — 그림 상한을 이번 호출만 바꿈(None이면 설정 VLM_FIGURES_MAX — figures_resume이 상한을 올려 다시 돌 때)."""
+    figures_max — 그림 상한을 이번 호출만 바꿈(None이면 설정 VLM_FIGURES_MAX)."""
     ext = Path(doc_path).suffix.lower()
     is_pdf = ext == ".pdf"
     px_edges = pptx_edges(doc_path) if ext == ".pptx" else {}  # 슬라이드 XML 연결선 — VLM edges보다 우선(있으면)

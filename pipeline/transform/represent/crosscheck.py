@@ -5,7 +5,7 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-from common.core.repfmt import EMPTY, locate, nlabel, pairs_of, pick  # noqa: F401
+from common.core.repfmt import EMPTY, nlabel, pairs_of
 from common.core.text import normalize_value
 
 
@@ -25,7 +25,7 @@ def load_doc(parse_dir, eng, doc):
 
 
 def build(parse_dir, src, min_fams=2):
-    """문서별 교차 확인 (라벨, 값) 사전 + 기준 엔진 텍스트(근거용)."""
+    """문서별 교차 확인 (라벨, 값) — {문서: {pairs, all}}(build_rep이 rep.meta로 씀)."""
     qa = json.loads((Path(parse_dir) / "qa.json").read_text(encoding="utf-8"))
     route = json.loads((Path(parse_dir) / "route.json").read_text(encoding="utf-8")) if (Path(parse_dir) / "route.json").exists() else {}
     fam = families()
@@ -53,13 +53,7 @@ def build(parse_dir, src, min_fams=2):
         label_count = defaultdict(int)
         for (lk, _), _v in ok.items():
             label_count[lk] += 1
-        ref = next(e for e in order if e in outs)
         docs[doc] = {
-            "format": dd["format"],
-            "ref": ref,
-            "text": outs[ref]["text"],
-            "outs": outs,
-            "fam": fam,
             "pairs": [
                 {"label": v["label"], "value": v["value"], "fams": len(v["fams"]), "lk": lk}
                 for (lk, _), v in ok.items()

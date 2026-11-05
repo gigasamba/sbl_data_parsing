@@ -51,7 +51,7 @@ from common.core.paths import (  # 폴더 재편 뒤 이 두 상수만 바뀌면
 from pipeline import config as pc
 from pipeline.shared import runtrace
 from pipeline.shared.env_error import is_env_error
-from pipeline.shared.pdf_kind import pdf_kind
+from pipeline.shared.pdf_kind import doc_pages, pdf_kind
 from pipeline.transform.parse.engines import registry
 
 # engine → importlib.metadata 패키지 이름("|"는 여러 후보) — src/tools/qa/eval_hard_parse.py의 PKG를 단일 인터프리터용으로
@@ -228,17 +228,6 @@ def redact(s):
 VLM_ENGINES = {"qwen_vlm"}
 # OCR 엔진은 파싱 엔진으로 안 돌림. 엔진 코드는 남김(filter_and_rotate 회전 판정·figures가 씀)
 OCR_ENGINES = {"rapidocr_ko"}
-
-
-def n_pages(doc):
-    if doc.suffix.lower() != ".pdf":
-        return 1
-    try:
-        import pypdfium2 as pdfium
-
-        return len(pdfium.PdfDocument(str(doc)))
-    except Exception:
-        return 1
 
 
 def page_timeout(eng, pages, first=False):
@@ -517,7 +506,7 @@ def main():
         ever = engine_version(eng)
         pkey = p0_key(eng, sha, ever)  # P0 열쇠(결과 출처 기록 — provenance·runs.jsonl)
         prov = {"engine": eng, "engine_version": ever, "p0_key": pkey, "params": {"profile": a.profile}}  # 자식이 결과에 넣어 씀(C4)
-        pages = n_pages(doc)
+        pages = doc_pages(doc) or 1
         tmo = page_timeout(eng, pages, first)
         sp.add(pages=pages, limit_s=tmo, first_of_engine=first)
         if eng in VLM_ENGINES:

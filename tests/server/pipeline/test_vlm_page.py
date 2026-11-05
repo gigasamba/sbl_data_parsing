@@ -29,7 +29,7 @@ from pipeline.transform.figures.scan_page_vlm import (
     PAGE_SIGNALS_VERSION,
     _signals_path,
     is_scan,
-    page_text,
+    page_text_pages,
     scan_pages,
     scan_pages_detail,
 )
@@ -131,9 +131,9 @@ def selftest():
         text, prov = vlm_page(img.read_bytes())
         assert text == "" and "미설정" in prov["error"]
         with pc.PIPE.env(VLM_PAGE_MAX="0"):
-            assert page_text(img) == ("", [])  # 꺼짐 — is_scan조차 안 부름(호출 0 보장)
-        t, provs = page_text(img)  # VLM 미설정 — 빈 글자(파싱은 계속), provenance는 오류로 남음
-        assert t == "" and len(provs) == 1 and provs[0].get("error")
+            assert page_text_pages(img) == []  # 꺼짐 — is_scan조차 안 부름(호출 0 보장)
+        provs = [pv for _, t, pv in page_text_pages(img) if not t]  # VLM 미설정 — 빈 글자(파싱은 계속), provenance는 오류로 남음
+        assert len(provs) == 1 and provs[0].get("error")
         assert PID_PAGE.startswith("page-v1-")
         print("[selftest] 스캔 판정·쪽 렌더·VLM_PAGE_MAX 끔·VLM 미설정 안전 경로 통과")
 
@@ -206,8 +206,8 @@ def selftest():
             assert scan_pages(mixed) == [2]
             assert not is_scan(mixed)  # 문서 전체는 스캔 아님(1·3쪽 글자 있음, 기존 is_scan 그대로)
 
-            t2, provs2 = page_text(mixed)  # AD31 — 기본 켬: 2쪽(스캔 쪽)만 대상 — 1·3쪽은 안 부름
-            assert t2 == "" and len(provs2) == 1 and provs2[0].get("error"), (t2, provs2)
+            pages2 = page_text_pages(mixed)  # AD31 — 기본 켬: 2쪽(스캔 쪽)만 대상 — 1·3쪽은 안 부름
+            assert len(pages2) == 1 and pages2[0][0] == 2 and not pages2[0][1] and pages2[0][2].get("error"), pages2
         finally:
             _e1.__exit__(None, None, None)
         print("[selftest] AD12·AD31 — page_signals·scan_pages·스캔 쪽만 쪽 VLM 대상 통과")

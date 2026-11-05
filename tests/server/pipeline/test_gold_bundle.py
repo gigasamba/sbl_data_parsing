@@ -28,15 +28,15 @@ def selftest():
     assert m == {"doc_date": "2026-05-01", "version": "2", "superseded": True}  # family는 pl-38에 지움
     print("[selftest] docs 메타(날짜·개정·구판, L3-1) 결합 통과")
 
-    # canon_clients(OCR 오탈자 고객 이름 맞추기)는 pl-38에 지움 — 교차 확인 고객(meta_confirmed)을 묶음이 더 만들지 않아 늘 할 일이 없었음
+    # 머리에 나온 고객 1순위 · 뒤쪽 1회만 나온 고객은 안 채움(잡음 가드)
     ds = [
-        {"client": "Pfizer Inc.", "meta_confirmed": True},
         {"full_text": "Supply Agreement · Pfizer Inc. / PFE-MAB-02 (C-PFE-2024-03)"},
         {"full_text": "QBR — 미르하제약(주) / MRH-ADC-04"},
-        {"full_text": "··· / MRH-MAB-01 (C-MRH-2023-02)", "contract": {"product_code": "MRH-MAB-01"}},
+        {"full_text": "··· " + "x" * 500 + " 미르하제약"},
     ]
-    infer_clients(ds, roster={"미르하제약(주)": ["미르하제약"]})
-    assert ds[1]["client"] == "Pfizer Inc." and ds[1]["client_src"] == "text" and ds[2]["client"] == "미르하제약(주)"
+    infer_clients(ds, roster={"미르하제약(주)": ["미르하제약"], "Pfizer Inc.": []})
+    assert ds[0]["client"] == "Pfizer Inc." and ds[0]["client_src"] == "text" and ds[1]["clients"] == ["미르하제약(주)"]
+    assert "client" not in ds[2]
     import tempfile
 
     calls = []
@@ -56,7 +56,6 @@ def selftest():
         assert v2.shape == (2, 4) and max(len(t) for t in received) <= 5
     finally:
         M._embed = orig
-    assert ds[3]["client"] == "미르하제약(주)" and ds[3]["client_src"] == "product"
 
     # BR57 — warn_if_no_client_roster: 명부 없음 + client 전부 빈 채일 때만 경고 한 줄(동작은 안 바꿈).
     import contextlib

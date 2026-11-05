@@ -163,8 +163,7 @@ class PipelineTransformRepresent(Section):
 
 
 class PipelineTransformStructure(Section):
-    chunk_overlap: int | None = F(64, "CHUNK_OVERLAP", "고정 길이 청커(chunk_fixed512)의 청크 간 겹침 글자 수")
-    chunk_size: int | None = F(None, "CHUNK_SIZE", "청크 목표 길이(글자) — 청커별 기본이 다름")
+    chunk_size: int | None = F(None, "CHUNK_SIZE", "청크 목표 길이(글자) — 비우면 800")
     chunk_table: str | None = F(None, "CHUNK_TABLE", "'rows'이면 큰 표를 행 묶음 단위로 쪼갬(그 외 값·미설정은 표를 통째로 둠)")
     chunk_table_rows: int | None = F(25, "CHUNK_TABLE_ROWS", "표를 쪼갤 때 청크당 행 수(CHUNK_TABLE=rows일 때만)")
     embed_batch: int | None = F(32, "EMBED_BATCH", "임베딩 API 한 번에 보내는 청크 수")
@@ -172,7 +171,6 @@ class PipelineTransformStructure(Section):
     embed_concurrency: int | None = F(4, "EMBED_CONCURRENCY", "임베딩 호출 병렬 수(EMBED_BATCH 묶음을 동시에 전송)")
     embed_max_chars: int | None = F(8000, "EMBED_MAX_CHARS", "임베딩 입력 청크 최대 글자 수(넘으면 자름, 400 오류 방지 안전망)")
     embed_retry: int | None = F(2, "EMBED_RETRY", "임베딩 API 실패 시 재시도 횟수")
-    page_chunk_max: int | None = F(None, "PAGE_CHUNK_MAX", "쪽 청크 최대 글자 수(임베딩 입력 한도 초과 방지)")
 
 
 class PipelineTransformVlm(Section):

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""저장소 묶음 만들기 — 파싱 선정 엔진 결과 → 청크(원본 위치)·요약·메타·임베딩 → output/edw/bundle/(PostgreSQL 적재 원본).
+"""저장소 묶음 만들기 — 대표 파싱 결과(output/parse/_rep) → 청크(원본 위치)·요약·메타·임베딩 → output/edw/bundle/(PostgreSQL 적재 원본).
 
-**파싱에서 선정된 엔진만** 쓴다(output/parse/selection.json `final` 형식별 주 엔진 → 실패면 예비 → route 순).
   청크   : structure 청커(chunking) — 본문은 정제 텍스트(쪽 번호 줄 제외), 위치 = 파일 경로·쪽·줄·문자 범위·제목,
            쪽 안 위치(bbox, pt) = OCR 엔진은 글자 상자 합집합, 텍스트 PDF는 원본 PDF에서 청크 첫·끝 줄을 찾아 합집합
   요약   : 앞부분 발췌
@@ -40,17 +39,6 @@ from pipeline import config as pc
 from pipeline.shared import runtrace  # run.progress
 from pipeline.transform.structure import chunking as S  # 청킹·개체 정규식(구조화 모듈)
 from pipeline.transform.structure import client_roster as ST  # name_hits·seed_roster(구조화 전용)
-
-PRODUCT_CODE_RE = re.compile(r"\b[A-Z]{2,5}-(ADC|MAB|BSA|BIS|BSP|VAC)-\d{1,3}\b")  # 제품 코드(용어 초안)
-
-
-def pick_engine(doc, dd, sel, route):
-    """선정 엔진(주 → 예비) 중 이 문서에서 성공한 것, 없으면 형식별 순위(route)에서 성공한 첫 엔진."""
-    ok = {e for e, m in dd["engines"].items() if m.get("ok")}
-    for e in (sel.get("final") or {}).get(dd["format"], []) + route.get(dd["format"], []):
-        if e in ok:
-            return e
-    return sorted(ok)[0] if ok else None
 
 
 def ocr_bbox(boxes, text, span):
@@ -222,34 +210,25 @@ def infer_clients(docs, head=400, roster=None):
     """문서 고객 라벨(다중 가능) — d['clients'](증거 강도 내림차순 목록) + d['client'](= clients[0],
     단일 필드를 쓰는 호출자·검색 경로용 1순위)를 채운다.
 
-    (1) 전체 본문(머리 400자만이 아니라)에서 알려진
-    고객 이름·별칭이 — ⓐ 2회 이상 나오거나 ⓑ 제목/첫 head자 안에 한 번이라도 나오면(잡음 가드 — 본문 뒤쪽 1회
-    등장만으로는 "같이 언급된 제3자"와 구분 안 됨) '증거 있음'으로 본다. 등장 횟수는 단어 경계·한글
-    조사 인식 매칭(ST.name_hits·_name_pat, match_clients·expand_query와 같은 규칙)으로 센다 —
+    전체 본문(머리 400자만이 아니라)에서 알려진 고객 이름·별칭이 — ⓐ 2회 이상 나오거나 ⓑ 제목/첫 head자 안에
+    한 번이라도 나오면(잡음 가드 — 본문 뒤쪽 1회 등장만으로는 "같이 언급된 제3자"와 구분 안 됨) '증거 있음'으로 본다.
+    등장 횟수는 단어 경계·한글 조사 인식 매칭(ST.name_hits·_name_pat, match_clients·expand_query와 같은 규칙)으로 센다 —
     경계 없는 substring count는 짧은 별칭(예 "MSD")이 "MSDS" 안에서도 걸린다.
-    증거 있는 고객이 여럿이면 전부 clients에, 증거 강한 순(제목/머리
-    등장 먼저 · 그다음 등장 횟수 · 동점은 이름순, 결정적)으로 담는다. meta_confirmed 문서는 자기 확정 고객이
-    항상 clients[0](1순위) — 본문에 다른 알려진 고객이 같이 나오면 뒤에 더한다(그 문서의 2번째 이하 라벨).
-    (2) 그래도 clients가 비면 제품 코드 접두어(MRH-MAB-01 → MRH)를 다른 문서에서 그 고객과 함께 나온 것으로
-    배워 채움(client_src='product') — 그대로, clients에도 반영.
-    알려진 고객 = 교차 확인된 고객 + 고객 명부(roster, 기본 T._aliases() — stack.json client_aliases·CLIENT_ROSTER·
-    GLOSSARY_DIR org_client) + 주요 바이오·제약사 공개 이름 seed(pipeline.transform.structure.client_roster.seed_roster())
-    합집합 — roster를 명시하면(시험 등) seed는 안 더함.
+    증거 있는 고객은 전부 clients에, 증거 강한 순(제목/머리 등장 먼저 · 그다음 등장 횟수 · 동점은 이름순, 결정적)으로 담는다.
+    알려진 고객 = 고객 명부(roster, 기본 T._aliases() — stack.json client_aliases·CLIENT_ROSTER·GLOSSARY_DIR org_client)
+    + 주요 바이오·제약사 공개 이름 seed(pipeline.transform.structure.client_roster.seed_roster()) 합집합 — roster를
+    명시하면(시험 등) seed는 안 더함.
     ponytail: 알려진 고객 수 × 문서 전체 길이 스캔(O(roster×len(text))) — 명부가 아주 커지면 아호코라식 등으로."""
     if roster is None:
         roster = dict(T._aliases())
         for c, al in ST.seed_roster().items():
             roster[c] = sorted(set(roster.get(c, [])) | set(al))
-    known = {d["client"]: [] for d in docs if d.get("meta_confirmed") and d.get("client")}
-    known.update({c: list(a) for c, a in roster.items()})
     for d in docs:
         text = d.get("full_text") or ""
         head_text = text[:head]
         scored = []
-        for c, al in known.items():
-            names = [n for n in [c] + al if n]
-            if not names:
-                continue
+        for c, al in roster.items():
+            names = [n for n in [c, *al] if n]
             cnt = sum(ST.name_hits(n, text) for n in names)  # 경계 인식 카운트(raw substring 아님, 원문 그대로 — 공백은 name_hits가 처리)
             if cnt == 0:
                 continue
@@ -257,23 +236,9 @@ def infer_clients(docs, head=400, roster=None):
             if cnt >= 2 or in_head:  # 잡음 가드 — 뒤쪽 1회 등장만으로는 안 채움
                 scored.append(((1 if in_head else 0, cnt), c))
         scored.sort(key=lambda x: (-x[0][0], -x[0][1], x[1]))  # 제목/머리 먼저 · 횟수 내림 · 이름 오름(결정적)
-        hits = [c for _, c in scored]
-        primary = d.get("client")
-        if not primary and hits:
-            primary = hits[0]
-            d["client"], d["client_src"] = primary, "text"
-        if primary or hits:
-            d["clients"] = ([primary] if primary else []) + [c for c in hits if c != primary]
-    pre = {}
-    for d in docs:
-        for code in {m.group(0) for m in PRODUCT_CODE_RE.finditer(d.get("full_text") or "")} if d.get("client") else ():
-            pre.setdefault(code.split("-")[0], set()).add(d["client"])
-    for d in docs:
-        code = (d.get("contract") or {}).get("product_code")
-        if not d.get("client") and code and len(pre.get(code.split("-")[0], ())) == 1:
-            cl = next(iter(pre[code.split("-")[0]]))
-            d["client"], d["client_src"] = cl, "product"
-            d["clients"] = [cl] + [c for c in d.get("clients", []) if c != cl]
+        if scored:
+            d["clients"] = [c for _, c in scored]
+            d["client"], d["client_src"] = d["clients"][0], "text"
 
 
 def warn_if_no_client_roster(docs):
@@ -424,7 +389,6 @@ def main(argv=None):
     ap.add_argument("--embed", default="api", choices=["api", "none"])
     ap.add_argument("--chunk", default=None, help="기본 = stack.json chunk(없으면 structure)")
     ap.add_argument("--stack", default=None, help="엔진 구성 파일(PC 실험·시험용 — 비우면 설정 common.paths.stack_file)")
-    ap.add_argument("--no-rep", action="store_true", help="대표 파싱(output/parse/_rep) 대신 선정 엔진을 문서마다 고름(단계 1 실험용)")
     ap.add_argument("--images-dir", default=None, help="그림 기록 index.jsonl 폴더(L1, 기본 = --parse-dir/_images) — 없으면 그림 청크 0건")
     ap.add_argument("--out", default="output/edw/bundle")
     a = ap.parse_args(argv)
@@ -433,21 +397,11 @@ def main(argv=None):
     t0 = time.time()
     pd = Path(a.parse_dir)
     fig_by_doc = load_figures(a.images_dir or (pd / "_images"))  # 그림 기록 → 문서별 그림 청크
-    use_rep = not a.no_rep and (pd / "_rep" / "index.json").exists()  # 단계 2: 고정 스택의 대표 파싱 결과만
-    reps = {}
-    if use_rep:  # 파싱 모듈 인계 = _rep 폴더 하나(형식·쪽 수·교차 확인·원본 정보 포함, docs/architecture.md)
-        for r in json.loads((pd / "_rep" / "index.json").read_text(encoding="utf-8"))["docs"]:
-            f = pd / "_rep" / f"{r['doc']}.json"
-            if r.get("engine") and f.exists():
-                reps[r["doc"]] = json.loads(f.read_text(encoding="utf-8"))
-    if use_rep and all("meta" in (x.get("rep") or {}) for x in reps.values()):
-        items = [(doc, {"format": x["rep"]["format"], "pages": x["rep"].get("pages")}) for doc, x in sorted(reps.items())]
-        route = sel = {}
-    else:  # 예전 대표 결과·단계 1 실험: qa.json·엔진별 결과에서
-        qa = json.loads((pd / "qa.json").read_text(encoding="utf-8"))
-        items = sorted(qa["docs"].items())
-        route = json.loads((pd / "route.json").read_text(encoding="utf-8")) if (pd / "route.json").exists() else {}
-        sel = json.loads((pd / "selection.json").read_text(encoding="utf-8")) if (pd / "selection.json").exists() else {}
+    reps = {}  # 파싱 모듈 인계 = _rep 폴더 하나(형식·쪽 수·교차 확인·원본 정보 포함)
+    for r in json.loads((pd / "_rep" / "index.json").read_text(encoding="utf-8"))["docs"]:
+        f = pd / "_rep" / f"{r['doc']}.json"
+        if r.get("engine") and f.exists():
+            reps[r["doc"]] = json.loads(f.read_text(encoding="utf-8"))
     src = Path(a.src)
     n_fig_dropped = 0  # 빈 VLM 그림은 청크를 만들지 않음
 
@@ -461,23 +415,14 @@ def main(argv=None):
                 r = json.loads(line)
                 if r.get("file_name") and r.get("key"):
                     _manifest_keys[r["file_name"]] = r["key"]
-    docs, chunks, n_sum, seen_sha = [], [], {"llm": 0, "lead": 0}, {}
+    docs, chunks, n_sum, seen_sha = [], [], {"lead": 0}, {}
     progress = contextlib.ExitStack()  # 60초마다 run.progress(처리한 문서/전체)
-    progress.enter_context(runtrace.Progress(total=len(items), done=lambda: len(docs), unit="doc"))
-    for doc, dd in items:
-        if use_rep:
-            raw = reps.get(doc)
-            if raw is None:
-                continue
-            if not (src / doc).exists() and not (raw.get("rep") or {}).get("source"):
-                continue  # 원본도 원본 정보(rep.source)도 없음
-            eng, folder = raw["rep"]["engine"], "_rep"
-        else:
-            eng = pick_engine(doc, dd, sel, route)
-            if not eng or not (src / doc).exists():
-                continue
-            raw, folder = json.loads((pd / eng / f"{doc}.json").read_text(encoding="utf-8")), eng
-        text, _ = S.load_parse_doc(pd, folder, doc)
+    progress.enter_context(runtrace.Progress(total=len(reps), done=lambda: len(docs), unit="doc"))
+    for doc, raw in sorted(reps.items()):
+        if not (src / doc).exists() and not (raw.get("rep") or {}).get("source"):
+            continue  # 원본도 원본 정보(rep.source)도 없음
+        eng = raw["rep"]["engine"]
+        text, _ = S.load_parse_doc(pd, "_rep", doc)
         if not text.strip():
             continue
         ab = lead_summary(text)
@@ -553,11 +498,11 @@ def main(argv=None):
                 seq += 1
             for c in [] if rows is not None else S.chunk_all({doc: text}, a.chunk, {doc: eng}):
                 m = c["meta"]
-                page = m["page"] or (1 if dd.get("pages") == 1 else None)  # 한 쪽짜리 문서는 1
+                page = m["page"] or (1 if raw["rep"].get("pages") == 1 else None)  # 한 쪽짜리 문서는 1
                 bbox = None
                 if raw.get("boxes"):
                     bbox = ocr_bbox(raw["boxes"], text, m["span"])
-                elif dd["format"] == ".pdf_text" and orig and page:  # 글자 PDF 위치는 원본 그 쪽에서 — 쪽·원본을 모르면 비워 둠
+                elif raw["rep"]["format"] == ".pdf_text" and orig and page:  # 글자 PDF 위치는 원본 그 쪽에서 — 쪽·원본을 모르면 비워 둠
                     bbox = pdf_bbox(str(orig), page, c["text"])
                 toks = tokens(c["text"])
                 chunks.append(
@@ -622,7 +567,7 @@ def main(argv=None):
         "created": time.strftime("%Y-%m-%d %H:%M:%S"),
         "stack": stack.get("name"),
         "stack_conf": stack,
-        "source": "rep" if use_rep else "selected",
+        "source": "rep",
         "embed": a.embed,
         "embed_model": C.cfg().models.embed.model if a.embed == "api" else a.embed,
         "dim": dim,
@@ -630,7 +575,6 @@ def main(argv=None):
         "summary": n_sum,
         "docs": len(docs),
         "chunks": len(chunks),
-        "engines": sorted({d.get("parse_engine") or "rep" for d in docs}),
         "bbox": sum(1 for c in chunks if c["bbox"]),
         "fig_chunks": sum(1 for c in chunks if c.get("image_id")),
         "figure_chunks_dropped": n_fig_dropped,

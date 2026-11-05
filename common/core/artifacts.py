@@ -79,7 +79,6 @@ LAYER_CODE = {
         "pipeline/transform/structure/__init__.py",
         "pipeline/transform/structure/gold_bundle.py",
         "pipeline/transform/structure/chunking.py",
-        "pipeline/transform/structure/draft_terms.py",
         "pipeline/transform/structure/client_roster.py",
     ],
     "r": [
@@ -102,6 +101,7 @@ NOT_LAYER = (
     "pipeline/transform/structure/__init__.py",  # 빈 파일 — s 층 목록에는 따로 적어 둠
     "pipeline/transform/structure/roster_from_edw.py",
     "pipeline/transform/structure/glossary_suggest.py",
+    "pipeline/transform/structure/draft_terms.py",  # 묶음 밖 용어 초안 도구
 )
 # 지문 계산에서 따라가지 않는 common 파일·폴더(결과와 무관 — 기록·DB 연결·표 정의·설정 도구). 따라가면 로그 → DB 기록 → 표 정의로
 # 이어져 DB 표 칸 하나만 고쳐도 모든 층 지문이 바뀐다. 설정 모델(config/settings.py)은 기본값이 결과를 바꿀 수 있어, store/pg.py는 검색(r)이 벡터 글자(vec)를 만들어 그대로 둔다.

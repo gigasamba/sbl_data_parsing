@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""파싱 채점 — 엔진 결과를 재고 합격선으로 판정 → <parse>/qa.json · route.json · selection.json · parse_summary.json.
+"""파싱 채점 — 엔진 결과를 재고 합격선으로 판정 → <parse>/qa.json · route.json · parse_summary.json.
 
 정답 우선순위(문서별): truth(PC 가상 문서) → answer_key(사람 정답지, 값만) → native(그 형식의 원본 구조 파서 —
 그 문서 비교에서는 제외) → consensus(인식 계열 여럿이 합의한 수치, 참고) → none. 정답 종류마다 지표가 다르다:
@@ -525,26 +525,6 @@ def build_route(agg, qa_docs, exts):
     return route
 
 
-def flags(qa_docs):
-    hits = []
-    for doc, dd in qa_docs.items():
-        chars_by = {e: m.get("chars", 0) for e, m in dd["engines"].items()}
-        max_chars = max(chars_by.values(), default=0)
-        ko_vals = [m["ko_ratio"] for m in dd["engines"].values() if m.get("ko_ratio") is not None]
-        ko_med = statistics.median(ko_vals) if ko_vals else 0
-        for eng, m in dd["engines"].items():
-            if m.get("chars", 0) < MIN_OK_CHARS and max_chars > 500:
-                hits.append((doc, eng, "F1"))
-            lr = m.get("len_ratio")
-            if lr is not None and (lr < 0.5 or lr > 2.0):
-                hits.append((doc, eng, "F2"))
-            if (m.get("garbage") or 0) > 0.05:
-                hits.append((doc, eng, "F3"))
-            if ko_med and m.get("ko_ratio", 0) < ko_med * 0.5:
-                hits.append((doc, eng, "F4"))
-    return hits
-
-
 def run(parse_dir, src_dir, truth_path, akey_dir, prev_docs=None):
     runs, unavailable = {}, {}
     for line in (parse_dir / "runs.jsonl").read_text(encoding="utf-8").splitlines():
@@ -780,183 +760,10 @@ def parse_summary(qa, src_dir=None):
     return {"types": rows, "total": total, "engines": engines}
 
 
-def summary_md(ps):
-    """parse_summary → 마크다운 표."""
-    md = [
-        "| 타입 | 지원 문서 | 수집 성공(엔진 1개 이상) | 정확도 95% 이상 | 평균 정확도(문서별 최고 엔진) | 판정 불가 | 100% 미만 문서 | ⚠ 모수 적음(성공 엔진·독립 계열 ≤2) |",
-        "|---|---|---|---|---|---|---|---|",
-    ]
-    for t, r in ps["types"].items():
-        md.append(
-            f"| {t} | {r['docs']} | {r['collected']}/{r['docs']} | **{r['full']}/{r['docs']}** | "
-            + (f"{r['mean_acc']:.3f}" if r["mean_acc"] is not None else "—")
-            + f" | {len(r['unjudged'])} | {', '.join(r['partial'][:5]) or '—'} | {', '.join(r.get('low_n', [])[:5]) or '—'} |"
-        )
-    tt = ps["total"]
-    md.append(
-        f"| **합계** | {tt['supported_docs']} | {tt['collected']}/{tt['supported_docs']} | **{tt['full']}/{tt['supported_docs']}** | "
-        + (f"{tt['mean_acc']:.3f}" if tt["mean_acc"] is not None else "—")
-        + f" | {tt['supported_docs'] - tt['judged'] - (tt['supported_docs'] - tt['collected'])} | | {tt.get('low_n', 0)} |"
-    )
-    md += ["", f"**{tt['line']}**"]
-    if tt["unsupported"]:
-        md.append(f"- 지원 안 되는 형식(처리 엔진 없음): {', '.join(tt['unsupported'][:20])}")
-    md += [
-        "",
-        "정확도 = 값 재현율(기준: 정답 → 사람 정답지 → 원본 구조 파서), 이미지 실데이터는 인식 계열 합의 수치 재현율. 문서 정확도 = 그 문서에서 가장 잘 뽑은 엔진. "
-        "판정 불가 = 수집은 됐으나 기준점이 없음(사람 검토 대상).",
-    ]
-    return md
-
-
-VLM_ENV = ("VLM_", "LLM_")  # 서버 모델 연결 설정 — 개발 PC에서 비어 있어 못 돈 엔진은 '문제'가 아니라 '서버에서 추가'
-
-
-def select_final(qa, per_type=3, target=10, tol=0.05):
-    """실데이터 파싱에 쓸 엔진 ~target개 — 형식마다 2~3개(속도·정확도).
-    정확도(문서별) = 값 재현율(정답·사람 정답지·원본 파서 기준) → 없으면 교차 재현율(다른 계열 엔진 2개+가 함께 뽑은 유의미 토큰 중 뽑은 비율).
-    기준점 있는 문서의 실패·빈 결과 = 0. 형식별 후보 = 최고 정확도 - tol 이내 → 정확도(0.01 단위) 내림차순, 같으면 쪽당 초 오름차순.
-    전체 선정 = 형식마다 2개가 찰 때까지 여러 형식에 걸친 엔진부터, 남으면 3번째(target까지)."""
-    unavail = (qa.get("meta") or {}).get("unavailable") or {}
-    vlm = {e: w for e, w in unavail.items() if any(k in w for k in VLM_ENV)}
-    stats = defaultdict(lambda: defaultdict(lambda: {"acc": [], "ok": 0, "n": 0, "spp": [], "basis": set()}))
-    for d in qa["docs"].values():
-        t, pages = d["format"], d.get("pages") or 1
-        for e, m in d["engines"].items():
-            if e in unavail:
-                continue
-            s = stats[t][e]
-            s["n"] += 1
-            s["ok"] += bool(m.get("ok"))
-            a = doc_accuracy(m, d.get("ref"))
-            if a is not None:
-                s["acc"].append(a)
-                s["basis"].add(
-                    "교차 재현율"
-                    if m.get("cross_recall") is not None
-                    else "계열 합의 재현율"
-                    if m.get("consensus_recall") is not None
-                    else "값 재현율(원본 파서)"
-                )
-            elif not m.get("ok") and d.get("ref") != "none":
-                s["acc"].append(0.0)
-            if m.get("ok") and m.get("sec") is not None:
-                s["spp"].append(m["sec"] / pages)
-    cand, issues, ranked_all = {}, [], {}
-    for t, by in sorted(stats.items()):
-        rows = []
-        for e, s in by.items():
-            acc = sum(s["acc"]) / len(s["acc"]) if s["acc"] else None
-            spp = statistics.median(s["spp"]) if s["spp"] else None
-            rows.append(
-                {
-                    "engine": e,
-                    "acc": round(acc, 4) if acc is not None else None,
-                    "ok_rate": round(s["ok"] / s["n"], 4),
-                    "sec_page": round(spp, 3) if spp is not None else None,
-                    "basis": "·".join(sorted(s["basis"])) or "—",
-                    "n": s["n"],
-                }
-            )
-            if s["ok"] < s["n"]:
-                issues.append({"engine": e, "type": t, "issue": f"실패 {s['n'] - s['ok']}/{s['n']}건"})
-            elif acc is not None and acc < 0.9:
-                issues.append({"engine": e, "type": t, "issue": f"정확도 {acc:.2f}(부분 추출)"})
-        ok_rows = [r for r in rows if r["acc"] is not None and r["ok_rate"] >= 0.5]
-        best = max((r["acc"] for r in ok_rows), default=None)
-        near = [r for r in ok_rows if best is not None and r["acc"] >= best - tol]
-        order = lambda r: (-round(r["acc"], 2), r["sec_page"] if r["sec_page"] is not None else 9e9, r["engine"])
-        near.sort(key=order)
-        cand[t] = near[:per_type]
-        ranked_all[t] = [r["engine"] for r in sorted(ok_rows, key=order)]
-    cover = Counter(r["engine"] for rs in cand.values() for r in rs)
-    selected = []
-    for need in (2, per_type):
-        for _t, rs in cand.items():
-            while sum(r["engine"] in selected for r in rs) < min(need, len(rs)):
-                if need > 2 and len(selected) >= target:
-                    break
-                pool = [r for r in rs[:need] if r["engine"] not in selected] or [
-                    r for r in rs if r["engine"] not in selected
-                ]  # 상위 need개 안에서 먼저
-                pick = min(pool, key=lambda r: (-cover[r["engine"]], rs.index(r)))
-                selected.append(pick["engine"])
-    # 형식별 최종 담당 = 선정 엔진 중 그 형식 순위가 가장 높은 것(주) + 다음(예비) — 모든 형식이 덮이는지 확인
-    final = {t: [e for e in ranked_all.get(t, []) if e in selected][:2] for t in stats}
-    uncovered = sorted(t for t, es in final.items() if not es)
-    # 추천도 = 형식마다 순위 점수(1위 3 · 2위 2 · 3위 1) 합 + 주 담당 형식 수 — 보고서 표 정렬 기준(선정 엔진 먼저)
-    score = Counter()
-    for _t, es in ranked_all.items():
-        for i, e in enumerate(es[:3]):
-            score[e] += 3 - i
-    for es in final.values():
-        if es:
-            score[es[0]] += 1
-    sel = sorted(
-        (
-            {
-                "engine": e,
-                "score": score[e],
-                "types": [t for t, rs in cand.items() if any(r["engine"] == e for r in rs)],
-                "primary": [t for t, es in final.items() if es and es[0] == e],
-                "backup": [t for t, es in final.items() if len(es) > 1 and es[1] == e],
-            }
-            for e in selected
-        ),
-        key=lambda x: (-x["score"], x["engine"]),
-    )
-    engines_all = {e for by in stats.values() for e in by} | set(unavail)
-    recommend = sorted(engines_all, key=lambda e: (e not in selected, -score[e], e))
-    for e, w in unavail.items():
-        if e not in vlm:
-            issues.append({"engine": e, "type": "전체", "issue": "미설치·미설정: " + w[:80]})
-    return {
-        "rule": select_final.__doc__.split("\n", 1)[1].strip(),
-        "types": cand,
-        "selected": sel,
-        "final": final,
-        "uncovered": uncovered,
-        "recommend": recommend,
-        "score": dict(score),
-        "excluded_vlm": [{"engine": e, "why": w[:100]} for e, w in sorted(vlm.items())],
-        "issues": sorted(issues, key=lambda x: (x["engine"], x["type"])),
-    }
-
-
 def write_summary(qa, src_dir, out_dir):
     ps = parse_summary(qa, src_dir)
     (Path(out_dir) / "parse_summary.json").write_text(json.dumps(ps, ensure_ascii=False, indent=1), encoding="utf-8")
-    (Path(out_dir) / "selection.json").write_text(json.dumps(select_final(qa), ensure_ascii=False, indent=1), encoding="utf-8")
     return ps
-
-
-def _fmt(v, w=7):
-    return f"{v:{w}.3f}" if isinstance(v, (int, float)) else f"{'—':>{w}}"
-
-
-def print_console(qa):
-    print("\n엔진 × 형식군 — ok_rate · cer · value_recall · sec_mean")
-    print(f"{'engine':22s} {'group':7s} {'ok_rate':>8s} {'cer':>8s} {'val_recall':>11s} {'sec':>8s}")
-    for eng in sorted(qa["engines"]):
-        for grp in ("native", "image"):
-            row = qa["engines"][eng].get(grp)
-            if row:
-                print(
-                    f"{eng:22s} {grp:7s} {_fmt(row.get('ok_rate'), 8)} {_fmt(row.get('cer'), 8)} "
-                    f"{_fmt(row.get('value_recall'), 11)} {_fmt(row.get('sec'), 8)}"
-                )
-
-
-def print_flags(qa_docs):
-    hits = flags(qa_docs)
-    by_flag = defaultdict(list)
-    for doc, eng, f in hits:
-        by_flag[f].append(f"{doc}/{eng}")
-    print(f"\n참조 없는 문서 신호(F1-F4) {len(hits)}건")
-    for f in sorted(by_flag):
-        ex = by_flag[f][:10]
-        more = f" 외 {len(by_flag[f]) - 10}건" if len(by_flag[f]) > 10 else ""
-        print(f"  {f}: {len(by_flag[f])}건 — {', '.join(ex)}{more}")
 
 
 def main():
@@ -989,11 +796,8 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "qa.json").write_text(json.dumps(qa, ensure_ascii=False, indent=1), encoding="utf-8")
     (out_dir / "route.json").write_text(json.dumps(route, ensure_ascii=False, indent=1), encoding="utf-8")
-    ps = write_summary(qa, Path(a.src), out_dir)
-    print("\n" + "\n".join(summary_md(ps)))
-    print_console(qa)
-    print_flags(qa["docs"])
-    print(f"\nqa.json · route.json → {out_dir}")
+    write_summary(qa, Path(a.src), out_dir)
+    print(f"[parse_qa] qa.json · route.json · parse_summary.json → {out_dir}", flush=True)
 
 
 if __name__ == "__main__":

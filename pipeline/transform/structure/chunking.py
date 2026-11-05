@@ -6,7 +6,7 @@ from pathlib import Path
 
 from common.core.meaning import strip_page_numbers
 from common.core.repfmt import _SECTION, locate  # noqa: F401 — 쪽·줄 위치 규칙(파싱 결과 형식)
-from pipeline import config as pc  # pipeline 칸 CHUNK_*·PAGE_CHUNK_MAX
+from pipeline import config as pc  # pipeline 칸 CHUNK_*
 
 RE_ID = re.compile(r"\b[A-Z]{1,4}-\d{2,}(?:-\d+)?\b")
 
@@ -27,63 +27,6 @@ def load_parse_doc(parse_dir, engine, doc):
         if tt and tt not in text:
             text = text + "\n" + tt
     return text, d.get("facts") or []
-
-
-def chunk_fixed512(doc, text, step=None, overlap=None):
-    """step·overlap 기본값은 CHUNK_SIZE·CHUNK_OVERLAP(없으면 512·64) — 인자로 청크 길이를 바꿔 볼 수 있게."""
-    st = pc.cfg().transform.structure  # CHUNK_SIZE는 기본 None — 청커마다 기본이 다름, CHUNK_OVERLAP 기본 64
-    step = step if step is not None else int(st.chunk_size if st.chunk_size is not None else 512)
-    overlap = overlap if overlap is not None else int(st.chunk_overlap)
-    if not text:
-        return []
-    out, n, i = [], 0, 0
-    while i < len(text):
-        out.append({"id": f"{doc}::fixed512::{n}", "doc": doc, "text": text[i : i + step], "pos": i})
-        n += 1
-        i += step - overlap
-    return out
-
-
-_SENT_SPLIT = re.compile(r"(?<=[.!?。！？])\s+|\n+")
-
-
-def _sentences(text):
-    return [s for s in _SENT_SPLIT.split(text) if s.strip()]
-
-
-def chunk_recursive(doc, text, target=None):
-    """문단 → 줄 → 문장 순으로 쪼개 target자까지 합친다(retrieve_local.py 구조 청킹 아이디어 확장).
-    target 기본값은 CHUNK_SIZE(없으면 800) — chunk_fixed512와 같은 규칙."""
-    cs = pc.cfg().transform.structure.chunk_size  # 기본 None → 800
-    target = target if target is not None else int(cs if cs is not None else 800)
-    if not text:
-        return []
-    paras = [p for p in text.split("\n\n") if p.strip()] or [text]
-    out, n, buf, buf_start, cursor = [], 0, "", 0, 0
-
-    def flush():
-        nonlocal buf, n
-        if buf.strip():
-            out.append({"id": f"{doc}::recursive::{n}", "doc": doc, "text": buf.strip(), "pos": buf_start})
-            n += 1
-        buf = ""
-
-    for para in paras:
-        idx = text.find(para, cursor)
-        if idx == -1:
-            idx = cursor
-        units = [para] if len(para) <= target else (_sentences(para) or para.split("\n") or [para])
-        upos = idx
-        for u in units:
-            if buf and len(buf) + len(u) > target:
-                flush()
-            if not buf:
-                buf_start = upos
-            buf += ("\n" if buf else "") + u
-            upos += len(u)
-        cursor = idx + len(para)
-    flush()
-    return out
 
 
 _HEADING = re.compile(r"^#{1,6}\s+\S")
@@ -132,22 +75,21 @@ def _fig_mask(lines):
     return mask
 
 
-def chunk_structure(doc, text, target=None, split_tables=None):
+def chunk_structure(doc, text):
     """제목(마크다운 heading) 경계 + 표 블록(연속된 '|'·탭 줄)은 통째로 한 청크.
-    target 기본값은 CHUNK_SIZE(없으면 800). CHUNK_TABLE=rows면 표가 CHUNK_TABLE_ROWS(기본 25)행보다
+    목표 길이 = CHUNK_SIZE(없으면 800). CHUNK_TABLE=rows면 표가 CHUNK_TABLE_ROWS(기본 25)행보다
     크면 머리글(+구분 줄)을 반복하며 행 묶음으로 쪼개고 행마다 '머리글: 값' 쌍을 덧붙인다(BM25·ID 검색용) ·
     머리글 없이 이어지는 다음 조각(쪽 넘김 — 빈 줄 뒤 열 수가 같은 표)은 쪼개기 전에 앞 표 몸통에 합친다 ·
     그림 블록은 절대 안 쪼갬. 표 청크의 meta(제목·시트·쪽)는 chunk_all의 locate()가 위치로 그대로 채움."""
     st = pc.cfg().transform.structure
-    target = target if target is not None else int(st.chunk_size if st.chunk_size is not None else 800)
+    target = int(st.chunk_size if st.chunk_size is not None else 800)
     if not text:
         return []
     lines = text.split("\n")
     starts = [0] * (len(lines) + 1)  # starts[i] = lines[:i] 합친 글자 수
     for k, ln in enumerate(lines):
         starts[k + 1] = starts[k] + len(ln) + 1
-    if split_tables is None:  # 인자 우선(스레드 안전) — 없으면 env CHUNK_TABLE=rows
-        split_tables = st.chunk_table == "rows"
+    split_tables = st.chunk_table == "rows"
     rows_per = int(st.chunk_table_rows)  # 기본 25
     fig = _fig_mask(lines) if split_tables else None
     out, n, buf, buf_start, i = [], 0, [], 0, 0
@@ -218,102 +160,7 @@ def chunk_structure(doc, text, target=None, split_tables=None):
     return out
 
 
-def chunk_sentence3(doc, text, window=3, stride=2):
-    if not text:
-        return []
-    sents = _sentences(text)
-    if not sents:
-        return []
-    out, n = [], 0
-    for i in range(0, len(sents), stride):
-        w = sents[i : i + window]
-        if not w:
-            break
-        out.append({"id": f"{doc}::sentence3::{n}", "doc": doc, "text": " ".join(w), "pos": i})
-        n += 1
-        if i + window >= len(sents):
-            break
-    return out
-
-
-_PAGE_SPLIT = re.compile(r"\x0c|\n(?=(?:page|Page|PAGE|쪽)\s*\d)")
-
-
-def _page_chunk_cap():
-    """PAGE_CHUNK_MAX(문자) — 없으면 CHUNK_SIZE×4(설정돼 있으면) 아니면 4000. 쪽 청크가 임베딩 API 입력 한도를
-    넘지 않게 쪼개는 기준(밀집 PDF의 큰 쪽에서 HTTP 400 방지)."""
-    st = pc.cfg().transform.structure  # 둘 다 기본 None — "0"도 '있음'이므로 is not None
-    if st.page_chunk_max is not None:
-        return int(st.page_chunk_max)
-    return int(st.chunk_size) * 4 if st.chunk_size is not None else 4000
-
-
-def _wrap(units, cap, sep):
-    """단위(문단·줄)를 이어붙여 cap 이하 조각으로. 단위 하나가 cap보다 크면 그 단위 혼자 한 조각(쪼개는 건 호출부 몫)."""
-    out, buf, blen = [], [], 0
-    for u in units:
-        if blen and blen + len(u) + len(sep) > cap:
-            out.append(sep.join(buf))
-            buf, blen = [], 0
-        buf.append(u)
-        blen += len(u) + len(sep)
-    if buf:
-        out.append(sep.join(buf))
-    return out
-
-
-def _split_page(text, cap):
-    """cap(문자)보다 큰 쪽 본문 → 문단(빈 줄) 경계로 쪼갠 뒤, 그래도 cap보다 큰 조각은 줄 경계로 다시 쪼갠다.
-    그림 블록([그림 …]~빈 줄)은 cap을 넘어도 절대 안 쪼갬(구조 청커 _fig_mask와 같은 규칙)."""
-    out = []
-    for part in _wrap(text.split("\n\n"), cap, "\n\n"):
-        if len(part) <= cap or part.lstrip().startswith("[그림 "):
-            out.append(part)
-        else:
-            out.extend(_wrap(part.split("\n"), cap, "\n"))
-    return [o.strip() for o in out if o.strip()]
-
-
-def chunk_page(doc, text):
-    """쪽마다 한 청크 — cap(=_page_chunk_cap())보다 크면 문단·줄 경계로 연속된 부분 청크(::part)로 쪼갠다.
-    cap 이하인(대부분) 쪽은 그대로 한 청크."""
-    if not text:
-        return []
-    cap = _page_chunk_cap()
-    parts = [p for p in _PAGE_SPLIT.split(text) if p.strip()] or [text]
-    out, cursor = [], 0
-    for n, p in enumerate(parts):
-        idx = text.find(p, cursor)
-        if idx == -1:
-            idx = cursor
-        pstrip = p.strip()
-        if len(pstrip) <= cap:
-            out.append({"id": f"{doc}::page::{n}", "doc": doc, "text": pstrip, "pos": idx})
-        else:
-            sub_cursor = idx
-            for pi, sub in enumerate(_split_page(pstrip, cap)):
-                sidx = text.find(sub[:40], max(idx, sub_cursor - 5)) if sub else sub_cursor
-                if sidx == -1:
-                    sidx = sub_cursor
-                out.append({"id": f"{doc}::page::{n}::{pi}", "doc": doc, "text": sub, "pos": sidx})
-                sub_cursor = sidx + len(sub)
-        cursor = idx + len(p)
-    return out
-
-
-def chunk_structure_table(doc, text, target=None):
-    """structure + 큰 표 행 묶음(실험 축 전용) — 인자로 넘김(env 토글은 스레드 안전하지 않음)."""
-    return chunk_structure(doc, text, target, split_tables=True)
-
-
-CHUNKERS = {
-    "fixed512": chunk_fixed512,
-    "recursive": chunk_recursive,
-    "structure": chunk_structure,
-    "sentence3": chunk_sentence3,
-    "page": chunk_page,
-    "structure_table": chunk_structure_table,
-}
+CHUNKERS = {"structure": chunk_structure}
 
 
 def chunk_all(corpus, method, used=None):

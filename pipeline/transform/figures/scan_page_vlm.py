@@ -229,9 +229,3 @@ def pick_pages(n_pages, whole_scan, scan, cap):
 def page_text_pages(doc_path):
     """page_targets() 쪽을 쪽 VLM으로 옮김 → [(쪽 번호, 글, provenance), ...](scan_fill이 그 쪽만 채우게 쪽 번호와 함께)."""
     return transcribe(doc_path, page_targets(doc_path))
-
-
-def page_text(doc_path):
-    """page_text_pages()의 글을 합친 것과 [쪽별 provenance]. 대상 쪽이 없으면 빈 문자열(호출 0)."""
-    pages = page_text_pages(doc_path)
-    return "\n".join(t for _, t, _ in pages if t), [pv for _, _, pv in pages]

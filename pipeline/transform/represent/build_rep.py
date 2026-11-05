@@ -22,6 +22,7 @@ from common.core import span as SP
 from common.core.console import utf8_stdout
 from pipeline import config as pc
 from pipeline.shared.ext_groups import IMG_EXTS
+from pipeline.shared.pdf_kind import doc_pages
 
 
 def _richness(rep_json):
@@ -296,20 +297,6 @@ def _page_agreement(text_a, text_b, min_len=HIDDEN_AGREE_MIN_LEN):
     return round(len(ga & gb) / len(ga | gb), 4)
 
 
-def _doc_page_count(doc_path):
-    """문서의 실제 쪽 수 — \\f(쪽 경계) 개수가 이것과 다르면 중간에 글자 0개(빈) 쪽이 있어 \\f로 나눈 쪽 번호를
-    못 믿는다(빈 쪽이 있으면 뒤 쪽 번호가 밀림). 이미지 파일은 항상 1쪽. 못 세면(손상 등) None — 호출부가 쪽 번호 확정 불가로 처리."""
-    p = Path(doc_path)
-    if p.suffix.lower() != ".pdf":
-        return 1
-    try:
-        import pypdfium2 as pdfium
-
-        return len(pdfium.PdfDocument(str(p)))
-    except Exception:
-        return None
-
-
 def _page_texts(base, doc_path, boxes):
     """base를 실제 쪽 번호별 글로 나눈다:
     1) boxes(엔진 출력의 rep["boxes"] — OCR 엔진만, 박스마다 실제 "page" 번호) 있으면 그걸로 그룹화한다.
@@ -330,7 +317,7 @@ def _page_texts(base, doc_path, boxes):
     parts = base.split("\f")
     if len(parts) == 1:
         return {1: base}
-    n_pages = _doc_page_count(doc_path)
+    n_pages = doc_pages(doc_path)  # 실제 쪽 수 — \f 개수와 다르면 빈 쪽이 있어 쪽 번호를 못 믿음
     if n_pages is not None and len(parts) != n_pages:
         return None  # 쪽 번호 확정 불가 — 건너뜀
     return {i + 1: p for i, p in enumerate(parts)}
@@ -557,13 +544,14 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
         ct = chart_text(doc_path)
         if ct.strip():
             blocks.append(ct)
-    _pt["attachments"] = time.time() - _pt0
+    _pt["charts"] = time.time() - _pt0
+    _pt0 = time.time()
     if "supsub" in feats:
         base, sup_full, n_unmatched = supsub.merge_supsub(base, doc_path)  # 줄만 바꿔 넣고 전체는 rep.post에 따로
         if sup_full.strip():
             info["supsub"] = sup_full
             info["supsub_unmatched"] = n_unmatched
-    _pt["charts"] = time.time() - _pt0
+    _pt["supsub"] = time.time() - _pt0
     _pt0 = time.time()
     if "attachments" in feats:
         from pipeline.transform.represent import mail_attachments as att_mod
@@ -572,7 +560,7 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
         blocks += att_blocks
         info["attachments_parsed"] = att_stats["parsed"]
         info["attachments_cached"] = att_stats["cached"]
-    _pt["supsub"] = time.time() - _pt0
+    _pt["attachments"] = time.time() - _pt0
     info["post_times"] = {k: round(v, 2) for k, v in _pt.items()}
     rep["text"] = base + "\n\n" + "\n\n".join(blocks) if blocks else base
     return info
