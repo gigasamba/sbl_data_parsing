@@ -7,7 +7,7 @@
 - pl-25 DB 스키마 명세 — dev: 검색 DB(gold)·마스터·applog는 구현됨, EDW 쪽 DDL(ParsingMeta 칸 정리)은 DB 담당자 승인·실행 대기(refactor.md C-76).
 - 열린 요건(todo): run_pipeline 지휘만 [rn-05](prd/ops.md#rn-05) · 원본 zip [pl-57](prd/extract.md#pl-57) · 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 확장자 `.hwp` [pl-45](prd/transform.md#pl-45) · 그림 부가 기능 줄이기 [pl-05](prd/transform.md#pl-05) · 전체 e2e [pl-54](prd/ops.md#pl-54) · `gold_status` 칸 쓰기 [pl-55](prd/ops.md#pl-55) · prd 이미지에 settings.yaml 굽기 [op-12](prd/doc.md#op-12) · 판 묶기(잠재 문제) [pl-56](prd/load.md#pl-56).
 - 서버 확인만 남음(dev): parse_document CPU 우선 [rn-03](prd/ops.md#rn-03).
-- 시험 정리(todo): [e2-13](prd/test.md#e2-13) · [e2-15](prd/test.md#e2-15) · [e2-20](prd/test.md#e2-20) · [e2-21](prd/test.md#e2-21).
+- 시험 정리(todo): [e2-13](prd/test.md#e2-13) · [e2-15](prd/test.md#e2-15) · [e2-20](prd/test.md#e2-20).
 
 ## 수집 (extract) — 서버에서 문서 목록을 정하고 받아 오기까지
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -180,7 +180,7 @@
 | 이미지 반입 관문 — `build_ship.sh`로 빌드하고 `selftest_gate.sh`가 종료 코드가 아니라 `[판정]` 줄로 판단(알려진 실패 밖 FAIL 0) | 서버는 반입 시험을 통과한 이미지만 받는다 | done | [e2-08](prd/test.md#e2-08) |  |
 | 코드만 바뀌면 코드 폴더 바꾸기(이미지는 그대로) | 이미지를 다시 만들지 않는다 | done | [e2-08](prd/test.md#e2-08) |  |
 | PC 일반 시험의 알려진 실패 0(`GENERAL_KNOWN_FAIL = {}`, `known_fail.txt` 빔) — 시험은 공용 PG를 읽지 않고, 지운 모듈의 시험은 없다 | 리팩토링 전부터 있던 실패를 없앴다 | done | [e2-11](prd/test.md#e2-11) |  |
-| 옛 오버레이 패치 흔적이 없다 — 버전 읽기(`common/core/fingerprint.py`)에 `common/PATCH_VERSION` 후보 없음, 읽는 곳 없는 `deploy/docker/IMAGE_BASE` 없음(지울지는 사용자가 정함) | `fingerprint.py`는 레이어 지문 파일이라 고치면 서버 문서가 모두 다시 처리된다 — 지문 배치에 | todo | [e2-21](prd/test.md#e2-21) | `fingerprint.py`가 `PATCH_VERSION`을 후보로 읽고, `IMAGE_BASE`가 읽는 곳 없이 남아 있다 |
+| 옛 오버레이 패치 흔적이 없다 — 버전 읽기(`common/core/fingerprint.py`)에 `common/PATCH_VERSION` 후보 없음, 읽는 곳 없는 `deploy/docker/IMAGE_BASE` 없음 | 없어진 길만 읽던 것이 남으면 헷갈린다 | done | [e2-21](prd/test.md#e2-21) |  |
 | 지시서 폴더 찾기(`paths.resolve_agent_dir`)는 있는 폴더 갈래만 본다 | `paths.py`를 고치면 레이어 지문이 모두 바뀌어 다음 지문 배치에 | todo | [e2-15](prd/test.md#e2-15) | 없는 갈래 셋(`resources/prompts/mcp`·`validation/e2e`·`dev_tools/unit_test/fixtures`)과 설명 주석이 남아 있다 |
 | PC 스모크 — 문서 2~3건으로 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색(README §4-4) | 릴리스 전에 사슬 전체를 증명 | done | [e2-01](prd/test.md#e2-01) |  |
 | PC Docker 스모크(`valid_env/docker/smoke_test.sh`)가 검색까지 통과한다 | 이미지 사슬 전체를 PC에서 증명 | todo | [e2-13](prd/test.md#e2-13) | mc-10을 고친 뒤 다시 돌리지 않았다 |

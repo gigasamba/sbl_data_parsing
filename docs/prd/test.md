@@ -39,8 +39,10 @@
 <a id="e2-21"></a>
 ## e2-21 · 옛 오버레이 패치 흔적 정리
 - 이유: 오버레이 패치 길은 없어졌는데 그 길만 읽던 것이 남았다.
-- 할 일: ① `common/core/fingerprint.py` `pipeline_version()`의 `common/PATCH_VERSION` 후보(와 `tests/server/common/test_fingerprint.py`의 그 사례·`keyscan.py` `PIPELINE_VERSION` 설명) — code_fp 파일이라 릴리스 지문 배치에서. ② `deploy/docker/IMAGE_BASE`(+ `.gitattributes` 줄) — 읽는 곳 없음, 지울지 사용자가 정한다.
-- Status: todo
+- 요건: ① 버전 표기 `common/core/fingerprint.py` `pipeline_version()`은 저장소 루트 `VERSION` 하나만 읽는다(`common/PATCH_VERSION` 후보 없음 — `tests/server/common/test_fingerprint.py` 사례 표). ② `deploy/docker/IMAGE_BASE`(읽는 곳 없음)와 그 `.gitattributes` 줄은 없다.
+- 반영: 0.3.0(11-05) — 레이어 지문은 그대로(`fingerprint.py`는 레이어 지문에 들지 않음).
+- 비고: `pipeline/load/publish_parse_result.py`의 설명·`--version` 도움말에 `PATCH_VERSION` 글자가 남아 있다(동작 무관).
+- Status: done
 
 <a id="e2-01"></a>
 ## e2-01 · PC 스모크 — 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색
