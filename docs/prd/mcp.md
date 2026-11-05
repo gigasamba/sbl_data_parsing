@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md)의 카테고리 하나 — 이미지 `mcp-server`. 도구 계약(이름, 입력, 출력, `tools/list` 순서)은 고정이다 — 협의와 새 판으로만 바꾼다([CLAUDE.md](../../CLAUDE.md) §4). 도구별 입출력 표는 [operations/mcp-guide.md](../operations/mcp-guide.md)(시험 `tests/general/mcp/test_mcp_guide.py`가 코드와 대조).
 
-순서: `search` mc-01·mc-16·mc-02·mc-05·mc-19 → 문서 키·기록 mc-10·mc-13·mc-15 → 원문 mc-17 → 다른 도구 mc-06·mc-07·mc-08·mc-18 → 서버 mc-09 → 권한 mc-20 → 코드와 다른 점.
+순서: `search` mc-01·mc-16·mc-02·mc-05·mc-19 → 문서 키·기록 mc-10·mc-13·mc-15 → 원문 mc-17 → 다른 도구 mc-06·mc-07·mc-08·mc-18 → 서버 mc-09 → 권한 mc-20 → 질문 유형 표 mc-21 → 코드와 다른 점.
 
 <a id="mc-01"></a>
 ## mc-01 · `search` 도구 — 적재된 문서에서 근거 찾기
@@ -188,6 +188,22 @@
   5. 도구 계약(이름·입력·출력)은 바꾸지 않는다 — 신원은 머리글로만 받는다.
   6. 호출 감사 기록([ops.md#op-01](ops.md#op-01))에 확인된 신원(agent id·사용자 id)을 남긴다. 토큰·증표 원문은 남기지 않는다.
 - 비고(현재와 다른 점): 코드에 없다. 지금은 공용 토큰 하나(`required.tokens.mcp_token`)로 "허용된 클라이언트인지"만 확인하고, 신원·권한 표·결과 거르기는 없다. 정할 것: agent별 토큰만 할지 사내 로그인 증표까지 할지, 권한 범위의 단위(원천·고객·부서), 검색 DB 거르기 칸(DB 담당자 협의·사람 검토).
+- Status: todo
+
+<a id="mc-21"></a>
+## mc-21 · 질문 유형 표는 쓰는 값만
+
+### 무엇·왜
+쓰지 않는 칸은 고칠 때 헷갈리게 한다.
+
+### 규칙
+1. `mcp_server/services/search/question_type.TYPE_TABLE`은 검색이 실제로 읽는 값만 가진다(지금 읽는 것은 `rank_rules.weights()`의 `aggregate` 판정 — BM25 가중을 표 집계용으로).
+
+### 비고(지금 코드와 다른 점)
+- 표의 `first_tool`·`search` 칸과 `aggregate` 밖 유형의 결과를 아무도 읽지 않는다.
+
+### QA
+- 정할 것: `tests/server/mcp/test_question_type.py`가 남은 칸만 본다.
 - Status: todo
 
 ## 코드와 다른 점 · 지울 코드

@@ -25,6 +25,8 @@
 | DRM·암호 파일 감지 — 감지해서 표시만(`skipped_drm`) | 복호화는 흐름 안에서 하지 않고 수동 명령(`python -m pipeline.extract.protected_docs decrypt`)으로 | done | [pl-02](prd/extract.md#pl-02) |  |
 | 원본 zip은 받은 뒤 풀어서 안의 문서를 파싱한다(`candidate_ready`) — 메일 첨부 zip과 같게(pl-36) | zip 안의 문서도 검색되어야 한다(사용자 11-05) | todo | [pl-57](prd/extract.md#pl-57) | 지금은 '지원하지 않음' 표시만(pl-02) |
 | FAQ 원천 — 질의응답 엑셀을 행 단위로(시트 = FAQ 묶음, 행 하나 = 청크 하나). `FAQ/<uuid>/<파일>`을 FileStorageMap에 등록 | 질의응답을 문서 통째가 아니라 질문 하나 단위로 찾는다 | done | [pl-39](prd/extract.md#pl-39) |  |
+| 같은 밤에 받은 같은 내용 문서는 하나만 파싱한다 — 문서마다 따로 받는(stage) 서버 흐름에서도 이번 실행이 이미 받은 sha256과 같으면 `skipped_dup` · staging 재사용은 내용이 같을 때만(ETag 또는 sha256) | 같은 파일을 두 번 파싱·적재하지 않는다. 크기만 같은 새 판을 옛 파일로 파싱하지 않는다 | todo | [pl-59](prd/extract.md#pl-59) | 같은 내용 거르기는 문서 1건 묶음 안과 ParsingMeta에 끝난 문서만 본다(같은 밤 다른 문서와 같으면 둘 다 파싱). staging 재사용(`download`·`stage_one`)은 크기만 비교한다 |
+| 고르기·받기(extract)는 변환(transform)을 import하지 않는다 — 지원 확장자 목록은 `pipeline/shared`에 · 원본 키 → 원천 이름 규칙은 함수 하나 | ETL 방향을 지킨다(rn-08). 원천 이름이 자리마다 다르면 게시·구조화·건너뜀 기록의 원천이 어긋난다 | todo | [pl-59](prd/extract.md#pl-59) | `candidate_pick`·`filter_and_rotate`가 `transform.parse.engines.registry`를 import. 원천 규칙이 `candidate_pick.source_of`·`_known_source`, `candidate_ready._derive_source_from_key`, 구조화의 키 첫 마디 판정으로 여럿 |
 
 ## 변환 (transform) — 파싱·대표 결과 고르기·그림·구조화
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -57,6 +59,7 @@
 | 명부·사전·원본 해시·매니페스트·엔진 지문은 프로세스마다 한 번만 읽고, 엔진 결과는 자식이 한 번에 쓰고, 1건 중복 확인은 자식 없이 | 결과는 바이트 그대로. 등급 A | done | [pl-49](prd/transform-cleanup.md#pl-49) |  |
 | 결과를 바꾸는 파일은 층 지문 목록에 들고, 기록·DB 표 정의는 지문 계산에서 빠진다. extract → transform → load 방향은 자동 점검(`check_modules` ⑫, 예외 없음) | 빠지면 고쳐도 옛 결과를 다시 쓰고, 넘치면 상관없는 수정에도 재처리 경보가 남. 등급 A | done | [pl-50](prd/transform-cleanup.md#pl-50) |  |
 | `dbtool`에 첫 이관 도구(`dbcompare`·`stamp`)가 없고(0.2.0 배포 뒤), 이미지 의존성에는 앱 코드가 쓰는 패키지만 | 첫 이관 도구와 안 쓰는 패키지는 이미지와 점검 범위만 키운다. 패키지를 빼면 새 이미지 버전 | todo | [pl-53](prd/transform-cleanup.md#pl-53) | `dbcompare`·`stamp`가 있음(0.2.0 배포 대기), `requirements*`에 `google-adk`·`litellm` — 지시서 `agent.py`만 import, 뺄지 미정 |
+| 쪽 수 세기는 함수 하나 — `pdf_kind.doc_pages`와 `vlmcall.page_count`가 같은 규칙 | 쪽 수가 자리마다 다르면 제한 시간·쪽 VLM 상한이 어긋난다. `vlmcall.py`는 엔진 지문에 들어가 사람 검토(등급 A) | todo | [pl-60](prd/transform.md#pl-60) | 두 함수가 따로 있음 |
 
 ## 적재 (load) — 검색 DB(pgvector)·게시·저장 구조·DB 스키마
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -90,6 +93,7 @@
 | 문서 키는 원본 경로 하나 — 검색 DB `doc.file_path` = Object Storage 원본 경로 = EDW `s3_key`(청크는 `doc_id`만), ParsingMeta와 이 값으로 잇는다 | sha256 `doc_key`는 검색 DB에 안 둔다(ParsingMeta `sha256`만) | dev | [pl-25](prd/load-schema.md#pl-25) |  |
 | 원천 시스템별 PG 스키마 5벌(`<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`), 각자 `doc`·`chunk`·BM25 표, `doc_id` 시퀀스는 기준 스키마 하나를 함께 | 원천마다 메타가 다르고 BM25 점수를 섞지 않는다. MCP `source_system` 필수(등급 A) | done | [pl-28](prd/load-schema.md#pl-28) |  |
 | 원천 = 원본 경로(`s3_key`) 첫 마디 — `SFDC`·`CRMS`·`LAS`·`FAQ`(대소문자 무관)이거나 `SFDC-`·`SFDC_`·`CRMS-`·`CRMS_`·`las_`·`LAS_`로 시작하면 그 원천, 아니면 `other`(`gold_bundle`). `faq` 스키마만 `chunk.faq_group` 칸 | `AI.FileStorageMap.source_system` 칸은 읽지 않는다 — 경로만으로 정함 | done | [pl-28](prd/load-schema.md#pl-28) |  |
+| 게시는 EDW 키(`source_system`, `source_key`)가 이미 있는지 먼저 보고, 있으면 올리지 않는다(`--reparse` 목록만 예외) | Object Storage에 EDW 행 없는 고아 객체를 남기지 않는다 | todo | [pl-61](prd/load.md#pl-61) | `apply()`가 올린 뒤 `insert_new`가 키를 본다 — 이미 있는 키면 올린 객체가 고아로 남음 |
 
 ## 검색 MCP (mcp) — AI 클라이언트가 부르는 도구 서버(이미지 `mcp-server`)
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -117,6 +121,7 @@
 | 서버는 `/mcp`(기본 127.0.0.1:8765) 또는 `--stdio`로 뜬다. 내부망 주소만, 0.0.0.0 거부, 루프백이 아니면 `MCP_TOKEN` 필수 + DNS 리바인딩 막기. 서버에서 PG 접속 칸이 비면 시작 거부 | 공용 내부 서비스라 위험한 노출을 거부 | done | [mc-09](prd/mcp.md#mc-09) |  |
 | 과부하 보호 — 동시 8개, 대기 32개(동시 × 4) 넘으면 바로 `busy`, 도구당 30초(`parse_document`는 자기 시간 + 10초) | 늘 떠 있게. `/health`는 예열 중 503, 새 적재는 30초마다 확인 | done | [mc-09](prd/mcp.md#mc-09) |  |
 | 요청 권한 관리 — 머리글(`Authorization`)로 신원을 확인(agent별 토큰 또는 사내 로그인이 서명한 사용자 증표)한 뒤, DB 권한 표로 그 신원이 볼 수 있는 범위만 돌려준다(`search`·원문·`query_edw` 결과 거르기). 도구 계약은 그대로, 감사 기록에 확인된 신원 | 요청에 적힌 user id·agent id는 꾸밀 수 있어 신원 확인이 먼저다. 부서·고객 담당에 따라 볼 문서가 다르다 | todo | [mc-20](prd/mcp.md#mc-20) | 코드에 없다 — 지금은 공용 토큰 하나로 허용 클라이언트인지만 본다. 방식(agent 토큰·사내 로그인)·권한 단위·검색 DB 거르기 칸은 미정 |
+| 질문 유형 표(`question_type.TYPE_TABLE`)는 쓰는 값만 가진다 | 쓰지 않는 칸(첫 도구·검색 설정)은 고칠 때 헷갈리게 한다 | todo | [mc-21](prd/mcp.md#mc-21) | 쓰는 곳은 `rank_rules.weights()`의 `aggregate` 판정 하나뿐(`first_tool`·`search` 칸은 아무도 안 읽음) |
 
 ## 운영 (ops) — 서버 러너(run_pipeline)·실행 관리·종료 정리·계정·모델 가드·설정
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -161,6 +166,8 @@
 | 환경마다 다른 경로·접속은 settings.yaml 필수(코드 기본값 없음) — 컨테이너 안 경로는 이미지 기본값 표 하나만, 호스트 `PATCH_CODE` 기본값 없음 | 사용자 11-02 | done | [op-09](prd/ops-settings.md#op-09) |  |
 | 은퇴한 설정(`common.paths.korean_font`·`eval_sets_dir` 등)은 없다 — 남아 있으면 시작 거부 | 쓰지 않는 칸 | done | [pl-21](prd/ops-settings.md#pl-21) |  |
 | run_pipeline 명령은 아무도 안 읽는 env(`FIG_OCR_BUDGET`·`SERVICE_MASTER_CSV`·`DIVISION_MASTER_CSV`·`PROD_MASTER_CSV`)를 넘기지 않는다 | C-51 | done | [pl-30](prd/ops-settings.md#pl-30) |  |
+| 서버 러너의 컨테이너 명령은 한 도우미가 만든다(`docker exec` · `PYTHONPATH` · 라이브러리 env 같게) · 게시·구조화가 시간 초과면 그 문서의 컨테이너 안 프로세스도 끈다 · 벌 이름 검사는 한 곳 · 스캔 회전 정책은 설정 칸 하나를 컨테이너가 직접 읽는다 · 레인 분류는 받기 단계 안에서(문서마다 따로 `docker exec` 없음) · 분류 캐시는 덧붙여 쓴다 | 명령마다 env가 다르면 같은 코드가 다르게 돈다. 끄지 않은 프로세스는 다음 문서와 CPU·메모리를 다툰다 | todo | [rn-09](prd/ops.md#rn-09) | `parse_cmd`에 `PYTHONPATH`가 없음. 시간 초과 때 끄는 것(`sweep_cmd`)은 파싱만. 스캔 회전 값이 run_pipeline → `stage --no-scan-rotate` → `stage_batch(scan_rotate)` → `filter_and_rotate --no-scan-rotate` 네 겹으로 전달. 분류는 문서마다 `docker exec`, 캐시는 문서마다 파일 전체를 다시 씀 |
+| 문서 1건의 반복 비용을 줄인다 — 원본 sha256은 한 번만 구하고 넘겨 씀 · 적재의 스키마 확인 질의는 하나(UNION) · 설정 파일은 프로세스마다 한 번 읽음 · `--set` 처리(`setarg.apply`)는 무거운 import 전에 | 문서 수천 건에서 같은 일을 되풀이하지 않는다 | todo | [rn-10](prd/ops.md#rn-10) | sha256을 중복 제외·거르기(`_record_skip`·회전 기록)·구조화가 각자 다시 구함. `pgvector_load`가 원천 스키마마다 따로 묻는다. 측정 전 — 줄일 크기는 `perf_report`로 먼저 잰다 |
 
 ## 테스트·평가 (test) — 변경을 어떻게 증명하나
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |

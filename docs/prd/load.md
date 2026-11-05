@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md) 카테고리. [transform.md](transform.md) 다음: EDW 메타(pl-29) → pgvector 적재(pl-07·pl-13·pl-16·pl-51·pl-19) → 게시(silver — pl-09·pl-26) → FAQ 다시 올리기(pl-41) → 정형 DB·문서 대장 없음(pl-08·pl-12) → 마스터 표(pl-38). 저장 구조·DB 스키마는 [load-schema.md](load-schema.md).
 
-순서: pl-29 · pl-07 · pl-13 · pl-16 · pl-51 · pl-19 · pl-09 · pl-26 · pl-41 · pl-08 · pl-12 · pl-38 · pl-56.
+순서: pl-29 · pl-07 · pl-13 · pl-16 · pl-51 · pl-19 · pl-09 · pl-26 · pl-41 · pl-08 · pl-12 · pl-38 · pl-56 · pl-61.
 
 <a id="pl-29"></a>
 ## pl-29 · EDW 고객·원천 메타를 적재 때 붙인다
@@ -187,4 +187,20 @@ FAQ는 판을 잇지 않는다. 새 FAQ가 오면 gold faq를 비우고 FAQ 전�
 
 ### 무엇·왜
 같은 문서의 다른 판은 `s3_key`가 달라 따로 적재된다 — 검색 '최신' 질문에서 옛 판이 위로 올 수 있다. 필요해지면 `created_at`으로 다시 설계한다. 지금 근거의 `version`은 수집 매니페스트 값만, `superseded`는 늘 null([mcp.md#mc-05](mcp.md#mc-05)).
+- Status: todo
+
+<a id="pl-61"></a>
+## pl-61 · 게시는 EDW 키를 먼저 본다
+
+### 무엇·왜
+Object Storage에 EDW 행 없는 고아 객체를 남기지 않는다.
+
+### 규칙
+1. 게시(`publish_parse_result.apply`)는 올리기 전에 EDW `AI.ParsingMeta`에 같은 키(`source_system`, `source_key`)가 있는지 본다. 있으면 → 올리지 않고 건너뜀으로 센다. `--reparse` 목록의 키만 예외(새 날짜 폴더).
+
+### 비고(지금 코드와 다른 점)
+- 올린 뒤 `insert_new`가 키를 본다 — 이미 있는 키면 올린 객체가 고아로 남는다.
+
+### QA
+- 정할 것: 이미 있는 키 → 업로드 0·EDW 행 그대로(`test_publish_parse` 사례).
 - Status: todo

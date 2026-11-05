@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md) 카테고리. 실행 관리(pl-10·pl-23·pl-54·pl-24·pl-55·pl-18), 서버 러너 `run_pipeline.py` 레인·대기열(rn-01~04), 종료 정리(pl-27), EDW 계정(op-03), 모델 호출 가드(pl-11), 로그(op-01). 설정 파일은 [ops-settings.md](ops-settings.md).
 
-순서: pl-10 · pl-23 · pl-54 · pl-24 · pl-55 · pl-18 · rn-01 · rn-02 · rn-03 · rn-04 · pl-27 · op-03 · pl-11 · op-01.
+순서: pl-10 · pl-23 · pl-54 · pl-24 · pl-55 · pl-18 · rn-01 · rn-02 · rn-03 · rn-04 · pl-27 · op-03 · pl-11 · op-01 · rn-09 · rn-10.
 
 <a id="pl-10"></a>
 ## pl-10 · 실행 관리 — 서버 입구는 `run_pipeline.py` 하나
@@ -247,3 +247,45 @@
 - 파일: `common/core/{jsonlog,span,exitclean}.py`, `common/store/logsink.py`, `mcp_server/services/call_log.py`, `pipeline/shared/runtrace.py`, `pipeline/tools/perf_report.py`, `pipeline/extract/{doc_lane_group,candidate_ready}.py`.
 - QA: `tests/server/common/test_{jsonlog,logsink,span,span_soft,call_event}.py`·`tests/server/mcp/test_call_log.py`·`tests/server/pipeline/test_{runtrace,perf,span_stages,doc_group}.py`·`tests/general/common/test_applog_pg.py`(PC 임시 PG 스키마) · 통과. 서버 적용 refactor.md C-79·C-80.
 - Status: done
+
+<a id="rn-09"></a>
+## rn-09 · 서버 러너 명령 정리
+
+### 무엇·왜
+명령마다 env가 다르면 같은 코드가 다르게 돈다. 시간 초과 뒤 남은 프로세스는 다음 문서와 CPU·메모리를 다툰다.
+
+### 규칙
+1. `run_pipeline.py`의 컨테이너 명령(목록·받기·파싱·게시·구조화·분류)은 도우미 하나가 만든다 — `docker exec`·`umask`·작업 폴더·`PYTHONPATH`·라이브러리 env가 모두 같다.
+2. 게시·구조화가 시간 초과면 → 파싱처럼 그 문서 표지를 가진 컨테이너 안 프로세스를 끈다.
+3. 벌(instance) 이름 검사는 한 곳이다.
+4. 스캔 문서 회전 정책은 설정 칸 하나를 컨테이너 안 거르기가 직접 읽는다(명령 인자로 여러 겹 전달하지 않음).
+5. 레인 분류는 받기 단계 안에서 한다(문서마다 따로 `docker exec` 없음). 분류 캐시는 줄을 덧붙여 쓴다(문서마다 파일 전체를 다시 쓰지 않음).
+
+### 비고(지금 코드와 다른 점)
+- `parse_cmd`에 `PYTHONPATH`가 없다. 시간 초과 때 끄는 것(`sweep_cmd`)은 파싱만이다.
+- 스캔 회전 값이 run_pipeline → `stage --no-scan-rotate` → `stage_batch(scan_rotate)` → `filter_and_rotate --no-scan-rotate` 네 겹으로 전달된다.
+- 분류는 문서마다 `docker exec`(`classify_doc`), 캐시(`docflow_class.json`)는 문서마다 통째로 다시 쓴다.
+
+### QA
+- 정할 것: 명령 줄 표(`tests/general/deploy/test_run_pipeline.py`)에서 모든 명령의 env가 같음 · 게시 시간 초과 사례 → 정리 명령이 불림(`test_docs_flow`).
+- Status: todo
+
+<a id="rn-10"></a>
+## rn-10 · 문서 1건의 반복 비용
+
+### 무엇·왜
+문서 수천 건에서 같은 일을 되풀이하지 않는다.
+
+### 규칙
+1. 원본 sha256은 문서마다 한 번 구하고 다음 단계는 그 값을 쓴다(중복 제외 → 거르기 → 게시 → 구조화).
+2. 적재(`pgvector_load`)의 스키마 확인 질의는 원천 스키마 5벌을 한 질의(UNION)로 묻는다.
+3. 설정 파일(settings.yaml)은 프로세스마다 한 번 읽는다.
+4. `--set` 처리(`setarg.apply`)는 무거운 import 전에 한다.
+
+### 비고(지금 코드와 다른 점)
+- sha256을 중복 제외·거르기(`_record_skip`·회전 기록)·구조화가 각자 다시 구한다. `pgvector_load`가 원천 스키마마다 따로 묻는다.
+- 아직 재지 않았다 — 줄일 크기는 `python -m pipeline.tools.perf_report`로 먼저 잰다.
+
+### QA
+- 정할 것: 같은 문서 1건 실행의 `pipe_event` 단계 시간 비교(`perf_report --compare`).
+- Status: todo

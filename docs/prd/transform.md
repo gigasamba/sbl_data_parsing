@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md) 카테고리. [extract.md](extract.md) 다음, [load.md](load.md) 앞: 엔진 구성 파싱(pl-03·pl-22·pl-43·pl-42·pl-45) → represent(pl-04·pl-36·pl-37) → 그림(pl-05) → 구조화(pl-06) → 분류(pl-33). 지문이 바뀌는 정리 묶음은 [transform-cleanup.md](transform-cleanup.md).
 
-순서: pl-03 · pl-22 · pl-43 · pl-42 · pl-45 · pl-04 · pl-36 · pl-37 · pl-05 · pl-06 · pl-33.
+순서: pl-03 · pl-22 · pl-43 · pl-42 · pl-45 · pl-04 · pl-36 · pl-37 · pl-05 · pl-06 · pl-33 · pl-60.
 
 <a id="pl-03"></a>
 ## pl-03 · 엔진 구성 파싱
@@ -222,3 +222,20 @@
 - `tests/server/pipeline/test_edw_meta.py::test_hints`(실제 SQLite EDW — 힌트 칸 갈래). EDW 대역 `valid_env/edw/sfdc.sql`(LAS 대역 문서는 없음).
 - 운영 결과와의 비교는 [test.md#e2-20](test.md#e2-20).
 - Status: done
+
+<a id="pl-60"></a>
+## pl-60 · 쪽 수 세기는 함수 하나
+
+### 무엇·왜
+쪽 수가 자리마다 다르면 제한 시간·쪽 VLM 상한이 어긋난다.
+
+### 규칙
+1. 문서 쪽 수는 함수 하나가 센다(`pipeline/shared` — `pdf_kind.doc_pages`와 `vlmcall.page_count`를 합침).
+2. `pipeline/shared/vlmcall.py`는 엔진 지문(`engine_code_fp`)에 들어간다 — 바꾸면 그 엔진 결과를 다시 만든다. 사람 검토(등급 A) 뒤 지문 배치에서 바꾼다.
+
+### 비고(지금 코드와 다른 점)
+- `pdf_kind.doc_pages`와 `vlmcall.page_count`가 따로 있다.
+
+### QA
+- 정할 것: 같은 문서 표(PDF·pptx·이미지)에서 두 자리가 같은 쪽 수.
+- Status: todo

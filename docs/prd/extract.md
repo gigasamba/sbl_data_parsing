@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md) 카테고리. 원천에서 문서를 받아(pl-01·pl-48) 준비(중복·회전·DRM — pl-02)하기까지와 FAQ 원천(pl-39). 다음 단계는 [transform.md](transform.md).
 
-순서: pl-01 · pl-02 · pl-58 · pl-48 · pl-39.
+순서: pl-01 · pl-02 · pl-58 · pl-59 · pl-48 · pl-39.
 
 <a id="pl-01"></a>
 ## pl-01 · 원천과 가져오기
@@ -101,4 +101,24 @@ A: `, 절 `DS`. 5행 = `divider`만 → 건너뜀. 머리글 없는 시트 `memo
 - 이유(사용자 11-05): zip으로 올라온 원본 안의 문서도 검색되어야 한다. 메일 첨부 zip은 이미 풀어 파싱한다(pl-36).
 - 요건(되어야 할 모습): 받은 원본이 zip이면 `candidate_ready`가 풀어 안의 문서를 각각 파싱 입력으로 둔다. 안 파일의 키·ParsingMeta 행·깊이·크기·개수 상한·암호 zip 처리는 설계 때 정해 여기 적는다.
 - 비고(현재와 다른 점): 원본 zip은 "지원하지 않음"(`skipped_unsupported`)으로 표시만 한다(`filter_and_rotate.ARCHIVE_EXT` — pl-02).
+- Status: todo
+
+<a id="pl-59"></a>
+## pl-59 · 같은 밤 중복·staging 재사용·extract 경계
+
+### 무엇·왜
+같은 파일을 두 번 파싱·적재하지 않고, 크기만 같은 새 판을 옛 파일로 파싱하지 않으며, 수집 단계가 변환 코드에 기대지 않게 한다.
+
+### 규칙
+1. 서버 흐름(문서마다 `stage`)에서도 이번 실행에서 이미 받은 원본과 sha256이 같으면 → 뒤의 문서는 `skipped_dup`(게시가 씀)로 건너뛴다.
+2. staging 파일을 다시 쓸 때는 내용이 같을 때만이다 — Object Storage ETag(또는 받은 파일 sha256)가 기록과 같아야 한다. 크기만 같으면 다시 받는다.
+3. `pipeline/extract`는 `pipeline/transform`을 import하지 않는다. 지원 확장자 목록(엔진이 있는 확장자)은 `pipeline/shared`의 한 곳에서 읽는다.
+4. 원본 키 → 원천 이름(`SFDC`·`CRMS`·`LAS`·`FAQ`)은 함수 하나가 정한다. 게시·구조화·건너뜀 기록이 모두 그 함수를 쓴다.
+
+### 비고(지금 코드와 다른 점)
+- 같은 내용 거르기는 문서 1건 묶음 안과 ParsingMeta에 끝난 문서만 본다. staging 재사용(`candidate_ready.download`·`run_pipeline.stage_one`)은 크기만 비교한다.
+- `candidate_pick._filter_unsupported_rows`·`filter_and_rotate`가 `transform.parse.engines.registry`를 import한다. 원천 규칙이 `candidate_pick.source_of`·`_known_source`, `candidate_ready._derive_source_from_key`, 구조화의 키 첫 마디 판정으로 여럿이다.
+
+### QA
+- 정할 것: 같은 밤 같은 내용 두 문서 → 하나만 파싱(`test_stage_batch` 사례 표 행) · 크기 같고 ETag 다른 staging → 다시 받음 · `check_modules`에 extract → transform import 거부 규칙.
 - Status: todo
