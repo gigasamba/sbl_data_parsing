@@ -2,7 +2,7 @@
 
 ↑ [server-guide.md](server-guide.md) · [env-guide.md](env-guide.md) · 처음 설치: [README §5-0 서버 설치 순서](../../README.md#서버-설치-순서)
 
-**전제**: 개발 서버(dev)에는 코드 없는 실행 이미지 2개를 넣고, 코드 수정은 **새 루트에 새 코드 폴더를 풀어** 전달한다(§1-1). 운영 서버(prd)는 개발 서버에서 시험한 코드를 구운 이미지를 쓴다(§1-2). 의존성이 바뀔 때만 새 실행 이미지 버전을 만든다(§5).
+**전제**: 모드마다 이미지를 따로 빌드한다(모드별 이미지·코드·띄우는 법은 [README §1-3 실행 모드 표](../../README.md#실행-모드)). ① PC가 개발 서버용 실행 이미지 2개(코드 없음)를 빌드·시험해 개인 이미지 저장소 `jehunlee302/sbl_images`에 올린다(README §5-2) ② 개발 서버(dev)는 그 이미지를 불러오고 코드 수정은 **새 루트에 새 코드 폴더를 풀어** 붙인다(§1-1) ③ 운영 서버(prd)는 개발 서버에서 시험한 코드를 구운 이미지를 쓴다(§1-2). 의존성이 바뀔 때만 새 실행 이미지 버전을 만든다(§5).
 
 ## 1. 이미지와 코드 폴더
 
@@ -16,7 +16,7 @@
 
 ### 1-1. 개발 서버 — 새 루트로 코드 바꾸기
 
-1. PC: `IMAGE_TARGET=pipeline-runtime bash deploy/release/build_ship.sh`(mcp는 `mcp-runtime`). 이미지 관문은 이 커밋의 코드 트리를 붙여 돌고, 코드 폴더 묶음 `output/ship/code-<버전>-<커밋>.tar.gz`(`CODE_OUT=`로 바꿈 — git 추적 파일 + `CODE_COMMIT`)을 만든다. 코드만 바뀐 판은 묶음만 보낸다. 이미지 저장소로 보낼 때: `CODE_BUNDLE=output/ship/code-<버전>-<커밋>.tar.gz bash deploy/release/stage_images.sh <판> pipeline-runtime mcp-runtime`. (코드 git zip을 그대로 받아도 된다 — README §5-0.)
+1. 코드: 코드 git의 그 판 zip(README §5-0)이면 된다. 실행 이미지는 서버에 있는 판 중 `BUILD.txt`의 `DEPS_HASH`가 코드의 `deploy/docker/DEPS_HASH`와 같은 판을 그대로 쓴다(README [§1-3](../../README.md#실행-모드)) — 같은 판이 없을 때만 PC에서 새 실행 이미지를 만든다(README §5-2). PC의 `BUILD_ONLY=1 IMAGE_TARGET=pipeline-runtime bash deploy/release/build_ship.sh`는 코드 폴더 묶음 `output/ship/code-<버전>-<커밋>.tar.gz`(`CODE_OUT=`로 바꿈 — git 추적 파일 + `CODE_COMMIT`)도 만든다. 묶음을 이미지 저장소에 함께 둘 때: `CODE_BUNDLE=output/ship/code-<버전>-<커밋>.tar.gz bash deploy/release/stage_images.sh <판> pipeline-runtime mcp-runtime`.
 2. 서버: 새 루트를 만들고 코드 폴더로 풀기 — `mkdir -p <새 루트>/sbl_data_parsing-<버전> && tar -xzf code-….tar.gz --no-same-owner -C <새 루트>/sbl_data_parsing-<버전>`. 앞 루트의 `settings.yaml`·`edw_chain.yaml`을 `cp -p`로 새 루트에 복사한다.
 3. 바꾸기(새 코드 폴더에서): `bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>`(코드 폴더 a+rX · `output/` — 컨테이너 사용자 10001이 못 읽으면 "읽을 수 없음(권한)"으로 멈춤) → `bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline mcp-data-parsing mcp` → `bash deploy/host/scripts/host_ctl.sh timers`(타이머를 새 루트로).
 4. 확인: 컨테이너 로그 첫 줄 `[image] 이미지 <이름 버전 커밋> · 코드 <커밋> · 의존성 <지문>` → `bash deploy/host/scripts/host_ctl.sh check`(마지막 줄 `[host_ctl check] 통과 — 6개`). `의존성 지문이 다름`으로 멈추면 그 코드는 새 실행 이미지가 필요하다.
@@ -24,12 +24,13 @@
 
 ### 1-2. 개발 → 운영 — 시험한 그대로 굽기
 
-운영 이미지는 PC에서 빌드하지 않는다. 개발 서버의 **실행 이미지 그 판** 위에 **시험한 코드 폴더**를 COPY만 해서 코드가 든 이미지를 만든다(`deploy/docker/Dockerfile.bake` — 패키지 설치·네트워크 없음). 구운 이미지는 코드 폴더 없이 뜬다.
+운영 이미지는 PC에서 빌드하지 않는다. 개발 서버에 불러온 **실행 이미지 그 판** 위에 **시험한 코드 폴더**를 COPY만 해서 앱마다 코드가 든 이미지 하나(`data-pipeline:<VERSION>`·`mcp-server:<VERSION>`)를 다시 빌드한다(`deploy/docker/Dockerfile.bake` — 패키지 설치·네트워크 없음). 구운 이미지는 코드 폴더 없이 뜬다. 순서: 개발 서버에서 굽기·판정 → 조각을 운영 서버로 옮김 → 운영 서버에서 불러오기·띄우기.
 
-1. 개발 서버(시험한 코드 폴더에서): `bash deploy/release/bake_prod_image.sh <실행 이미지 판>`(예 `0.1.0`, 대상 하나만이면 뒤에 `pipeline` 또는 `mcp`). 코드 폴더는 스크립트가 든 폴더(다른 폴더면 `CODE_DIR=`), 새 태그는 코드 `VERSION`(다른 `TAG=`는 거부), 컨테이너 도구는 podman(없으면 docker — `DOCKER=`), 저장 폴더 `/var/tmp/bake`(`OUT=`).
+1. 개발 서버(시험한 코드 폴더에서): `bash deploy/release/bake_prod_image.sh <실행 이미지 판>`(개발 서버가 지금 쓰는 실행 이미지 판 — settings.yaml 이미지 칸의 태그, 대상 하나만이면 뒤에 `pipeline` 또는 `mcp`). 코드 폴더는 스크립트가 든 폴더(다른 폴더면 `CODE_DIR=`), 새 태그는 코드 `VERSION`(다른 `TAG=`는 거부), 컨테이너 도구는 podman(없으면 docker — `DOCKER=`), 저장 폴더 `/var/tmp/bake`(`OUT=`).
 2. 스크립트 순서: ① 코드 `DEPS_HASH` = 실행 이미지 지문인지(다르면 멈춤) ② 빌드 — 라벨 `org.opencontainers.image.revision`(코드 커밋)·`org.opencontainers.image.base.digest`(실행 이미지 ID) ③ `selftest_gate.sh` 판정(`[판정] 통과`가 아니면 멈춤) ④ 저장·45 MB 분할·sha256 → `/var/tmp/bake/sbl_images/`(`load.sh` · `<태그>/BUILD.txt` · `<태그>/<이미지>/` + 같은 태그 폴더에 코드 묶음 `code-<태그>-<커밋>.tar.gz`·sha256).
-3. 운영 서버: 새 루트에 `sbl_images/`를 옮겨 `DOCKER=podman bash sbl_images/load.sh <태그>` → 코드 묶음을 `<새 루트>/sbl_data_parsing-<버전>`에 풀고 §1-1 2·3(호스트 스크립트만 씀). 셸·unit에 `CODE_DIR`을 두지 않는다(두면 compose가 코드 폴더를 덮어 붙임).
-4. 어느 판인지: `podman image inspect <태그> --format '{{json .Config.Labels}}'`.
+3. 옮기기: `/var/tmp/bake/sbl_images/`를 운영 서버로 옮긴다.
+4. 운영 서버: `DOCKER=podman bash sbl_images/load.sh <태그>` → 코드 묶음을 `<새 루트>/sbl_data_parsing-<버전>`에 풀고(호스트 스크립트만 씀) settings.yaml 이미지 칸을 `data-pipeline:<VERSION>`·`mcp-server:<VERSION>`으로 → §1-1 2·3으로 띄우고 `host_ctl.sh check`. 셸·unit에 `CODE_DIR`을 두지 않는다(두면 compose가 코드 폴더를 덮어 붙임).
+5. 어느 판인지: `podman image inspect <태그> --format '{{json .Config.Labels}}'`.
 
 ## 2. 서버에서 직접 고친 코드
 
@@ -55,6 +56,7 @@ bash deploy/release/selftest_gate.sh $DOCKER run --rm <코드 폴더 옵션> <�
 
 두 이미지는 같은 버전을 쓴다. 정본은 저장소 루트 `VERSION` 한 줄(SemVer).
 - MAJOR = MCP 도구 계약·DB 스키마·핸드오프 형식이 깨질 때(1.0.0 전에는 MINOR로 올림) · MINOR = 새 이미지 버전(의존성·Dockerfile·마운트 경로) 또는 큰 기능 · PATCH = 코드 폴더만 바꿈.
+- PATCH인지 MINOR인지 가르기: `git diff v<앞 판>..HEAD -- deploy/docker/`를 본다. `requirements*.txt`가 그대로라 `DEPS_HASH`가 같고, 실행 이미지에 구워지는 파일(`Dockerfile`·`runtime_entry.sh`·`wheels/`)의 동작이 그대로면 PATCH — 서버의 실행 이미지를 그대로 쓰고 코드 폴더만 바꾼다. `entrypoint.sh`·`Dockerfile.bake`는 코드 폴더에서 읽히므로 바뀌어도 PATCH다. `DEPS_HASH`가 다르거나 실행 이미지에 구워지는 파일의 동작이 바뀌면 MINOR(새 실행 이미지 — §5).
 - `release/<버전>` 브랜치에서 `VERSION`을 고치고, main 머지 커밋에 annotated 태그 `v<버전>`을 붙인다. 이미지 태그는 `v` 없이(`data-pipeline:0.2.0`).
 - `build_ship.sh`·`stage_images.sh`는 태그를 안 주면 `VERSION`을 쓴다. 같은 태그가 이미 있으면 `build_ship.sh`가 멈춘다(다시 만들 때만 `FORCE_TAG=1`). 빌드 커밋은 라벨 `org.opencontainers.image.revision`(커밋 안 한 변경이 섞이면 `-dirty`).
 - 회사 DB `AI.ParsingMeta`의 버전 칸(silver를 만든 판·`gold_version`)은 이미지 안 `/app/deploy/VERSION`(코드 폴더면 그 루트 `VERSION`)을 쓴다.
@@ -71,7 +73,7 @@ PC 명령은 [README §5-2](../../README.md#5-2-pc에서--이미지-만들기와
 
 ### 5-2. 서버에서
 
-- 이미지 불러오기는 `load.sh` 하나다(개발: README §5-0 2번 · 운영: §1-2 3).
+- 이미지 불러오기는 `load.sh` 하나다(개발: README §5-0 2번 · 운영: §1-2 4).
 - **이미지·코드 폴더·`run_pipeline.py`는 같은 때에 바꾼다**(서로 맞아야 함). 순서: 새벽 배치·상주 컨테이너 멈춤 → 이미지 적재 → 새 루트에 새 코드 폴더(§1-1) → 새 이미지로 다시 띄움(`run_pipeline.py`는 새 코드 폴더 안의 것 — §5-4).
 - 이미지 이름은 settings.yaml `required.deploy.pipeline_image`·`required.deploy.mcp_image`에 적는다.
 - 배포 뒤, 컨테이너 안 코드가 있는지 파일로 본다(bind 마운트 원본이 없으면 빈 폴더가 붙어 `test -d`는 통과하므로):
@@ -158,8 +160,6 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 ## 8. 0.2.0 배포 — 사람이 할 일
 
 **실제로 칠 명령은 8-3**, 되돌리기는 8-5. 항목별 근거·상태는 [refactor.md](../refactoring/refactor.md)의 C 표다. 값·비밀은 이 문서에 쓰지 않는다. 누가: 사용자 · 서버 운영 · DB 담당(공유 PostgreSQL) · EDW 담당(회사 DB) · devops(빌드·반입).
-
-> ⚠️ 0.2.0은 아직 출시 전이다(`VERSION` 0.1.0, 태그 `v0.2.0` 없음). 태그가 붙기 전에는 운영 서버에서 8-3을 실행하지 않는다.
 
 ### 8-1. 꼭 알 것
 

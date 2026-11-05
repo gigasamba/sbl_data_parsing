@@ -4,8 +4,6 @@
 
 ### 0. 읽기 전에 — 꼭 알아 둘 것
 
-> **⚠️ 0.2.0은 아직 출시 전이다.** `VERSION`은 `0.1.0`이고 git 태그 `v0.2.0`도 없다. 태그가 붙기 전에는 운영 서버에서 [release-and-patch §8-3](docs/operations/release-and-patch.md#8-3-실행-순서--복사해-붙이는-명령dev-먼저-그다음-prd)을 실행하지 않는다.
->
 > **⚠️ 0.1.0 DB에 `migrate up`을 그냥 하지 않는다.** 마이그레이션 `0002_search`는 0.1.0이 만든 옛 검색 표를 **지운다**. 운영 DB는 새 `required.pg.pg_schema`를 정하고 `pg_dump`로 백업한 뒤 올린다(release-and-patch §8-3).
 >
 > **⚠️ `docker compose`·`podman compose`를 직접 부르지 않는다.** 서버 컨테이너는 늘 `bash deploy/host/scripts/host_ctl.sh …`로 다룬다(§5-3 ①).
@@ -61,7 +59,7 @@
 
 `run_pipeline` 종료 코드: 0 끝 · 1 실패 문서 있음 · 2 설정 문제 · 75 마감 도달·다른 run_pipeline 실행 중.
 
-### 1-3. 서버 이미지 2개와 버전
+### 1-3. 서버 이미지 2개와 실행 모드
 
 | 이미지 | 역할 | 상주 컨테이너 |
 |---|---|---|
@@ -69,6 +67,26 @@
 | `mcp-server` | 검색 MCP | `mcp-server` |
 
 버전은 저장소 루트 `VERSION` 하나이고 두 이미지가 함께 쓴다(태그 `data-pipeline:<버전>` — 규칙: [release-and-patch §4](docs/operations/release-and-patch.md#4-버전)).
+
+<a id="실행-모드"></a>
+**실행 모드(`required.env.run_env`)마다 컨테이너를 띄우는 법이 다르다.** 이미지는 모두 `deploy/docker/Dockerfile` 한 파일에서 나온다 — 공통 `base` 단계(Python + `requirements-core.txt`) 위에 검색 MCP는 `mcp-runtime`, 파이프라인은 `parse-deps`(`requirements-image.txt` + LibreOffice) → `pipeline-runtime`(+ OCR 모델)을 쌓은 것이 **실행 이미지**(코드 없음)이고, 거기에 코드를 COPY한 것이 **코드가 든 이미지**다.
+
+| | local(PC) | dev(개발 서버) | prd(운영 서버) |
+|---|---|---|---|
+| 이미지(태그 꼴) | 없음 — Python으로 직접(§4). 이미지 시험만 코드가 든 이미지 `data-pipeline:<시험 태그>`·`mcp-server:<시험 태그>` | 실행 이미지 `data-pipeline-runtime:<이미지 판>`·`mcp-server-runtime:<이미지 판>` | 코드가 든 이미지 `data-pipeline:<VERSION>`·`mcp-server:<VERSION>` |
+| 코드가 오는 곳 | 저장소 체크아웃 그대로 · 시험 이미지는 빌드 때 COPY(Dockerfile 타깃 `pipeline`·`mcp`) | 루트에 푼 코드 폴더 `sbl_data_parsing-<판>`(코드 git zip)을 컨테이너 `/app/deploy`에 읽기 전용(`:ro,z`)으로 붙임 | 이미지 안(굽기 때 COPY) — 붙이지 않음. 함께 오는 코드 묶음은 호스트 스크립트(`deploy/host/`)용 |
+| 만드는 법 | `ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh`(mcp는 `IMAGE_TARGET=mcp TAG=mcp-server:<시험 태그>`) | PC: `BUILD_ONLY=1 IMAGE_TARGET=pipeline-runtime bash deploy/release/build_ship.sh`(+ `mcp-runtime` — 이 커밋 코드를 붙여 selftest 판정) → 통과하면 `stage_images.sh`로 조각을 만들어 개인 이미지 저장소 `jehunlee302/sbl_images`에 push(사람) → 개발 서버 `load.sh <이미지 판>`(§5-2). 의존성이 같으면 다시 만들지 않는다 | 개발 서버의 시험한 코드 폴더에서 `bash deploy/release/bake_prod_image.sh <이미지 판>` — 그 실행 이미지 위에 코드만 COPY(`deploy/docker/Dockerfile.bake`, 네트워크 없음) → 운영 서버 `load.sh <VERSION>`([release-and-patch §1-2](docs/operations/release-and-patch.md#1-2-개발--운영--시험한-그대로-굽기)) |
+| 띄우는 법 | `.venv/bin/python -m mcp_server.main` 등(§4-4·§4-5) · 이미지 시험 `bash valid_env/docker/smoke_test.sh`(`valid_env/docker/compose.test.yml` — §4-7) | 코드 폴더에서 `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp` — 이미지가 `*-runtime:`이면 `host_ctl.sh`가 자기 코드 폴더를 `CODE_DIR`로 잡아 `compose.code*.yml`을 더한다. 시작 스크립트 `runtime_entry.sh`가 마운트·의존성 지문을 확인하고 코드의 `deploy/docker/entrypoint.sh`로 넘긴다 | 같은 `host_ctl.sh up -d …` — 이미지가 `*-runtime`이 아니므로 마운트 없이 이미지 안 `entrypoint.sh`로 뜬다. 셸·systemd에 `CODE_DIR`을 두지 않는다 |
+| settings.yaml 이미지 칸(`required.deploy.pipeline_image`·`mcp_image`) | 쓰지 않음(이미지 시험은 셸 변수 `DATA_PIPELINE_IMAGE`·`MCP_SERVER_IMAGE`) | `data-pipeline-runtime:<이미지 판>` · `mcp-server-runtime:<이미지 판>` | `data-pipeline:<VERSION>` · `mcp-server:<VERSION>` |
+| `run_env` | `local`(저장소 루트 `settings.yaml`) | `dev` | `prd` |
+
+**실행 이미지 판 고르기(dev·굽기).** 실행 이미지 판은 코드 판과 다를 수 있다. **이미지 판의 `BUILD.txt`에 적힌 `DEPS_HASH`가 코드의 `deploy/docker/DEPS_HASH`와 같은 판**을 쓴다(값 = `requirements-core.txt`·`requirements-image.txt`의 지문, `bash deploy/release/deps_hash.sh`). 다르면 컨테이너가 `의존성 지문이 다름`으로 멈추고(종료 2) `bake_prod_image.sh`도 멈춘다 — 같은 값인 판이 없으면 새 실행 이미지가 필요하다([release-and-patch §5](docs/operations/release-and-patch.md#5-새-이미지-버전이-필요할-때)).
+
+```bash
+cat deploy/docker/DEPS_HASH                                                   # 코드 폴더에서 — 코드가 요구하는 지문
+grep -H DEPS_HASH ../../sbl_images-main/*/BUILD.txt                           # 이미지 판마다 지문 — 같은 값인 판을 load.sh <판>
+$DOCKER run --rm --entrypoint cat data-pipeline-runtime:<판> /app/docker/deps_hash   # 이미 불러온 이미지의 지문
+```
 
 ### 1-4. DB — Alembic 마이그레이션
 
@@ -123,7 +141,7 @@ pgvector의 표는 코드가 실행 중에 만들지 않는다. 모두 Alembic �
 
 ## 4. PC에서 실행하기
 
-Docker 없이 Python으로 직접 실행한다. 순서는 서버의 처리 순서와 같다.
+앱 컨테이너 없이 Python으로 직접 실행한다(Docker는 전용 pgvector만 — 이미지 시험은 §4-7, 모드별 차이는 [§1-3](#실행-모드)). 순서는 서버의 처리 순서와 같다.
 
 ```
 4-1 준비(처음 한 번) → 4-2 settings.yaml → 4-3 점검 → 4-4 파이프라인(①~⑥) → 4-5 MCP 서버 → 4-6 검증 페이지
@@ -336,8 +354,8 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 | 하고 싶은 것 | 명령 |
 |---|---|
 | 답변 생성 점검(LLM 설정·예산 필요) | `.venv/bin/python -m validation.e2e.answer_gen --url http://127.0.0.1:18769/mcp --q "<질문>"` |
-| 이미지 배치 그대로 PC Docker 시험 | `DATA_PIPELINE_IMAGE=… MCP_SERVER_IMAGE=… DOC_SRC=<문서 폴더> RAG_OUT=<빈 폴더> SMOKE_SETTINGS=<설정 파일> SMOKE_PG_PASSWORD=<시험용> SMOKE_SYSTEM=<원천> bash valid_env/docker/smoke_test.sh` — 필요한 값은 스크립트 첫 줄 설명 |
-| 이미지 로컬 빌드(시험 태그) | `ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh` — TAG를 빼면 배포용 `data-pipeline:<VERSION>` |
+| 이미지 배치 그대로 PC Docker 시험(코드가 든 시험 이미지 — 실행 이미지는 코드를 붙이지 않아 멈춤) | `DATA_PIPELINE_IMAGE=data-pipeline:<시험 태그> MCP_SERVER_IMAGE=mcp-server:<시험 태그> DOC_SRC=<문서 폴더> RAG_OUT=<빈 폴더> SMOKE_SETTINGS=<설정 파일> SMOKE_PG_PASSWORD=<시험용> SMOKE_SYSTEM=<원천> bash valid_env/docker/smoke_test.sh` — 필요한 값은 스크립트 첫 줄 설명 |
+| 이미지 로컬 빌드(시험 태그) | `ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh`(mcp는 `IMAGE_TARGET=mcp TAG=mcp-server:<시험 태그>`) — TAG를 빼면 배포용 `data-pipeline:<VERSION>` |
 | 커밋 전 점검 | `bash deploy/release/lint_changed.sh`(`FIX=1`이면 자동 수정) |
 
 ---
@@ -350,10 +368,13 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 ### 5-0. 배포 단계와 개발 서버 설치
 
-| 단계 | 어디서 → 어디로 | run_env | 이미지 | 코드 |
-|---|---|---|---|---|
-| ① 개발 반입 | PC → 개발 서버 | `local` → `dev` | 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`(PC가 빌드 — §5-2) | 코드 git zip을 푼 폴더를 `/app/deploy`에 읽기 전용 마운트(스크립트가 자기 코드 폴더를 붙임). 코드만 바꿀 때 = 새 루트에 새 코드 zip(§5-8) |
-| ② 운영 반입 | 개발 서버 → 운영 서버 | `dev` → `prd` | 코드가 든 이미지 `data-pipeline`·`mcp-server`(개발 서버에서 `bake_prod_image.sh` — [release-and-patch §1-2](docs/operations/release-and-patch.md#1-2-개발--운영--시험한-그대로-굽기)) | 이미지 안(마운트 없음, `CODE_DIR` 두지 않음) |
+모드마다 이미지를 따로 빌드한다(이미지·코드·띄우는 법은 [§1-3 실행 모드 표](#실행-모드)). 순서는 셋이다.
+
+| 단계 | 어디서 | 하는 일 | 확인 |
+|---|---|---|---|
+| ① 개발 이미지 만들기 | PC(`local`) | 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`을 빌드 → 이 커밋 코드를 붙여 selftest → 통과하면 `stage_images.sh`로 조각을 만들어 개인 이미지 저장소 `jehunlee302/sbl_images`에 push(사람) — §5-2 | `build_ship.sh`의 `[판정] 통과` |
+| ② 개발 서버에 띄우기 | 개발 서버(`dev`) | 이미지 저장소 zip을 받아 `load.sh <이미지 판>` → 코드 git zip을 루트에 풀고 그 코드 폴더를 `/app/deploy`에 읽기 전용으로 붙여 띄움(`host_ctl.sh`가 붙임 — 아래 설치 순서). 코드만 바뀌면 새 루트에 새 코드 zip(§5-8) | `host_ctl.sh check` · e2e |
+| ③ 운영 이미지 굽기·옮기기 | 개발 서버 → 운영 서버(`prd`) | 개발 서버에서 불러온 실행 이미지 위에 시험한 코드 폴더를 넣어 앱마다 코드가 든 이미지 `data-pipeline:<VERSION>`·`mcp-server:<VERSION>`를 다시 빌드(`bake_prod_image.sh`) → 조각을 운영 서버로 옮겨 `load.sh <VERSION>` → `host_ctl.sh up`(마운트 없음, `CODE_DIR` 두지 않음) — [release-and-patch §1-2](docs/operations/release-and-patch.md#1-2-개발--운영--시험한-그대로-굽기) | 굽기의 `[판정] 통과` · 운영 `host_ctl.sh check` |
 
 반입은 git 저장소 두 개를 **zip으로 받아** 이미지는 공용 폴더에, 코드는 루트에 푼다:
 - 코드: `gigasamba/sbl_data_parsing`의 받을 판(태그·커밋). zip을 푼 폴더(`sbl_data_parsing-<판>`)가 그대로 코드 폴더다. zip은 `CODE_COMMIT`을 채운다(git clone은 안 채움 — 시작 로그의 커밋이 틀 그대로).
@@ -390,9 +411,9 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 0. `export DOCKER=podman` — 위 "미리 있어야 하는 것"을 확인한다.
 1. 공용 폴더와 루트를 만들고(`mkdir -p /home/sbl/dev`처럼 아무 자리) 이미지 zip은 공용 폴더(`/home/sbl/`)에, 코드 zip은 루트(`/home/sbl/dev/`)에 푼다.
-2. 이미지를 불러온다(공용 폴더에서 — 서버에 한 번, 이미 불러온 판이면 건너뜀): `cd /home/sbl && DOCKER=podman bash sbl_images-main/load.sh <이미지 판>` — 조각 sha256 확인 → 합치기 → load, 끝에 `<판>/BUILD.txt`(빌드 커밋·DEPS_HASH). **코드의 `deploy/docker/DEPS_HASH`가 `BUILD.txt`의 DEPS_HASH와 같은 판**을 고른다 — 0.2.0 코드는 0.1.0 실행 이미지(`f0fcc30bd067bc2f`)를 쓴다: `load.sh 0.1.0`.
+2. 이미지를 불러온다(공용 폴더에서 — 서버에 한 번, 이미 불러온 판이면 건너뜀): `cd /home/sbl && DOCKER=podman bash sbl_images-main/load.sh <이미지 판>` — 조각 sha256 확인 → 합치기 → load, 끝에 `<판>/BUILD.txt`(빌드 커밋·DEPS_HASH). **코드의 `deploy/docker/DEPS_HASH`가 `BUILD.txt`의 DEPS_HASH와 같은 판**을 고른다(확인 명령 — [§1-3](#실행-모드)).
 3. 루트 채우기: `cd <루트>/<코드> && bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>` — `output/`·`output/_mcp_parse/jobs`(UID 10001, 2775)·`backup/`(700), 코드 폴더 a+rX, `settings.sample.yaml` → `<루트>/settings.yaml`, `resources/config/edw_chain.yaml` → `<루트>/edw_chain.yaml`(둘 다 없을 때만, 10001:<운영 그룹> 640). 끝에 빈 필수 칸 **이름**을 찍는다. 여러 번 불러도 안전하다.
-4. 설정을 채운다 — `<루트>/settings.yaml` 맨 위 `required`의 빈 값(§5-3 ② "꼭 채울 값"). 이미지 칸에는 2에서 불러온 실행 이미지 태그(`data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0`). 자원 상한도 본다(아래).
+4. 설정을 채운다 — `<루트>/settings.yaml` 맨 위 `required`의 빈 값(§5-3 ② "꼭 채울 값"). 이미지 칸에는 2에서 불러온 실행 이미지 태그(`data-pipeline-runtime:<이미지 판>`·`mcp-server-runtime:<이미지 판>`). 자원 상한도 본다(아래).
    - EDW 표 설명 자료(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료, 받는 곳은 refactor.md C-91)를 루트 아래 결과 폴더에 복사하고(`<루트>/output/edw_meta/`, UID 10001이 읽을 수 있게) `search.edw_meta.edw_meta_catalog_dir: /app/output/edw_meta`를 적는다. 없으면 `edw_meta` 도구만 `not_configured`로 답한다(나머지 도구는 그대로).
 5. `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline`(코드 폴더에서 — DB 도구가 그 안에서 돈다).
 6. DB(§5-3 ③): `bash deploy/host/scripts/pipe_exec.sh migrate check --target all` → `… migrate up --target all --dim <임베딩 차원>`(차원 = 임베딩 모델 출력 크기, 모델 담당 확인) → `… migrate master load` → `… migrate check --target all`(기대: 차이 없음).
@@ -481,16 +502,16 @@ bash deploy/host/scripts/host_ctl.sh ps                                         
 
 ### 5-2. PC에서 — 이미지 만들기와 이미지 저장소에 올리기
 
-PC가 하는 일은 실행 이미지 두 개를 만들어 이미지 git(`sbl_images`)에 조각으로 올리는 것뿐이다. 코드만 바뀐 판(`deploy/docker/DEPS_HASH`가 같음)은 이미지를 다시 만들지 않는다.
+§5-0 ① 단계다. PC가 하는 일은 개발 서버용 실행 이미지 두 개를 빌드·시험하고, 통과하면 개인 이미지 저장소 `jehunlee302/sbl_images`에 조각으로 올리는 것뿐이다. 코드만 바뀐 판(`deploy/docker/DEPS_HASH`가 같음)은 이미지를 다시 만들지 않는다.
 
 ```bash
 # 폐쇄망 빌드라면 먼저 deploy/docker/wheels/에 휠(linux/amd64, py3.12), assets/rapidocr/에 *.onnx(release-and-patch §5-6)
-BUILD_ONLY=1 IMAGE_TARGET=pipeline-runtime bash deploy/release/build_ship.sh   # data-pipeline-runtime:<VERSION> → 이 커밋 코드를 붙여 selftest 판정
-BUILD_ONLY=1 IMAGE_TARGET=mcp-runtime      bash deploy/release/build_ship.sh   # mcp-server-runtime:<VERSION>
-bash deploy/release/stage_images.sh pipeline-runtime mcp-runtime                 # output/ship/sbl_images/ — load.sh · <판>/BUILD.txt · <판>/<이미지>/ 45MB 조각 + sha256
+BUILD_ONLY=1 IMAGE_TARGET=pipeline-runtime bash deploy/release/build_ship.sh   # 1) 빌드 data-pipeline-runtime:<VERSION> → 2) 이 커밋 코드를 붙여 selftest — [판정] 통과여야 다음으로
+BUILD_ONLY=1 IMAGE_TARGET=mcp-runtime      bash deploy/release/build_ship.sh   #    mcp-server-runtime:<VERSION>
+bash deploy/release/stage_images.sh pipeline-runtime mcp-runtime                 # 3) output/ship/sbl_images/ — load.sh · <판>/BUILD.txt · <판>/<이미지>/ 45MB 조각 + sha256
 ```
 
-`output/ship/sbl_images/`를 이미지 git에 그대로 올린다(push는 사람). 같은 태그의 이미지가 이미 있으면 `build_ship.sh`가 멈춘다(버전을 올리거나, 꼭 다시 만들 때만 `FORCE_TAG=1`). 운영 서버 이미지는 PC에서 만들지 않는다(개발 서버에서 굽는다).
+4) `output/ship/sbl_images/`를 개인 이미지 저장소 `jehunlee302/sbl_images`에 그대로 올린다(push는 사람). 개발 서버는 그 저장소 zip을 받아 `load.sh`로 불러온다(§5-0 설치 순서 2). 같은 태그의 이미지가 이미 있으면 `build_ship.sh`가 멈춘다(버전을 올리거나, 꼭 다시 만들 때만 `FORCE_TAG=1`). 운영 서버 이미지는 PC에서 만들지 않는다(개발 서버에서 굽는다 — §5-0 ③).
 
 ### 5-3. 서버 — 처음 설치 자세히
 
@@ -541,7 +562,7 @@ bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp   
 | `extract.source.source_input_location`·`source_default_bucket`·`source_uri_prefix` | 원본 위치 | 운영 담당 | `rdb:csv:<루트>/list.csv` · `<버킷>` · `s3://<버킷>/<접두>` | dev·prd | 첫 `run_pipeline` |
 | `required.tokens.mcp_token` | MCP 토큰 하나 — 검색 MCP와 `parse_document` 작업 서비스가 함께 씀 | `openssl rand -hex 24` | 48자 16진수 | dev·prd(밖에서 붙을 때 필수) | `host_ctl.sh check` ⑥ `/health` · `parse_document` 호출이 토큰 오류 |
 | `required.tokens.fulltext_sign_key` | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키 — 비우면 두 도구가 `not_configured`, 바꾸면 이미 발급한 sfid가 모두 무효 | 같은 명령 | 48자 16진수 | dev·prd | 원문 도구 호출이 `not_configured` |
-| `required.deploy.pipeline_image` · `mcp_image` | 띄울 이미지 태그(같은 배포 묶음) | §5-0 2번 `load.sh` | dev: `data-pipeline-runtime:0.1.0` · prd: `data-pipeline:0.2.0` | dev·prd | `host_ctl.sh up`이 이미지 없음으로 멈춤 |
+| `required.deploy.pipeline_image` · `mcp_image` | 띄울 이미지 태그(같은 배포 묶음) | §5-0 2번 `load.sh` | dev: `data-pipeline-runtime:<이미지 판>` · prd: `data-pipeline:<VERSION>` | dev·prd | `host_ctl.sh up`이 이미지 없음으로 멈춤 |
 | `required.deploy.host_docs_dir` | 원본 문서 폴더 | 서버 관리자 | `/data/docs` | dev·prd | `host_ctl.sh up`이 `:?` 안내로 멈춤 |
 | `ops.host.host_output_dir` | 결과 폴더 — 비우면 `<루트>/output` | 서버 관리자 | (비움) | dev·prd | — |
 | `required.deploy.pg_container_name` | `pg_dump`·`psql`을 exec할 PG 컨테이너 이름 | DB 담당 | `<컨테이너>` | dev·prd | 백업 명령(release-and-patch §8-3 2) |
