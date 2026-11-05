@@ -11,7 +11,7 @@
   1. `tests/server/`(이미지 반입 관문 — `python -m pipeline.cli selftest`가 `tests/runner.py`로 실행, 외부 접속 없음) · `tests/general/`(PC 전용: PG, Docker, 느린 것 — pytest).
   2. 알려진 실패 목록: 반입 `deploy/release/known_fail.txt`, PC `tests/conftest.py` `GENERAL_KNOWN_FAIL`. 목록에 있는 시험이 통과하면 XPASS 경고(목록에서 지움).
   3. PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕(`run_env: local`만, 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `_PC_SETTINGS_CASES`(지금 빔).
-- 기준선(11-05, feature/rn05-work — rn-05 대상 목록·받기 한 길, run_pipeline·staging 이름, PG 없는 PC): `selftest` 102개 모두 통과(대상 목록 사례 표 `test_target_list` 추가) · `pytest tests/` 156 통과 · 3 건너뜀(호스트 EDW 사본 시험 `test_edw_copies` 3개·`test_faq_first`를 지우고 `test_target_list`가 그 판단을 컨테이너 쪽에서 봄) · 알려진 실패 0(두 목록 모두 빔) · FINGERPRINT `18142592accca442`(그대로) · code_fp p0 `68ad05c4b661` → `d4dd7bf6855f` · p1 `657eb43b99d9` → `d20e2aaa925e` · r `ef3002f928b6` → `70ce6de9fba3` · s `ae734381ada6` → `34c3db70eb63`(rn-05 — `pipeline/config.py` 칸 이름, `candidate_ready`·`candidate_pick`·`mssql`·`parsing_meta_db`, 파일 이름 `doc_represent`·`run_mcp_parsing`, 주석의 run_pipeline 이름. 기록용 — 재처리 없음) · 엔진 지문(`engine_code_fp`, p0 열쇠 — 엔진 폴더 경로가 바뀌고 import 줄만 고침, 기록용): anydoc `9d98dd253cee` → `01d0d7813c77` · docx2python `3f50c8a9d24d` → `9ba622227470` · html_stdlib·mhtml·msg_extract `64bdd541f075` → `6b86d3b876c3` · hwpx `3025cea0697b` → `1ce4058a3a0a` · kreuzberg `6570633dc767` → `f8cf85542789` · markitdown `3e7311ce0a0c` → `00fa7c1d36fc` · office `7c8c58c00dc4` → `c18d228eb2e6` · plaintext `0072c18a491f` → `e61fe9d86b40` · pymupdf `ad46c268e872` → `8611e97ce9ec` · qwen_vlm `5644ba5811c5` → `dfc11ddbca73` · rapidocr_ko `c559639a3395` → `1e08f27b5ddd`.
+- 기준선(11-05, feature/readme-multi — 받기 → 중복 제외 → 거르기, 건너뜀 기록, settings 칸 이름 정리, PG 없는 PC): `selftest` 103개 모두 통과(`test_stage_batch` 사례 표 추가) · `pytest tests/` 157 통과 · 3 건너뜀 · 알려진 실패 0(두 목록 모두 빔) · FINGERPRINT `18142592accca442` · code_fp p0 `5008e96cfbc2` · p1 `d11d5a6a30c7` · r `73fc07cc6691` · s `f534babf263a`(기록용 — 재처리 없음) · 엔진 지문(`engine_code_fp`, 기록용): anydoc `01d0d7813c77` · docx2python `9ba622227470` · html_stdlib·mhtml·msg_extract `6b86d3b876c3` · hwpx `1ce4058a3a0a` · kreuzberg `f8cf85542789` · markitdown `00fa7c1d36fc` · office `c18d228eb2e6` · plaintext `e61fe9d86b40` · pymupdf `8611e97ce9ec` · qwen_vlm `f32324125077`(엔진 폴더는 그대로 — 함께 셈하는 `pipeline/shared/vlmcall.py`의 설정 이름이 바뀜) · rapidocr_ko `1e08f27b5ddd`.
 - 지문 확인 명령: [CLAUDE.md](../../CLAUDE.md) §4. 공용·레이어 파일을 고친 커밋은 전후 값을 커밋 메시지에 적는다.
 - QA: `python -m pipeline.cli selftest` · `[판정]` 통과, 기준선보다 나빠지지 않음.
 - Status: done
@@ -88,7 +88,7 @@
 
 <a id="e2-07"></a>
 ## e2-07 · 검색 점검 페이지
-- 규칙: MCP 서버와 pgvector에 이어 근거를 보는 로컬 페이지 — `validation/search_ui/start_mcp.sh`·`start_ui.sh`, 포트 `dev.mcp.ui_port`(기본 8790), MCP 주소 `dev.mcp.mcp_url`(기본 `http://127.0.0.1:8765/mcp`).
+- 규칙: MCP 서버와 pgvector에 이어 근거를 보는 로컬 페이지 — `validation/search_ui/start_mcp.sh`·`start_ui.sh`, 포트 `dev.search_ui.port`(기본 8790), MCP 주소 `dev.search_ui.mcp_url`(기본 `http://127.0.0.1:8765/mcp`).
 - 파일: `validation/search_ui/serve.py`.
 - QA: 수동 — 페이지를 열어 질문 하나에 근거가 나옴.
 - Status: done

@@ -99,7 +99,7 @@ def test_one_vlm_path():
                 assert len(seen) - before == calls, (name, len(seen) - before)
                 for body in seen[before:]:
                     assert body["chat_template_kwargs"] == EXTRA["chat_template_kwargs"], (name, body.keys())  # extra_body 한 칸
-                    assert _png_width(body) == 200, name  # 2인치 × extract.ocr.dpi 100
+                    assert _png_width(body) == 200, name  # 2인치 × extract.page_render_dpi 100
                     assert body.get("max_tokens") == max_tokens, (name, body.get("max_tokens"))
                 if name.startswith("엔진"):
                     assert "| 온도 | 25℃ |" in out["text"] and out["trace"]["pages"] == 2, out
@@ -127,7 +127,7 @@ def test_retry_and_page_cap():
                     out = parse_qwen_vlm(str(pdf))
                     assert ok and out["trace"]["pages"] == 1 and out["trace"]["pages_total"] == 3, (
                         out
-                    )  # 쪽 상한 transform.vlm.page_max(엔진도)
+                    )  # 쪽 상한 transform.vlm.max_pages_per_doc(엔진도)
                 except RuntimeError as ex:
                     assert not ok and "VLM 실패" in str(ex), ex  # 재시도 소진 → 엔진 실패(반쪽 결과를 성공으로 남기지 않음)
             assert len(seen) == fail_first + (1 if ok else 0), (retry, len(seen))

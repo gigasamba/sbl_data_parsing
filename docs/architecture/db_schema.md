@@ -333,7 +333,7 @@ ID 모양 정규식(계약 번호·제품 코드 등). 읽는 곳: `common.core.
 
 gold·EDW와 별개인 로그 표다. 서버 적용 절차는 refactor.md C-79.
 
-판: `common/store/db/migrations/versions/0001_applog_base.py`(브랜치 `applog`) · 파티션 관리: `common/store/db/migrations/applog_parts.py` · 모델: `common/store/db/models/log_tables.py` · 쓰기: `common/store/logsink.py`(큐 → 배치 INSERT, 실패하면 `output/logs/*.jsonl`, 앱이 DDL을 실행하지 않음). 켜는 설정: 파일 자리 `ops.log.db_enabled`(모델 `common.log.db_enabled`, 서버 이미지 기본 켬·PC 기본 꺼짐 — op-13). `tests/server/common/test_db_schema.py`는 이 절을 대조하지 않는다 — 판과 실제 DB 대조는 `dbtool check --target applog`.
+판: `common/store/db/migrations/versions/0001_applog_base.py`(브랜치 `applog`) · 파티션 관리: `common/store/db/migrations/applog_parts.py` · 모델: `common/store/db/models/log_tables.py` · 쓰기: `common/store/logsink.py`(큐 → 배치 INSERT, 실패하면 `output/logs/*.jsonl`, 앱이 DDL을 실행하지 않음). 켜는 설정: 파일 자리 `ops.log.db_enabled`(모델 `ops.log.db_enabled`, 서버 이미지 기본 켬·PC 기본 꺼짐 — op-13). `tests/server/common/test_db_schema.py`는 이 절을 대조하지 않는다 — 판과 실제 DB 대조는 `dbtool check --target applog`.
 
 - **파티션:** `mcp_log`(`requested_at`)·`pipe_event`(`ts_start`)는 월 단위(UTC). 이름은 `<표>_YYYYMM`. `dbtool up`과 `dbtool maintain`이 현재 달부터 3개월 치를 만든다.
 - **보존:** `dbtool maintain --target applog`를 매일 실행한다. `ops.log.retention_days`(기본 90)가 지난 달의 파티션을 DROP하고 `pipe_run`은 DELETE한다. 달이 통째로 지나야 DROP되므로 파티션 표의 행은 약 90~120일 남는다.
@@ -405,7 +405,7 @@ MCP 요청 1건당 1행. 인증 실패와 `initialize`도 행으로 남는다. �
 | docs_reused | INTEGER | 재사용 문서 수. 지금은 비어 있음(실행마다 새로 파싱) | 〃 | 〃 | 새로 |
 | workers | INTEGER | 작업자 수 | 〃 | 〃 | 새로 |
 | cpu_max_load | FLOAT | CPU 문턱값 | 〃 | 〃 | 새로 |
-| mem_start_pct | FLOAT | 메모리 문턱값 | 〃 | 없음 | 새로 |
+| mem_start_pct | FLOAT | 실행 시작 때 메모리 사용률(%) | 〃 | 없음 | 새로 |
 
 ### applog.pipe_event
 

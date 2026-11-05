@@ -4,7 +4,7 @@
 client_edw·created, 머리 주석 참고), 읽기·검사는 common.store.edw_chain(검색 MCP와 함께 씀). 코드는 사슬을 따라가는 해석기 하나(_resolve)뿐이다:
 단계를 위에서 아래로 — 열쇠(file 또는 앞 단계 칸)로 표를 읽고, 열쇠 목록이면 앞 자리부터 후보가 있는 첫 자리에서 하나로 정하고(둘 이상이면 비움),
 when.prefix로 SFDC id 접두 갈래를 고른다. SFDC 분류 힌트의 연결 개체 종류는 접두 표 resources/mappings/sfdc_prefix.json(sfdc_entity 단계).
-서버에서 고친 사본은 설정 ops.paths.edw_chain(검색 MCP와 같은 칸 — 비우면 기본 파일). 파일만 점검(EDW·PG 안 붙음): python -m pipeline.load.edw_doc_meta --check [--file F].
+서버에서 고친 사본은 설정 ops.paths.edw_chain_file(검색 MCP와 같은 칸 — 비우면 기본 파일). 파일만 점검(EDW·PG 안 붙음): python -m pipeline.load.edw_doc_meta --check [--file F].
 EDW를 못 열면 빈 dict와 경고(적재는 메타를 비운 채 계속 — 자동 갱신 없음: 나중에 --replace로 다시 적재해 채움). 한 단계의 칸을 못 읽으면
 그 칸만 비고 경고, 표를 못 읽으면 그 원천 메타가 빔(optional 단계면 그 단계만). 설정 파일이 틀리면 ValueError로 멈춘다(이름은 SQL 글자에 들어가므로 검사,
 값은 늘 바인딩)."""
@@ -300,7 +300,7 @@ def main(argv=None):
     utf8_stdout()
     ap = argparse.ArgumentParser(description="EDW 조인 사슬 설정 점검(pl-29·pl-52) — 파일만 읽고 검사, EDW·PG에 붙지 않음")
     ap.add_argument("--check", action="store_true", required=True, help="설정 파일 검사(필수 — 이 모듈의 유일한 명령)")
-    ap.add_argument("--file", help="점검할 파일(없으면 settings.yaml ops.paths.edw_chain → 비우면 기본 파일)")
+    ap.add_argument("--file", help="점검할 파일(없으면 settings.yaml ops.paths.edw_chain_file → 비우면 기본 파일)")
     a = ap.parse_args(argv)
     rc, msg = check(a.file)
     print(msg)  # 한 줄(성공·실패 모두 표준 출력 — 판정은 종료 코드)

@@ -63,7 +63,7 @@ def _inner(cmd):
 
 
 def test_container_command_from_setting():
-    """컨테이너 명령은 DOCKER(셸 env > 설정 ops.host.docker > podman·docker)에서 — 고정 docker 글자가 남지 않음."""
+    """컨테이너 명령은 DOCKER(셸 env > 설정 ops.host.container_cli > podman·docker)에서 — 고정 docker 글자가 남지 않음."""
     old = RD.DOCKER
     try:
         RD.DOCKER = "podman"
@@ -176,15 +176,21 @@ def test_read_settings_new_layout(tmp_path):
     """러너는 파일 배치를 모델 배치로 바꿔 읽고(글자 그대로), 옛 배치·같은 칸 두 번은 거부."""
     f = tmp_path / "settings.yaml"
     f.write_text(
-        "required:\n  env: {run_env: dev}\n  edw: {read_password: '0123'}\nops:\n  run_pipeline: {staging: '30'}\n", encoding="utf-8"
+        "required:\n  env: {run_env: dev}\n  edw: {read_password: '0123'}\nops:\n  run_pipeline:\n    staging: {max_docs: '30'}\n    structure: {max_backlog: null}\n",
+        encoding="utf-8",
     )
     doc, err = RD.read_settings(f)
     assert err is None and doc["common"]["run_env"] == "dev" and doc["common"]["connections"]["rdb"]["read"]["password"] == "0123"
-    assert RD.run_pipeline_policy(doc)[0]["staging"] == 30
+    vals, probs = RD.run_pipeline_policy(doc)
+    assert (
+        vals["staging"] == 30 and vals["struct_backlog"] == RD.RUN_PIPELINE_DEFAULTS["struct_backlog"] and probs == []
+    )  # YAML null = 비움
     f.write_text("common:\n  run_env: dev\n", encoding="utf-8")
     doc, err = RD.read_settings(f)
     assert doc == {} and "common.run_env → required.env.run_env" in err
-    f.write_text("required:\n  env: {run_env: dev}\nops:\n  host: {docker: podman}\nops:\n  nightly: {time: '01:00'}\n", encoding="utf-8")
+    f.write_text(
+        "required:\n  env: {run_env: dev}\nops:\n  host: {docker: podman}\nops:\n  nightly: {start_time: '01:00'}\n", encoding="utf-8"
+    )
     doc, err = RD.read_settings(f)
     assert doc == {} and "같은 칸 두 번: ops" in err  # 앱 settings와 같은 거부(layout.reject_dup_keys)
 

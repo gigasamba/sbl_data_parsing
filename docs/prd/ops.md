@@ -9,19 +9,19 @@
 - 이유: 서버는 문서 수천 건을 사람 없이 돌린다.
 - 규칙:
   1. CLI `pipeline.cli`는 `parse`·`show-stack`·`selftest`. 이미지 entrypoint(`deploy/docker/entrypoint.sh`)가 `publish`·`migrate`·`check`·`services`·`resources`·`tool`·`ask`·`mcp`·`run-mcp-parsing`·`idle`을 더한다. `idle` = 상주 컨테이너가 떠 있기만 한다(run_pipeline이 `docker exec`).
-  2. 서버 실행은 호스트 python의 `deploy/host/scripts/run_pipeline.py`(PyYAML·pymssql 필요)가 상주 컨테이너 `data-pipeline` 안에서 문서마다 명령을 `docker exec`로 돌린다. 컨테이너 명령은 settings.yaml `ops.host.docker`(없으면 podman). PC에서는 실행하지 않는다.
+  2. 서버 실행은 호스트 python의 `deploy/host/scripts/run_pipeline.py`(PyYAML·pymssql 필요)가 상주 컨테이너 `data-pipeline` 안에서 문서마다 명령을 `docker exec`로 돌린다. 컨테이너 명령은 settings.yaml `ops.host.container_cli`(없으면 podman). PC에서는 실행하지 않는다.
   3. 시작: 설정 파일 = `--settings` → `SETTINGS_FILE` → `<루트>/settings.yaml`(루트 = 코드 폴더의 부모 — op-13). `required.env.run_env`가 dev·prd가 아니거나 필요한 칸이 없으면 칸 경로만 찍고 종료 2. 코드 폴더 = `--code`(없으면 스크립트가 든 코드 폴더) — 그 안의 `common/config/layout.py`·`deploy/host/scripts/host_settings.tsv`로 설정 배치와 컨테이너 안 경로를 읽는다.
   4. 대상 목록(컨테이너 안 `python -m pipeline.extract.candidate_pick list` — run_pipeline은 목록 파일 `<결과 자리>/_docflow/targets.json`만 읽음): EDW `SELECT id, s3_key, original_filename, file_size FROM AI.FileStorageMap WHERE (<이름 조건>) AND file_size IS NOT NULL ORDER BY file_size ASC`. 이름 조건 = `--filter`(기본 `RFP,proposal`)의 낱말마다 `LOWER(original_filename) LIKE '%낱말%'`를 OR. 순번(seq)은 이 순서. `--start-offset N`(기본 1072 — 새벽 배치는 0)부터, `--seqs`면 그 순번만, `--skip-done`이면 끝난 문서([pl-23](#pl-23))를 빼고, FAQ 먼저([load.md#pl-41](load.md#pl-41)), `--max-docs`면 그 뒤 앞에서 N건, `--limit`은 시험용(그 전에 자름). `--filter`는 글자·숫자·`_` `,` `.` `-`만, `--seqs`는 숫자와 쉼표만(아니면 종료 2).
   5. 문서마다: 미리 받기(`candidate_ready stage` — 받기 → 중복 → 거르기) → 레인 분류 → 파싱 → 게시 → 원본 삭제 → gold(구조화+적재) → 임시 삭제([pl-24](#pl-24)). 배치 장벽 없이 끝나는 순서대로 흐른다.
   6. 레인·대기열은 [rn-01](#rn-01)·[rn-02](#rn-02), MCP 양보는 [rn-03](#rn-03)·[rn-04](#rn-04), 종료 코드는 [pl-18](#pl-18).
   7. 문서별 값은 컨테이너 명령에 `--set`으로 준다(같은 이름은 뒤 값이 이김):
      - 파싱 공통: `VLM_MAX_CONCURRENCY=8` · `VLM_CONCURRENCY=8` · `VLM_FIGURES_MAX=10` · `PARSE_POST=supsub,charts,figures,context,attachments` · `RAPIDOCR_PAGE_WORKERS=2` · `OCR_THREADS=1` · `PIPE_PROCS=4` · `PARSE_REP_SELECT=first` · `PARSE_QA_LIGHT=1`, 문서 출력 자리 `PIPE_OUT_ROOT`·`DOC_DIR_PREPARED`·`PARSE_IMAGES_ROOT`·`PARSE_RAW_ROOT` = `<결과 자리>/_docflow/<seq>/…`.
-     - vlm 레인이면 덧붙임: `VLM_MAX_CONCURRENCY=6` · `VLM_CONCURRENCY=6` · `PARSE_POST=…,attachments,vlm_page` · `VLM_PAGE_MAX=`(상한 없음). 쪽 해상도는 settings.yaml `extract.ocr.dpi`(VLM 설정은 [pl-43](transform.md#pl-43)).
+     - vlm 레인이면 덧붙임: `VLM_MAX_CONCURRENCY=6` · `VLM_CONCURRENCY=6` · `PARSE_POST=…,attachments,vlm_page` · `VLM_PAGE_MAX=`(상한 없음). 쪽 해상도는 settings.yaml `extract.page_render_dpi`(VLM 설정은 [pl-43](transform.md#pl-43)).
      - CPU 게이트 `CPU_MAX_LOAD` = light 레인 9(사실상 게이트 없음), 그 밖 `--cpu-gate`(기본 1.3).
-     - 미리 받기: `SOURCE_STAGING=<결과 자리>/_staging` · `SOURCE_FETCH_WORKERS=2`로 `python -m pipeline.extract.candidate_ready stage --csv <_docflow/seq>/batch.csv --out <_docflow/seq> --prepared <_docflow/seq>/prepared`(`scan_rotate`가 꺼져 있으면 `--no-scan-rotate`), 제한 900초.
+     - 미리 받기: `SOURCE_STAGING=<결과 자리>/_staging` · `SOURCE_FETCH_WORKERS=2`로 `python -m pipeline.extract.candidate_ready stage --csv <_docflow/seq>/batch.csv --out <_docflow/seq> --prepared <_docflow/seq>/prepared`(`ops.run_pipeline.parse.rotate_scans`가 꺼져 있으면 `--no-scan-rotate`), 제한 900초.
      - 파싱 명령: `python -m pipeline.cli parse --staged`(stage가 남긴 `parse/_source/only.txt`만), 제한 2700초.
      - 구조화·적재: `EMBED_CONCURRENCY=6` · `EMBED_BATCH=32` · `BM25_THREADS=3`으로 `pipeline.transform.structure.gold_bundle` → `pipeline.load.pgvector_load load`.
-  8. 기록: 작업 폴더(`ops.pipeline_host.run_pipeline_dir`, 비우면 스크립트 옆 `test_space/`)의 `batch_progress/` — `progress.log`(진행), `doc_<seq>.log`(문서별 파싱), `queue_depth.jsonl`([rn-02](#rn-02)), 잠금 `run_pipeline.lock`.
+  8. 기록: 작업 폴더(`ops.run_pipeline.work_dir`, 비우면 스크립트 옆 `test_space/`)의 `batch_progress/` — `progress.log`(진행), `doc_<seq>.log`(문서별 파싱), `queue_depth.jsonl`([rn-02](#rn-02)), 잠금 `run_pipeline.lock`.
 - 파일: `deploy/host/scripts/run_pipeline.py`, `pipeline/cli.py`, `deploy/docker/entrypoint.sh`.
 - QA: `tests/general/deploy/test_run_pipeline.py`(명령 글자·설정 대조)·`test_docs_flow.py` · 통과.
 - Status: done
@@ -34,7 +34,7 @@
   2. "끝난 행" = `parse_status`가 `skipped_dup`, 또는 `ok`·`partial`이면서 `gold_version`이 있음(`gold_version` 칸이 없는 EDW에서는 `parse_status`만 봄). `not_parsed`·`skipped_disk_cap`·실패·행 없음은 다시 고른다. 목록은 `common/store/parsing_meta_db.DONE_STATUSES` 한 곳.
   3. 끝난 문서 빼기는 `pipeline/extract/candidate_pick.py` `done_keys` 하나 — 서버는 `candidate_pick list --skip-done`, PC 직접 파싱(`pipeline.cli parse --source`)은 고르기 때. EDW를 한 번 읽는다(읽기 계정, PC는 sqlite 대역). 못 읽으면 RUN_ENV가 local이 아니면 종료 4, 그 밖은 받은 목록 그대로 + 로그 한 줄. 키 = 수집 manifest의 `key`(없으면 이름).
   4. 전체 재파싱은 사람이 전체 e2e를 시작할 때만([pl-54](#pl-54)).
-  5. 새벽 배치: settings.yaml `ops.nightly.time`(시작 HH:MM)·`max_docs`(새 문서 수 상한, 1 이상)·`deadline`(마감 HH:MM, 시작보다 5분 넘게 뒤) — 하나라도 비면 돌지 않는다. systemd `data-pipeline-nightly.timer`(`OnCalendar=*:0/5`)가 `nightly_batch.sh scheduled`를 부르고, 시작 시각부터 5분 안이면 `run_pipeline.py --start-offset 0 --skip-done --max-docs <n> --deadline <hh:mm>`. 형식 오류면 종료 2. 서비스 `TimeoutStartSec=6h`.
+  5. 새벽 배치: settings.yaml `ops.nightly.start_time`(시작 HH:MM)·`max_docs`(새 문서 수 상한, 1 이상)·`stop_time`(마감 HH:MM, 시작보다 5분 넘게 뒤) — 하나라도 비면 돌지 않는다. systemd `data-pipeline-nightly.timer`(`OnCalendar=*:0/5`)가 `nightly_batch.sh scheduled`를 부르고, 시작 시각부터 5분 안이면 `run_pipeline.py --start-offset 0 --skip-done --max-docs <n> --deadline <hh:mm>`. 형식 오류면 종료 2. 서비스 `TimeoutStartSec=6h`.
 - 파일: `pipeline/extract/candidate_pick.py`(`done_keys`·`list_targets`·`unparsed`), `common/store/parsing_meta_db.py`, `deploy/host/scripts/{run_pipeline.py,nightly_batch.sh}`, `deploy/host/systemd/data-pipeline-nightly.{timer,service}`.
 - QA: `tests/general/deploy/test_trigger_gate.py`·`tests/server/pipeline/test_nightly_time.py`·`test_run_pipeline`(`deadline_at`) · `tests/server/pipeline/test_target_list.py`·`test_parse_pick.py` · 통과. 서버 확인 refactor.md C-72.
 - Status: done
@@ -51,7 +51,7 @@
 - 이유: 게시가 gold를 기다리지 않고, 원본은 게시가 성공했을 때만 지운다.
 - 규칙:
   1. 파싱 성공 → 게시 대기열(게시 스레드 1개 — Object Storage 업로드 + ParsingMeta INSERT).
-  2. 게시 성공 → 원본(staging `.bin`·`_docflow/<seq>/_source_files`) 삭제(`drop_original()` — 원본을 지우는 곳은 여기 하나, 파싱 끝 `candidate_ready.finish()`는 처리 기록·sha256만 남김) → 구조화 대기열(`struct_workers` 스레드 — gold_bundle·pgvector_load) → `_docflow/<seq>` 삭제(`--no-cleanup`이면 남김).
+  2. 게시 성공 → 원본(staging `.bin`·`_docflow/<seq>/_source_files`) 삭제(`drop_original()` — 원본을 지우는 곳은 여기 하나, 파싱 끝 `candidate_ready.finish()`는 처리 기록·sha256만 남김) → 구조화 대기열(`ops.run_pipeline.structure.workers` 스레드 — gold_bundle·pgvector_load) → `_docflow/<seq>` 삭제(`--no-cleanup`이면 남김).
   3. 파싱 실패·게시 실패 → 원본을 남기고 로그에만(gold로 안 감, EDW에 안 씀). 파싱 실패면 그 문서 표지(`RUN_PIPELINE_DOC`)가 붙은 컨테이너 안 프로세스를 끈다.
   4. gold 실패 → 게시한 silver·ParsingMeta 행은 그대로, 로그에만. `gold_version`이 비어 다음 `--skip-done`이 다시 고른다(파싱·게시부터 다시).
 - 파일: `deploy/host/scripts/run_pipeline.py`(`doc_flow`, `cleanup_doc`, `drop_original`) · `pipeline/extract/candidate_ready.py`(`finish`).
@@ -83,9 +83,9 @@
 - 규칙:
   1. 레인 분류(받은 뒤, 결과는 `s3_key`별로 저장해 다시 씀): `run_pipeline.classify_doc`이 컨테이너 안 `pipeline/extract/doc_lane_group.py`(원본 파일·원본 이름·크기 — 제한 60초)를 부르고, 규칙은 그 파일의 `doc_lane_group()` 하나에 있다. 답이 없으면 vlm. 규칙: 확장자가 `.txt .hwpx .hwp .csv .eml .msg .html .htm .tsv .md .json .xml .log .rtf`면 light. `.pptx .ppt`면 vlm. `.pdf .docx .doc .xlsx .xls .xlsm .docm`이면 내용을 본다 — PDF는 첫 3쪽 글자가 쪽당 평균 300자 미만, 오피스 zip은 내장 그림 8개 이상 또는 합계 800,000바이트 이상, 검사 실패도 heavy → vlm. 아니면 크기 기준(`.docx .doc` 300KB · `.xlsx .xlsm .xls` 500KB · `.pdf` 1024KB 이상)이면 medium, 그 밖 light. 다른 확장자는 vlm.
   2. 워커 수: settings.yaml `ops.run_pipeline.<레인>_dedicated`(자기 레인만)·`<레인>_shared`(자기 레인 먼저, 비면 대기열이 가장 긴 다른 레인), 기본 각 1(모두 6개).
-  3. `vlm_cap`(기본 2): 진행 중 vlm 문서가 이만큼이면 vlm 레인을 건너뛴다(전담 워커도).
+  3. `ops.run_pipeline.vlm_lane.max_concurrent_docs`(기본 2): 진행 중 vlm 문서가 이만큼이면 vlm 레인을 건너뛴다(전담 워커도).
   4. 고르기 = 순수 함수 `pick_lane(own, shared, queues, inflight, vlm_cap)`.
-  5. 시작 때 거부(종료 2): 값이 0 이상 정수가 아님 · `staging`·`staging_workers`·`vlm_cap`이 1 미만 · 전담과 모든 공유 워커 합이 0인 레인.
+  5. 시작 때 거부(종료 2): 값이 0 이상 정수가 아님 · `staging.max_docs`·`staging.workers`·`vlm_lane.max_concurrent_docs`가 1 미만 · 전담과 모든 공유 워커 합이 0인 레인.
 - 파일: `deploy/host/scripts/run_pipeline.py`(`classify_doc`·`RUN_PIPELINE_DEFAULTS` — 설정 모델 `pipeline.config.PipelineHostRunPipeline`와 시험이 대조) · `pipeline/extract/doc_lane_group.py`(`doc_lane_group`).
 - QA: `tests/general/deploy/test_run_pipeline.py`(`pick_lane` 표·`test_classify_cache_skips_probe`) · `tests/server/pipeline/test_doc_group.py`(그룹 규칙 표) · 통과.
 - Status: done
@@ -94,9 +94,9 @@
 ## rn-02 · 대기열 — 진입·중간 상한과 길이 기록
 - 이유: 구조화가 느리면 파싱 결과가 쌓인다(디스크·대기 시간).
 - 규칙:
-  1. 진입 `ops.run_pipeline.staging`(기본 20, `--staging`이 덮음): 미리 받아 둘 문서 수(받는 중 포함, 파싱 중 제외). 동시 받기 = `min(staging_workers(기본 2), 빈자리)`.
-  2. 구조화 스레드 `struct_workers`(기본 2, `--struct-workers`가 덮음).
-  3. 중간 상한 `struct_backlog`(비우면 구조화 스레드 × 2, 0 = 없음): 게시 대기 + 구조화 대기가 이 수 이상이면 레인 워커가 새 파싱을 시작하지 않는다.
+  1. 진입 `ops.run_pipeline.staging.max_docs.max_docs`(기본 20, `--staging`이 덮음): 미리 받아 둘 문서 수(받는 중 포함, 파싱 중 제외). 동시 받기 = `min(staging_workers(기본 2), 빈자리)`.
+  2. 구조화 스레드 `ops.run_pipeline.structure.workers`(기본 2, `--struct-workers`가 덮음).
+  3. 중간 상한 `ops.run_pipeline.structure.max_backlog`(비우면 구조화 스레드 × 2, 0 = 없음): 게시 대기 + 구조화 대기가 이 수 이상이면 레인 워커가 새 파싱을 시작하지 않는다.
   4. `batch_progress/queue_depth.jsonl`에 dispatch·pick·parse_end·struct_put·struct_get마다 한 줄(`pub_wait` 포함). 쓰기 실패는 무시.
 - 파일: `deploy/host/scripts/run_pipeline.py`.
 - QA: `tests/general/deploy/test_run_pipeline.py`(`test_struct_backlog_holds_new_parses`) · 통과.
@@ -105,7 +105,7 @@
 <a id="rn-03"></a>
 ## rn-03 · MCP `parse_document`에 CPU 먼저 주기
 - 이유: 일괄 파싱이 CPU를 다 쓰면 사람이 기다리는 `parse_document`가 느려진다. 컨테이너끼리는 cgroup CPU 가중치가 정한다(nice는 한 세션 안에서만).
-- 규칙: `parse_document` 작업 서비스는 전용 컨테이너 `mcp-data-parsing`(같은 이미지, entrypoint `run-mcp-parsing` = `pipeline.run_mcp_parsing`, 127.0.0.1:8766). 자원 = settings.yaml `ops.pipeline_host.data_parsing_cpus`(기본 3)·`data_parsing_mem_limit`(8g)·`data_parsing_cpu_shares`(4096 — 일괄 `data-pipeline`은 1024). 결과 폴더만 붙인다. 죽으면 `restart`, 꺼지면 `mcp_keepalive.sh`(keepalive 타이머)가 띄운다. 일괄 엔진 자식은 nice +10.
+- 규칙: `parse_document` 작업 서비스는 전용 컨테이너 `mcp-data-parsing`(같은 이미지, entrypoint `run-mcp-parsing` = `pipeline.run_mcp_parsing`, 127.0.0.1:8766). 자원 = settings.yaml `ops.containers.data_parsing.cpus`(기본 3)·`mem_limit`(8g)·`cpu_shares`(4096 — 일괄 `data-pipeline`은 1024). 결과 폴더만 붙인다. 죽으면 `restart`, 꺼지면 `mcp_keepalive.sh`(keepalive 타이머)가 띄운다. 일괄 엔진 자식은 nice +10.
 - 파일: `deploy/host/compose/compose.data-parsing.yml`(개발 서버 짝 `compose.code.data-parsing.yml`), `pipeline/run_mcp_parsing.py`, `common/core/resources.py`.
 - QA: `tests/general/deploy/test_compose.py` · 통과.
 - Status: dev — 서버에서 일괄 파싱 중 `parse_document` 응답 시간 확인(refactor.md C-83 ①)만 남음.
@@ -123,7 +123,7 @@
 - 요건(되어야 할 모습):
   1. 서버 러너 `run_pipeline.py`는 지휘만 한다 — 레인·워커·임시 폴더 관리와 컨테이너 안 파이프라인 명령 호출(`docker exec`). 원천 목록 읽기, 끝난 문서 빼기, 중복, 레인 판정, FAQ 교체 판단, 게시 판단은 파이프라인(extract·transform·load) 함수가 한다.
   2. 대상 목록은 컨테이너 명령 하나 `python -m pipeline.extract.candidate_pick list`가 만든다 — EDW `FileStorageMap`에서 이름 키워드(`--filter`)·파일 크기 오름차순(크기 없는 행 뺌), `--start-offset`·`--limit`·`--seqs`, `--skip-done`이면 끝난 문서(`ok`·`partial`은 `gold_version`도, `skipped_dup` — `done_keys()` 한 곳)를 빼고, FAQ를 앞에(교체를 마친 키 `<결과 폴더>/_faq_seen.txt`), 앞 `--max-docs`개. 결과는 목록 파일 `--out`(JSON `total`·`start`·`docs`[`seq`·`id`·`s3_key`·`original_filename`·`file_size`])이고 러너는 그 파일만 읽는다. EDW 접속은 `parsing_meta_db`·`mssql`을 다시 쓴다.
-  3. 원본 받기는 한 길이다 — `python -m pipeline.extract.candidate_ready stage`가 문서를 `_staging/`(`extract.source.staging`)에 한 번 받고, 같은 실행에서 바로 중복 제외(받은 파일 SHA-256 — 같은 묶음·ParsingMeta에 끝난 다른 원본, pl-02)와 형식·DRM·암호·미지원 거르기(`filter_and_rotate`)를 이 순서로 한다. 살아남은 문서만 파싱하고, 파싱(`parse --staged`)은 받아 둔 파일만 읽는다 — 받지 못한 문서는 파싱 실패다. DRM 문서는 표시만 하고 건너뛴다(처리 단계 없음). 회전은 기본 꺼짐 그대로다. 원본은 게시가 성공한 뒤 `drop_original()`만 지운다(pl-24).
+  3. 원본 받기는 한 길이다 — `python -m pipeline.extract.candidate_ready stage`가 문서를 `_staging/`(`extract.source.staging_dir`)에 한 번 받고, 같은 실행에서 바로 중복 제외(받은 파일 SHA-256 — 같은 묶음·ParsingMeta에 끝난 다른 원본, pl-02)와 형식·DRM·암호·미지원 거르기(`filter_and_rotate`)를 이 순서로 한다. 살아남은 문서만 파싱하고, 파싱(`parse --staged`)은 받아 둔 파일만 읽는다 — 받지 못한 문서는 파싱 실패다. DRM 문서는 표시만 하고 건너뛴다(처리 단계 없음). 회전은 기본 꺼짐 그대로다. 원본은 게시가 성공한 뒤 `drop_original()`만 지운다(pl-24).
   4. PC(`RUN_ENV=local`)도 같은 `run_pipeline`로 E2E를 돈다 — 가짜 대상만(EDW sqlite·`file://` 게시 폴더·상대 경로, op-14). PC만의 분기는 접속 대상을 고르는 한 곳이다.
   5. 커밋 전 점검 스크립트는 점검 도구 자리 `common/check/`에 있다(`.githooks/pre-commit`·CLAUDE.md §5-2·README가 그 경로를 부른다).
 - 비고(현재와 다른 점, 11-05 확인):
@@ -150,10 +150,10 @@
 ## rn-07 · 벌 이름 하나로 갈리는 여러 벌, 적은 설정 칸, 목적만 적은 주석
 - 이유(사용자 11-05 점검): 개발 서버에 여러 벌이 EDW·게시·포트·스키마를 함께 쓰면 서로 덮는다. 같은 값 칸·늘 같은 스위치·옛 칸 표는 설정을 읽기 어렵게 한다.
 - 요건(되어야 할 모습):
-  1. 여러 벌은 `ops.host.instance` 한 칸으로 갈린다 — 컨테이너 이름 · PG 스키마 `<db_schema>_<벌>`(따로 적으면 그 값) · EDW 기록 표 `<parsing_meta_table>_<벌>`(예 `AI.ParsingMeta_hong` — DB 담당이 미리 만듦, 실행 중 DDL 없음) · 게시 경로는 dev에서만 `<prefix>/<벌>/…` · 포트는 기본값 그대로면 시작 거부. 버전 칸에는 접미를 붙이지 않는다. `prd`에서 벌 이름을 쓰면 시작 거부.
+  1. 여러 벌은 `ops.host.instance_name` 한 칸으로 갈린다 — 컨테이너 이름 · PG 스키마 `<db_schema>_<벌>`(따로 적으면 그 값) · EDW 기록 표 `<parsing_meta_table>_<벌>`(예 `AI.ParsingMeta_hong` — DB 담당이 미리 만듦, 실행 중 DDL 없음) · 게시 경로는 dev에서만 `<prefix>/<벌>/…` · 포트는 기본값 그대로면 시작 거부. 버전 칸에는 접미를 붙이지 않는다. `prd`에서 벌 이름을 쓰면 시작 거부.
   2. 파싱 MCP는 컨테이너·서비스·compose 파일 `mcp-data-parsing`, 설정 칸 `data_parsing`(env `DATA_PARSING_*`). 파싱 포트와 프록시 주소는 한 칸, 토큰은 `tokens.mcp` 하나.
   3. `run_pipeline.py`가 컨테이너 명령에 붙이는 `--set` 값(VLM 동시 수·워커 수 등, vlm 레인 값 포함)은 `ops.run_pipeline.*` 칸에서 온다(비우면 그 칸 기본값).
-  4. 늘 같은 값인 스위치 칸과 옛 칸 표는 없다. VLM 동시 수 칸은 둘(`concurrency`·`max_concurrency`). 옛 칸이 남은 settings.yaml은 시작 거부.
+  4. 늘 같은 값인 스위치 칸과 옛 칸 표는 없다. VLM 동시 수 칸은 둘(`common.models.vlm.requests_per_doc`·`max_total_requests`). 옛 칸이 남은 settings.yaml은 시작 거부.
   5. 스캔 PDF 판정은 `pdf_kind` 하나(그림 VLM의 스캔 쪽 판정도).
   6. 쓰지 않는 코드·한 곳만 쓰는 감싸기는 없다. 주석은 목적 한 줄(이력은 git·`docs/history`).
 - QA: selftest·pytest 기준선 유지(벌 이름 → 스키마·EDW 표·게시 경로·포트 거부, prd 거부 시험) · `check_modules`·`keyscan --check`·`sample --check`·`gen_host_keys --check` 통과 · 저장소 전체 ruff·mypy 0 · 옛 이름(`data-pipeline-mcp`·`parse_mcp`·`PARSE_MCP_`) 0건(docs/history 제외).
@@ -193,10 +193,10 @@
 - 이유: ParsingMeta·FileStorageMap·RDB 원천 표·`query_edw`가 같은 EDW 서버·DB에 있다.
 - 규칙:
   1. 벡터는 pgvector에만, EDW에는 넣지 않는다.
-  2. 접속 블록 하나 — settings.yaml `required.edw`(`host`·`port`·`database`·`read_user`·`read_password`·`write_user`·`write_password`, 모델 `common.connections.rdb` · 게시 표 `parsing_meta_table` — 비우면 `AI.ParsingMeta`). 서버는 접속 칸을, PC는 `sqlite` 하나만 채운다. 드라이버는 pymssql만(`common.store.mssql.login(role)`).
+  2. 접속 블록 하나 — settings.yaml `required.edw`(`host`·`port`·`database`·`read_user`·`read_password`·`write_user`·`write_password`, 모델 `common.connections.rdb` · 게시 표 `parsing_meta_table` — 비우면 `AI.ParsingMeta`). 서버는 접속 칸을, PC는 `local_sqlite_file` 하나만 채운다. 드라이버는 pymssql만(`common.store.mssql.login(role)`).
   3. 읽기 계정: RDB 원천 목록·discover·고객 목록·FileStorageMap·ParsingMeta 상태·`run_pipeline.py` 읽기·MCP 전부. 쓰기 계정: ParsingMeta 게시(INSERT/UPDATE)·`loaded_at` UPDATE.
   4. MCP 프로세스는 `settings.edw_read_only()`를 먼저 불러 설정 객체의 쓰기 계정을 비운다.
-  5. PC 대역: `required.edw.sqlite`에 적은 sqlite 파일 하나(`valid_env/edw/edw.sqlite`의 사본 — 생성: `python -m validation.e2e.edw_standin`, `local`에서만 열림)를 `AI`·`CRMS`·`LAS`·`SFDC` 별칭으로 ATTACH(`mssql.standin`, 기본 읽기 전용). `query_edw`는 읽기 전용으로 연다.
+  5. PC 대역: `required.edw.local_sqlite_file`에 적은 sqlite 파일 하나(`valid_env/edw/edw.sqlite`의 사본 — 생성: `python -m validation.e2e.edw_standin`, `local`에서만 열림)를 `AI`·`CRMS`·`LAS`·`SFDC` 별칭으로 ATTACH(`mssql.standin`, 기본 읽기 전용). `query_edw`는 읽기 전용으로 연다.
 - 파일: `common/store/{mssql,parsing_meta_db}.py`, `common/config/settings.py`.
 - QA: `tests/server/common/test_edw_login.py`·`tests/general/common/test_edw_standin.py` · 통과.
 - Status: done
@@ -206,10 +206,10 @@
 - 이유: 폐쇄망 서버는 외부 모델을 부르면 안 되고, PC 호출은 싸게 유지해야 한다.
 - 규칙:
   1. OpenAI 호환 역할 llm·vlm·embed. 서버(dev·prd)는 외부 모델을 거부한다. 외부 전송은 `<PREFIX>_ALLOW_EXTERNAL`이 켜지고 `RUN_ENV=local`일 때만. 개발 서버부터 내부망 모델, PC는 OpenRouter.
-  2. 하루 지출 상한 `dev.models.guard.budget_usd` 기본 0.1달러 — 외부 모델 호출의 하루(현지 날짜) 합계. 비운 칸은 기본값.
-  3. 장부: 날짜마다 파일 하나 — `spend_file`이 있으면 이름 뒤에 날짜(`spend.json` → `spend-<날짜>.json`), 비우면 `<저장소>/output/_llm_spend/<날짜>.txt`. 같은 작업 폴더의 모든 프로세스가 파일 잠금으로 합계 하나를 나눠 쓴다. 정산·반환은 선차감한 날의 장부로 간다. 시험 자식(`case_env`)은 임시 장부.
+  2. 하루 지출 상한 `dev.models.guard.daily_budget_usd` 기본 0.1달러 — 외부 모델 호출의 하루(현지 날짜) 합계. 비운 칸은 기본값.
+  3. 장부: 날짜마다 파일 하나 — `spend_ledger_file`이 있으면 이름 뒤에 날짜(`spend.json` → `spend-<날짜>.json`), 비우면 `<저장소>/output/_llm_spend/<날짜>.txt`. 같은 작업 폴더의 모든 프로세스가 파일 잠금으로 합계 하나를 나눠 쓴다. 정산·반환은 선차감한 날의 장부로 간다. 시험 자식(`case_env`)은 임시 장부.
   4. 외부 LLM은 단가(`PRICES` 또는 `LLM_PRICE_IN·OUT`)를 모르면 거부한다(`llm.chat`·`admit_turn` 같음). 한 번의 호출이 사후 정산으로 상한을 조금 넘을 수 있고, 다음 호출부터 거부된다.
-  5. 응답 캐시, RPM, 시험용 가짜 LLM(`dev.llm_fake` — local만).
+  5. 응답 캐시, RPM, 시험용 가짜 LLM(`dev.fake_llm` — local만).
   6. 역할마다 설정 `dev.models.<llm|vlm|embed>.allow_external` 하나로 외부 허용을 정한다 — `llm.chat`을 부르는 모든 곳(분류 포함)이 `LLM_ALLOW_EXTERNAL`을 따른다(호출 인자 `allow_external=True`는 같은 효과). 내부망 서버(dev·prd)의 settings.yaml은 셋 다 `false`. 시험: `tests/server/common/test_llm.py`(local+1 허용 · local+없음 거부 · dev·prd+1 거부).
 - 파일: `common/ai/guard.py`, `common/ai/llm.py`, `common/config/settings.py`.
 - QA: `tests/server/common/test_guard.py`·`test_llm.py` · 통과. 서버 확인 refactor.md C-88.
@@ -219,7 +219,7 @@
 ## op-01 · JSON Lines 사건 기록과 DB 로그(두 앱)
 - 이유: 두 앱의 사건·감사·성능 기록을 같은 형식으로 남긴다.
 - 규칙 — JSON 줄:
-  1. `common/core/jsonlog.py` `setup(app)` — 한 줄 키 `time, level, app, event, msg, request_id, run_id, span_id, duration_ms, err`. logger 이름 `applog.<앱>`. PC 기본 `logs/<앱>.jsonl`, 서버 stdout. 설정 `ops.log.level`(기본 INFO)·`ops.log.dir`. contextvars ID는 `settings.child_env()` 내부 신호로 자식에 전파.
+  1. `common/core/jsonlog.py` `setup(app)` — 한 줄 키 `time, level, app, event, msg, request_id, run_id, span_id, duration_ms, err`. logger 이름 `applog.<앱>`. PC 기본 `logs/<앱>.jsonl`, 서버 stdout. 설정 `ops.log.level`(기본 INFO)·`ops.log.json_dir`. contextvars ID는 `settings.child_env()` 내부 신호로 자식에 전파.
   2. 비밀값 가림은 `jsonlog.masked(value)` 한 곳 — 라벨 패턴과 settings `SecretStr` 칸 값(4자 이상은 부분 문자열, 1~3자는 토큰 경계에서만). JSON 줄·sink·MCP args/result/err가 같은 함수를 쓴다.
   3. `err`는 allowlist — 예외 타입 이름(+errno 이름·CalledProcessError 종료 코드)과 `span.safe(...)` 고정 문구만. 외부 예외 문자열 원문은 남기지 않는다.
   4. dev·prd 시작 관문: 비어 있지 않은 비밀 설정이 8자(`MIN_SECRET_LENGTH`) 미만이면 칸 경로만 알리고 종료 2.

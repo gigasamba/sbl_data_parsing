@@ -86,7 +86,7 @@ def test_root_is_code_parent():
 
 def test_timers():
     """host_ctl.sh timers가 단위 파일 4개의 @CODE_DIR@를 이 코드 폴더로 채워 쓴다(DC_UNIT_DIR — systemctl 없음).
-    여러 벌(ops.host.instance)이면 단위 이름 끝에 -<instance>(타이머·서비스 짝이 같은 이름)."""
+    여러 벌(ops.host.instance_name)이면 단위 이름 끝에 -<instance>(타이머·서비스 짝이 같은 이름)."""
     bash = _need_bash()
     if not bash:
         return

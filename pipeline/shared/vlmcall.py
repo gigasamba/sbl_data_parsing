@@ -1,7 +1,7 @@
 """VLM 호출 한 길: 엔진 qwen_vlm·쪽 VLM 후보정(vlm_page)·pptx 슬라이드·그림 VLM(figures)·중첩 그림(nested)이
 모두 `ask()` 하나로 부른다 — llm.complete('vlm')(내부망 가드·예산 장부·모델 다운 감지·`common.models.vlm.extra_body`·재시도
 `models.vlm.retry`·호출 1건 제한 시간 `models.vlm.timeout`) + 전역 동시 수 게이트(`models.vlm.max_concurrency` — 한 프로세스 안의
-모든 VLM 호출 합). 렌더 해상도는 `extract.ocr.dpi` 하나(`dpi()`).
+모든 VLM 호출 합). 렌더 해상도는 `extract.page_render_dpi` 하나(`dpi()`).
 쪽 옮기기(`transcribe` → `vlm_page`)는 엔진과 후보정이 같은 지시문·렌더·캐시 열쇠를 써서, 한쪽이 옮긴 쪽은 다른 쪽이 다시 부르지 않는다.
 """
 
@@ -59,12 +59,12 @@ EMPTY = "빈 응답"  # vlm_page가 빈 답에 남기는 오류 글자(엔진은
 
 
 def dpi():
-    """쪽·그림 렌더 해상도(DPI) — `extract.ocr.dpi` 하나(엔진·쪽 VLM·pptx·그림·prepare 공용, 기본 150). 결정적 열쇠에 들어감."""
+    """쪽·그림 렌더 해상도(DPI) — `extract.page_render_dpi` 하나(엔진·쪽 VLM·pptx·그림·prepare 공용, 기본 150). 결정적 열쇠에 들어감."""
     return int(pc.cfg().extract.ocr.dpi)
 
 
 def page_max():
-    """문서당 VLM으로 옮길 쪽 수 상한 `transform.vlm.page_max` — None = 전부, 0 = 끔, N = 앞 N쪽(엔진 qwen_vlm·쪽 VLM 공통)."""
+    """문서당 VLM으로 옮길 쪽 수 상한 `transform.vlm.max_pages_per_doc` — None = 전부, 0 = 끔, N = 앞 N쪽(엔진 qwen_vlm·쪽 VLM 공통)."""
     pc.checked("VLM_PAGE_MAX")  # 형식이 틀리면 여기서 실패(기본값이 '제한 없음'이라 조용히 넘기지 않음)
     v = pc.cfg().transform.vlm.page_max
     return None if v is None else int(v)

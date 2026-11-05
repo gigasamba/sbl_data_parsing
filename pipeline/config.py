@@ -62,7 +62,9 @@ class PipelineExtractCache(Section):
 class PipelineExtractOcr(Section):
     dpi: int | None = F(150, "OCR_DPI", "쪽·그림 이미지 렌더링 해상도(DPI, OCR 엔진·VLM 엔진·쪽 VLM·그림 VLM·pptx 슬라이드·prepare 공용)")
     max_pages: int | None = F(
-        0, "OCR_MAX_PAGES", "문서당 OCR 엔진(rapidocr 등 — VLM 아님) 쪽 수 상한(쪽, 0=제한 없음 · VLM 쪽 수 상한은 transform.vlm.page_max)"
+        0,
+        "OCR_MAX_PAGES",
+        "문서당 OCR 엔진(rapidocr 등 — VLM 아님) 쪽 수 상한(쪽, 0=제한 없음 · VLM 쪽 수 상한은 transform.vlm.max_pages_per_doc)",
     )
     table_grid: bool | None = F(True, "OCR_TABLE_GRID", "OCR 박스 좌표로 표 격자를 추정할지(=0이면 끔)")
     threads: int | None = F(
@@ -211,7 +213,6 @@ class PipelineExtract(Section):
     rapidocr_page_workers: int | None = F(1, "RAPIDOCR_PAGE_WORKERS", "rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개)")
     rotated_max: int | None = F(20, "PARSE_ROTATED_MAX", "쪽 VLM 후보로 올릴 '회전된 쪽' 상한(쪽 수) — 0이면 rotation.csv를 안 읽음")
     skipped_log: str | None = F(None, "PARSE_SKIPPED_LOG", "건너뛴 문서(암호 PDF 등) 기록 jsonl 경로")
-    source_limit: int | None = F(0, "PARSE_SOURCE_LIMIT", "원본에서 처리할 문서 건수 상한(0=제한 없음)")
     text_page_sec: float | None = F(
         10.0, "PARSE_TEXT_PAGE_SEC", "글자 엔진(VLM 아님) 문서×엔진 1건의 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
     )
@@ -380,7 +381,7 @@ by_env, given, dropped, checked = _VIEW.by_env, _VIEW.given, _VIEW.dropped, _VIE
 
 
 def stack():
-    """엔진 구성(사전 — name·body_sha + body). 서버·PC 같은 파일(common.paths.stack_file — 비우면 resources/config/pipeline_stack.json,
+    """엔진 구성(사전 — name·body_sha + body). 서버·PC 같은 파일(resources/config/pipeline_stack.json —
     사용자 11-01: 판 표 없음). 층 파일(run_all·attachments)이 이것만 부른다 — 이 모듈은 층의 code_fp 의존이 아니다(common 아래만 셈)."""
     from common.store.db import cfgfile  # 파일 읽기 한 곳(이 모듈은 층의 code_fp 의존이 아님)
 

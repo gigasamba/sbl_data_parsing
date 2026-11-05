@@ -11,7 +11,7 @@
 모든 형식을 잘 읽는 파서는 없다. 형식마다 정해 둔 엔진을 모두 돌리고 represent가 고른다.
 
 ### 규칙
-1. 엔진 구성은 파일 하나 `resources/config/pipeline_stack.json`(설정 `common.paths.stack_file`)이다 — 서버·PC 같은 파일. 모양·읽기·바꾸기는 [resources.md §1](../architecture/resources.md).
+1. 엔진 구성은 파일 하나 `resources/config/pipeline_stack.json`이다(설정 칸 없음) — 서버·PC 같은 파일. 모양·읽기·바꾸기는 [resources.md §1](../architecture/resources.md).
 2. 문서마다 그 형식 키의 `parse` 목록에 있는 엔진을 **모두** 돌린다(하나씩 차례로 시도하지 않음).
 3. 형식 키 = 확장자(소문자). 단 `.pdf`는 글자층이 쪽당 평균 20자 미만이면 `.pdf_image`(스캔), 아니면 `.pdf_text` — 판정은 `<out>/_types.json`에 크기·수정 시각과 함께 캐시한다. 판정 함수는 `pipeline.shared.pdf_kind.pdf_kind()` 하나 — 쪽 VLM의 문서 전체 스캔 판정(`scan_page_vlm.is_scan`)과 `parse_document`도 같은 함수를 쓴다(레인 분류 `doc_lane_group`의 앞 3쪽 규칙은 목적이 달라 따로).
 4. 만약 형식 키가 구성에 없으면 → 그 확장자를 읽는 등록 엔진 모두(OCR 엔진 제외)로 돌리고 형식마다 한 번 로그를 남긴다.
@@ -31,14 +31,14 @@
 
 ### 규칙
 1. 문서마다 구성의 엔진을 동시에, 엔진마다 따로 떨어진 자식 프로세스 하나로 돌린다. 문서끼리는 `--workers`·`--procs`로 병렬.
-2. 문서×엔진 제한 시간(초) = round(max(max(1, 쪽 수) × 쪽당 초, 첫 문서면 `pipeline.extract.warmup_sec`(60)) + `isolate_overhead`(10), 2). 쪽당 초 = VLM 엔진은 VLM 호출 1건 제한 `common.models.vlm.timeout`(180), 그 밖 `text_page_sec`(10).
+2. 문서×엔진 제한 시간(초) = round(max(max(1, 쪽 수) × 쪽당 초, 첫 문서면 `tuning.extract.first_doc_min_timeout_sec`(60)) + `tuning.extract.isolate_startup_sec`(10), 2). 쪽당 초 = VLM 엔진은 VLM 호출 1건 제한 `common.models.vlm.timeout_sec`(180), 그 밖 `tuning.extract.text_engine_page_timeout_sec`(10).
 3. 시간을 넘기면 제한을 두 배로 한 번 더 돌리고, 그래도 넘으면 실패로 기록한다.
 4. OCR 엔진 `rapidocr_ko`는 파싱 엔진으로 돌지 않는다 — 이미지·스캔 문서는 VLM 엔진 `qwen_vlm`만.
-5. 글자 PDF 속 스캔 쪽은 represent가 쪽 전체를 VLM으로 읽어 채운다(`vlm_page`) — 회전된 쪽(`pipeline.extract.rotated_max` 20)·숨은 글자가 그림과 겹친 쪽(`hidden_overlap_max` 20) 각각 최대 20쪽. 쪽 VLM은 `PARSE_POST`에 `vlm_page`가 있을 때만, 문서당 한 번(실패한 쪽은 다시 부르지 않음).
+5. 글자 PDF 속 스캔 쪽은 represent가 쪽 전체를 VLM으로 읽어 채운다(`vlm_page`) — 회전된 쪽(`tuning.extract.max_rotated_pages` 20)·숨은 글자가 그림과 겹친 쪽(`tuning.extract.max_hidden_overlap_pages` 20) 각각 최대 20쪽. 쪽 VLM은 `PARSE_POST`에 `vlm_page`가 있을 때만, 문서당 한 번(실패한 쪽은 다시 부르지 않음).
 6. 대표 결과가 이미지·스캔 형식(`.pdf_image`·png·jpg 등)의 VLM 엔진이고 글이 비어 있지 않으면 → 쪽 VLM을 건너뛰고 쪽 그림은 처리된 것으로 표시한다(그림 VLM 없음).
-7. VLM 엔진·쪽 VLM·그림 VLM의 호출 1건 제한은 모두 `common.models.vlm.timeout` 하나다([pl-43](#pl-43)).
-8. 일괄 엔진 자식은 낮은 우선순위로 돈다(`pipeline.extract.low_priority` — POSIX nice +10). 컨테이너끼리의 CPU 순위는 [ops.md#rn-03](ops.md#rn-03).
-9. 파싱 서비스(`parse_document`)는 우선순위를 낮추지 않고 자기 제한을 쓴다 — `pipeline.service.data_parsing.text_page_sec` 1 · `warmup_sec` 20(VLM 엔진은 파이프라인과 같은 `common.models.vlm.timeout`), 작업 제한 `job_timeout_sec` 600. 작업 시간을 넘기면 프로세스 그룹 전체를 끝낸다.
+7. VLM 엔진·쪽 VLM·그림 VLM의 호출 1건 제한은 모두 `common.models.vlm.timeout_sec` 하나다([pl-43](#pl-43)).
+8. 일괄 엔진 자식은 낮은 우선순위로 돈다(`tuning.extract.low_priority_engines` — POSIX nice +10). 컨테이너끼리의 CPU 순위는 [ops.md#rn-03](ops.md#rn-03).
+9. 파싱 서비스(`parse_document`)는 우선순위를 낮추지 않고 자기 제한을 쓴다 — `tuning.ops.services.data_parsing.text_engine_page_timeout_sec` 1 · `first_try_min_timeout_sec` 20(VLM 엔진은 파이프라인과 같은 `common.models.vlm.timeout_sec`), 작업 제한 `job_timeout_sec` 600. 작업 시간을 넘기면 프로세스 그룹 전체를 끝낸다.
 10. 알려진 한계: 숨은 글자가 그림과 겹친 쪽(`hidden_overlap`)은 쪽 VLM에 낱말 상자가 없어 숫자 표기 차이(예: 430.000 ↔ 430,000)를 고치지 않고 원래 글을 둔다. 글자 엔진은 쪽으로 나누지 않는다(쪽 병렬은 VLM 엔진 안에서만).
 
 ### 예시
@@ -55,21 +55,21 @@
 공유 VLM 서버의 동시 요청을 설정 몇 개로 묶어 조절한다(엔진마다 손잡이를 두지 않음). 11-04(사용자): 스캔 쪽이 엔진 `qwen_vlm`·쪽 VLM 후보정·그림 VLM 세 길로 각자 요청을 만들어 해상도(200·150·200)·생각 끄기·제한 시간·재시도·동시 수가 길마다 달랐다 — 한 함수·한 설정으로 합친다.
 
 ### 규칙
-1. 모든 VLM 호출(엔진 `qwen_vlm`·쪽 VLM·pptx 슬라이드·그림 VLM·중첩 그림)은 `pipeline/shared/vlmcall.py`의 `ask()` 하나로 `common.ai.llm.complete('vlm')`를 부른다 — 내부망 가드·예산 장부·모델 다운 감지가 같고, 요청 본문에 `common.models.vlm.extra_body`(생각 끄기 등)를 합친다. 코드에 고정한 생각 끄기는 없다.
-2. 호출 1건 제한 시간 = `common.models.vlm.timeout`(180초). 실패(시간 초과·연결 오류·429·5xx) 재시도 = `common.models.vlm.retry`(1 — 시도는 retry + 1번).
-3. 렌더 해상도 = `pipeline.extract.ocr.dpi`(150) 하나 — 엔진·쪽 VLM·pptx·그림·`prepare --dpi` 기본값. 긴 변은 2000 px로 줄인다.
-4. 쪽 수 상한 = `pipeline.transform.vlm.page_max`(비움 = 전부, 0 = 끔) — 엔진과 쪽 VLM 공통. `pipeline.extract.ocr.max_pages`는 OCR 엔진(VLM 아님)에만 남는다(엔진 공용 파일 `engines/_common`을 바꾸면 모든 엔진 지문이 바뀌어 두었다).
+1. 모든 VLM 호출(엔진 `qwen_vlm`·쪽 VLM·pptx 슬라이드·그림 VLM·중첩 그림)은 `pipeline/shared/vlmcall.py`의 `ask()` 하나로 `common.ai.llm.complete('vlm')`를 부른다 — 내부망 가드·예산 장부·모델 다운 감지가 같고, 요청 본문에 `common.models.vlm.extra_request_body`(생각 끄기 등)를 합친다. 코드에 고정한 생각 끄기는 없다.
+2. 호출 1건 제한 시간 = `common.models.vlm.timeout_sec`(180초). 실패(시간 초과·연결 오류·429·5xx) 재시도 = `tuning.common.models.vlm.retries`(1 — 시도는 retry + 1번).
+3. 렌더 해상도 = `extract.page_render_dpi`(150) 하나 — 엔진·쪽 VLM·pptx·그림·`prepare --dpi` 기본값. 긴 변은 2000 px로 줄인다.
+4. 쪽 수 상한 = `transform.vlm.max_pages_per_doc`(비움 = 전부, 0 = 끔) — 엔진과 쪽 VLM 공통. `extract.ocr.max_pages_per_doc`는 OCR 엔진(VLM 아님)에만 남는다(엔진 공용 파일 `engines/_common`을 바꾸면 모든 엔진 지문이 바뀌어 두었다).
 5. 엔진과 쪽 VLM은 같은 쪽 옮기기 함수(`transcribe` — 같은 지시문 `page_transcribe`·렌더·캐시 열쇠)를 써서, 엔진이 옮긴 쪽은 후보정이 캐시로 다시 쓴다. 엔진은 쪽 하나라도 호출이 실패하면 문서×엔진 실패로 남긴다(빈 답은 빈 쪽).
-6. 동시 수: 한 프로세스 안 모든 VLM 호출의 합 상한 = `common.models.vlm.max_concurrency`(8, 호출 한 건이 자리 하나). 문서 하나 안 = `common.models.vlm.concurrency`(4 — 쪽·그림 공통). 쪽 옮기기는 가장 느린 호출이 60초를 넘으면 다음 묶음 병렬 수를 절반(최소 2)으로 줄였다가 빨라지면 되돌린다(코드 상수).
-7. 일괄 파싱(`pipeline.cli parse`)은 엔진 자식에 `VLM_CONCURRENCY` = max(1, min(`concurrency`, `max_concurrency` ÷ 동시 문서 수))를 넘긴다. 동시 문서 수 = min(이번 문서 수, 조각 `--procs` × `--workers`).
+6. 동시 수: 한 프로세스 안 모든 VLM 호출의 합 상한 = `common.models.vlm.max_total_requests`(8, 호출 한 건이 자리 하나). 문서 하나 안 = `common.models.vlm.requests_per_doc`(4 — 쪽·그림 공통). 쪽 옮기기는 가장 느린 호출이 60초를 넘으면 다음 묶음 병렬 수를 절반(최소 2)으로 줄였다가 빨라지면 되돌린다(코드 상수).
+7. 일괄 파싱(`pipeline.cli parse`)은 엔진 자식에 `VLM_CONCURRENCY` = max(1, min(`requests_per_doc`, `max_total_requests` ÷ 동시 문서 수))를 넘긴다. 동시 문서 수 = min(이번 문서 수, 조각 `--procs` × `--workers`).
 
 ### 현재 상태(11-04)
-- 지운 칸(남아 있으면 시작 거부): `extract.vlm_page_sec`·`tuning.ops.services.data_parsing.vlm_page_sec` → `common.models.vlm.timeout` · `tuning.transform.vlm.deadline` → `timeout` · `transform.vlm.global_concurrency` → `max_concurrency` · `tuning.transform.vlm.page_concurrency`·`tuning.transform.figures.vlm_parallel`·`tuning.ops.nightly_run.vlm_concurrency`(명령 인자 `--vlm-concurrency`) → `concurrency` · `transform.vlm.page_slow`·`tuning.transform.vlm.page_min_concurrency` → 코드 상수.
+- 지운 칸(남아 있으면 시작 거부): `extract.vlm_page_sec`·`tuning.ops.services.data_parsing.vlm_page_sec` → `common.models.vlm.timeout_sec` · `tuning.transform.vlm.deadline` → `timeout_sec` · `transform.vlm.global_concurrency` → `max_total_requests` · `tuning.transform.vlm.page_concurrency`·`tuning.transform.figures.vlm_parallel`·`tuning.ops.nightly_run.vlm_concurrency`(명령 인자 `--vlm-concurrency`) → `requests_per_doc` · `transform.vlm.page_slow`·`tuning.transform.vlm.page_min_concurrency` → 코드 상수.
 - 고친 결함: run_pipeline이 `--set VLM_CONCURRENCY=8`(vlm 레인 6)을 줘도 `--workers` 기본 4로 나눠 문서 1건 실행의 엔진 자식이 늘 2였다(`8 ÷ 4`). 이제 동시 문서 수(문서 1건이면 1)로 나눈다.
 - 결과가 바뀜: 엔진 `qwen_vlm` 지문이 바뀌어 스캔·이미지 문서는 다시 파싱된다(지시문이 쪽 VLM과 같은 `page_transcribe`로, 해상도 200 → 150). 그림 해상도 200 → 150이라 그림 캐시도 새로 만든다. 서버 확인은 [refactor.md C-93](../refactoring/refactor.md).
 
 ### QA
-- `tests/server/pipeline/test_vlmcall.py` — 가짜 로컬 VLM 서버로 표 한 줄 = 한 길(엔진·쪽 VLM 후보정·그림·중첩 그림): 같은 `extra_body`·제한 시간·해상도, 엔진이 옮긴 쪽은 후보정이 호출 0, 재시도 횟수·쪽 상한·실패 시 엔진 실패.
+- `tests/server/pipeline/test_vlmcall.py` — 가짜 로컬 VLM 서버로 표 한 줄 = 한 길(엔진·쪽 VLM 후보정·그림·중첩 그림): 같은 `extra_request_body`·제한 시간·해상도, 엔진이 옮긴 쪽은 후보정이 호출 0, 재시도 횟수·쪽 상한·실패 시 엔진 실패.
 - `tests/general/pipeline/test_vgate.py` — 합 상한만큼만 동시 진입.
 - Status: done
 
@@ -110,7 +110,7 @@
 엔진마다 결과가 다르다. 다음 단계로 넘기는 글(대표 결과 `_rep/<문서>.json`)은 가장 정확해야 한다.
 
 ### 규칙
-1. 대표 엔진은 정확도 + 풍부함으로 고른다(`pipeline.transform.represent.rep_select`, 기본 best).
+1. 대표 엔진은 정확도 + 풍부함으로 고른다(`transform.represent.engine_pick`, 기본 best).
 2. 줄 단위 투표로 합치고(`fragment_vote.py`), 엔진 사이 라벨·값을 서로 확인한다(`crosscheck.py`).
 3. 후보정 `PARSE_POST`(일괄 파싱 기본 `all` = `vlm_page,supsub,charts,figures,context,attachments`, 파싱 서비스 기본 `supsub`): 쪽 VLM 채우기([pl-22](#pl-22)), 윗첨자 `^`·아래첨자 `_`, 차트·그림([pl-05](#pl-05)), 그림 근처 맥락([pl-37](#pl-37)), 메일 첨부([pl-36](#pl-36)).
 4. 여러 엔진의 표를 본문 제자리에 넣고(`table_inline.py`), 표준 표(`tables_std`)를 만든다.
@@ -128,7 +128,7 @@
 메일의 핵심 내용이 첨부에 있는 경우가 많다.
 
 ### 규칙
-1. `.eml`·`.msg`의 첨부(zip 첨부는 풀어서)를 형식별 엔진으로 재귀 파싱한다 — 깊이 `pipeline.extract.attach.max_depth`(1), 첨부 하나 `max_mb`(20 MB) 넘으면 건너뜀, 문서당 `max_n`(10)개까지.
+1. `.eml`·`.msg`의 첨부(zip 첨부는 풀어서)를 형식별 엔진으로 재귀 파싱한다 — 깊이 `tuning.extract.attach.max_depth`(1), 첨부 하나 `max_mb`(20 MB) 넘으면 건너뜀, 문서당 `max_count`(10)개까지.
 2. 결과는 대표 본문에 `[첨부 <파일명>]` 절로 덧붙이고, 인용 스레드는 접는다.
 3. 인라인 그림(cid)은 그림 기능([pl-05](#pl-05))이 맡는다.
 
@@ -157,8 +157,8 @@
 차트·도식·이미지에는 글자 추출이 놓치는 값이 있다.
 
 ### 규칙
-1. 이미지(pdf·docx·xlsx·pptx·eml)마다 VLM 한 번(`figure_describe` 지시서)으로 검색용 기록을 만든다 — 문서당 최대 `pipeline.transform.vlm.figures_max`(20)개.
-2. 후보에서 뺀다(기록은 남김): 쪽 면적 1% 미만, 짧은 변 `fig_min_px`(64 px) 미만, 같은 sha로 반복되는 이미지(로고).
+1. 이미지(pdf·docx·xlsx·pptx·eml)마다 VLM 한 번(`figure_describe` 지시서)으로 검색용 기록을 만든다 — 문서당 최대 `transform.vlm.max_figures_per_doc`(20)개.
+2. 후보에서 뺀다(기록은 남김): 쪽 면적 1% 미만, 짧은 변 `tuning.transform.figures.min_side_px`(64 px) 미만, 같은 sha로 반복되는 이미지(로고).
 3. 원본 차트 XML·벡터 차트 값은 VLM 없이 읽는다(`chart_values.py`).
 4. 슬라이드·도형은 soffice로 그려 읽는다 — 문서당 `PARSE_PPTX_RENDER_MAX`(10)쪽, 변환 제한 `PARSE_PPTX_CONVERT_SEC`(60초).
 5. 지금 코드는 도식 연결선·겹친 개체 묶음(`figure_overlay`)·중첩 그림(`nested_figure`)·pptx 도형 연결·도형 감지·Mermaid 출력도 따로 만든다(`figures/figure_extract.py`) — 아래 단계에서 줄인다.
@@ -197,7 +197,7 @@
 - 적재(`pipeline/load/pgvector_load.py` `load`)가 EDW 메타를 붙인 직후, gold에 넣기 전에 한다. 고르는 규칙을 따로 두지 않는다 — 적재 대상이 곧 분류 대상.
 
 ### 규칙
-1. 모델은 `llm.chat`(역할 llm — 예산 장부)으로 부른다. effort는 `common.models.llm.extra_body`(서버는 `{"reasoning_effort": "high"}`), 답 길이 상한 4,096 토큰.
+1. 모델은 `llm.chat`(역할 llm — 예산 장부)으로 부른다. effort는 `common.models.llm.extra_request_body`(서버는 `{"reasoning_effort": "high"}`), 답 길이 상한 4,096 토큰.
 2. 본문 근거 = 대표 결과 `.md`(`render_md` — 게시본과 같은 글)의 앞 8,000자. `run_pipeline`가 적재에 `--rep-dir <문서 폴더>/parse/_rep`를 넘긴다(없으면 묶음의 본문). 본문이 없으면 부르지 않고 실패.
 3. **SFDC 지시문**(`resources/prompts/pipeline/classify_sfdc/`, 공용 꼬리 없음 `common_tail: false`): 라벨 `RFI`·`RFP`·`RFI+RFP`·`Proposal`·`Other`, 경계 규칙 6개(내부 입찰 평가 자료는 Other · 우리가 채운 RFI 질문서는 RFI · 견적 보조 파일은 제안 묶음일 때만 Proposal · `RFI+RFP`는 한 문서가 두 요청을 정말 함께 담을 때만 · 작성자는 파일 이름이 아니라 문서 안의 머리·표지로 · 고객 RFP에 답하는 우리 제안은 Proposal).
 4. **SFDC 문서 정보** = gold `<기준>_sfdc.doc.attrs`의 분류 힌트 키([db_schema.md](../architecture/db_schema.md) gold.doc.attrs 키 — 적재 때 EDW 조인, 표·칸 이름은 `resources/config/edw_chain.yaml` `sfdc.fields`) + 원본 파일 이름 + 형식·대표 엔진(대표 결과의 `format`·`engine`) + 제목 키워드 묶음(`classify.fams`). 제목이 비면 원본 파일 이름. 서버 EDW에 힌트 칸이 없으면 그 힌트만 빈다(경고 한 줄).

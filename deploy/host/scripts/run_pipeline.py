@@ -43,11 +43,11 @@ ROOT = Path(__file__).resolve().parent
 #   파일: --settings 또는 SETTINGS_FILE, 없으면 <루트>/settings.yaml(루트 = 코드 폴더의 부모). 호스트 python에 PyYAML이 있어야 한다(pymssql처럼 —
 #   refactor.md C-09). 필요한 칸이 없으면 칸 경로만 찍고 종료 코드 2(값은 찍지 않음). required.env.run_env가 dev·prd가 아니면 거부(로컬 실행 금지 — CLAUDE.md 3절).
 #   docker exec로 부르는 상주 컨테이너(data-pipeline)는 같은 파일을 붙여 읽으므로(compose x-settings) 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
-#   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.pipeline_host.run_pipeline_dir(비우면 이 스크립트 옆 test_space/), 결과 공유 폴더는
-#   ops.host.output_root(RAG_OUT — 컨테이너 /app/output의 원본 그대로), 비우면 <루트>/output(load_settings.sh와 같음).
+#   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.run_pipeline.work_dir(비우면 이 스크립트 옆 test_space/), 결과 공유 폴더는
+#   ops.host.output_dir(RAG_OUT — 컨테이너 /app/output의 원본 그대로), 비우면 <루트>/output(load_settings.sh와 같음).
 TEST = PROG = DOCSPACE = DOCFLOW = STAGING = None  # configure()가 채움
-PIPE_C = "data-pipeline"  # docker exec 대상 상주 컨테이너(목록·받기·파싱·게시·구조화·정리) — configure()가 ops.host.instance를 붙임
-DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.docker(없으면 podman, 그것도 없으면 docker)로 채움
+PIPE_C = "data-pipeline"  # docker exec 대상 상주 컨테이너(목록·받기·파싱·게시·구조화·정리) — configure()가 ops.host.instance_name을 붙임
+DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.container_cli(없으면 podman, 그것도 없으면 docker)로 채움
 CODE_DIR = None  # --code(설정 배치 모듈 layout.py·이미지 경로 표를 찾을 코드 폴더 — 운영자 폴더에서 돌릴 때, 기본 배치 경로 없음)
 SOURCE_BUCKET = PG_CONTAINER = PG_USER = PG_DB = PG_SCHEMA = None  # staging 파일 이름의 원천 버킷 · 문서 수 세기(psql)
 SETTINGS_REQUIRED = (  # (칸 경로, 무엇에 쓰나) — 없으면 시작 거부
@@ -139,7 +139,7 @@ def read_settings(settings_file=None):
 
 
 def work_dir(doc):
-    """작업 폴더(진행 기록 batch_progress/·batches/) — settings.yaml ops.pipeline_host.run_pipeline_dir(모델 pipeline.host.run_pipeline_dir), 비우면 이 스크립트 옆 test_space/."""
+    """작업 폴더(진행 기록 batch_progress/·batches/) — settings.yaml ops.run_pipeline.work_dir(모델 pipeline.host.run_pipeline_dir), 비우면 이 스크립트 옆 test_space/."""
     work = _host().get(doc, "pipeline.host.run_pipeline_dir")
     return Path(work) if work else ROOT / "test_space"
 
@@ -175,15 +175,15 @@ def configure(settings_file=None):
     DOCFLOW = DOCSPACE / "_docflow"  # 문서별 임시 디렉토리(종료 시 삭제)
     STAGING = DOCSPACE / "_staging"  # SOURCE_STAGING 대기열 저장소
     DOCKER = (
-        os.environ.get("DOCKER")  # env 남김 — 호스트 도구(셸 env > ops.host.docker — load_settings.sh와 같은 순서)
+        os.environ.get("DOCKER")  # env 남김 — 호스트 도구(셸 env > ops.host.container_cli — load_settings.sh와 같은 순서)
         or _host().get(doc, "common.host.docker")
         or ("podman" if shutil.which("podman") else "docker")
     )
     inst = _host().get(doc, "common.host.instance") or ""
     if not re.fullmatch(r"([a-z0-9][a-z0-9-]*)?", str(inst)):
-        return ["ops.host.instance는 영소문자·숫자·-만(앞은 글자·숫자)"]
+        return [f"{_host().layout().to_yaml('common.host.instance')}는 영소문자·숫자·-만(앞은 글자·숫자)"]
     if inst and run_env == "prd":
-        return ["ops.host.instance는 개발 서버(dev)에서만 — 운영(prd)은 한 벌"]
+        return [f"{_host().layout().to_yaml('common.host.instance')}는 개발 서버(dev)에서만 — 운영(prd)은 한 벌"]
     if inst:  # 여러 벌 — 포트가 코드 기본값 그대로면 다른 벌과 겹침(load_settings.sh·앱과 같은 거부)
         for p in ("mcp.server.port", "common.runtime.data_parsing_port"):
             d = _const(f"default.{p}")
@@ -440,9 +440,10 @@ def run_pipeline_policy(doc):
     sec = _host().get(doc, "pipeline.host.run_pipeline")
     sec = sec if isinstance(sec, dict) else {}
     vals, probs = {}, []
+    where = lambda k: _host().layout().to_yaml(f"pipeline.host.run_pipeline.{k}")  # 안내 글자에 파일 자리
     for k, d in RUN_PIPELINE_DEFAULTS.items():
         v = sec.get(k)
-        if v in (None, ""):
+        if v in (None, ""):  # YAML null은 읽을 때 None(settings_to_env.load_model)
             vals[k] = d
             continue
         try:
@@ -459,7 +460,7 @@ def run_pipeline_policy(doc):
                     raise ValueError
         except ValueError:
             vals[k] = d
-            probs.append(f"pipeline.host.run_pipeline.{k} 형식 오류 — " + ("true·false만" if isinstance(d, bool) else "0 이상 수만"))
+            probs.append(f"{where(k)} 형식 오류 — " + ("true·false만" if isinstance(d, bool) else "0 이상 수만"))
     if probs:
         return vals, probs
     for k in (
@@ -468,11 +469,11 @@ def run_pipeline_policy(doc):
         "vlm_cap",
     ):  # 0이면 문서를 안 받거나(staging·staging_workers) vlm 레인을 아무도 안 집어 배치가 끝나지 않음
         if vals[k] < 1:
-            probs.append(f"pipeline.host.run_pipeline.{k} — 1 이상만")
+            probs.append(f"{where(k)} — 1 이상만")
     shared = sum(vals[f"{c}_shared"] for c in LANES)
     for c in LANES:  # 어느 워커도 못 집는 레인이 있으면 그 큐가 안 비어 배치가 끝나지 않음
         if vals[f"{c}_dedicated"] + shared < 1:
-            probs.append(f"pipeline.host.run_pipeline — {c} 레인을 처리할 워커가 없음({c}_dedicated와 모든 *_shared가 0)")
+            probs.append(f"ops.run_pipeline — {c} 레인을 처리할 워커가 없음({where(c + '_dedicated')}와 모든 *_lane.shared_workers가 0)")
     return vals, probs
 
 
@@ -678,7 +679,7 @@ def downloader(rows, order):
 def parse_one(seq, row):
     """문서 1개 파싱 — 공유 상주 컨테이너(PIPE_C) 안에서 워커별 분리(경로 격리).
     문서마다 출력 루트(PIPE_OUT_ROOT·DOC_DIR_PREPARED — --set으로 넘김)를 따로 둔다.
-    VLM·OCR·후처리 값은 settings.yaml ops.run_pipeline, 쪽 해상도는 extract.ocr.dpi."""
+    VLM·OCR·후처리 값은 settings.yaml ops.run_pipeline, 쪽 해상도는 extract.page_render_dpi."""
     d = DOCFLOW / f"{seq}"  # stage_one이 만든 문서 폴더(batch.csv 포함)
     doc_log = PROG / f"doc_{seq}.log"
     t0 = time.time()
@@ -873,10 +874,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--start-offset", type=int, default=1072)
     ap.add_argument(
-        "--staging", type=int, default=None, help="진입 대기열(미리 받을 문서 수) — 기본 settings.yaml ops.run_pipeline.staging(20)"
+        "--staging",
+        type=int,
+        default=None,
+        help="진입 대기열(미리 받을 문서 수) — 기본 settings.yaml ops.run_pipeline.staging.max_docs(20)",
     )
     ap.add_argument(
-        "--struct-workers", type=int, default=None, help="구조화 스레드 수 — 기본 settings.yaml ops.run_pipeline.struct_workers(2)"
+        "--struct-workers", type=int, default=None, help="구조화 스레드 수 — 기본 settings.yaml ops.run_pipeline.structure.workers(2)"
     )
     ap.add_argument("--filter", default="RFP,proposal")
     ap.add_argument("--limit", type=int, default=0, help="시험 — 이 개수만 처리")
@@ -884,7 +888,10 @@ def main():
     ap.add_argument("--deadline", default="", help="새벽 배치 마감(HH:MM) — 지나면 새 문서를 받기 시작하지 않음(사용자 11-02)")
     ap.add_argument("--seqs", default="", help="임의 문서 집합(쉼표 seq 목록) — 지정 시 연속 범위 대신 이 목록만 처리")
     ap.add_argument(
-        "--cpu-gate", type=float, default=None, help="파이프라인 CPU 게이트(CPU_MAX_LOAD) — 기본 settings.yaml ops.run_pipeline.cpu_gate"
+        "--cpu-gate",
+        type=float,
+        default=None,
+        help="파이프라인 CPU 게이트(CPU_MAX_LOAD) — 기본 settings.yaml ops.run_pipeline.parse.max_cpu_load",
     )
     ap.add_argument(
         "--skip-done",

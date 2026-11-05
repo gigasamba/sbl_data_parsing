@@ -354,7 +354,7 @@ def main():
     ap.add_argument(
         "--stack",
         default=None,
-        help="엔진 구성 파일(PC 실험·시험용 — 비우면 설정 common.paths.stack_file · pl-03 represent·gold_bundle과 같음)",
+        help="엔진 구성 파일(PC 실험·시험용 — 비우면 resources/config/pipeline_stack.json · pl-03 represent·gold_bundle과 같음)",
     )
     a = ap.parse_args()
     from common.core import resources

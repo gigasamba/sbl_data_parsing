@@ -253,7 +253,7 @@ EDW 읽기 전용 SQL. 요약 없이 원래 행만 돌려준다(집계는 SQL에
 | `time_out_threshold` | 정수 | 아니요 | 300 | 초. 이 안에 끝나면 결과, 못 끝내면 `{"error": "시간 안에 수행 못했습니다", "job_id": …}` — 같은 파일을 바로 다시 내면 새 작업이 생긴다 |
 | `max_chars` | 정수 | 아니요 | 200000 | 응답 `text` 상한 — 넘으면 잘리고 `text_truncated` |
 
-- 파일 크기 상한 100 MB(`path`·`content_b64` 같음 — 설정 `ops.runtime.parse_max_mb`). **⚠ 운영과 다름:** 운영은 64 MB. 넘으면 `{"error": "파일이 크기 상한(100MB)보다 큼(…MB) — …"}`. `content_b64`는 검색 MCP가 서비스로 보내기 전에 거른다. base64라 요청 본문은 파일의 약 1.33배(100 MB 파일 ≈ 134 MB) — 검색 MCP 앞에 리버스 프록시를 두면 그 본문 상한(nginx `client_max_body_size` 기본 1 MB 등)과 클라이언트 쪽 제한 시간을 그만큼 늘린다.
+- 파일 크기 상한 100 MB(`path`·`content_b64` 같음 — 설정 `ops.services.data_parsing.max_file_mb`). **⚠ 운영과 다름:** 운영은 64 MB. 넘으면 `{"error": "파일이 크기 상한(100MB)보다 큼(…MB) — …"}`. `content_b64`는 검색 MCP가 서비스로 보내기 전에 거른다. base64라 요청 본문은 파일의 약 1.33배(100 MB 파일 ≈ 134 MB) — 검색 MCP 앞에 리버스 프록시를 두면 그 본문 상한(nginx `client_max_body_size` 기본 1 MB 등)과 클라이언트 쪽 제한 시간을 그만큼 늘린다.
 
 돌려주는 모양(완료): `text`(대표 본문, 표 포함) · `tables_std` · `tables` · `facts` · `fields` · `engine`(대표 엔진) · `rep_path`(전체 대표 결과 JSON 경로) · `ms`. 대기열이 차면 HTTP 429.
 

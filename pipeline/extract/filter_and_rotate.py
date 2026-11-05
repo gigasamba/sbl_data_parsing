@@ -3,10 +3,10 @@
 
 1. --only 목록(candidate_ready stage_batch의 only.txt — 중복 제외를 지난 이름)에 있는 파일만. DRM·암호·지원 안 함은 건너뜀
    기록(_records/skipped.jsonl·skipped.csv + 문서마다 extract.skip span 1행)만 남기고 처리하지 않는다.
-2. 방향 보정(설정 `extract.prepare.rotate` — 기본 꺼짐): 켜면 이미지·이미지 PDF의 쪽마다 0·90·180·270도로 돌려
+2. 방향 보정(설정 `extract.prepare.rotate_pages` — 기본 꺼짐): 켜면 이미지·이미지 PDF의 쪽마다 0·90·180·270도로 돌려
    RapidOCR 점수(가로 글상자의 신뢰도 × 글자 수)를 **동시에**(스레드 4개, 스레드마다 RapidOCR 하나) 재고 가장 높은 방향으로 돌린다
    (같으면 0도, 모두 0이면 그대로). 끄면 회전을 위한 OCR을 전혀 하지 않고 그대로 놓는다.
-   - 점수는 긴 변 --probe-px(기본 1280)로 줄인 이미지로 계산(속도). 저장은 원래 해상도(PDF는 --dpi, 기본 extract.ocr.dpi = 150).
+   - 점수는 긴 변 --probe-px(기본 1280)로 줄인 이미지로 계산(속도). 저장은 원래 해상도(PDF는 --dpi, 기본 extract.page_render_dpi = 150).
    - 회전이 있었던 파일만 새로 쓰고, 나머지는 그대로 복사. 텍스트 레이어가 있는 PDF·오피스·txt는 복사만.
    - 이미지 PDF를 돌리면 쪽 이미지로 다시 만든 PDF가 된다(원래 텍스트 레이어 없음 전제).
 3. 기록: output/prepared/rotation.csv (파일·쪽·선택 각도·네 방향 점수·`orig_sha256` = 회전 전 원본 파일 sha256 —
@@ -338,7 +338,7 @@ def main():
     ap.add_argument("--out", default=str(APP_ROOT / "output" / "prepared"))
     ap.add_argument("--only", default="", help="이 목록(파일명 한 줄씩)에 있는 파일만 — 보통 stage_batch의 only.txt")
     ap.add_argument(
-        "--dpi", type=int, default=pc.cfg().extract.ocr.dpi, help="PDF 쪽 렌더 해상도 — 기본 extract.ocr.dpi(쪽·그림 VLM과 같은 값)"
+        "--dpi", type=int, default=pc.cfg().extract.ocr.dpi, help="PDF 쪽 렌더 해상도 — 기본 extract.page_render_dpi(쪽·그림 VLM과 같은 값)"
     )
     ap.add_argument("--probe-px", type=int, default=1280)
     ap.add_argument("--no-scan-rotate", action="store_true", help="이미지 PDF(스캔)는 방향 보정 안 함 — run_pipeline 스캔 문서 정책")
@@ -401,7 +401,7 @@ def main():
             continue
         elif (
             ext == ".pdf" and rotate_on and not a.no_scan_rotate and is_image_pdf(p)
-        ):  # 회전은 extract.prepare.rotate(기본 꺼짐)일 때만 · 꺼지면 회전용 OCR 없이 그대로 놓음
+        ):  # 회전은 extract.prepare.rotate_pages(기본 꺼짐)일 때만 · 꺼지면 회전용 OCR 없이 그대로 놓음
             import pypdfium2 as pdfium
 
             osha = _sha256(p)

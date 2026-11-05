@@ -304,7 +304,7 @@ class Handler(BaseHTTPRequestHandler):
             n = int(self.headers.get("Content-Length") or 0)
             if n > parse_limit.body_cap():  # 상한 안 파일이면 크기 판정은 _submit의 _check_size가 함
                 raise ValueError(
-                    f"요청 본문이 크기 상한보다 큼 — 파일 상한 {common_cfg().runtime.parse_max_mb:g}MB(ops.runtime.parse_max_mb)"
+                    f"요청 본문이 크기 상한보다 큼 — 파일 상한 {common_cfg().runtime.parse_max_mb:g}MB(ops.services.data_parsing.max_file_mb)"
                 )
             source = json.loads(self.rfile.read(n) or b"{}")
             job_id, ahead = _submit(source)

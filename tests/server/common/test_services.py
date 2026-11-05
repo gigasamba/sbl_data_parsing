@@ -32,7 +32,7 @@ def selftest():
     # op-09 — 빈 접속 칸은 코드 기본값(127.0.0.1·5432·rag·ai)으로 채우지 않고 거부, 메시지에 settings.yaml 자리
     with isolated(**{**_FULL, "PG_HOST": None, "PG_DB": None}):
         msg = _refused(conf)
-        assert "required.pg.host" in msg and "required.pg.db" in msg and "required.pg.port" not in msg, msg
+        assert "required.pg.host" in msg and "required.pg.database" in msg and "required.pg.port" not in msg, msg
         assert _refused(lambda: connect(types.SimpleNamespace(pg=False, local=False)))  # --local이 아니면 PG 필수
     with isolated(**_FULL):
         assert conf()["PG_HOST"] == "h" and conf()["PG_DB"] == "d"

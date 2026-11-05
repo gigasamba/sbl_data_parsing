@@ -5,7 +5,7 @@
 #   (이름 필터는 REPOS만, `system prune`·`-a` 금지).
 # 기본 dry-run(지울 목록만 출력) · --apply일 때만 실제로 지움.
 #   bash deploy/host/scripts/prune_images.sh [--apply] [--stage-dir <조각·tar 폴더>] [--keep N(기본 2 = 지금 판 + 직전 판)]
-# 설정 파일(SETTINGS_FILE 또는 <루트>/settings.yaml)이 있으면 ops.host.image_stage_dir·prune_keep·docker를 거기서 읽는다.
+# 설정 파일(SETTINGS_FILE 또는 <루트>/settings.yaml)이 있으면 ops.host.prune_stage_dir·prune_keep_versions·container_cli를 거기서 읽는다.
 set -uo pipefail
 # 부른 자리 그대로(cd 안 함 — 상대 --stage-dir·SETTINGS_FILE은 부른 자리 기준). 설정 파일을 못 읽어도 멈추지 않는다(기본값으로).
 . "$(dirname "$0")/load_settings.sh"   # 루트 RAG_ROOT(코드 폴더의 부모)·load_settings·docker_default
@@ -64,5 +64,5 @@ if [ "$APPLY" = 1 ]; then
   echo "== $DOCKER image prune -f (이름 없는 층만 — system prune·-a 아님) =="
   $DOCKER image prune -f
 else
-  echo "(dry-run — 실제로 지우려면 --apply · 조각·tar 정리는 --stage-dir 또는 ops.host.image_stage_dir)"
+  echo "(dry-run — 실제로 지우려면 --apply · 조각·tar 정리는 --stage-dir 또는 ops.host.prune_stage_dir)"
 fi

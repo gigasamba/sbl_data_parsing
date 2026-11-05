@@ -24,7 +24,7 @@ export DOCKER=podman                                   # 운영 계정 ~/.bashrc
 bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>   # 루트의 output/·backup/·settings.yaml·edw_chain.yaml(없을 때만) — README §5-0 3번
 ```
 - 값은 `init`이 찍은 빈 필수 칸부터 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)). `nightly_batch.sh`·`pipe_exec.sh`·`mcp_keepalive.sh`·systemd unit은 `<루트>/settings.yaml`을 스스로 찾는다.
-- **엔진 구성은 코드 폴더의 파일이다**(`resources/config/pipeline_stack.json` — 다른 파일이면 `ops.paths.stack_file`). 바꾸려면 코드 폴더째 바꾼다. 원천은 폴더·`rdb:csv`만.
+- **엔진 구성은 코드 폴더의 파일이다**(`resources/config/pipeline_stack.json` 하나 — 설정 칸 없음). 바꾸려면 코드 폴더째 바꾼다. 원천은 폴더·`rdb:csv`만.
 
 ### 1-1. 값 바꾸기
 - 앱 설정은 `settings.yaml`을 직접 고치고 `host_ctl.sh up -d --force-recreate <서비스>`.
@@ -40,9 +40,9 @@ README §5-3 ④ 연결 점검과 ⑤ 이미지 점검, 또는 한 번에 `bash 
 
 | 칸 | 하는 일 | 예(홍 개발자) |
 |---|---|---|
-| `ops.host.instance` | 벌 이름(영소문자·숫자·`-`) — 이것 하나로 아래가 갈린다. 비우면 한 벌 — 이름 그대로 | `hong` |
+| `ops.host.instance_name` | 벌 이름(영소문자·숫자·`-`) — 이것 하나로 아래가 갈린다. 비우면 한 벌 — 이름 그대로 | `hong` |
 | `search.server.port` | 검색 MCP 포트 — 벌 이름이 있는데 기본값(8765)이면 시작 거부 | `8775` |
-| `ops.runtime.data_parsing_port` | parse_document 작업 서비스 포트(검색 MCP도 이 값으로 부름) — 벌 이름이 있는데 기본값(8766)이면 시작 거부 | `8776` |
+| `ops.services.data_parsing.port` | parse_document 작업 서비스 포트(검색 MCP도 이 값으로 부름) — 벌 이름이 있는데 기본값(8766)이면 시작 거부 | `8776` |
 
 벌 이름 `hong`이 있으면 저절로:
 - 컨테이너·compose 묶음·systemd 단위 이름 끝에 `-hong`(`data-pipeline-hong`·`mcp-data-parsing-hong`·`mcp-server-hong`, 타이머 `data-pipeline-nightly-hong.timer`).
@@ -52,7 +52,7 @@ README §5-3 ④ 연결 점검과 ⑤ 이미지 점검, 또는 한 번에 `bash 
 - EDW 기록 표는 DB 담당자가 미리 만든다 — `docs/operations/parsing_meta_mssql.sql`을 복사해 표 이름만 바꿔 넘긴다(refactor.md C-94).
 
 - 컨테이너는 모두 호스트 네트워크라 포트가 겹치면 뒤에 띄운 쪽이 시작하지 못한다.
-- 명령은 그 루트의 코드 폴더에서 `host_ctl.sh`로만 한다 — `host_ctl.sh`·`mcp_keepalive.sh`·`nightly_batch.sh`·`pipe_exec.sh`·`run_pipeline.py`가 settings.yaml의 `ops.host.instance`를 읽어 자기 벌의 컨테이너만 다룬다(셸 변수 `INSTANCE`로는 덮지 않음 — 컨테이너 명령은 셸 `DOCKER`가 `ops.host.docker`를 이김). compose를 직접 부르면 이름·포트 값이 채워지지 않는다.
+- 명령은 그 루트의 코드 폴더에서 `host_ctl.sh`로만 한다 — `host_ctl.sh`·`mcp_keepalive.sh`·`nightly_batch.sh`·`pipe_exec.sh`·`run_pipeline.py`가 settings.yaml의 `ops.host.instance_name`를 읽어 자기 벌의 컨테이너만 다룬다(셸 변수 `INSTANCE`로는 덮지 않음 — 컨테이너 명령은 셸 `DOCKER`가 `ops.host.container_cli`를 이김). compose를 직접 부르면 이름·포트 값이 채워지지 않는다.
 - 자동 실행(`host_ctl.sh timers`)도 벌마다 따로 켜진다. 개발자 벌은 새벽 배치가 필요 없으면 `systemctl disable --now data-pipeline-nightly-<이름>.timer`.
 - CPU·메모리 상한(§README 5-0 "자원")은 서버 전체 합계를 보고 벌마다 줄인다.
 
@@ -60,9 +60,9 @@ README §5-3 ④ 연결 점검과 ⑤ 이미지 점검, 또는 한 번에 `bash 
 
 서버 입구는 `run_pipeline.py` 하나다 — 문서마다 파싱 → publish(Object Storage + EDW) → 원본 삭제 → 구조화·적재를 상주 컨테이너 안에서 `exec`로 돌린다. 자리·설정: [release-and-patch §5-4](release-and-patch.md#5-4-run_pipelinepy-자리와-설정).
 - 원본(`_staging/*.bin`·`_docflow/<seq>/_source_files`)은 **publish가 성공한 뒤에만** 지운다. 파싱·publish가 실패한 문서는 원본이 남고 `batch_progress/progress.log`에만 적힌다(EDW에 안 씀 — 다음 `--skip-done` 실행이 다시 고름). 구조화·적재가 실패하면 publish한 결과·EDW 행은 그대로이고 로그에만 적힌다.
-- **게시·EDW 설정**(settings.yaml `required` — 빠지면 run_pipeline이 칸 이름을 찍고 종료 2): 게시 위치 `required.publish.bucket`·`prefix`, Object Storage 접속 `required.object_storage.endpoint`·`access_key`·`secret_key`(`region` 비우면 `us-east-1`, `verify_tls` 비우면 검증 켬 — 사내 CA면 CA 파일 경로), EDW 접속 `required.edw.host`·`database`·`read_*`·`write_*`(`port` 비우면 1433), 게시 표 `required.edw.parsing_meta_table`(비우면 `AI.ParsingMeta`). `required.edw.sqlite`는 PC 전용이라 서버에서는 비운다.
+- **게시·EDW 설정**(settings.yaml `required` — 빠지면 run_pipeline이 칸 이름을 찍고 종료 2): 게시 위치 `required.publish.bucket`·`prefix`, Object Storage 접속 `required.object_storage.endpoint`·`access_key`·`secret_key`(`region` 비우면 `us-east-1`, `verify_tls` 비우면 검증 켬 — 사내 CA면 CA 파일 경로), EDW 접속 `required.edw.host`·`database`·`read_*`·`write_*`(`port` 비우면 1433), 게시 표 `required.edw.parsing_meta_table`(비우면 `AI.ParsingMeta`). `required.edw.local_sqlite_file`는 PC 전용이라 서버에서는 비운다.
 - **종료 코드**(PRD [pl-18](../prd/ops.md#pl-18)): `0` 대상 0건·모두 끝 · `1` 실패 문서가 하나라도 · `75` 마감(`--deadline`) 도달(실패 없음) 또는 다른 run_pipeline이 도는 중 · `2` 설정 문제. 실패와 마감이 함께면 `1`. 새벽 배치 unit은 `75`를 성공으로 친다.
-- **겹침 잠금:** run_pipeline은 `batch_progress/run_pipeline.lock`을 `flock`으로 잡는다 — 새벽 배치와 사람이 직접 돌린 run_pipeline이 함께 돌지 않는다(뒤에 온 쪽이 75). 죽으면 잠금은 저절로 풀린다. 작업 폴더(`ops.pipeline_host.run_pipeline_dir`)가 같아야 같은 잠금이다.
+- **겹침 잠금:** run_pipeline은 `batch_progress/run_pipeline.lock`을 `flock`으로 잡는다 — 새벽 배치와 사람이 직접 돌린 run_pipeline이 함께 돌지 않는다(뒤에 온 쪽이 75). 죽으면 잠금은 저절로 풀린다. 작업 폴더(`ops.run_pipeline.work_dir`)가 같아야 같은 잠금이다.
 - 파싱·게시만 따로:
 ```bash
 bash deploy/host/scripts/pipe_exec.sh parse [--source-limit N]   # 파싱 → <결과 폴더>/parse/_rep. 임베딩·DB 없음
@@ -71,13 +71,13 @@ bash deploy/host/scripts/pipe_exec.sh publish                    # 대표 결과
 ```
 - 같은 결과 폴더에 두 작업이 겹치면 `/app/output/.pipeline.lock` 때문에 뒤쪽이 종료 75.
 - 도구만 따로: `bash deploy/host/scripts/pipe_exec.sh <rdb_discover|check_env|ping_models|migrate|show-stack|check> [인자]`.
-- 우선순위 낮추기(`tuning.extract.low_priority` — 일괄 파싱 엔진 자식 nice +10)는 같은 세션·autogroup 안에서만 효과가 있다. 컨테이너끼리는 CPU 나눔 비율(`data_parsing_cpu_shares` 4096 대 일괄 1024)이 정한다.
+- 우선순위 낮추기(`tuning.extract.low_priority_engines` — 일괄 파싱 엔진 자식 nice +10)는 같은 세션·autogroup 안에서만 효과가 있다. 컨테이너끼리는 CPU 나눔 비율(`ops.containers.data_parsing.cpu_shares` 4096 대 일괄 1024)이 정한다.
 
 ### 2-1. 검색 MCP는 늘 켜 둠
 `bash deploy/host/scripts/mcp_keepalive.sh` + keepalive 타이머 — README §5-5.
 
 ### 2-2. 새벽 배치
-`ops.nightly.time`·`max_docs`·`deadline` 세 칸 + `data-pipeline-nightly.timer` — README §5-5. 타이머는 5분마다 깨우고 `nightly_batch.sh scheduled`가 시작 시각부터 5분 안일 때만 `run_pipeline.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>`을 부른다(마감이 지나면 새 문서를 받지 않고, 받은 문서는 끝까지). 형식이 틀리면(HH:MM 아님 · 상한이 1 이상 정수 아님 · 마감이 시작보다 5분 이내) 종료 2. 지금 바로 돌리려면 run_pipeline을 직접 부른다.
+`ops.nightly.start_time`·`max_docs`·`stop_time` 세 칸 + `data-pipeline-nightly.timer` — README §5-5. 타이머는 5분마다 깨우고 `nightly_batch.sh scheduled`가 시작 시각부터 5분 안일 때만 `run_pipeline.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>`을 부른다(마감이 지나면 새 문서를 받지 않고, 받은 문서는 끝까지). 형식이 틀리면(HH:MM 아님 · 상한이 1 이상 정수 아님 · 마감이 시작보다 5분 이내) 종료 2. 지금 바로 돌리려면 run_pipeline을 직접 부른다.
 
 ### 2-3. 답변 생성 점검(코드 폴더에서, 이미지 밖)
 ```bash
@@ -103,7 +103,7 @@ MCP 토큰은 settings.yaml `required.tokens.mcp`, 모델은 `required.models.ll
 ### 4-1. EDW 쿼리 도구 설정 — `edw_meta`·`query_edw`
 에이전트가 `edw_meta`(정적 자료, DB 접속 없음)로 표·칸을 보고 `query_edw`로 SELECT를 보낸다. 읽기 전용·시스템 표 차단·상한은 코드(`mcp_server/services/edw_query.py`)가 강제하지만, **운영자가 아래를 준비해야 안전하다.**
 
-0. **EDW 표 설명 자료**(`edw_meta`용) — `catalog.json`(표 목록·설명)·`columns.jsonl`(한 줄에 열 하나)을 `<루트>/output/edw_meta/`에 복사하고 `search.edw_meta.dir: /app/output/edw_meta`를 적는다. 개인정보가 없는 자료만 둔다. 없으면 `edw_meta`만 `not_configured`(`query_edw`는 그대로) — 파일 꼴은 PRD [mc-07](../prd/mcp.md#mc-07), 받기는 refactor.md C-91.
+0. **EDW 표 설명 자료**(`edw_meta`용) — `catalog.json`(표 목록·설명)·`columns.jsonl`(한 줄에 열 하나)을 `<루트>/output/edw_meta/`에 복사하고 `search.edw_meta.catalog_dir: /app/output/edw_meta`를 적는다. 개인정보가 없는 자료만 둔다. 없으면 `edw_meta`만 `not_configured`(`query_edw`는 그대로) — 파일 꼴은 PRD [mc-07](../prd/mcp.md#mc-07), 받기는 refactor.md C-91.
 
 1. **EDW 읽기 계정**(`required.edw.read_user`·`read_password` — 파이프라인 원천 조회와 같은 계정):
    - `SELECT` 권한만 준다(DDL·DML·`EXEC`·시스템 프로시저 없음).
@@ -193,8 +193,8 @@ PYTHONPATH=. python -c "from common.core import terms as T; import sys; g=T.load
 | 파싱이 종료 4 | 서버에서 EDW `AI.ParsingMeta`를 못 읽음(전체 재파싱을 막으려고 멈춤) | `required.edw`(주소·읽기 계정)·EDW 연결 확인 |
 | 구조화·적재가 "인계 형식(핑거프린트) 다름"으로 거부 | 핑거프린트가 바뀐 옛 파싱 결과 | 그 문서를 다시 파싱 |
 | 같은 결과 폴더에서 종료 75 | 다른 실행이 `.pipeline.lock`을 잡고 있음 | 끝날 때까지 기다리거나 다음 트리거에서 재시도 |
-| 메모리 터짐(OOM), 큰 스캔 PDF | 쪽 이미지를 한꺼번에 올림 | `extract.ocr.dpi`(기본 150 — 더 낮추면 VLM 글 품질을 먼저 확인)·VLM 쪽 상한 `transform.vlm.page_max`·OCR 엔진 쪽 상한 `extract.ocr.max_pages`·`extract.max_file_mb`·컨테이너 메모리 상한 확인 |
-| CPU 폭주 | 컨테이너가 호스트 전체 코어로 스레드를 늘림 | `ops.runtime.pipe_procs`는 `auto`(cgroup 한도 기준), 컨테이너 CPU 상한 지정 |
+| 메모리 터짐(OOM), 큰 스캔 PDF | 쪽 이미지를 한꺼번에 올림 | `extract.page_render_dpi`(기본 150 — 더 낮추면 VLM 글 품질을 먼저 확인)·VLM 쪽 상한 `transform.vlm.max_pages_per_doc`·OCR 엔진 쪽 상한 `extract.ocr.max_pages_per_doc`·`extract.max_file_mb`·컨테이너 메모리 상한 확인 |
+| CPU 폭주 | 컨테이너가 호스트 전체 코어로 스레드를 늘림 | `ops.runtime.engine_processes`는 `auto`(cgroup 한도 기준), 컨테이너 CPU 상한 지정 |
 | MCP `/health` 503 | 기동 직후 예열 중 | 잠시 뒤 재시도 |
 | MCP 401 | 호출 쪽 토큰이 없거나 `required.tokens.mcp`와 다름 | 호출 쪽 `Authorization: Bearer <토큰>`을 서버 값과 같게 |
 | MCP가 안 뜸 | `required.embed` 없음 · 컨테이너가 설정 파일을 못 읽음(권한) | 필수 값 채우기 · 주인 10001·권한 640 |

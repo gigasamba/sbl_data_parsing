@@ -18,17 +18,17 @@ services:
       POSTGRES_USER: ${PG_USER:-rag}
       POSTGRES_PASSWORD: ${PG_PASSWORD:?PG_PASSWORD 필요}
     ports:
-      - "${PG_BIND:-127.0.0.1}:${PG_PORT:-5432}:5432"   # 기본은 개발 서버 안에서만 접속
+      - "127.0.0.1:${PG_PORT:-5432}:5432"   # 기본은 개발 서버 안에서만 접속
     volumes:
       - rag_pgdata:/var/lib/postgresql/data
-    # 메모리·병렬 설정 = .env로 조정(기본값은 개발 서버 RHEL 9.6 · 4 vCPU · 32 GB 기준). 다른 서버는 물리 메모리의 대략
+    # 메모리·병렬 설정 = 고정값(개발 서버 RHEL 9.6 · 4 vCPU · 32 GB 기준 — 바꾸려면 이 파일을 고침). 다른 서버는 물리 메모리의 대략
     #   shared_buffers 1/8 · effective_cache_size 3/8 · maintenance_work_mem 1/16(HNSW 생성) · shm ≥ maintenance_work_mem + 1g
     command: >
-      postgres -c shared_buffers=${PG_SHARED_BUFFERS:-4GB} -c effective_cache_size=${PG_EFFECTIVE_CACHE:-12GB} -c work_mem=${PG_WORK_MEM:-64MB}
-               -c maintenance_work_mem=${PG_MAINT_MEM:-2GB} -c max_parallel_maintenance_workers=${PG_PARALLEL:-2}
-               -c max_parallel_workers_per_gather=${PG_PARALLEL:-2} -c max_connections=${PG_MAX_CONN:-50}
-    shm_size: ${PG_SHM:-3g}                             # 병렬 HNSW 생성 공유 메모리(≥ maintenance_work_mem)
-    mem_limit: ${PG_MEM_LIMIT:-12g}                     # 컨테이너 메모리 상한 — 다른 서비스(OpenViking·Gitea·파이프라인)와 같이 쓰므로
+      postgres -c shared_buffers=4GB -c effective_cache_size=12GB -c work_mem=64MB
+               -c maintenance_work_mem=2GB -c max_parallel_maintenance_workers=2
+               -c max_parallel_workers_per_gather=2 -c max_connections=50
+    shm_size: 3g                                        # 병렬 HNSW 생성 공유 메모리(≥ maintenance_work_mem)
+    mem_limit: 12g                                      # 컨테이너 메모리 상한 — 다른 서비스(OpenViking·Gitea·파이프라인)와 같이 쓰므로
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s

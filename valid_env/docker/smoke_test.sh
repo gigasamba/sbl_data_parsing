@@ -33,8 +33,7 @@ $PY - "$SMOKE_OVERLAY_DIR" <<'PYEOF' || { echo "[실패] 덮기 파일 만들기
 import os, sys, yaml
 from pathlib import Path
 d, e = Path(sys.argv[1]), os.environ
-job = {"PG_HOST": "pg", "PG_PORT": "5432", "PG_PASSWORD": e["SMOKE_PG_PASSWORD"], "PARSE_SOURCE": "/data/docs",
-       "PARSE_SOURCE_LIMIT": e.get("SMOKE_LIMIT") or "0"}
+job = {"PG_HOST": "pg", "PG_PORT": "5432", "PG_PASSWORD": e["SMOKE_PG_PASSWORD"], "PARSE_SOURCE": "/data/docs"}
 files = {"job": {"base": "/etc/rag/base.yaml", "overrides": job},
          "mcp": {"base": "/etc/rag/smoke/job.yaml", "overrides": {"MCP_HOST": "auto", "MCP_PORT": "8765",
                                                                    # 비루프백 바인드(auto)라 DNS 리바인딩 보호가 켜짐: 호스트 게시 주소로 부르는 ⑤를 허용(없으면 421)
@@ -53,7 +52,7 @@ step "시험용 PostgreSQL" $DC up -d --wait pg               # 적재(load)·�
 # ⓪ 마스터 표(용어집·고객 명부): 구조화의 고객 판별이 읽고 비었으면 멈추므로 파싱 전에 판을 올리고 git CSV로 채운다.
 step "⓪ 마스터 판(migrate up --target master)" $DC run --rm load migrate up --target master
 step "⓪ 마스터 표 채우기(migrate master load)" $DC run --rm load migrate master load
-step "① 파싱(data-pipeline)" $DC run --rm parse parse
+step "① 파싱(data-pipeline)" $DC run --rm parse parse --source-limit "${SMOKE_LIMIT:-0}"
 step "② 구조화(data-pipeline — run_pipeline과 같은 gold_bundle)" $DC run --rm --entrypoint python structure -m pipeline.transform.structure.gold_bundle --parse-dir /app/output/parse --out /app/output/edw/bundle
 # 적재는 서버 실제 길(run_pipeline.py와 같은 `python -m pipeline.load.pgvector_load load` — README §4-4).
 #   표·vector 확장은 migrate가 먼저(실행 중 DDL 없음, 차원은 묶음 meta.json). 마스터 표는 맨 앞(⓪ — 구조화가 읽음).

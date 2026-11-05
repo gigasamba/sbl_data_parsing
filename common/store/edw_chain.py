@@ -23,7 +23,7 @@ _FIELD_KEYS = {"from", "filter", "evidence", "type", "max"}
 
 
 def chain_path():
-    """쓸 사슬 파일 — 설정 common.paths.edw_chain(= settings.yaml ops.paths.edw_chain — 적재·검색 MCP가 같은 칸), 비우면 기본 CHAIN_FILE."""
+    """쓸 사슬 파일 — 설정 common.paths.edw_chain(= settings.yaml ops.paths.edw_chain_file — 적재·검색 MCP가 같은 칸), 비우면 기본 CHAIN_FILE."""
     from common.config.settings import cfg
 
     p = cfg().paths.edw_chain

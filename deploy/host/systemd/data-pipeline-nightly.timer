@@ -1,4 +1,4 @@
-# 5분마다 깨움 — 실제 시작 시각·켬/끔은 settings.yaml ops.nightly.time(NIGHTLY_TIME, HH:MM — 비우면 새벽 배치 없음).
+# 5분마다 깨움 — 실제 시작 시각·켬/끔은 settings.yaml ops.nightly.start_time(NIGHTLY_TIME, HH:MM — 비우면 새벽 배치 없음).
 # nightly_batch.sh scheduled가 그 시각부터 5분 안일 때만 night를 돌린다. 서버 시간대 확인(timedatectl). 배치가 도는 동안은 같은 서비스가 다시 안 뜸(oneshot).
 [Unit]
 Description=RAG 새벽 배치 시작

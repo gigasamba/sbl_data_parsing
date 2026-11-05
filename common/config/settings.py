@@ -85,7 +85,7 @@ def image_default(env, pc=None):
     return IMAGE_DEFAULTS.get(env, pc)
 
 
-# settings.yaml ops.runtime.lib_env로 줄 수 있는 라이브러리 env 이름(비밀 아님 — 이 목록 밖은 거부).
+# settings.yaml ops.runtime.library_env로 줄 수 있는 라이브러리 env 이름(비밀 아님 — 이 목록 밖은 거부).
 # 컨테이너 entrypoint(common.config.boot)가 시작 때 env로 낸다 — 사용자 env는 안 덮고, 이미지 ENV 값(/app/docker/image_env.txt)은 덮는다.
 # 담은 것: 스레드·캐시·오프라인 신호(OMP_NUM_THREADS·HF_HUB_OFFLINE·TZ 등) + Dockerfile ENV(TZ·LANG·HF_*·DO_NOT_TRACK·
 # SCARF_NO_ANALYTICS) + 코드가 자식·라이브러리에 넘기는 이름(OMP·MKL·OPENBLAS·NUMEXPR·TORCH, PIPELINE_VERSION, TESSDATA_PREFIX·HF_HOME).
@@ -866,7 +866,7 @@ def require_run_env(app="", environ=None, sections=None):
 
 
 def instance_problems(st):
-    """여러 벌(ops.host.instance) 시작 거부 사유 — prd에 벌 이름, 벌 이름이 있는데 포트가 코드 기본값(다른 벌과 겹침)."""
+    """여러 벌(ops.host.instance_name) 시작 거부 사유 — prd에 벌 이름, 벌 이름이 있는데 포트가 코드 기본값(다른 벌과 겹침)."""
     c = st.common
     if not c.host.instance:
         return []
@@ -1382,16 +1382,7 @@ class CommonConnectionsPg(Section):
 
 class CommonDevDocker(Section):
     mcp_publish_port: Port | None = F(18765, "MCP_PUBLISH_PORT", "시험 compose에서 MCP를 호스트에 게시할 포트")
-    pg_bind: str | None = F("127.0.0.1", "PG_BIND", "시험 PostgreSQL 컨테이너를 호스트에 게시할 바인드 주소")
-    pg_effective_cache: str | None = F("12GB", "PG_EFFECTIVE_CACHE", "시험 PG effective_cache_size")
     pg_image: str | None = F("pgvector/pgvector:pg16", "PG_IMAGE", "시험 PostgreSQL(pgvector) 이미지")
-    pg_maint_mem: str | None = F("2GB", "PG_MAINT_MEM", "시험 PG maintenance_work_mem(HNSW 생성)")
-    pg_max_conn: int | None = F(50, "PG_MAX_CONN", "시험 PG max_connections")
-    pg_mem_limit: str | None = F(None, "PG_MEM_LIMIT", "시험 PG 컨테이너 메모리 상한")
-    pg_parallel: int | None = F(2, "PG_PARALLEL", "시험 PG 병렬 작업자 수(maintenance·gather 둘 다)")
-    pg_shared_buffers: str | None = F("4GB", "PG_SHARED_BUFFERS", "시험 PG shared_buffers")
-    pg_shm: str | None = F("3g", "PG_SHM", "시험 PG 컨테이너 공유 메모리(shm_size)")
-    pg_work_mem: str | None = F("64MB", "PG_WORK_MEM", "시험 PG work_mem")
     smoke_settings: str | None = F(
         None,
         "SMOKE_SETTINGS",
@@ -1508,7 +1499,7 @@ class CommonHost(Section):
         "INSTANCE",
         "한 서버에 여러 벌(개발자별 등) 띄울 때 이 루트의 이름(영소문자·숫자·-) — 컨테이너 이름·compose 묶음·systemd 타이머 이름 끝에 -<이름>으로 붙음."
         " 비우면 이름 그대로(한 벌). 적으면 PG 스키마·EDW 기록 표 끝에 _<이름>(-는 _로), 개발 서버(dev) 게시 경로에 <접두>/<이름>."
-        " 포트(search.server.port · ops.runtime.data_parsing_port)는 벌마다 다르게(기본값 그대로면 시작 거부) · prd에서는 쓰지 않음(시작 거부)",
+        " 포트(search.server.port · ops.services.data_parsing.port)는 벌마다 다르게(기본값 그대로면 시작 거부) · prd에서는 쓰지 않음(시작 거부)",
     )
     image_stage_dir: str | None = F(None, "IMAGE_STAGE_DIR", "prune_images.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값)")
     output_root: str | None = F(
@@ -1546,11 +1537,6 @@ class CommonPaths(Section):
         "없을 때만 복사, 적었을 때만 쓰임) · 점검: python -m pipeline.load.edw_doc_meta --check",
     )
     source_manifest: str | None = F(None, "SOURCE_MANIFEST", "원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응)")
-    stack_file: str | None = F(
-        None,
-        "PIPELINE_STACK_FILE",
-        "엔진 구성 파일 경로(서버·PC 같음 — 사용자 11-01: 판 표 없앰)",
-    )
 
 
 class CommonRuntime(Section):
@@ -1568,9 +1554,6 @@ class CommonRuntime(Section):
         5.0, "MEM_SETTLE_MARGIN", "상한(MEM_MAX_PCT) 이만큼(%p) 아래부터 프로세스 띄운 뒤 잠깐 쉼", unset=("auto",)
     )
     mem_settle_sec: float | None = F(2.0, "MEM_SETTLE_SEC", "메모리가 상한 근처일 때 프로세스 띄운 뒤 쉬는 시간(초)", unset=("auto",))
-    mem_start_pct: float | None = F(
-        90.0, "MEM_START_PCT", "wait_mem 기본 상한 — 실험 도구가 새 프로세스를 띄우는 메모리 사용률(%)", unset=("auto",)
-    )
     parse_max_mb: float = F(
         100.0,
         "DATA_PARSING_MAX_MB",

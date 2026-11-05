@@ -60,7 +60,7 @@ def _demo():
             doc_dir()
             raise AssertionError("DOC_DIR 없으면 SystemExit이어야 함")
         except SystemExit as e:
-            assert "ops.paths.doc_dir" in str(e)
+            assert "ops.paths.docs_dir" in str(e)
     # resources/prompts/는 모든 이미지에 폴더째 있으므로 앱별 묶음도 이미지 구분 없이 확인
     assert resolve_agent_dir("page_transcribe") == RES_ROOT / "prompts" / "common" / "page_transcribe"
     assert resolve_agent_dir("nested_figure") == RES_ROOT / "prompts" / "pipeline" / "nested_figure"

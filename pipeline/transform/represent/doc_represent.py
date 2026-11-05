@@ -434,7 +434,7 @@ from pipeline.transform.represent import fragment_vote as fuse_mod  # noqa: E402
 from pipeline.transform.represent import table_inline  # noqa: E402
 
 
-# 후보정 기능 — transform.represent.post: 없음/"all" = 전부 · "none" = 꺼짐 · 콤마 목록("supsub,charts") = 그것만.
+# 후보정 기능 — transform.represent.post_steps: 없음/"all" = 전부 · "none" = 꺼짐 · 콤마 목록("supsub,charts") = 그것만.
 # "context"는 "figures" 없이는 효과 없음(그림 기록이 있어야 캡션·값 확인을 붙임).
 def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_pages=None, page_covered=False):
     """후보정 패키지 적용 — base 본문에 쪽 VLM 옮기기·차트·그림 기록 블록을 덧붙이고, 첨자(supsub)는 그 줄만 base 안에서
@@ -903,7 +903,7 @@ def write_mark(parse_dir, **kw):
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--stack", default=None, help="엔진 구성 파일(PC 실험·시험용 — 비우면 설정 common.paths.stack_file)")
+    ap.add_argument("--stack", default=None, help="엔진 구성 파일(PC 실험·시험용 — 비우면 resources/config/pipeline_stack.json)")
     ap.add_argument("--parse-dir", default="output/parse")
     ap.add_argument("--src", default=None, help="파싱한 문서 폴더(원본 경로·sha256을 대표 결과에 남김 — 구조화 모듈이 원본 없이 돌 때 씀)")
     a = ap.parse_args(argv)
