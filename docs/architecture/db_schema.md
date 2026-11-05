@@ -447,14 +447,14 @@ MCP 요청 1건당 1행. 인증 실패와 `initialize`도 행으로 남는다. �
 
 ### applog.skip_doc_info
 
-다시 받아도 파싱할 수 없는 원본(지원 안 하는 확장자·확장자 없음·DRM·암호) 1개당 1행([pl-58](../prd/extract.md#pl-58)). 기본 키 `source_key`. 일반 표(파티션·보존 DELETE 없음 — 지우면 그 문서를 다시 고름). 판: `common/store/db/migrations/versions/0002_applog_skip.py`. 쓰는 곳: `pipeline/extract/skip_docs.py` `record()`(받기 전 `candidate_pick._record_source_skipped`·받은 뒤 `candidate_ready._record_filtered` — 같은 키면 `last_seen`·`count`만 갱신). 읽는 곳: `candidate_pick.list_targets`(`--skip-done`이면 이 키를 뺌). 중복(`dup_*`)과 파싱 실패는 쓰지 않는다. PC(PG 접속 없음)는 대역 sqlite `<standin_dir>/applog.sqlite`.
+다시 받아도 파싱할 수 없는 원본(지원 안 하는 확장자·확장자 없음·DRM·암호)과 같은 밤 다른 원본과 같은 내용인 원본 1개당 1행([pl-58](../prd/extract.md#pl-58)). 기본 키 `source_key`. 일반 표(파티션·보존 DELETE 없음 — 지우면 그 문서를 다시 고름). 판: `common/store/db/migrations/versions/0002_applog_skip.py`. 쓰는 곳: `pipeline/extract/skip_docs.py` `record()`(받기 전 `candidate_pick._record_source_skipped`·받은 뒤 `candidate_ready._record_filtered`·같은 밤 중복 `candidate_ready._dedup` — 같은 키면 `last_seen`·`count`만 갱신). 읽는 곳: `candidate_pick.list_targets`(`--skip-done`이면 이 키를 뺌). 같은 묶음·끝난 문서와의 중복(`dup_batch`·`dup_done`)과 파싱 실패는 쓰지 않는다. PC(PG 접속 없음)는 대역 sqlite `<standin_dir>/applog.sqlite`.
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
 | source_key | TEXT PK | 원본 키(Object Storage `s3_key`, 폴더 원천은 상대 경로·이름) | skip_docs | candidate_pick | 새로 |
 | source_system | TEXT | 원천 이름(키 첫 마디가 SFDC·CRMS·LAS·FAQ일 때만) | 〃 | 없음 | 새로 |
 | file_name | TEXT | 파일 이름 | 〃 | 없음 | 새로 |
-| reason | TEXT NOT NULL | 이유(`unsupported_archive`·`unsupported_format`·`no_extension`·`drm_*`·`encrypted_*`) | 〃 | 없음 | 새로 |
+| reason | TEXT NOT NULL | 이유(`unsupported_archive`·`unsupported_format`·`no_extension`·`drm_*`·`encrypted_*`·`duplicate_sha256`) | 〃 | 없음 | 새로 |
 | level | TEXT NOT NULL | 수준(기본 `error`) | 〃 | 없음 | 새로 |
 | first_seen | TIMESTAMPTZ NOT NULL | 처음 건너뛴 시각(기본 now) | 〃 | 없음 | 새로 |
 | last_seen | TIMESTAMPTZ NOT NULL | 마지막으로 건너뛴 시각(기본 now) | 〃 | 없음 | 새로 |

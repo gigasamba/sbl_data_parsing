@@ -1,8 +1,10 @@
 """pl-02 — 파싱 전 extract `candidate_ready.stage_batch`: 받기 → 중복 제외(받은 파일 sha256 — 같은 묶음 · ParsingMeta에 끝난 다른 원본)
 → 거르기(filter_and_rotate — DRM·암호·지원 안 함). 건너뛴 문서는 문서마다 extract.skip span 1행. ParsingMeta는 임시 SQLite EDW 대역 — 외부 접속 없음."""
 
+import contextlib
 import hashlib
 import os
+import sqlite3
 import sys
 import tempfile
 import uuid
@@ -13,9 +15,11 @@ from common.config.settings import COMMON
 from common.core import jsonlog, span
 from common.store import pg as PGC
 from common.store.parsing_meta_db import SqliteStore
+from pipeline import config as pc
 from pipeline.extract import candidate_ready as CR
 from pipeline.extract import filter_and_rotate as FR
 from pipeline.extract import skip_docs as SD
+from pipeline.shared import srcsha as SRCSHA
 
 sha = lambda body: hashlib.sha256(body).hexdigest()
 DONE_KEY = "SFDC/x/old.txt"  # ParsingMeta에 끝난(ok) 다른 원본 키 — old.txt와 같은 내용
@@ -95,3 +99,86 @@ def _run(root):
     local, left, _, only = CR.stage_batch(str(src), root / "out", prepared, 0, _filter, done={LEFTOVER[0]})
     keep_txt = (root / "out" / "dedup" / "keep.txt").read_text(encoding="utf-8").split()
     return local, left, only.read_text(encoding="utf-8").split(), keep_txt
+
+
+# pl-59 — 문서마다 stage(서버 흐름): 이번 실행에서 다른 원본이 먼저 받은 sha256이면 skipped_dup + skip_doc_info(duplicate_sha256).
+# (문서 폴더, 원본 키 = 이름(평평한 폴더), 내용, 기대 이유, 기대 dup_of) — 차례대로 같은 실행 표지 폴더(seen)로.
+RUN_DOCS = [
+    ("1", "a.txt", b"same", None, None),  # 처음 받은 원본
+    ("2", "b.txt", b"same", "dup_run", "a.txt"),  # 같은 밤 같은 내용 → 건너뜀(원래 원본 키는 dup_of)
+    ("3", "a.txt", b"same", None, None),  # 같은 원본을 다시 받음(받기 재시도) — 중복 아님
+    ("4", "c.txt", b"other", None, None),  # 다른 내용
+]
+
+
+def test_same_night_dup():
+    rows = []
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        with (
+            COMMON.env(RUN_ENV="local", PG_STANDIN_DIR=str(root / "pg")),
+            mock.patch.object(PGC, "has_conn", return_value=False),
+            mock.patch.object(CR.CP, "done_by_sha", lambda shas: {}),
+            mock.patch.object(span, "_emit", lambda row, level=None: rows.append(row)),
+            jsonlog.context(run_id=str(uuid.uuid4())),
+        ):
+            for seq, name, body, reason, _ in RUN_DOCS:
+                d = root / "docflow" / seq
+                (d / "src").mkdir(parents=True)
+                (d / "src" / name).write_bytes(body)
+                _, left, _, _ = CR.stage_batch(str(d / "src"), d, d / "prepared", 0, _filter, seen=root / "docflow" / "_seen_sha")
+                assert left == ([] if reason else [name]), (seq, left)
+                keep = (d / "dedup" / "keep.txt").read_text(encoding="utf-8").split()
+                assert (name in keep) == (reason is None), (seq, keep)
+                assert sorted(p.name for p in (d / "dedup").iterdir()) == ["keep.txt"]  # 1건 — 지문 캐시·보고서 안 씀
+        with contextlib.closing(sqlite3.connect(root / "pg" / "applog.sqlite")) as cn:
+            got = dict(cn.execute("SELECT source_key, reason FROM skip_doc_info").fetchall())
+    assert got == {n: "duplicate_sha256" for _, n, _, reason, _ in RUN_DOCS if reason}, got
+    skips = [(r["doc_id"], r["metrics"]["reason"], r["metrics"].get("dup_of")) for r in rows if r["stage"] == "extract.skip"]
+    assert skips == [(n, reason, dup_of) for _, n, _, reason, dup_of in RUN_DOCS if reason], skips
+
+
+class _S3:
+    """가짜 Object Storage — {(버킷, 키): (ETag, 내용)} · 받은 횟수(got)."""
+
+    def __init__(self, objs):
+        self.objs, self.got = objs, 0
+
+    def head_object(self, Bucket, Key):
+        etag, body = self.objs[(Bucket, Key)]
+        return {"ETag": f'"{etag}"', "ContentLength": len(body)}
+
+    def download_file(self, Bucket, Key, path):
+        self.got += 1
+        Path(path).write_bytes(self.objs[(Bucket, Key)][1])
+
+
+# staging 다시 쓰기는 ETag가 같을 때만(pl-59) — (ETag, 내용, 받기 호출 누적 기대). 둘째 줄 = 크기 같고 ETag 다름 → 다시 받음.
+STAGING_ROUNDS = [("e1", b"aaaa", 1), ("e2", b"bbbb", 2), ("e2", b"bbbb", 2)]
+
+
+def test_rdb_stage_once():
+    """rdb:csv 문서 1건 — manifest는 한 번 쓰고 sha256(+ 해시한 파일 표지)을 담음 · 거르기(자식)는 다시 해시하지 않음 · staging은 ETag로만 다시 씀."""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        csv_f = root / "batch.csv"
+        csv_f.write_text("id,s3_key,original_filename,file_size\n1,SFDC/u1/a.txt,a.txt,4\n", encoding="utf-8")
+        s3 = _S3({})
+        writes = []
+        real_write = CR._write_manifest
+        with (
+            pc.PIPE.env(RDB_BUCKET="b", SOURCE_STAGING=str(root / "staging")),
+            mock.patch.object(CR.objectstore, "client", lambda: s3),
+            mock.patch.object(CR.CP, "done_by_sha", lambda shas: {}),
+            mock.patch.object(CR, "_write_manifest", lambda st, rows: writes.append(1) or real_write(st, rows)),
+        ):
+            for i, (etag, body, got) in enumerate(STAGING_ROUNDS):
+                s3.objs[("b", "SFDC/u1/a.txt")] = (etag, body)
+                out = root / f"out{i}"
+                # 받기 뒤(중복·거르기)는 manifest 값을 씀 — 다시 해시하면 실패
+                with mock.patch.object(SRCSHA, "file_hash", side_effect=AssertionError("다시 해시함")):
+                    _, left, state, _ = CR.stage_batch(f"rdb:csv:{csv_f}", out, out / "prepared", 0, _filter)
+                assert left == ["a.txt"] and s3.got == got, (i, left, s3.got)
+                (row,) = CR.jl(state / "manifest.jsonl")
+                assert row["sha256"] == sha(body) and row["sha256_stat"] == SRCSHA.stat_of(out / "_source_files" / "a.txt"), row
+        assert len(writes) == len(STAGING_ROUNDS), writes  # 묶음마다 한 번

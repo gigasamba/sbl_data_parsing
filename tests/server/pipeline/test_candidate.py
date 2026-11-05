@@ -202,7 +202,7 @@ def _selftest_same_key_new_version():
 
 
 def _selftest_finish_keep():
-    """pl-02 — 중복 제외(_dedup)가 남긴 문서의 sha256을 manifest에 남기고(publish_parse가 로컬 원본 없이도 EDW 행을 쓸 수 있게),
+    """pl-02 — 받기가 manifest에 남긴 sha256(publish_parse가 로컬 원본 없이도 EDW 행을 쓸 수 있게)을 중복 제외(_dedup)는 다시 쓰지 않고,
     finish는 처리 기록만 남기고 원본은 지우지 않는다(삭제는 게시 뒤 run_pipeline drop_original 한 곳)."""
     import tempfile
     from unittest import mock
@@ -213,17 +213,19 @@ def _selftest_finish_keep():
     local.mkdir()
     (local / "a.txt").write_text("x", encoding="utf-8")
     (state / "manifest.jsonl").write_text(
-        json.dumps({"file_name": "a.txt", "key": "k1", "etag": "e1", "updated_at": None}) + chr(10), encoding="utf-8"
+        json.dumps({"file_name": "a.txt", "key": "k1", "etag": "e1", "updated_at": None, "sha256": "s1"}) + chr(10), encoding="utf-8"
     )
+    before = (state / "manifest.jsonl").read_bytes()
     rep = d / "index.json"
     rep.write_text(json.dumps({"docs": [{"doc": "a.txt", "engine": "eng1"}]}), encoding="utf-8")
     with mock.patch.object(CP, "done_by_sha", lambda shas: {}):
         assert M._dedup(local, ["a.txt"], d / "dedup", state) == ["a.txt"]
+    assert (state / "manifest.jsonl").read_bytes() == before, "중복 제외가 manifest를 다시 씀(받기가 한 번 씀)"
     finish(state, rep)
     man = {r["file_name"]: r for r in jl(state / "manifest.jsonl")}
     assert (local / "a.txt").exists(), "finish가 원본을 지움 — 삭제는 drop_original 한 곳"
     assert [json.loads(x)["key"] for x in (state / "processed.jsonl").read_text(encoding="utf-8").splitlines()] == ["k1"]
-    assert man["a.txt"].get("sha256"), "중복 제외가 sha256을 manifest에 안 남김(publish_parse가 로컬 없이 EDW 행을 못 씀)"
+    assert man["a.txt"]["sha256"] == "s1", "manifest의 sha256이 사라짐(publish_parse가 로컬 없이 EDW 행을 못 씀)"
     print("[selftest] finish — 처리 기록 + sha256 기록, 원본은 남김 통과")
 
 
