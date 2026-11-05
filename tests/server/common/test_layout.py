@@ -54,6 +54,11 @@ REFUSED = (
     ("required:\n  source: {publish_bucket: b}\n", "pipeline", "required.source.publish_bucket"),
     ("required:\n  deploy: {mcp_store: pg}\n", "pipeline", "required.deploy.mcp_store"),
     ("required:\n  pg: {hots: h}\n", "pipeline", "required.pg.hots"),
+    (  # 옮긴 required 칸(layout.MOVED) — 빈 줄이어도 새 자리를 알려 줌
+        "required:\n  edw: {edw_local_sqlite_file: }\n",
+        "pipeline",
+        "required.edw.edw_local_sqlite_file → dev.local.local_edw_sqlite_file",
+    ),
     ("required:\n  env: {run_mode: prod}\n", "pipeline", "required.env.run_mode"),
     ("required:\n  tokens: {parse_proxy: tok-123456}\n", "mcp", "required.tokens.parse_proxy"),
     ("search:\n  server: {warmup: false}\n", "mcp", "warmup"),

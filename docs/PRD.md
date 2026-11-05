@@ -76,7 +76,7 @@
 | ParsingMeta에는 INSERT만 — 키 (`source_system`, `source_key` = 원본 전체 키)가 이미 있으면 건너뜀. UPDATE는 적재 때 `loaded_at`·`gold_version`뿐 | — | done | [pl-09](prd/load.md#pl-09) |  |
 | DRM(`skipped_drm`)·실패(`failed`) 문서는 EDW에 쓰지 않고 `output/publish/excluded_<날짜>.md` 보고서에만. 업로드 대상 상태는 `tuning.load.publish.publish_upload_statuses`(기본 ok·partial) | 깨진 결과가 다른 팀에 넘어가지 않게 | done | [pl-09](prd/load.md#pl-09) |  |
 | 게시 버킷과 원천 원본 버킷이 같은지는 검사하지 않는다 — `required.publish.publish_bucket`을 다르게 두는 것은 운영자 몫 | 늘 꺼져 있던 검사 | done | [pl-09](prd/load.md#pl-09) |  |
-| 게시는 늘 하고 게시·EDW 칸은 settings.yaml `required` 한곳(`publish`·`object_storage`·`edw`) — 서버는 접속 칸, PC(`local`)는 `file://<폴더 절대 경로>`와 가짜 EDW `edw_local_sqlite_file`만 | `run_pipeline`는 문서마다 늘 게시하고 게시 위치·Object Storage·EDW 읽기·쓰기 칸이 비면 시작을 거부한다 | done | [pl-26](prd/load.md#pl-26) |  |
+| 게시는 늘 하고 게시·EDW 칸은 settings.yaml `required` 한곳(`publish`·`object_storage`·`edw`) — 서버는 접속 칸, PC(`local`)는 채우지 않음(`dev.local` 게시 폴더·가짜 EDW — op-14) | `run_pipeline`는 문서마다 늘 게시하고 게시 위치·Object Storage·EDW 읽기 칸이 비면 시작을 거부한다(쓰기 계정은 비우면 읽기 계정) | done | [pl-26](prd/load.md#pl-26) |  |
 | FAQ를 다시 올리면 gold faq의 문서·청크를 모두 지우고 지금 FAQ 파일 전체를 다시 적재(판을 잇지 않음) | pl-13 "지우지 않음"의 FAQ 예외(등급 A) | done | [pl-41](prd/load.md#pl-41) |  |
 | 정형 DB(`struct` 스키마 — 마스터·문서 대장·표·칸)를 두지 않는다. 엔진 구성은 파일만 | 쓰이지 않았다. 서버에 남은 표는 DB 담당자가 정리 | done | [pl-08](prd/load.md#pl-08) |  |
 | 문서 대장(`doc_registry`)·숨김(`doc_hidden`)·원천 삭제 처리를 두지 않는다. 서버는 PG가 없으면 로컬 대체 DB로 바꿔 타지 않고 멈춘다 | 빼야 할 문서는 원천에서 지우거나 사람이 SQL로 | done | [pl-12](prd/load.md#pl-12) |  |
@@ -151,7 +151,7 @@
 | JSON Lines 사건 기록(공통 키·로그 수준·비밀 가림) + DB 감사·성능 로그 — 두 앱 `common.core.jsonlog`, MCP 도구 호출마다 `applog.mcp_log`, 파이프라인 실행·단계 `applog.pipe_run`·`pipe_event`(`dbtool up --target applog`) | 사건·감사·성능을 같은 형식으로 남긴다(코드 #87 병합 — 서버 적용은 C-79·C-80) | done | [op-01](prd/ops.md#op-01) |  |
 | 실행 환경 `RUN_ENV`(`required.env.run_env`)는 `local`·`dev`·`prd`만, 어디서나 필수 — `stage`나 모르는 값이면 시작 거부 | `stage`는 `prd`와 똑같이 동작했다 | done | [op-02](prd/ops-settings.md#op-02) |  |
 | 서버(`dev`·`prd`)는 가짜 LLM(`dev.fake_llm`)이 켜져 있거나 설정 파일을 못 읽으면 시작 거부 | 서버에서 가짜 답이 도는 것을 막는다 | done | [op-02](prd/ops-settings.md#op-02) |  |
-| PC(`local`)는 가짜 대상만 — EDW sqlite·`file://` 게시 폴더·원본 폴더는 저장소 루트 기준 상대 경로를 받고, 실제 EDW·Object Storage 칸이 적혀 있으면 시작 거부 | 나중에 PC에서 전체 흐름을 가짜 대상으로 돌린다. 사용자 11-04 | done | [op-14](prd/ops-settings.md#op-14) |  |
+| PC(`local`)는 가짜 대상만 — `dev.local`의 가짜 EDW·게시 폴더·원본 폴더·새 문서 상한을 쓰고, 서버 전용 칸(EDW·Object Storage·서버 게시 버킷)은 비우고 경고, 경로는 저장소 루트 기준 상대 경로 | PC 시험에 EDW·Object Storage·토큰·배포 값이 필요 없게. 사용자 11-04·11-05 | done | [op-14](prd/ops-settings.md#op-14) |  |
 | 한 서버에 여러 벌(개발자별) — `ops.host.instance_name`가 컨테이너·compose 묶음·타이머 이름 끝에 붙고, 포트·스키마는 벌마다 설정으로 | 개발 서버에 개발자마다 컨테이너를 띄움. 사용자 11-04 | done | [op-15](prd/ops-settings.md#op-15) |  |
 | 설정은 settings.yaml 하나 — `settings.sample.yaml`에 모든 키가 기본값과 함께(`python -m common.config.sample`로 생성) | — | done | [op-05](prd/ops-settings.md#op-05) |  |
 | 배치 — 맨 위 `required`(필수·비밀) → 역할 절 7개(환경마다 정하는 값) → `tuning`(거의 안 바꾸는 값 — 분류 제목, 11-04). 옛 배치·옛 자리·모르는 칸은 시작 거부(칸 이름만 알림 — rn-07) | sample과 실제 파일의 차이를 줄였다 | done | [op-08](prd/ops-settings.md#op-08) |  |

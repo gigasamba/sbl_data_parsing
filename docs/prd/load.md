@@ -113,9 +113,9 @@
 
 ### 규칙
 1. 게시(silver → Object Storage + EDW)는 기본이자 유일한 방식이다 — 끄는 선택지가 없다. `run_pipeline`는 문서마다 늘 게시한다([ops.md#pl-24](ops.md#pl-24) — gold 전).
-2. 게시·EDW 칸은 settings.yaml `required` 한곳에 있다 — 게시 위치 `required.publish.publish_bucket`·`publish_prefix`, Object Storage 접속 `required.object_storage`(`object_storage_endpoint`·`object_storage_region`·`object_storage_access_key`·`object_storage_secret_key`·`object_storage_verify_tls`), EDW `required.edw`(`parsing_meta_table`·`edw_host`·`edw_port`·`edw_database`·`read_*`·`write_*`·`edw_local_sqlite_file`). 칸마다 주석에 서버·PC에 넣을 값을 적는다. 옛 자리(`required.source.publish_*`·`dev.connections.rdb.sqlite`·`common.connections.…`)도 경고 한 번 뒤 읽는다.
-3. 서버(`run_pipeline`)는 게시 버킷·접두, Object Storage 주소·키, EDW 주소·읽기·쓰기 계정이 비면 칸 이름을 찍고 시작을 거부한다(종료 2). `object_storage_region`·`object_storage_verify_tls`·`edw_port`·`parsing_meta_table`은 비우면 코드 기본값(`us-east-1`·`1`·1433·`AI.ParsingMeta`).
-4. PC(`local`)는 로컬 대역만 적는다 — 게시 버킷 `file://<가짜 Object Storage 폴더 절대 경로>`(S3 접속 칸 비움), EDW `required.edw.edw_local_sqlite_file`(가짜 EDW 파일 — 접속 칸 비움). 가짜 EDW는 `local`에서만 열린다(서버 설정에 있으면 EDW를 쓸 때 거부). PC에서는 운영 EDW·Object Storage에 접속하지 않는다(CLAUDE.md §4).
+2. 게시·EDW 칸은 settings.yaml `required` 한곳에 있다 — 게시 위치 `required.publish.publish_bucket`·`publish_prefix`, Object Storage 접속 `required.object_storage`(`object_storage_endpoint`·`object_storage_region`·`object_storage_access_key`·`object_storage_secret_key`·`object_storage_verify_tls`), EDW `required.edw`(`parsing_meta_table`·`edw_host`·`edw_port`·`edw_database`·`read_*`·`write_*`). 칸마다 주석에 서버·PC에 넣을 값을 적는다. PC 전용 값은 `dev.local`(op-14).
+3. 서버(`run_pipeline`)는 게시 버킷·접두, Object Storage 주소·키, EDW 주소·읽기 계정이 비면 칸 이름을 찍고 시작을 거부한다(종료 2). 쓰기 계정은 둘 다 비우면 읽기 계정으로 게시한다(op-03). `object_storage_region`·`object_storage_verify_tls`·`edw_port`·`parsing_meta_table`은 비우면 코드 기본값(`us-east-1`·`1`·1433·`AI.ParsingMeta`).
+4. PC(`local`)는 로컬 대역만 쓴다 — 게시 폴더 `dev.local.local_publish_dir`(기본 `valid_env/object_storage/Parsing_Result`), EDW `dev.local.local_edw_sqlite_file`(비우면 `valid_env/edw/edw_copy.sqlite`). 서버 게시 버킷·Object Storage·EDW 접속 칸은 적혀 있어도 비우고 경고한다(op-14). 가짜 EDW는 `local`에서만 열린다(서버 설정에 있으면 EDW를 쓸 때 거부). PC에서는 운영 EDW·Object Storage에 접속하지 않는다(CLAUDE.md §4).
 
 ### QA
 - 칸 자리·옛 자리: `tests/server/common/test_layout.py::test_publish_edw_keys_in_required`. 서버 시작 검사는 `run_pipeline.py` `SETTINGS_REQUIRED`(자동 시험 없음).

@@ -53,6 +53,8 @@ STACK_FILE = RES_ROOT / "config" / "pipeline_stack.json"  # 엔진 구성(DB 표
 GLOSSARY_ROOT = RES_ROOT / "vocab" / "glossary"  # 용어집·명부 예시·고객 seed(코드 기본값·selftest용)
 APP_ROOT = PROJ_ROOT  # 런타임 루트(output/·assets/가 있는 곳) — PC=저장소 루트, 이미지=/app
 LOG_DIR = APP_ROOT / "output" / "logs"  # 파일 로그 한 곳 — PC JSON 로그·DB 실패 예비 기록의 기본 폴더
+LOCAL_EDW_SEED = PROJ_ROOT / "valid_env" / "edw" / "edw.sqlite"  # PC 가짜 EDW 원본(git — 쓰지 않음)
+LOCAL_EDW_COPY = PROJ_ROOT / "valid_env" / "edw" / "edw_copy.sqlite"  # local 가짜 EDW 기본 — 없으면 원본을 복사(common.store.mssql, op-14)
 SPEND_DIR = APP_ROOT / "output" / "_llm_spend"  # 하루 지출 장부 기본 폴더(spend_file 비었을 때 — common.ai.guard.ledger_file)
 
 

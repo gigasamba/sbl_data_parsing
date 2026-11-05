@@ -46,6 +46,9 @@
 - 서버에서 설정 파일을 못 읽거나(권한) 그 이미지 절이 틀리면 컨테이너가 이유(칸 경로·오류 종류만)를 찍고 **시작하지 않는다**(종료 2).
 - 호스트 칸만 꺼내 보기(비밀 없음 — 인자는 모델 경로): `bash deploy/host/scripts/load_settings.sh pipeline.host common.host`. 호스트 python에는 PyYAML만 있으면 된다(칸 목록 `deploy/host/scripts/host_settings.tsv` — 설정 모델을 고치면 `PYTHONPATH=. python deploy/release/gen_host_keys.py`로 다시 만듦).
 - `run_pipeline.py`(서버 전용)도 같은 파일을 읽는다 — 필요한 칸이 없으면 칸 경로만 찍고 종료 2.
+- **모드마다 꼭 채울 칸**(sample 주석 `[필수 · …]`와 같음):
+  - `local`(PC): `required.env.run_env`, 모델 접속 `required.models`(`embed_base_url`·`embed_model`·`llm_base_url`·`llm_model`·`vlm_base_url`·`vlm_model`). PG(`required.pg` 접속 다섯 칸)는 채우면 그 PG, 모두 비우면 sqlite 대역. EDW·Object Storage·토큰·배포 칸은 채우지 않는다 — 적혀 있어도 EDW 주소·계정, Object Storage 주소·키, 원천 버킷, 서버 게시 버킷은 비우고 `[settings] local(PC) — 서버 전용 칸을 무시함(비움): <칸 이름>` 한 줄을 찍는다(값 없음). 대신 `dev.local`(가짜 EDW `local_edw_sqlite_file` · 게시 폴더 `local_publish_dir` · 원본 폴더 `local_source_dir` · 새 문서 상한 `local_max_new_docs_per_run`)의 기본값을 쓴다.
+  - `dev`·`prd`(서버): 위에 더해 PG 접속 다섯 칸, EDW(`edw_host`·`edw_database`·`edw_read_user`·`edw_read_password`), `publish_bucket`, Object Storage 세 칸, 토큰(`mcp_token`·원문 도구를 쓰면 `fulltext_sign_key`), 배포 네 칸(`pipeline_image`·`mcp_image`·`host_docs_dir`·`pg_container_name`). `pg_schema`는 비우면 `data_parsing`, EDW 쓰기 계정은 둘 다 비우면 읽기 계정으로 게시한다.
 - 라이브러리가 읽는 env(`TZ`·`OMP_NUM_THREADS`·`HF_HUB_OFFLINE`·`TESSDATA_PREFIX` 등 — 허용 목록 `common.config.settings.LIB_ENV_NAMES`)는 `ops.runtime.library_env` 사전에 적는다. 목록 밖 이름은 검증 오류.
 
 ### 0-2. 한 번 실행에만 다른 값 — `--set 이름=값`(서버 포함)
@@ -87,7 +90,7 @@
 ### 저장소 (PostgreSQL + pgvector)
 | 이름 | 메모 |
 |---|---|
-| `PG_HOST`·`PG_PORT`·`PG_DB`·`PG_USER`·`PG_PASSWORD`·`PG_SCHEMA` | 모두 필수(자동 탐지 없음 — 비면 채울 자리를 적고 멈춤). compose는 `network_mode: host`라 `127.0.0.1`이 서버 자신. 계정은 우리 스키마 권한만 |
+| `PG_HOST`·`PG_PORT`·`PG_DB`·`PG_USER`·`PG_PASSWORD`·`PG_SCHEMA` | 서버는 접속 다섯 칸 필수(자동 탐지 없음 — 비면 채울 자리를 적고 멈춤) · `PG_SCHEMA`(`pg_schema`)는 비우면 `data_parsing`(여러 벌이면 끝에 `_<벌>`) · PC(local)는 접속 칸을 모두 비우면 sqlite 대역. compose는 `network_mode: host`라 `127.0.0.1`이 서버 자신. 계정은 우리 스키마 권한만 |
 
 ### 검색 MCP
 | 이름 | 기본 | 메모 |
@@ -106,8 +109,8 @@
 
 | 이름 | 기본 | 메모 |
 |---|---|---|
-| `RDB_HOST`·`RDB_PORT`·`RDB_DATABASE`·`RDB_READ_USER`·`RDB_READ_PASSWORD` | 비움·`1433`·비움 | `required.edw`(`edw_host`·`edw_port`·`edw_database`·`edw_read_user`·`edw_read_password`) — 서버만, PC는 비움 |
-| `RDB_SQLITE`(`required.edw.edw_local_sqlite_file`) | 비움 | PC(local) 전용 가짜 EDW 파일 — `valid_env/edw/edw.sqlite`의 사본 경로(다시 만들기 `python -m validation.e2e.edw_standin`). 적으면 EDW 접속 칸은 안 봄 · 서버 설정에 있으면 EDW를 쓸 때 실패 |
+| `RDB_HOST`·`RDB_PORT`·`RDB_DATABASE`·`RDB_READ_USER`·`RDB_READ_PASSWORD` | 비움·`1433`·비움 | `required.edw`(`edw_host`·`edw_port`·`edw_database`·`edw_read_user`·`edw_read_password`) — 서버만. PC(local)는 적혀 있어도 주소·계정을 비우고 경고(칸 이름만) |
+| `RDB_SQLITE`(`dev.local.local_edw_sqlite_file`) | 비움 | PC(local) 전용 가짜 EDW 파일 — 비우면 `valid_env/edw/edw_copy.sqlite`(없으면 git의 `valid_env/edw/edw.sqlite`를 복사해 만듦 — 원본은 다시 만들기 `python -m validation.e2e.edw_standin`). local은 늘 이 대역을 쓴다 · 서버 설정에 있으면 EDW를 쓸 때 실패 |
 | `EDW_QUERY_MAX_ROWS` | `1000` | 도구 `max_rows`의 상한 |
 | `EDW_QUERY_TIMEOUT_SEC` | `20` | 넘으면 `timeout` |
 | `EDW_QUERY_MAX_BYTES` | `2000000` | 응답 JSON 크기 상한 — 넘으면 끝 행부터 버리고 `truncated: true` |
@@ -126,16 +129,18 @@
 | 이름 | 무엇 | 형식 |
 |---|---|---|
 | `PARSE_SOURCE`(`extract.source.source_input_location`) | 이번에 읽을 원천 | 폴더 · `rdb:csv:<경로>` |
+| `LOCAL_PARSE_SOURCE`(`dev.local.local_source_dir`) | PC(local) 원천 — `PARSE_SOURCE`·`--source`가 없을 때. 게시 폴더·맨 위 `*.md`는 원본으로 읽지 않음 | 폴더(기본 `valid_env/object_storage`) |
+| `LOCAL_PARSE_MAX_NEW`(`dev.local.local_max_new_docs_per_run`) | PC(local) 한 번에 새로 파싱할 문서 수 — `PARSE_MAX_NEW`(`extract.max_new_docs_per_run`)·`--max-new`가 없을 때 | 정수(기본 5, 0 = 제한 없음) |
 | `PG_FILTER_EXACT_MAX` | 고객 필터 정확 검색 문턱 | 고객으로 좁힌 청크가 이 수(기본 20000) 이하면 정확 검색 |
 | 변경 뒤 확인 | — | `python -m common.check.checker env`(서버는 `pipe_exec.sh check_env`) |
 
 ### 원천 Object Storage·EDW·게시
 | 이름 | 메모 |
 |---|---|
-| `OS_ENDPOINT`·`OS_REGION`·`OS_ACCESS_KEY`·`OS_SECRET_KEY`·`OS_VERIFY_TLS` | `required.object_storage`(`object_storage_endpoint`·`object_storage_region`·`object_storage_access_key`·`object_storage_secret_key`·`object_storage_verify_tls`) — 서버만, PC는 비움(게시는 `file://` 폴더). `object_storage_region` 비우면 `us-east-1` · `object_storage_verify_tls` 비우면 `1`, 사내 CA면 CA 파일 경로(`0`이면 검증 끔 — 경고) |
+| `OS_ENDPOINT`·`OS_REGION`·`OS_ACCESS_KEY`·`OS_SECRET_KEY`·`OS_VERIFY_TLS` | `required.object_storage`(`object_storage_endpoint`·`object_storage_region`·`object_storage_access_key`·`object_storage_secret_key`·`object_storage_verify_tls`) — 서버만. PC(local)는 적혀 있어도 주소·키를 비우고 경고(게시는 `dev.local.local_publish_dir` 폴더). `object_storage_region` 비우면 `us-east-1` · `object_storage_verify_tls` 비우면 `1`, 사내 CA면 CA 파일 경로(`0`이면 검증 끔 — 경고) |
 | `RDB_CONNECT_KWARGS` | EDW 연결 추가 인자(JSON — 비밀) |
-| `RDB_WRITE_USER`·`RDB_WRITE_PASSWORD`(`required.edw.edw_write_user`·`edw_write_password`) | 쓰기 계정 — ParsingMeta 게시(INSERT·UPDATE)만, 파이프라인 이미지에만. 서버는 `run_pipeline` 시작 때 빠지면 멈춤 · PC는 비움 |
-| `PM_BUCKET`·`PM_PREFIX`(`required.publish.publish_bucket`·`publish_prefix`) | silver 게시 위치 — 서버: 버킷 이름(원천 원본 버킷과 달라야 함) · PC(local): `file://<가짜 Object Storage 폴더 절대 경로>`(그 폴더에 씀 — S3 접속 칸 불필요). `publish_prefix`는 버킷(폴더) 안 경로 접두(비우면 맨 위). ⚠ **첫 게시 전 EDW 표를 DBA가 한 번 만든다**: [`parsing_meta_mssql.sql`](parsing_meta_mssql.sql)(코드는 표를 만들지 않음 — 없으면 첫 INSERT에서 실패) |
+| `RDB_WRITE_USER`·`RDB_WRITE_PASSWORD`(`required.edw.edw_write_user`·`edw_write_password`) | 쓰기 계정 — ParsingMeta 게시(INSERT·UPDATE)만, 파이프라인 이미지에만. 둘 다 비우면 게시도 읽기 계정을 쓴다(검색 MCP는 늘 읽기 계정만) · PC는 무시 |
+| `PM_BUCKET`·`PM_PREFIX`(`required.publish.publish_bucket`·`publish_prefix`) | silver 게시 위치 — 서버: 버킷 이름(원천 원본 버킷과 달라야 함) · PC(local): 이 칸은 무시하고 `dev.local.local_publish_dir`(`LOCAL_PM_DIR` — 폴더 경로, 기본 `valid_env/object_storage/Parsing_Result`, 처음 게시할 때 만듦)에 쓴다. `publish_prefix`는 버킷(폴더) 안 경로 접두(비우면 맨 위). ⚠ **첫 게시 전 EDW 표를 DBA가 한 번 만든다**: [`parsing_meta_mssql.sql`](parsing_meta_mssql.sql)(코드는 표를 만들지 않음 — 없으면 첫 INSERT에서 실패) |
 | `PM_TABLE`(`required.edw.parsing_meta_table`) | 게시할 EDW 표(비우면 `AI.ParsingMeta`) — PC 가짜 EDW는 표 이름 `ParsingMeta` 고정(이 칸 안 봄) |
 | `EDW_CHAIN_FILE`(`ops.paths.edw_chain_file`) | EDW 조인 사슬 파일 — 적재와 검색 MCP가 같은 칸을 읽는다. 비우면 코드의 `resources/config/edw_chain.yaml`, 서버 사본을 쓰려면 `/etc/rag/edw_chain.yaml`. 쓰는 법: [release-and-patch §8-6](release-and-patch.md#8-6-edw-조인-사슬-파일-고쳐-쓰기서버--pl-29) |
 
@@ -186,7 +191,7 @@ ls -l ../settings.yaml                # 서버(코드 폴더에서): 주인 1000
 | 바뀐 것 | 할 일 |
 |---|---|
 | 칸 배치 — 맨 위 `required` → 역할 절 → `tuning`. 옛 배치·옛 자리·지운 칸·모르는 칸은 시작 거부(칸 이름만 알림) | `init`이 놓은 새 settings.yaml에 옛 값을 칸마다 옮겨 적는다(§8-3 4) |
-| `required.pg` 여섯 칸 필수(자동 탐지 없음) | 모두 채운다. `pg_schema`는 **새 이름**(판 0002가 옛 표를 지움) |
+| `required.pg` 접속 다섯 칸 필수(자동 탐지 없음) | 모두 채운다. `pg_schema`는 비우면 `data_parsing` — 운영은 **새 이름**(판 0002가 옛 표를 지움) |
 | env로 준 값은 효과 없음(엔진·핸드오프 칸 포함) | 컨테이너에 `-e VLM_BASE_URL=…`·`OCR_DPI=…`처럼 주던 값은 settings.yaml 칸으로(`--where <이름>`으로 자리 확인) |
 | 이미지 칸 `required.deploy.pipeline_image`·`mcp_image` | dev `data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0` · prd `data-pipeline:0.2.0`·`mcp-server:0.2.0` |
 | 새 칸 `required.deploy.pg_container_name`·`required.tokens.fulltext_sign_key` · 토큰은 `required.tokens.mcp_token` 하나(작업 서비스도 같은 값) | 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)) |

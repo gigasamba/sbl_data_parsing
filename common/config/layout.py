@@ -13,22 +13,19 @@
 SECTIONS = ("required", "common", "extract", "transform", "load", "search", "ops", "tuning", "dev")
 
 # required — (카테고리 열쇠, 제목, [(칸 이름, 모델 경로, 필수 조건)]). 조건은 sample 주석 머리에 그대로 — "필수 · <언제·어느 앱>" 또는 "선택".
-_PG_NEED = "필수 · dev·prd(pipeline·mcp)"
+_PG_NEED = "필수 · dev·prd(pipeline·mcp) — local은 비우면 sqlite 대역"
+_SERVER_NEED = "필수 · dev·prd(pipeline·mcp) — local은 무시(비움)"
 REQUIRED_GROUPS = (
     ("env", "실행 환경", (("run_env", "common.run_env", "필수 · 모두(local·dev·prd)"),)),
     (
         "pg",
-        "PostgreSQL(pgvector) — local은 6칸 모두 비우면 sqlite 대역(일부만 적으면 거부)",
-        tuple(
-            (f"pg_{k}", f"common.connections.pg.{m}", _PG_NEED)
-            for k, m in (
-                ("host", "host"),
-                ("port", "port"),
-                ("database", "db"),
-                ("user", "user"),
-                ("password", "password"),
-                ("schema", "db_schema"),
-            )
+        "PostgreSQL(pgvector) — local은 접속 5칸을 모두 비우면 sqlite 대역(일부만 적으면 거부)",
+        (
+            *(
+                (f"pg_{k}", f"common.connections.pg.{m}", _PG_NEED)
+                for k, m in (("host", "host"), ("port", "port"), ("database", "db"), ("user", "user"), ("password", "password"))
+            ),
+            ("pg_schema", "common.connections.pg.db_schema", "선택 — 비우면 data_parsing(여러 벌이면 끝에 _<벌>)"),
         ),
     ),
     (
@@ -56,21 +53,24 @@ REQUIRED_GROUPS = (
         "EDW(회사 DB) — ParsingMeta 표·접속",
         (
             ("parsing_meta_table", "common.connections.parsing_meta.table", "선택"),
-            ("edw_host", "common.connections.rdb.host", "필수 · dev·prd(pipeline·mcp) — local은 적으면 시작 거부"),
+            ("edw_host", "common.connections.rdb.host", _SERVER_NEED),
             ("edw_port", "common.connections.rdb.port", "선택"),
-            ("edw_database", "common.connections.rdb.database", "필수 · dev·prd(pipeline·mcp)"),
-            ("edw_read_user", "common.connections.rdb.read.user", "필수 · dev·prd(pipeline·mcp)"),
-            ("edw_read_password", "common.connections.rdb.read.password", "필수 · dev·prd(pipeline·mcp)"),
-            ("edw_write_user", "common.connections.rdb.write.user", "필수 · dev·prd(pipeline — 게시할 때)"),
-            ("edw_write_password", "common.connections.rdb.write.password", "필수 · dev·prd(pipeline — 게시할 때)"),
-            ("edw_local_sqlite_file", "common.connections.rdb.sqlite", "필수 · local(pipeline·mcp) — dev·prd는 적으면 거부"),
+            ("edw_database", "common.connections.rdb.database", _SERVER_NEED),
+            ("edw_read_user", "common.connections.rdb.read.user", _SERVER_NEED),
+            ("edw_read_password", "common.connections.rdb.read.password", _SERVER_NEED),
+            (
+                "edw_write_user",
+                "common.connections.rdb.write.user",
+                "선택 — 비우면 읽기 계정(쓰기 계정 이름·비밀번호 둘 다 비울 때) · local은 무시",
+            ),
+            ("edw_write_password", "common.connections.rdb.write.password", "선택 — 비우면 읽기 계정 · local은 무시"),
         ),
     ),
     (
         "publish",
         "게시(silver 적재) 위치",
         (
-            ("publish_bucket", "pipeline.load.publish.bucket", "필수 · 모두(pipeline)"),
+            ("publish_bucket", "pipeline.load.publish.bucket", "필수 · dev·prd(pipeline) — local은 무시(dev.local.local_publish_dir)"),
             ("publish_prefix", "pipeline.load.publish.prefix", "선택"),
         ),
     ),
@@ -81,10 +81,10 @@ REQUIRED_GROUPS = (
             (
                 "object_storage_endpoint",
                 "common.connections.object_storage.endpoint",
-                "필수 · dev·prd(pipeline·mcp) — local은 적으면 시작 거부",
+                _SERVER_NEED,
             ),
-            ("object_storage_access_key", "common.connections.object_storage.access_key", "필수 · dev·prd(pipeline·mcp)"),
-            ("object_storage_secret_key", "common.connections.object_storage.secret_key", "필수 · dev·prd(pipeline·mcp)"),
+            ("object_storage_access_key", "common.connections.object_storage.access_key", _SERVER_NEED),
+            ("object_storage_secret_key", "common.connections.object_storage.secret_key", _SERVER_NEED),
         ),
     ),
     (
@@ -357,7 +357,14 @@ PLACED = {
     "common.connections.pg.standin_schema": "dev.pg_standin.pg_standin_schema",
     "mcp.dev.mcp_url": "dev.search_ui.search_ui_mcp_url",
     "mcp.dev.ui_port": "dev.search_ui.search_ui_port",
+    # dev — local(PC) 전용 값(op-14: local은 서버 전용 칸을 무시하고 이 값을 씀)
+    "common.connections.rdb.sqlite": "dev.local.local_edw_sqlite_file",
+    "pipeline.load.publish.local_dir": "dev.local.local_publish_dir",
+    "pipeline.extract.local_source": "dev.local.local_source_dir",
+    "pipeline.extract.local_max_new": "dev.local.local_max_new_docs_per_run",
 }
+# 자리를 옮긴 required 칸 — {옛 파일 자리: 새 파일 자리}. 남아 있으면 "옛 자리 → 새 자리"로 거부(refactor.md C-95 대응표).
+MOVED = {"required.edw.edw_local_sqlite_file": "dev.local.local_edw_sqlite_file"}
 
 # tuning — 거의 안 바꾸는 값(sample 아래쪽에 분류별로 모음 — 비우면 코드 기본값).
 TUNING_INTERNAL = (  # 내부 조정값 — 재시도·내부 대기·묶음 크기·출력 상한
@@ -591,6 +598,9 @@ def to_model(doc, source=""):
         raise LayoutError(f"설정 파일에 모르는 최상위 절 {unknown} — {'·'.join(SECTIONS)}만(덮기 파일은 base·overrides){where}")
     out, bad, moved = {}, [], []
     for y, v in _leaves(doc):
+        if y in MOVED:
+            moved.append(f"{y} → {MOVED[y]}")
+            continue
         m = None if y.rpartition(".")[0] in _LOCAL_PARENTS and y not in _REQ_BACK else to_model_path(y)
         if m is None:
             if v not in (None, {}):

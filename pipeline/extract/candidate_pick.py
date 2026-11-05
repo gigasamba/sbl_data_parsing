@@ -184,11 +184,27 @@ def _known_source(seg):
     return seg.upper() if seg.lower() in set(SOURCES) - {"other"} else None
 
 
+def _publish_dirs():
+    """원본이 아닌 게시 폴더(resolve) — file:// 게시 버킷의 폴더와 PC 게시 폴더(dev.local.local_publish_dir — 버킷을 바꿔도 남은 폴더)."""
+    from common.config.settings import repo_path
+
+    pub = pc.cfg().load.publish
+    out = {Path(repo_path(pub.local_dir)).resolve()} if pub.local_dir else set()
+    b = pub.bucket or ""
+    return out | ({Path(b[len("file://") :]).resolve()} if b.startswith("file://") else set())
+
+
 def _tree_files(src):
     """폴더가 원천별 하위 폴더 모양(`<원천>/<id>/<파일>`)이면 그 아래 파일 목록, 아니면 None(평평한 폴더로).
     모양 = 맨 위에 파일이 없고(숨김 파일 빼고), 맨 위 폴더가 모두 원천 이름(_known_source)이며 그 아래 파일이 있음.
-    숨김(점으로 시작)·__MACOSX는 어디서나 뺀다 — 흘린 sub/.DS_Store 하나로 평평한 폴더가 바뀌지 않게."""
-    top = [p for p in src.iterdir() if not _hidden(p) and p.name != ".gitkeep"]
+    숨김(점으로 시작)·__MACOSX는 어디서나 뺀다 — 흘린 sub/.DS_Store 하나로 평평한 폴더가 바뀌지 않게.
+    맨 위의 설명 파일(*.md)과 게시 폴더(file:// 게시 버킷 — PC valid_env/object_storage/Parsing_Result)는 원본이 아니라 뺀다(op-14)."""
+    out = _publish_dirs()
+    top = [
+        p
+        for p in src.iterdir()
+        if not _hidden(p) and p.name != ".gitkeep" and not (p.is_file() and p.suffix == ".md") and p.resolve() not in out
+    ]
     dirs = [p for p in top if p.is_dir()]
     if not dirs or len(dirs) != len(top) or not all(_known_source(d.name) for d in dirs):
         return None
