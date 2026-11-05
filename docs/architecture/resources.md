@@ -45,7 +45,7 @@ LLM·VLM을 **부르는** 단계의 지시서 패키지 7개 — `resources/prom
 | `resources/prompts/common/<패키지>/` | 여러 단계·이미지가 함께 쓰는 지시서, 공용 꼬리 `_common/` | 모든 이미지(`resources/` 폴더째) |
 | `resources/prompts/pipeline/<패키지>/` | 파싱·구조화·평가 지시서 | 모든 이미지 |
 
-- 찾는 자리는 `common/core/paths.py` `resolve_agent_dir()` 한 곳이다. 순서는 ① `resources/prompts/common` ② `resources/prompts/pipeline` ③ `valid_env/answer_test`(`rag_qa` — PC 전용 데이터 · 이미지에 없음). 코드에는 폴더가 없는 갈래 셋(`resources/prompts/mcp`·`validation/e2e`·`dev_tools/unit_test/fixtures`)이 더 있어 늘 건너뛴다 — 지우기는 PRD [e2-15](../prd/test.md#e2-15)(`paths.py`라 다음 지문 배치). 패키지 이름은 겹치지 않아 순서가 결과를 바꾸지는 않지만, 결정적이어야 캐시·로그가 재현된다.
+- 찾는 자리는 `common/core/paths.py` `resolve_agent_dir()` 한 곳이다. 순서는 ① `resources/prompts/common` ② `resources/prompts/pipeline` ③ `valid_env/answer_test`(`rag_qa` — PC 전용 데이터 · 이미지에 없음). 코드에는 폴더가 없는 갈래 셋(`resources/prompts/mcp`·`validation/e2e`·`dev_tools/unit_test/fixtures`)이 더 있어 늘 건너뛴다(요건: [test.md#e2-15](../prd/test.md#e2-15)). 패키지 이름은 겹치지 않아 순서가 결과를 바꾸지는 않지만, 결정적이어야 캐시·로그가 재현된다.
 - `resources/`는 저장소 루트 바로 아래이고, 이미지 안에서는 `/app/deploy/resources`다(`paths.RES_ROOT` = 코드 패키지들이 import되는 자리의 `resources/`).
 
 ### 2-2. 패키지 구성
@@ -68,7 +68,7 @@ LLM·VLM을 **부르는** 단계의 지시서 패키지 7개 — `resources/prom
 | `rag_qa` | (`valid_env/answer_test/` — PC 전용) | llm | 검색 MCP 도구(`search`·`edw_meta`·`query_edw`)를 스스로 골라 근거를 찾고 숫자마다 인용을 붙여 답함(agentic — `max_turns` 12, 로컬 도구 `verify_citations`: 답의 숫자가 인용 `quote`에 있고 그 quote가 이번 질문의 검색 근거에 있는지) | 질문(사용자) → `{answer, status: found\|partial\|not_found, citations}` | `validation/e2e/answer_gen.py`(`validation.e2e.tool_loop.run("rag_qa", …)` — 턴마다 예산 확인 `llm.admit_turn()` · 도구 함수·근거 pool은 호출자, 지시문 `instructions.md` + 출력 스키마) | 없음(instruction에 지시문) · 있음 |
 | `figure_overlay` | `pipeline/` | vlm | 겹친 개체 묶음(그림 + 글상자·화살표·도형) 1장 → 검색용 기록 | 묶음 union bbox 크롭 + 지시문(생각 끔) → figure-v1 JSON | `pipeline/transform/figures/figure_extract.py` `vlm_fig_overlay()`(`P_FIGOVERLAY`) | 기본 · 있음 |
 | `nested_figure` | `pipeline/` | vlm | 쪽 전체 그림 안의 자식 그림 bbox 찾기 | 쪽 그림 + 지시문 → `{"regions": [{bbox, kind, …}]}` | `pipeline/transform/figures/nested_figures.py` `bbox_regions()`(`P_BBOX`) | 기본 · 있음 |
-| `classify_sfdc` · `classify_las` | `pipeline/` | llm | SFDC·LAS 문서 하나 → 종류 라벨 하나(`doc_class` — pl-33, 운영 지시문 그대로) | 문서 정보 + 본문 앞 8,000자(LAS는 키워드 근거 더함) → JSON `class` | `pipeline/load/doc_classify.py` `classify_one()`(적재 중 — `llm.chat`) | 없음 · 없음 |
+| `classify_sfdc` · `classify_las` | `pipeline/` | llm | SFDC·LAS 문서 하나 → 종류 라벨 하나(`doc_class` — 운영 지시문 그대로) | 문서 정보 + 본문 앞 8,000자(LAS는 키워드 근거 더함) → JSON `class` | `pipeline/load/doc_classify.py` `classify_one()`(적재 중 — `llm.chat`) | 없음 · 없음 |
 
 모델 호출 시험은 `tests/server/common/test_llm_call.py`, 도구 왕복은 `tests/general/e2e/test_answer_gen.py`.
 

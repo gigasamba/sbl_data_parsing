@@ -167,15 +167,12 @@
   2. `pipeline/transform/parse/` = 엔진 파싱 — 엔진 `engines/`(보호 파일), 엔진 준비 확인 `engine_check.py`, 엔진 실행은 한 파일(엔진마다 자식 프로세스로 분리), 엔진 버전·캐시 키(`engine_version`·`p0_key`·`engine_code_fp`)와 캐시 지우기. 그 뒤 `represent`(대표 결과) → `figures`(그림) → `structure`(gold 묶음 `gold_bundle.py`).
   3. `pipeline/shared`의 파일은 한 가지 일만 하고 이름이 그 일이다(원본 캐시·실패 단서·`pdf_kind` 각각). 한 단계만 쓰는 것은 그 단계 폴더에 둔다(후처리 스위치 → represent, 차트 글자 → figures).
   4. 요건 행에 닿지 않는 코드(부르는 곳이 없거나 시험만 부르는 함수, 쓰지 않는 설정 칸·반환 칸)와 같은 일을 하는 두 번째 코드는 두지 않는다. `rep.meta`와 `parse_document` 출력(MCP 계약)은 그대로.
-- 비고(현재와 다른 점, 11-05 조사):
-  - 엔진·엔진 실행이 `pipeline/extract/{engines,run_engines.py,run_one_engine.py,engine_stack.py}`에 있고, 엔진 실행이 두 파일로 나뉨.
-  - `extract/fetch_docs.py` 하나가 고르기·받기·중복 정리를 함께 하고, 끝난 문서 빼기가 받은 뒤에 한 번 더 돈다.
-  - `shared/parse_run.py`가 원본 캐시·엔진 버전·캐시 지우기·실패 단서·`pdf_kind`를 함께 가짐. 묶음 파일 이름 `build_bundle.py`.
-  - 닿지 않는 코드: 쓰지 않는 청커 5개와 `chunk_overlap` 칸, `infer_clients`의 닿지 않는 갈래, `select_final`·`selection.json`·`--no-rep` 옛 길, `page_text`(시험만), `crosscheck`·`meta.engines`·`n_sum["llm"]`의 읽지 않는 칸. 중복: `figure_extract`의 `_png`·`_model_dir`·`_host`(= `vlmcall`), 쪽 수 세기 두 벌. 오류: `apply_post` 표시 이름. `draft_terms`가 레이어 s 코드 지문에 들어감.
-  - 엔진 폴더를 옮기면 엔진 핑거프린트(상대 경로 포함)와 code_fp가 바뀐다 — 기록용(재처리는 ParsingMeta 끝난 상태로만). 사람 검토 필요.
+- 비고(남은 것, 11-05):
+  - 이 행 밖에 남은 옛 이름: `README.md`·`docs/operations/`(문서 정리 작업이 맡음), 보호 파일 `common/core/contract.py`의 설명 글(`build_bundle` — 핸드오프 지문 때문에 그대로), rn-05~07 앵커 본문.
+  - 엔진 폴더를 옮겨 엔진 핑거프린트(상대 경로 포함)와 code_fp가 바뀜 — 기록용([test.md#e2-02](test.md#e2-02), 재처리는 ParsingMeta 끝난 상태로만). 사람 검토 필요.
   - 이번에 하지 않음: 그림 부가 기능(pl-05), 글자 파싱 뒤 레인 나누기.
 - QA: selftest·pytest 기준선 유지 · `check_modules`·`keyscan --check`·`sample --check` 통과 · 저장소 전체 ruff·mypy 0 · FINGERPRINT 그대로 · 비고의 옛 이름(`extract/engines`·`engine_stack`·`run_one_engine`·`fetch_docs`·`build_bundle`) 0건(docs/history 제외).
-- Status: todo
+- Status: done
 
 <a id="pl-27"></a>
 ## pl-27 · 프로세스 종료 정리 — 임시 설정 파일·PID 기록 지움, 자식 회수
