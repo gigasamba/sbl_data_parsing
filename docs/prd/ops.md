@@ -284,7 +284,7 @@
 4. `--set` 처리(`setarg.apply`)는 무거운 import 전에 한다.
 
 ### 비고(지금 코드와 다른 점)
-- sha256을 중복 제외·거르기(`_record_skip`·회전 기록)·구조화가 각자 다시 구한다. `pgvector_load`가 원천 스키마마다 따로 묻는다.
+- sha256은 받기가 한 번 구해 manifest에 두고 중복 제외·거르기·파싱(`parse_engines` 조각·작업 열쇠)·구조화(`gold_bundle`)·게시가 그 값을 쓴다(`pipeline/shared/srcsha.py` — 같은 파일일 때만). 대표 결과(`contract.source_record`)만 아직 프로세스에서 한 번 다시 구한다 — 핸드오프 파일(`contract.py`)이라 고치려면 사람 검토. `pgvector_load`가 원천 스키마마다 따로 묻는다.
 - 아직 재지 않았다 — 줄일 크기는 `python -m pipeline.tools.perf_report`로 먼저 잰다.
 
 ### QA

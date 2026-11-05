@@ -12,6 +12,7 @@ filename=original_filename · content_version=content_version_id(열 이름이 �
 import csv
 import json
 import re
+import shutil
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -21,6 +22,7 @@ from common.core.contract import jl
 from common.core.contract import safe_filename as _safe_name
 from pipeline import config as pc
 
+RUN_SEEN = "_seen_sha"  # 이번 실행이 받은 원본 sha256 표지 폴더(목록 파일 옆) — list가 비우고, 문서마다 stage가 채움
 COL_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")  # csv 열 이름(RDB_COL_*) 화이트리스트
 
 
@@ -460,6 +462,7 @@ def _list_cmd(argv):
     seqs = [int(x) for x in a.seqs.split(",") if x.strip()]
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
+    shutil.rmtree(out.parent / RUN_SEEN, ignore_errors=True)  # 새 실행 — 앞 실행이 받은 sha256 표지를 비움
     sync = lambda reset: faq_sync(reset, out.with_name("faq_sync.json"))  # 결과는 목록 파일 옆
     rows, order, start, total = list_targets(keywords, a.start_offset, a.limit, seqs, a.skip_done, a.max_docs, a.faq_seen, sync)
     docs = [{"seq": s, **{k: rows[s][k] for k in ("id", "s3_key", "original_filename", "file_size")}} for s in order]

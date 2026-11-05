@@ -24,10 +24,7 @@ from common.core import docmeta as DM  # 날짜·개정·구판·문서군(struc
 from common.core import span as SP  # 성능 span
 from common.core import terms as T  # 고객 명부·이름 정규화·ID 모양(검색과 같은 규칙)
 from common.core.console import utf8_stdout
-from common.core.contract import (  # 문서 ID(doc_key) 규칙(orig_sha256으로 parse와 같은 값)
-    file_hash,
-    original_file_hash,
-)
+from common.core.contract import original_file_hash  # 문서 ID(doc_key) 규칙(orig_sha256으로 parse와 같은 값)
 from common.core.meaning import strip_page_numbers
 from common.core.paths import APP_ROOT  # 폴더 재편 뒤 이 상수만 바뀌면 됨
 from common.core.text import (  # 색인 본문·토큰 규칙(모듈 계약)
@@ -37,6 +34,7 @@ from common.core.text import (  # 색인 본문·토큰 규칙(모듈 계약)
 from common.store import master  # 마스터 표 해시(묶음 meta.json master_hash)
 from pipeline import config as pc
 from pipeline.shared import runtrace  # run.progress
+from pipeline.shared.srcsha import sha_of  # 받기가 manifest에 남긴 원본 sha256(같은 파일일 때 — 없으면 다시 구함)
 from pipeline.transform.structure import chunking as S  # 청킹·개체 정규식(구조화 모듈)
 from pipeline.transform.structure import client_roster as ST  # name_hits·seed_roster(구조화 전용)
 
@@ -432,7 +430,7 @@ def main(argv=None):
         so = (raw.get("rep") or {}).get("source") or {}
         path = (a.path_prefix.rstrip("/\\") + "/" + doc) if a.path_prefix else (str(orig.resolve()) if orig else so["path"])
         h = (
-            (original_file_hash(orig) or file_hash(orig)) if orig else so["sha256"]
+            (original_file_hash(orig) or sha_of(orig)) if orig else so["sha256"]
         )  # 원본이 로컬에 있어도 회전된 바이트 대신 원본 식별(rotation.csv) 먼저
         if h in seen_sha:  # 같은 내용 다른 이름(사본) — 한 번만, 다른 경로는 aliases에
             docs[seen_sha[h]].setdefault("aliases", []).append(path)

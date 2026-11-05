@@ -646,9 +646,9 @@ def _chars(dst):
 
 
 def _sha(p):
-    from common.core.contract import file_hash  # fp-perf C2 — 한 곳(같은 프로세스 안에서는 파일당 한 번 읽음)
+    from pipeline.shared.srcsha import sha_of  # 받기가 manifest에 남긴 sha256(같은 파일일 때 — 없으면 contract.file_hash)
 
-    return file_hash(p)[:16]
+    return sha_of(p)[:16]
 
 
 @functools.cache  # 엔진 폴더 해시는 프로세스마다 엔진당 한 번(실행 중 코드는 안 바뀜)

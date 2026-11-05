@@ -29,7 +29,6 @@ import time
 from pathlib import Path
 
 from common.core.console import utf8_stdout
-from common.core.contract import file_hash
 from common.core.paths import (  # 폴더 재편 뒤 이 상수만 바뀌면 됨
     APP_ROOT,
     doc_dir,
@@ -37,6 +36,7 @@ from common.core.paths import (  # 폴더 재편 뒤 이 상수만 바뀌면 됨
 )
 from pipeline import config as pc
 from pipeline.shared.ext_groups import IMG_EXTS, OOXML_EXTS
+from pipeline.shared.srcsha import sha_of
 from pipeline.transform.parse.engines import registry  # '처리 엔진 없는 확장자' 판정(engines_for)
 
 _OCR: list = []
@@ -277,7 +277,7 @@ def best_angle(im, probe):
     return (a if s[a] > 0 else 0), s
 
 
-_sha256 = file_hash
+_sha256 = sha_of  # 받기가 manifest에 남긴 값(같은 파일일 때) — 없으면 다시 구함
 
 
 def _record_skip(p, reason, skipped, skipped_log):
