@@ -2,6 +2,7 @@
 → 거르기(filter_and_rotate — DRM·암호·지원 안 함). 건너뛴 문서는 문서마다 extract.skip span 1행. ParsingMeta는 임시 SQLite EDW 대역 — 외부 접속 없음."""
 
 import hashlib
+import os
 import sys
 import tempfile
 import uuid
@@ -28,6 +29,8 @@ CASES = [
 ]
 # ParsingMeta 행 (원본 키, 내용, parse_status, gold_version 있음?)
 PM = [(DONE_KEY, b"old", "ok", True), ("n.txt", b"normal", "ok", True), ("SFDC/y/f.txt", b"failed", "failed", False)]
+# 이번 묶음 밖(앞 실행이 폴더에 남긴 파일) — a.txt와 같은 내용·더 늦은 수정 시각이지만 해시 대상이 아니라 a.txt를 밀어내지 않음
+LEFTOVER = ("zz_left.txt", b"same")
 
 
 def _filter(args):
@@ -58,6 +61,7 @@ def test_stage_batch_order_and_skip_log():
     want_left = [n for n, _, reason, _ in CASES if reason is None]
     assert sorted(left) == sorted(want_left) and only == left, left
     assert "old.txt" not in keep_txt and "a(1).txt" not in keep_txt and "drm.pdf" in keep_txt  # 게시가 중복을 skipped_dup로 씀
+    assert LEFTOVER[0] in keep_txt  # 묶음 밖 파일은 중복으로 표시하지 않음(앞 실행 문서가 skipped_dup로 굳지 않게)
     skips = {r["doc_id"]: r for r in rows if r["stage"] == "extract.skip"}
     assert set(skips) == {n for n, _, reason, _ in CASES if reason}, skips
     for name, _, reason, dup_of in CASES:
@@ -73,6 +77,8 @@ def _run(root):
     src.mkdir()
     for name, body, _, _ in CASES:
         (src / name).write_bytes(body)
-    local, left, _, only = CR.stage_batch(str(src), root / "out", prepared, 0, _filter)
+    (src / LEFTOVER[0]).write_bytes(LEFTOVER[1])
+    os.utime(src / LEFTOVER[0], (2_000_000_000, 2_000_000_000))  # 묶음 안이었다면 대표로 뽑혔을 시각
+    local, left, _, only = CR.stage_batch(str(src), root / "out", prepared, 0, _filter, done={LEFTOVER[0]})
     keep_txt = (root / "out" / "dedup" / "keep.txt").read_text(encoding="utf-8").split()
     return local, left, only.read_text(encoding="utf-8").split(), keep_txt

@@ -22,10 +22,10 @@ _NOISE = re.compile(
 )
 
 
-def run_folder(src, out):
-    """폴더의 파일을 해시로 묶어 대표만 keep — (keep {대표 이름: sha256}, groups.csv 행, 중복 그룹 수).
+def run_folder(src, out, names=None):
+    """폴더의 파일(names를 주면 그 이름만 — 이번 묶음)을 해시로 묶어 대표만 keep — (keep {대표 이름: sha256}, groups.csv 행, 중복 그룹 수).
     지문은 (경로·크기·수정 시각)이 같으면 fingerprints.jsonl 캐시를 다시 쓴다(새·바뀐 파일만 읽음)."""
-    files = sorted(p for p in Path(src).iterdir() if p.is_file() and p.name != ".gitkeep")
+    files = sorted(p for p in Path(src).iterdir() if p.is_file() and p.name != ".gitkeep" and (names is None or p.name in names))
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     cache_path = out / "fingerprints.jsonl"

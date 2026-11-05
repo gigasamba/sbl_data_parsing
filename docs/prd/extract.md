@@ -27,15 +27,15 @@
 비싼 파싱 전에 같은 파일·읽을 수 없는 파일을 거르고, 돌아간 스캔을 바로잡는다. 받기와 같은 단계(`candidate_ready.stage_batch`)에서 하고, 거르기를 지난 문서만 파싱한다.
 
 ### 규칙
-1. `stage_batch`는 세 단계를 이 순서로 한 번씩 한다 — ① 받기(`resolve` → rdb:csv는 `download`로 staging에 받음) ② 중복 제외(`_dedup` — 받은 파일의 sha256) ③ 거르기(`filter_and_rotate` — DRM·암호·미지원, 회전). 각 단계는 앞 단계를 지난 문서만 본다. 거르기를 지난 이름은 `<결과 폴더>/parse/_source/only.txt`에 남고 `pipeline.cli parse --staged`가 그것만 파싱한다. MCP 파싱 작업(`run_mcp_parsing`)도 같은 거르기(`filter_and_rotate`)를 직접 부른다.
+1. `stage_batch`는 세 단계를 이 순서로 한 번씩 한다 — ① 받기(`resolve` → rdb:csv는 `download`로 staging에 받음) ② 중복 제외(`_dedup` — 이번 묶음 이름만, 받은 파일의 sha256) ③ 거르기(`filter_and_rotate` — DRM·암호·미지원, 회전). 각 단계는 앞 단계를 지난 문서만 본다. 거르기를 지난 이름은 `<결과 폴더>/parse/_source/only.txt`에 남고 `pipeline.cli parse --staged`가 그것만 파싱한다. MCP 파싱 작업(`run_mcp_parsing`)도 같은 거르기(`filter_and_rotate`)를 직접 부른다. 같은 내용 거르기는 이 ② 한 곳이다(파싱 `parse_engines`는 사본 복사를 하지 않음 — pl-03).
 2. 중복 판정 키는 **받은 파일 내용의 sha256**이다(S3 키·이름이 달라도 내용이 같으면 중복). 두 가지를 뺀다.
-   - 같은 묶음 안: 같은 sha256 묶음에서 하나만 남긴다. 남길 파일은 `deduplication.py` `run_folder()` 순서로 고른다: 이름에 사본 표시(`(1)`·`사본` 등)가 없는 것 → 수정 시각이 늦은 것 → 큰 파일.
+   - 같은 묶음 안: 이번에 고른 이름만 해시한다(받는 폴더에 앞 실행이 남긴 파일은 보지 않음). 같은 sha256 묶음에서 하나만 남긴다. 남길 파일은 `deduplication.py` `run_folder()` 순서로 고른다: 이름에 사본 표시(`(1)`·`사본` 등)가 없는 것 → 수정 시각이 늦은 것 → 큰 파일.
    - 이미 끝난 문서: EDW `ParsingMeta`에 끝난 행(`done_keys()`와 같은 상태 — `skipped_dup`, `ok`·`partial`은 `gold_version`도)이 같은 `sha256`을 **다른 원본 키**로 가지면 뺀다(`candidate_pick.done_by_sha`). 같은 원본 키면 그 문서의 재처리라 남긴다. ParsingMeta를 못 읽으면 `done_keys()`와 같다(서버는 종료 4, PC는 이 확인 없이 진행).
-3. 빠진 중복은 `<결과 폴더>/dedup/keep.txt`에 없고, 게시가 그 문서를 ParsingMeta `skipped_dup`로 쓴다(다음 실행이 다시 고르지 않음). 문서는 S3 키마다 따로 둔다(키마다 메타가 다름).
+3. 빠진 중복은 `<결과 폴더>/dedup/keep.txt`에 없고(나머지 폴더 파일은 그대로 있음), 게시가 그 문서를 ParsingMeta `skipped_dup`로 쓴다(다음 실행이 다시 고르지 않음). 문서는 S3 키마다 따로 둔다(키마다 메타가 다름).
 4. 회전 바로잡기는 `pipeline.extract.prepare.rotate`(기본 `false`)가 켜졌을 때만 한다. 꺼져 있으면 회전용 OCR을 하지 않고 파일을 그대로 놓는다. 서버 러너는 `ops.run_pipeline.scan_rotate`(기본 `false`)가 꺼져 있으면 `stage --no-scan-rotate`로 이미지 PDF(스캔)는 돌리지 않는다.
 5. 켜져 있으면 이미지·스캔 PDF 쪽마다 4방향(0·90·180·270도) RapidOCR 점수를 스레드 4개로 동시에 재고 가장 높은 방향으로 돌린다 — 같으면 0도, 모두 0이면 그대로. 기록은 `output/prepared/rotation.csv`(파일·쪽·각도·네 방향 점수·회전 전 원본 sha256 `orig_sha256`).
 6. DRM·암호 파일은 감지해서 표시하고 건너뛴다(상태 `skipped_drm`, `prepared/_records/skipped.jsonl`). 복호화는 흐름 안에서 하지 않고 수동 명령 `python -m pipeline.extract.protected_docs decrypt`로만 한다.
-7. 압축 파일(zip)은 지원하지 않는다고 표시한다.
+7. 압축 파일(zip)은 지원하지 않는다고 표시한다. 처리 엔진 없는 확장자(`registry.engines_for`가 빈 것)는 두 곳에서만 거른다 — 받기 전 `candidate_pick.rdb_pick`(`_filter_unsupported_rows` — rdb:csv 대상 고르기), 받은 뒤 `filter_and_rotate`(`unsupported_*`). 파일 크기 상한(`extract.max_file_mb`)은 파싱(`parse_engines`)이 본다.
 8. 중복·DRM·암호·미지원으로 건너뛴 문서는 문서마다 `applog.pipe_event`에 한 행을 남긴다(`candidate_ready.skip_event` — 단계 `extract.skip`, `doc_id` = 파일 이름, `status=skip`, `err_kind=doc`, `err`·`metrics.reason` = 이유 `dup_batch`·`dup_done`·`drm_*`·`encrypted_*`·`unsupported_*`, 중복이면 `metrics.dup_of` = 남긴 문서 — 같은 묶음은 파일 이름, ParsingMeta는 원본 키). 새 표는 없다.
 
 ### QA
