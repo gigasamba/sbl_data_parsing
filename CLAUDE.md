@@ -161,7 +161,7 @@ export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자�
 README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. 실행마다 다른 값은 `--set`(파이프라인 진입점)이나 덮어쓰기 설정 파일(`python -m common.config.overrides` — `mcp_server.main`, `ask`처럼 `--set`을 받지 않는 명령)로 준다. 테스트 문서는 `valid_env/object_storage/{SFDC,CRMS}/`에 있고(문서 목록은 README §4-4), 임베딩 캐시는 `output/edw/embed_cache.sqlite`다(같은 청크는 다시 호출하지 않는다 — 실제 호출을 확인하려면 `EMBED_CACHE=<빈 sqlite>`).
 
 ### 6-6. 검증 페이지와 이미지 빌드
-- 검증 페이지: `validation/search_ui/start_mcp.sh`와 `start_ui.sh`로 띄운다(설정은 루트 `settings.yaml` 하나 — `search.server`, `dev.search_ui`, PG 접속 `required.pg`, 외부 임베딩 `common.models.embed.allow_external` — README §4-2 예시). 주소는 http://127.0.0.1:8791 이다. 자세한 내용은 README §4-6.
+- 검증 페이지: `validation/search_ui/start_mcp.sh`와 `start_ui.sh`로 띄운다(설정은 루트 `settings.yaml` 하나 — `search.server`, `dev.search_ui`, PG 접속 `required.pg`, 외부 임베딩 `dev.models.embed.embed_allow_external` — README §4-2 예시). 주소는 http://127.0.0.1:8791 이다. 자세한 내용은 README §4-6.
 - 서버에 올릴 이미지를 빌드하기 전에 `assets/`를 채운다(`PYTHONPATH=. python deploy/release/assets.py pack` — [release-and-patch §5-6](docs/operations/release-and-patch.md#5-6-반입-자산assets-준비--이미지-빌드-전)).
 - 이미지: `ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh` → `bash deploy/release/selftest_gate.sh docker run --rm data-pipeline:<태그> selftest`(판정은 종료 코드가 아니라 `[판정]` 줄로 한다). PC 시험 빌드는 태그를 작업마다 새로 붙인다(TAG를 빼면 `data-pipeline:<VERSION>` — 배포용 버전 태그이고, 이미 있으면 `build_ship.sh`가 멈춘다). push와 서버 배포는 사람이 한다.
 - **배포 단계마다 이미지와 코드의 구성이 다르다**(README §5-0). ① PC(local) → 개발 서버(dev): 코드가 없는 실행 이미지(`IMAGE_TARGET=pipeline-runtime|mcp-runtime`) + PC 커밋의 코드 묶음을 개발 서버 코드 폴더(`CODE_DIR`/`live`)로 마운트한다. ② 개발 서버 → 운영 서버(prd): 개발 서버에서 `deploy/release/bake_prod_image.sh`로 같은 실행 이미지 + 시험한 코드 폴더를 묶어 코드가 든 이미지를 만든다(코드 폴더 없이 실행). Dockerfile의 코드 포함 타깃(`pipeline`·`mcp`)은 PC 시험과 비상용이다.
@@ -170,8 +170,8 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 
 ## 7. 외부 모델(OpenRouter 등 유료) — 비용 규칙
 
-- 외부 호출은 역할마다 `common.models.<embed|llm|vlm>.allow_external`(기본 false)이 켜지고 `RUN_ENV=local`일 때만 된다. 개발 중에는 **기능 확인만** 한다(문서 2~3건, 질문 몇 개).
-- 하루 지출 상한 `common.models.guard.budget_usd`(기본 0.1달러 — 장부 `spend_file`, 여러 프로세스가 합계 하나를 나눠 씀). 단가(`PRICES`)를 모르는 외부 LLM은 거부한다.
+- 외부 호출은 역할마다 `dev.models.<embed|llm|vlm>.<embed|llm|vlm>_allow_external`(기본 false)이 켜지고 `RUN_ENV=local`일 때만 된다. 개발 중에는 **기능 확인만** 한다(문서 2~3건, 질문 몇 개).
+- 하루 지출 상한 `dev.models.guard.daily_budget_usd`(기본 0.1달러 — 장부 `spend_ledger_file`, 여러 프로세스가 합계 하나를 나눠 씀). 단가(`PRICES`)를 모르는 외부 LLM은 거부한다.
 - 외부 허용은 루트 settings.yaml에 둔다. 한 번만 풀 때는 `--set`을 쓴다. 내부망 서버(dev·prd)의 settings.yaml은 셋 다 false.
 - 모델 호출은 `llm.chat`·`llm.complete`만 쓴다(예산 장부·가드를 거침). PC 답변 점검의 여러 턴 도구 반복은 `validation/e2e/tool_loop.py`가 맡는다(턴마다 예산 확인 — `llm.admit_turn()`).
 - 기술 스택 비교처럼 호출이 많은 작업은 예상 비용(호출 수 × 평균 토큰 × 단가)을 먼저 보고하고 승인을 받는다. 서버는 내부망 모델만 쓴다(외부 모델은 거부).

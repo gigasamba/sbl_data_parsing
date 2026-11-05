@@ -11,7 +11,7 @@
   1. `question`과 `source_system`(값 하나)은 필수다. 그 원천의 gold 스키마(`<PG_SCHEMA>_<원천>`)만 찾는다.
   2. 거르기가 있으면 먼저 범위(맞는 문서)를 구하고, 후보 `min(50, max(3k, 30))`개를 찾은 뒤 순위를 다시 매긴다(재순위 모델 없음).
   3. 방법 `vector`·`bm25`·`id`(기본 셋 다 — `tuning.search.search_default_methods`)를 가중 RRF로 합친다. 가중치 `tuning.search.weights` — vector 1.0 · bm25 1.0 · id 2.0 · 집계 단서 질문의 bm25 0.2.
-  4. vector = pgvector 코사인, HNSW(거르기 범위가 `search.pg.filter_exact_max` 문서 이하면 정확 검색). 차원이 HNSW 한도를 넘으면 `binary_quantize`로 후보를 고른 뒤 상위 200을 원 벡터로 다시 점수.
+  4. vector = pgvector 코사인, HNSW(거르기 범위가 `tuning.search.pg.exact_search_max_chunks` 문서 이하면 정확 검색). 차원이 HNSW 한도를 넘으면 `binary_quantize`로 후보를 고른 뒤 상위 200을 원 벡터로 다시 점수.
   5. BM25 = `chunk_term`·`term_stat`·`corpus_stat`(전체 청크 수·평균 길이). id = 드문 ID 정규식.
   6. 맞는 문서가 없으면 오류가 아니라 빈 결과(`scope_docs` 0, `evidence_status` none).
   7. `evidence_status`: 근거 없음 → `none`, 질문 핵심어가 근거에 없으면 `weak`, 그 밖 `found`. 근거 목록은 줄이지 않는다(표시만).
@@ -128,7 +128,7 @@
 <a id="mc-06"></a>
 ## mc-06 · `query_edw` 도구 — 읽기 전용 EDW SQL
 - 이유: 정형 질문은 회사 EDW에서 답한다.
-- 규칙: SELECT/WITH 문 하나만. 낮은 권한의 읽기 계정(`required.edw.read_*`)으로 연다. 상한 — 행 `search.edw_query.edw_query_max_rows` 1000(도구 인자 `edw_query_max_rows` 기본 1000과 작은 쪽) · 시간 20초 · 응답 2,000,000바이트. 표는 시스템 카탈로그를 뺀 모든 스키마를 허용한다(설정 허용 목록 없음 — 좁히기는 읽기 계정 권한). PC는 sqlite 대역(`valid_env/edw/edw.sqlite` — 대역 표 아홉 허용).
+- 규칙: SELECT/WITH 문 하나만. 낮은 권한의 읽기 계정(`required.edw.edw_read_*`)으로 연다. 상한 — 행 `search.edw_query.edw_query_max_rows` 1000(도구 인자 `edw_query_max_rows` 기본 1000과 작은 쪽) · 시간 20초 · 응답 2,000,000바이트. 표는 시스템 카탈로그를 뺀 모든 스키마를 허용한다(설정 허용 목록 없음 — 좁히기는 읽기 계정 권한). PC는 sqlite 대역(`valid_env/edw/edw.sqlite` — 대역 표 아홉 허용).
 - 파일: `mcp_server/services/edw_query.py`, `mcp_server/services/edw_calls.py`, `mcp_server/config.py`.
 - QA: `tests/server/mcp/test_call_log.py`(tools/list 바이트·SHA-256) · 통과.
 - Status: done

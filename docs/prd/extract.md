@@ -49,8 +49,8 @@
 큰 목록을 빨리 받는다. 받기는 네트워크 대기라 CPU를 거의 쓰지 않는다.
 
 ### 규칙
-1. `candidate_ready`의 staging 받기(`download`)는 `extract.source.source_fetch_threads`(기본 1 = 차례대로)개 스레드로 받는다(서버 러너는 `ops.run_pipeline.staging.staging_max_docs.fetch_threads`를 `--set`으로 넘김).
-2. 서버 러너 `run_pipeline.py`는 받기 워커 `ops.run_pipeline.staging.staging_max_docs.workers`(기본 2)개가 차례대로 집어 받는다. 실제 동시 받기 수 = min(받기 워커 수, 미리 받기 빈자리). 미리 받기 상한은 `ops.run_pipeline.staging.staging_max_docs.max_docs`(기본 20, 받는 중 포함) — 빈자리가 없으면 워커가 있어도 받지 않는다.
+1. `candidate_ready`의 staging 받기(`download`)는 `extract.source.source_fetch_threads`(기본 1 = 차례대로)개 스레드로 받는다(서버 러너는 `ops.run_pipeline.staging.staging_fetch_threads`를 `--set`으로 넘김).
+2. 서버 러너 `run_pipeline.py`는 받기 워커 `ops.run_pipeline.staging.staging_workers`(기본 2)개가 차례대로 집어 받는다. 실제 동시 받기 수 = min(받기 워커 수, 미리 받기 빈자리). 미리 받기 상한은 `ops.run_pipeline.staging.staging_max_docs`(기본 20, 받는 중 포함) — 빈자리가 없으면 워커가 있어도 받지 않는다.
 
 ### QA
 - `tests/general/deploy/test_run_pipeline.py::test_parallel_stage_respects_free_slots`.

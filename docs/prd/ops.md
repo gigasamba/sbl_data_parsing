@@ -87,7 +87,7 @@
   2. 워커 수: settings.yaml `ops.run_pipeline.<레인>_dedicated`(자기 레인만)·`<레인>_shared`(자기 레인 먼저, 비면 대기열이 가장 긴 다른 레인), 기본 각 1(모두 6개).
   3. `ops.run_pipeline.vlm_lane.vlm_lane_max_concurrent_docs`(기본 2): 진행 중 vlm 문서가 이만큼이면 vlm 레인을 건너뛴다(전담 워커도).
   4. 고르기 = 순수 함수 `pick_lane(own, shared, queues, inflight, vlm_cap)`.
-  5. 시작 때 거부(종료 2): 값이 0 이상 정수가 아님 · `staging.max_docs`·`staging.workers`·`vlm_lane.max_concurrent_docs`가 1 미만 · 전담과 모든 공유 워커 합이 0인 레인.
+  5. 시작 때 거부(종료 2): 값이 0 이상 정수가 아님 · `staging.staging_max_docs`·`staging.staging_workers`·`vlm_lane.vlm_lane_max_concurrent_docs`가 1 미만 · 전담과 모든 공유 워커 합이 0인 레인.
 - 파일: `deploy/host/scripts/run_pipeline.py`(`classify_doc`·`RUN_PIPELINE_DEFAULTS` — 설정 모델 `pipeline.config.PipelineHostRunPipeline`와 시험이 대조) · `pipeline/extract/doc_lane_group.py`(`doc_lane_group`).
 - QA: `tests/general/deploy/test_run_pipeline.py`(`pick_lane` 표·`test_classify_cache_skips_probe`) · `tests/server/pipeline/test_doc_group.py`(그룹 규칙 표) · 통과.
 - Status: done
@@ -96,7 +96,7 @@
 ## rn-02 · 대기열 — 진입·중간 상한과 길이 기록
 - 이유: 구조화가 느리면 파싱 결과가 쌓인다(디스크·대기 시간).
 - 규칙:
-  1. 진입 `ops.run_pipeline.staging.staging_max_docs.max_docs`(기본 20, `--staging`이 덮음): 미리 받아 둘 문서 수(받는 중 포함, 파싱 중 제외). 동시 받기 = `min(staging_workers(기본 2), 빈자리)`.
+  1. 진입 `ops.run_pipeline.staging.staging_max_docs`(기본 20, `--staging`이 덮음): 미리 받아 둘 문서 수(받는 중 포함, 파싱 중 제외). 동시 받기 = `min(staging_workers(기본 2), 빈자리)`.
   2. 구조화 스레드 `ops.run_pipeline.structure.structure_workers`(기본 2, `--struct-workers`가 덮음).
   3. 중간 상한 `ops.run_pipeline.structure.structure_max_backlog`(비우면 구조화 스레드 × 2, 0 = 없음): 게시 대기 + 구조화 대기가 이 수 이상이면 레인 워커가 새 파싱을 시작하지 않는다.
   4. `batch_progress/queue_depth.jsonl`에 dispatch·pick·parse_end·struct_put·struct_get마다 한 줄(`pub_wait` 포함). 쓰기 실패는 무시.

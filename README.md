@@ -186,8 +186,8 @@ tuning:
 - **게시(silver)·EDW·원본 — PC는 가짜 대상만 적는다.** 경로는 저장소 루트 기준 상대 경로로 써도 된다(절대 경로도 됨):
   ```yaml
   required:
-    publish: {bucket: "file://output/object_storage/silver", prefix: parse}   # 가짜 Object Storage 폴더
-    edw: {sqlite: output/edw.sqlite}   # 가짜 EDW(ParsingMeta 포함) — valid_env/edw/edw.sqlite 사본(파싱·게시가 씀)
+    publish: {publish_bucket: "file://output/object_storage/silver", publish_prefix: parse}   # 가짜 Object Storage 폴더
+    edw: {edw_local_sqlite_file: output/edw.sqlite}   # 가짜 EDW(ParsingMeta 포함) — valid_env/edw/edw.sqlite 사본(파싱·게시가 씀)
   ```
   `file://` 뒤 폴더에 `<prefix>/<출처>/<원본 경로>/<파일명>_<날짜>.md`로 쓴다. 원본 폴더(`ops.paths.source_docs_dir`)·파싱 원본(`extract.source.source_input_location` — 폴더 또는 `rdb:csv:<경로>`)·PG 대체 폴더(`dev.pg_standin.pg_standin_dir`)도 상대 경로를 받는다(예 `valid_env/object_storage`).
   `run_env: local`에서 실제 대상(`required.edw.edw_host`, `required.object_storage.object_storage_endpoint`, 원천 버킷, `file://`가 아닌 게시 버킷)이 적혀 있으면 앱이 시작하지 않는다. 서버(dev·prd)는 실제 접속 칸을 쓴다.
@@ -429,12 +429,13 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 ```yaml
 ops:
   host:
-    instance: hong                # 컨테이너 data-pipeline-hong · mcp-data-parsing-hong · mcp-server-hong, 타이머 data-pipeline-nightly-hong.timer
-  runtime:
-    data_parsing_port: 8776       # parse_document 작업 서비스 포트(기본 8766 — 검색 MCP도 이 값으로 부름)
+    instance_name: hong                # 컨테이너 data-pipeline-hong · mcp-data-parsing-hong · mcp-server-hong, 타이머 data-pipeline-nightly-hong.timer
+  services:
+    data_parsing:
+      data_parsing_port: 8776       # parse_document 작업 서비스 포트(기본 8766 — 검색 MCP도 이 값으로 부름)
 search:
   server:
-    port: 8775                    # 검색 MCP 포트(기본 8765)
+    mcp_port: 8775                # 검색 MCP 포트(기본 8765)
 ```
 - 명령(root 셸 — 이미지는 서버에 한 번만 불러 두면 벌끼리 같이 쓴다):
 ```bash

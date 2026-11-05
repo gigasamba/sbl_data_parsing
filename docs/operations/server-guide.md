@@ -120,7 +120,7 @@ MCP 토큰은 settings.yaml `required.tokens.mcp_token`, 모델은 `required.mod
 | 무엇 | 위치 |
 |---|---|
 | 용어집 · 고객 명부 · ID 모양 · 단위 · 계약·고객 마스터 | PG 마스터 표 `<db_schema>_master`. 원본 CSV(`resources/vocab/glossary/` 또는 서버 폴더)를 고친 뒤 `pipe_exec.sh migrate master load [--dir <폴더>]`(5-1) |
-| 원천 표 열 이름 | settings.yaml `extract.connections.rdb.columns.*` |
+| 원천 표 열 이름 | settings.yaml `tuning.extract.source_columns.source_column_*` |
 | 엔진 구성 | `resources/config/pipeline_stack.json`(확인 `show-stack`) |
 | MCP 안내 문구 | 코드 `mcp_server/main.py`의 `_DEFAULT_MCP_INSTRUCTIONS`(설정 칸 없음 — 바꾸면 코드 배포) |
 | EDW 조인 사슬(고객·원천 메타·검색 attrs 키) | 서버 사본 `<루트>/edw_chain.yaml`(5-2) |

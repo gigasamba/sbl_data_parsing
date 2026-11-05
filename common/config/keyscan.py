@@ -33,7 +33,7 @@ PREFIXES = ("LLM", "VLM", "EMBED")
 NAME_LIST = {
     "VLM_EXTRA_BODY": "common/ai/llm.py(_EXTRA_ENV_KEY 표)",
     **{
-        f"RDB_COL_{f}": "pipeline/extract/candidate_pick.py(_rdb_cols — 설정 칸 extract.connections.rdb.columns)"
+        f"RDB_COL_{f}": "pipeline/extract/candidate_pick.py(_rdb_cols — 설정 칸 tuning.extract.source_columns.source_column_*)"
         for f in ("CONTENT_VERSION", "DOC_ID", "FILENAME", "KEY", "SIZE")
     },
 }
