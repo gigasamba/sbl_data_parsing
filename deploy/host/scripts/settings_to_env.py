@@ -85,12 +85,13 @@ _NULL = ("~", "null", "Null", "NULL")
 
 
 def _nulls(v):
-    """글자 로더라 YAML 널(`null`·`~`)도 글자로 온다 — 앱처럼 None(비움)으로 바꾼다(sample의 null 칸을 그대로 복사해도 비운 것과 같게)."""
+    """글자 로더라 YAML 널(`null`·`~`)과 빈 칸(`이름:` — BaseLoader는 '')도 글자로 온다 — 앱처럼 None(비움)으로 바꾼다
+    (sample의 null·빈 칸을 그대로 복사해도 비운 것과 같게). 글자 로더는 `''`와 빈 칸을 가르지 못해 `''`도 비움이다."""
     if isinstance(v, dict):
         return {k: _nulls(x) for k, x in v.items()}
     if isinstance(v, list):
         return [_nulls(x) for x in v]
-    return None if isinstance(v, str) and v.strip() in _NULL else v
+    return None if isinstance(v, str) and (not v.strip() or v.strip() in _NULL) else v
 
 
 def load_or_error(path):

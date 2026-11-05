@@ -22,7 +22,7 @@
 - 규칙:
   1. 설정은 settings.yaml 하나에 둔다(`resources/config` 파라미터 파일 없음). 서버·PC 파일 = sample을 복사해 필수값·비밀값을 채운 것.
   2. `python -m common.config.sample`이 모든 칸을 실제 YAML로 낸다. 절 순서 [op-08](#op-08), 절 안은 카테고리 제목 주석(`# ---- … ----` — `required.models` 안은 모델마다 작은 제목). 값 자리 = 코드 기본값. 칸마다 줄 끝 주석 한 줄 — 필수 칸은 `[필수 · 언제(어느 앱)]`(언제 = 모두·local·dev·prd, 앱 = pipeline·mcp·호스트 스크립트 — `layout.REQUIRED_GROUPS` 칸마다 조건), 그 밖 `[선택]`, 짧은 설명과 허용값 또는 예, 비밀은 `[비밀]`. 설명은 `sample.NOTES` 한 표(칸이 빠지면 sample이 멈춤).
-  3. sample에서 `null`(비움)로 내는 칸: 사람이 채울 값(기본 없음)·비밀·빈 글자·이미지 기본값 칸(이미지·PC 값이 다름)·적었는지로 동작이 갈리는 칸(`sample.SET_MATTERS` — `PIPE_PROCS`·`PIPE_THREADS`·`PM_BUCKET`)·저장소 경로가 든 기본값. `null`은 빈 칸과 같다(호스트 스크립트도 같게 읽음).
+  3. sample에서 사람이 꼭 적을 `[필수]` 칸(비워 두면 그 모드에서 시작 거부나 기능 실패 — `layout.NEED`가 "필수")은 **빈 칸**(`pg_host:` 뒤가 비어 있음, 주석에 예)으로 낸다. 비워 두면 코드 기본값·계산값·끔이 되는 칸은 `null`로 낸다 — 기본 없음·비밀·빈 글자·이미지 기본값 칸(이미지·PC 값이 다름)·적었는지로 동작이 갈리는 칸(`sample.SET_MATTERS` — `PIPE_PROCS`·`PIPE_THREADS`·`PM_BUCKET`)·저장소 경로가 든 기본값. 읽을 때는 빈 칸·`null`이 같다(앱 설정·호스트 `settings_to_env.py`·`load_settings.sh`·`host_ctl.sh init`·`run_pipeline.py` 모두 비움). sample을 그대로 복사해 빈 칸만 채우면 시작된다(`tests/server/common/test_sample_copy.py`).
   4. settings.yaml에 적힌 값이 코드 기본값보다 이긴다. 비운 칸은 코드 기본값.
   5. 설정 값은 code_fp에 들어가지 않는다 — 값을 바꿔도 자동 재처리는 없다.
   6. 옛 env 이름·판정 꼴은 `python -m common.config.sample --where <이름>`.
@@ -33,7 +33,7 @@
   11. 칸 주석은 100자 안팎, 허용값 또는 예를 하나 넣는다 — 켜기·고른 글자·숫자 칸은 sample이 꼴(`true·false`·값 목록·`정수`·`숫자`)을 붙인다.
 - 메모(사용자 11-04 — 칸 줄이기): 읽는 곳이 없거나 겹치는 칸을 지웠다 — `secure_doc.password`, `pg.conn_file`, `ops.paths.output_root`(공용), `transport.ping_timeout`(점검기 상수 60초), EDW 원천 표의 선택 열(`bucket`·`company`·`doc_type`·`etag` 등 10개)과 `company`·`doc_type` 거르기, `structure.embed`(`gold_bundle --embed` 기본 api), publish `parse_date`·`path_map`, `server.instructions`, `search.min_score`, `search.pg.vector_search`, `edw_query.tables`·`tables_strict`, `gold_dir` 두 칸(op-11). 옛 파일에 남으면 시작 거부(rn-07). `search.server.fulltext_secret`은 `required.tokens.fulltext_sign_key`로 옮겼다. 남긴 칸과 이유: `tuning.ops.runtime.glossary_lock_timeout_sec`(용어 초안 잠금 — 핸드오프 파일이 읽음), `llm_price_in_usd_per_mtok`·`llm_price_out_usd_per_mtok`(가격표에 없는 모델), `extract.max_new_docs_per_run`(명령 기본값), `publish_upload_statuses`, `load.stored_path_prefix`, `search.edw_meta.edw_meta_catalog_dir`(mc-07).
 - 파일: `common/config/{sample,settings,keyscan,layout}.py`, `pipeline/config.py`, `mcp_server/config.py`, `settings.sample.yaml`.
-- QA: `python -m common.config.sample --check` · sample이 설정 모델과 같음. `tests/server/common/test_sample_yaml.py`(복사한 sample로 서버 STRICT 시작 · 적힌 값 = 코드 기본값)·`test_leaf_names.py`(잎 이름 하나씩) · 통과.
+- QA: `python -m common.config.sample --check` · sample이 설정 모델과 같음. `tests/server/common/test_sample_yaml.py`(복사한 sample로 서버 STRICT 시작 · 적힌 값 = 코드 기본값)·`test_leaf_names.py`(잎 이름 하나씩)·`test_sample_copy.py`(복사 뒤 빈 칸만 채워 local·dev 시작 · 빈 필수 칸 거부) · 통과.
 - Status: done
 
 <a id="op-08"></a>

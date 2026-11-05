@@ -1,7 +1,7 @@
 # settings.sample.yaml — 설정 파일 구조와 설명. 생성: python -m common.config.sample (손으로 고치지 않음)
 # 복사해 [필수] 칸을 채우면 시작된다 — PC: 저장소 루트 settings.yaml(권한 600) · 서버: <루트>/settings.yaml(루트 = 코드 폴더의 부모 · UID 10001·권한 640).
 # 순서: required(사람이 채울 값) → common·extract·transform·load·search·ops(환경마다 정하는 값) → tuning(거의 안 바꾸는 값) → dev(PC 전용 — 서버는 비움).
-#   값 자리 = 코드 기본값. null = 비움(코드 기본값·계산값을 씀 — 주석의 "null = …"). 사람이 채울 값은 required의 [필수] 칸뿐.
+#   빈 칸(`이름:` 뒤가 비어 있음) = 사람이 꼭 적을 값([필수] — 주석에 예). null = 비워 두면 코드 기본값·계산값·끔(주석의 "null = …"). 그 밖의 값 = 코드 기본값.
 #   복사할 때는 [필수] 칸과 바꿀 칸만 옮기기를 권장 — 적힌 값은 코드 기본값보다 이겨서, 나중에 코드 기본값이 바뀌어도 반영되지 않는다.
 #   [필수 · 언제(어느 앱)] — 언제 = 모두·local(PC)·dev·prd(서버), 앱 = pipeline·mcp·호스트 스크립트. [선택] = 비워도 됨. [비밀] = settings.yaml에만(출력·로그에 안 나옴).
 #   각 앱은 자기 칸만 읽는다(pipeline: required·common·extract·transform·load·ops·dev · mcp: required·common·search·ops·dev — tuning은 둘 다).
@@ -12,59 +12,59 @@
 required:
   # ---- 실행 환경 ----
   env:
-    run_env: null                             # [필수 · 모두(local·dev·prd)] 실행 환경 · local(PC)·dev(개발 서버)·prd(운영 서버)
+    run_env:                                  # [필수 · 모두(local·dev·prd)] 실행 환경 · local(PC)·dev(개발 서버)·prd(운영 서버)
   # ---- PostgreSQL(pgvector) — local은 6칸 모두 비우면 sqlite 대역(일부만 적으면 거부) ----
   pg:
-    pg_host: null                             # [필수 · dev·prd(pipeline·mcp)] PG 주소 · 예 127.0.0.1
-    pg_port: null                             # [필수 · dev·prd(pipeline·mcp)] PG 포트 · 예 55433
-    pg_database: null                         # [필수 · dev·prd(pipeline·mcp)] PG 데이터베이스 이름 · 예 rag
-    pg_user: null                             # [필수 · dev·prd(pipeline·mcp)] PG 계정 · 예 rag_app
-    pg_password: null                         # [필수 · dev·prd(pipeline·mcp)] PG 비밀번호 · 서버는 8자 이상 [비밀]
-    pg_schema: null                           # [필수 · dev·prd(pipeline·mcp)] 검색 스키마 · 예 sbl_test — 벌 이름을 적으면 <스키마>_<벌>
+    pg_host:                                  # [필수 · dev·prd(pipeline·mcp)] PG 주소 · 예 127.0.0.1
+    pg_port:                                  # [필수 · dev·prd(pipeline·mcp)] PG 포트 · 예 55433
+    pg_database:                              # [필수 · dev·prd(pipeline·mcp)] PG 데이터베이스 이름 · 예 rag
+    pg_user:                                  # [필수 · dev·prd(pipeline·mcp)] PG 계정 · 예 rag_app
+    pg_password:                              # [필수 · dev·prd(pipeline·mcp)] PG 비밀번호 · 서버는 8자 이상 · 예 DB 담당이 준 값 [비밀]
+    pg_schema:                                # [필수 · dev·prd(pipeline·mcp)] 검색 스키마 · 예 sbl_test — 벌 이름을 적으면 <스키마>_<벌>
   # ---- 모델 접속 — 임베딩·LLM·VLM(모델마다 따로) ----
   models:
     # ---- 임베딩 모델 ----
-    embed_base_url: null                      # [필수 · 모두(pipeline·mcp)] 임베딩 주소(OpenAI 호환) · 예 http://10.0.0.5:8000/v1
+    embed_base_url:                           # [필수 · 모두(pipeline·mcp)] 임베딩 주소(OpenAI 호환) · 예 http://10.0.0.5:8000/v1
     embed_api_key: null                       # [선택 — 엔드포인트가 키를 요구할 때] 임베딩 API 키 (null = 키 안 보냄) [비밀]
-    embed_model: null                         # [필수 · 모두(pipeline·mcp)] 임베딩 모델 이름(색인과 같게) · 예 bge-m3
+    embed_model:                              # [필수 · 모두(pipeline·mcp)] 임베딩 모델 이름(색인과 같게) · 예 bge-m3
     # ---- LLM ----
-    llm_base_url: null                        # [필수 · 모두(pipeline)] LLM 주소(OpenAI 호환) · 예 http://10.0.0.6:8000/v1 — 적재 분류(doc_classify)가 씀
+    llm_base_url:                             # [필수 · 모두(pipeline)] LLM 주소(OpenAI 호환) · 예 http://10.0.0.6:8000/v1 — 적재 분류(doc_classify)가 씀
     llm_api_key: null                         # [선택 — 엔드포인트가 키를 요구할 때] LLM API 키 (null = 키 안 보냄) [비밀]
-    llm_model: null                           # [필수 · 모두(pipeline)] LLM 모델 이름 · 예 qwen3-32b
+    llm_model:                                # [필수 · 모두(pipeline)] LLM 모델 이름 · 예 qwen3-32b
     # ---- VLM ----
-    vlm_base_url: null                        # [필수 · 모두(pipeline)] VLM 주소(OpenAI 호환) · 예 http://10.0.0.7:8000/v1 — 그림·쪽 VLM·스캔 PDF가 씀
+    vlm_base_url:                             # [필수 · 모두(pipeline)] VLM 주소(OpenAI 호환) · 예 http://10.0.0.7:8000/v1 — 그림·쪽 VLM·스캔 PDF가 씀
     vlm_api_key: null                         # [선택 — 엔드포인트가 키를 요구할 때] VLM API 키 (null = 키 안 보냄) [비밀]
-    vlm_model: null                           # [필수 · 모두(pipeline)] VLM 모델 이름 · 예 qwen2.5-vl-7b
+    vlm_model:                                # [필수 · 모두(pipeline)] VLM 모델 이름 · 예 qwen2.5-vl-7b
   # ---- EDW(회사 DB) — ParsingMeta 표·접속 ----
   edw:
     parsing_meta_table: AI.ParsingMeta        # [선택] 게시 기록 표 · 스키마.표 · 예 AI.ParsingMeta — 여러 벌이면 끝에 _<벌>
-    edw_host: null                            # [필수 · dev·prd(pipeline·mcp) — local은 적으면 시작 거부] EDW(SQL Server) 주소 · 예 edw.corp.local
+    edw_host:                                 # [필수 · dev·prd(pipeline·mcp) — local은 적으면 시작 거부] EDW(SQL Server) 주소 · 예 edw.corp.local
     edw_port: 1433                            # [선택] EDW 포트 · 1~65535
-    edw_database: null                        # [필수 · dev·prd(pipeline·mcp)] EDW 데이터베이스 이름 · 예 EDW
-    edw_read_user: null                       # [필수 · dev·prd(pipeline·mcp)] EDW 읽기 계정(원천 목록·ParsingMeta 조회·query_edw)
-    edw_read_password: null                   # [필수 · dev·prd(pipeline·mcp)] EDW 읽기 비밀번호 · DB 담당이 줌 [비밀]
-    edw_write_user: null                      # [필수 · dev·prd(pipeline — 게시할 때)] EDW 쓰기 계정(ParsingMeta INSERT만) · 예 svc_parse_w
-    edw_write_password: null                  # [필수 · dev·prd(pipeline — 게시할 때)] EDW 쓰기 비밀번호 · DB 담당이 줌 [비밀]
-    edw_local_sqlite_file: null               # [필수 · local(pipeline·mcp) — dev·prd는 적으면 거부] 가짜 EDW sqlite 파일(저장소 기준 상대 가능) · 예 output/edw.sqlite
+    edw_database:                             # [필수 · dev·prd(pipeline·mcp)] EDW 데이터베이스 이름 · 예 EDW
+    edw_read_user:                            # [필수 · dev·prd(pipeline·mcp)] EDW 읽기 계정(원천 목록·ParsingMeta 조회·query_edw) · 예 svc_parse_r
+    edw_read_password:                        # [필수 · dev·prd(pipeline·mcp)] EDW 읽기 비밀번호 · 예 DB 담당이 준 값 [비밀]
+    edw_write_user:                           # [필수 · dev·prd(pipeline — 게시할 때)] EDW 쓰기 계정(ParsingMeta INSERT만) · 예 svc_parse_w
+    edw_write_password:                       # [필수 · dev·prd(pipeline — 게시할 때)] EDW 쓰기 비밀번호 · 예 DB 담당이 준 값 [비밀]
+    edw_local_sqlite_file:                    # [필수 · local(pipeline·mcp) — dev·prd는 적으면 거부] 가짜 EDW sqlite 파일(저장소 기준 상대 가능) · 예 output/edw.sqlite
   # ---- 게시(silver 적재) 위치 ----
   publish:
-    publish_bucket: null                      # [필수 · 모두(pipeline)] 게시 버킷(원본 버킷과 다르게) · 예 rag-silver · local 예 file://output/silver
+    publish_bucket:                           # [필수 · 모두(pipeline)] 게시 버킷(원본 버킷과 다르게) · 예 rag-silver · local 예 file://output/silver
     publish_prefix: null                      # [선택] 버킷 안 경로 접두 · 예 parse (null = 버킷 맨 위)
   # ---- Object Storage 접속 ----
   object_storage:
-    object_storage_endpoint: null             # [필수 · dev·prd(pipeline·mcp) — local은 적으면 시작 거부] S3 호환 주소 · 예 https://os.corp.local:9000
-    object_storage_access_key: null           # [필수 · dev·prd(pipeline·mcp)] S3 액세스 키 [비밀]
-    object_storage_secret_key: null           # [필수 · dev·prd(pipeline·mcp)] S3 시크릿 키 [비밀]
+    object_storage_endpoint:                  # [필수 · dev·prd(pipeline·mcp) — local은 적으면 시작 거부] S3 호환 주소 · 예 https://os.corp.local:9000
+    object_storage_access_key:                # [필수 · dev·prd(pipeline·mcp)] S3 액세스 키 · 예 스토리지 담당이 준 값 [비밀]
+    object_storage_secret_key:                # [필수 · dev·prd(pipeline·mcp)] S3 시크릿 키 · 예 스토리지 담당이 준 값 [비밀]
   # ---- 서비스 토큰·서명 키 ----
   tokens:
-    mcp_token: null                           # [필수 · dev·prd(mcp·parse MCP 서비스)] MCP 토큰(Authorization: Bearer — 검색·parse MCP 공용) · 예 openssl rand -hex 32 [비밀]
-    fulltext_sign_key: null                   # [필수 · dev·prd(mcp — 원문 도구를 쓸 때)] 원문 도구 sfid 서명 키(바꾸면 준 sfid 무효) · 8자 이상 · 예 openssl rand -hex 32 [비밀]
+    mcp_token:                                # [필수 · dev·prd(mcp·parse MCP 서비스)] MCP 토큰(Authorization: Bearer — 검색·parse MCP 공용) · 예 openssl rand -hex 32 [비밀]
+    fulltext_sign_key:                        # [필수 · dev·prd(mcp — 원문 도구를 쓸 때)] 원문 도구 sfid 서명 키(바꾸면 준 sfid 무효) · 8자 이상 · 예 openssl rand -hex 32 [비밀]
   # ---- 서버 배포(이미지·호스트 폴더) ----
   deploy:
-    pipeline_image: null                      # [필수 · dev·prd(호스트 compose)] data-pipeline 이미지:태그 · 예 data-pipeline-runtime:0.2.0(dev)
-    mcp_image: null                           # [필수 · dev·prd(호스트 compose)] mcp-server 이미지:태그 · 예 mcp-server-runtime:0.2.0(dev)
-    host_docs_dir: null                       # [필수 · dev·prd(호스트 compose)] 호스트 원본 문서 폴더(절대 경로 — 컨테이너 /data/docs로 붙음) · 예 /data/docs
-    pg_container_name: null                   # [필수 · dev·prd(호스트 run_pipeline·백업)] 호스트 PG(pgvector) 컨테이너 이름(run_pipeline 문서 수·백업) · 예 pgvector
+    pipeline_image:                           # [필수 · dev·prd(호스트 compose)] data-pipeline 이미지:태그 · 예 data-pipeline-runtime:0.2.0(dev)
+    mcp_image:                                # [필수 · dev·prd(호스트 compose)] mcp-server 이미지:태그 · 예 mcp-server-runtime:0.2.0(dev)
+    host_docs_dir:                            # [필수 · dev·prd(호스트 compose)] 호스트 원본 문서 폴더(절대 경로 — 컨테이너 /data/docs로 붙음) · 예 /data/docs
+    pg_container_name:                        # [필수 · dev·prd(호스트 run_pipeline·백업)] 호스트 PG(pgvector) 컨테이너 이름(run_pipeline 문서 수·백업) · 예 pgvector
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
 common:
