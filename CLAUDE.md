@@ -164,7 +164,7 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 - 검증 페이지: `validation/search_ui/start_mcp.sh`와 `start_ui.sh`로 띄운다(설정은 루트 `settings.yaml` 하나 — `search.server`, `dev.search_ui`, PG 접속 `required.pg`, 외부 임베딩 `dev.models.embed.embed_allow_external` — README §4-2 예시). 주소는 http://127.0.0.1:8791 이다. 자세한 내용은 README §4-6.
 - 서버에 올릴 이미지를 빌드하기 전에 `assets/`를 채운다(`PYTHONPATH=. python deploy/release/assets.py pack` — [release-and-patch §5-6](docs/operations/release-and-patch.md#5-6-반입-자산assets-준비--이미지-빌드-전)).
 - 이미지: `ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh` → `bash deploy/release/selftest_gate.sh docker run --rm data-pipeline:<태그> selftest`(판정은 종료 코드가 아니라 `[판정]` 줄로 한다). PC 시험 빌드는 태그를 작업마다 새로 붙인다(TAG를 빼면 `data-pipeline:<VERSION>` — 배포용 버전 태그이고, 이미 있으면 `build_ship.sh`가 멈춘다). push와 서버 배포는 사람이 한다.
-- **배포 단계마다 이미지와 코드의 구성이 다르다**(README §5-0). ① PC(local) → 개발 서버(dev): 코드가 없는 실행 이미지(`IMAGE_TARGET=pipeline-runtime|mcp-runtime`) + PC 커밋의 코드 묶음을 개발 서버 코드 폴더(`CODE_DIR`/`live`)로 마운트한다. ② 개발 서버 → 운영 서버(prd): 개발 서버에서 `deploy/release/bake_prod_image.sh`로 같은 실행 이미지 + 시험한 코드 폴더를 묶어 코드가 든 이미지를 만든다(코드 폴더 없이 실행). Dockerfile의 코드 포함 타깃(`pipeline`·`mcp`)은 PC 시험과 비상용이다.
+- **배포 단계마다 이미지와 코드의 구성이 다르다**(README §5-0). ① PC(local) → 개발 서버(dev): 코드가 없는 실행 이미지(`IMAGE_TARGET=pipeline-runtime|mcp-runtime`) + PC 커밋의 코드 묶음을 개발 서버 루트에 푼 코드 폴더를 `/app/deploy`에 읽기 전용으로 마운트한다(`host_ctl.sh`가 자기 코드 폴더를 `CODE_DIR`로 잡음). ② 개발 서버 → 운영 서버(prd): 개발 서버에서 `deploy/release/bake_prod_image.sh`로 같은 실행 이미지 + 시험한 코드 폴더를 묶어 코드가 든 이미지를 만든다(코드 폴더 없이 실행). Dockerfile의 코드 포함 타깃(`pipeline`·`mcp`)은 PC 시험과 비상용이다.
 
 ---
 

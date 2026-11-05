@@ -181,10 +181,10 @@ def connect(a):
     """명령 인자 a(--pg·--local): --local이면 로컬 묶음, 아니면 PostgreSQL 필수(op-09 — 못 붙으면 거부, 로컬로 조용히 빠지지 않음)."""
     if getattr(a, "local", False):
         a.pg = False
-        print("[연결] 저장소: 로컬 묶음(--local)", flush=True)
+        print("[연결] 저장소: 로컬 묶음(--local)", file=sys.stderr, flush=True)  # stdout은 --json 출력 몫
         return
     ok, why = detect_pg()
     if not ok:
         raise SystemExit(f"[연결] PostgreSQL에 붙지 못함: {why}")
     a.pg = True
-    print(f"[연결] 저장소: pgvector({why})", flush=True)
+    print(f"[연결] 저장소: pgvector({why})", file=sys.stderr, flush=True)

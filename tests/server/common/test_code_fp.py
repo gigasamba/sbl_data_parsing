@@ -82,6 +82,8 @@ def test_code_fp_follows_output_code():
         base = fps()
         for rel, want in CASES:
             f = root / rel
+            if not f.is_file():  # 코드 포함 pipeline 이미지 — mcp_server는 config만(r 층 파일 없음)
+                continue
             orig = f.read_bytes()
             f.write_bytes(orig + b"\n# x\n")
             now = fps()
