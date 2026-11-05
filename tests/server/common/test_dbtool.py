@@ -96,12 +96,7 @@ def selftest():
             lambda h: lambda sql, p=None: ([{"x": 1}] if h is not None else []) if "to_regclass" in sql else [{"version_num": v} for v in h]
         )(have)
         assert status(fq, "search", "ai")[0] == want, (have, status(fq, "search", "ai"))
-    from sqlalchemy import DefaultClause, text
-
-    from common.store.db.dbcompare import _text
-
-    assert _text(DefaultClause(text("now()"))) == "now()" and _text("1") == "1" and _text(None) == "None"  # 기본값 다름 문구
-    print("[selftest] dbtool — 색인 종류(차원 2,000 경계)·판 상태 판정(없음·끝·모름·끝+모름 섞임)·기본값 문구 통과")
+    print("[selftest] dbtool — 색인 종류(차원 2,000 경계)·판 상태 판정(없음·끝·모름·끝+모름 섞임) 통과")
     return 0
 
 
@@ -117,3 +112,24 @@ def test_all_keeps_applog_schema():  # up --target all --schema demo가 applog �
     a = Namespace(target="all", schema="demo")
     assert _schema_arg(a, "search") == "demo" and _schema_arg(a, "applog") is None
     assert _schema_arg(Namespace(target="applog", schema="test_x"), "applog") == "test_x"
+
+
+def test_applog_schema_only_applog():  # --target applog --schema <검색 스키마>가 applog 표를 엉뚱한 스키마에 만들지 않게(쓰는 쪽은 늘 applog)
+    import contextlib
+    import io
+
+    from common.store.db.dbtool import DbToolError, main, schema_of
+
+    for given, want in ((None, "applog"), ("applog", "applog"), ("test_applog_ab12", "test_applog_ab12")):
+        assert schema_of("applog", given) == want, given
+    for call in (
+        *(lambda b=b: schema_of("applog", b) for b in ("demo", "data_parsing", "public", "Applog", "test-x")),
+        lambda: main(["up", "--target", "applog", "--schema", "demo"]),  # CLI는 PG 접속 확인보다 먼저 거부
+    ):
+        err = io.StringIO()
+        try:
+            with contextlib.redirect_stderr(err):
+                call()
+            raise AssertionError("거부해야 함")
+        except DbToolError as e:
+            assert e.code == 2 and "applog 스키마에만" in err.getvalue(), err.getvalue()

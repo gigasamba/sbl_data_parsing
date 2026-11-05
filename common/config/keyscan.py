@@ -67,7 +67,7 @@ NOT_SETTINGS = {
     "NETWORK_HOST": ("env로 남김", "entrypoint 신호(compose)"),
     "OMP_NUM_THREADS": ("env로 남김", "라이브러리(OpenMP)가 읽음"),
     "PARSE_RUN_ID": ("env로 남김", "부모 → 자식 프로세스 신호"),
-    "PIPELINE_VERSION": ("env로 남김", "버전 표기 마지막 대체(VERSION·PATCH_VERSION이 없을 때 — D-036)"),
+    "PIPELINE_VERSION": ("env로 남김", "버전 표기 마지막 대체(VERSION이 없거나 SemVer가 아닐 때 — D-036)"),
     "PYTHONPATH": ("env로 남김", "이미지·셸"),
     "RAG_MODULE": ("env로 남김", "이미지 신호(Dockerfile ENV)"),
     "RUN_ENV": ("env로 남김", "새 키(D-015) — local·dev·prd"),

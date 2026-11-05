@@ -5,9 +5,9 @@
 
 ## 지금 진행 중
 - pl-25 DB 스키마 명세 — dev: 검색 DB(gold)·마스터·applog는 구현됨, EDW 쪽 DDL(ParsingMeta 칸 정리)은 DB 담당자 승인·실행 대기(refactor.md C-76).
-- 열린 요건(todo): run_pipeline 지휘만 [rn-05](prd/ops.md#rn-05) · 원본 zip [pl-57](prd/extract.md#pl-57) · 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 확장자 `.hwp` [pl-45](prd/transform.md#pl-45) · 그림 부가 기능 줄이기 [pl-05](prd/transform.md#pl-05) · 전체 e2e [pl-54](prd/ops.md#pl-54) · `gold_status` 칸 쓰기 [pl-55](prd/ops.md#pl-55) · 첫 이관 도구·안 쓰는 패키지 [pl-53](prd/transform-cleanup.md#pl-53) · prd 이미지에 settings.yaml 굽기 [op-12](prd/doc.md#op-12) · 판 묶기(잠재 문제) [pl-56](prd/load.md#pl-56).
+- 열린 요건(todo): run_pipeline 지휘만 [rn-05](prd/ops.md#rn-05) · 원본 zip [pl-57](prd/extract.md#pl-57) · 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 확장자 `.hwp` [pl-45](prd/transform.md#pl-45) · 그림 부가 기능 줄이기 [pl-05](prd/transform.md#pl-05) · 전체 e2e [pl-54](prd/ops.md#pl-54) · `gold_status` 칸 쓰기 [pl-55](prd/ops.md#pl-55) · prd 이미지에 settings.yaml 굽기 [op-12](prd/doc.md#op-12) · 판 묶기(잠재 문제) [pl-56](prd/load.md#pl-56).
 - 서버 확인만 남음(dev): parse_document CPU 우선 [rn-03](prd/ops.md#rn-03).
-- 시험 정리(todo): [e2-13](prd/test.md#e2-13) · [e2-15](prd/test.md#e2-15) · [e2-20](prd/test.md#e2-20) · [e2-21](prd/test.md#e2-21).
+- 시험 정리(todo): [e2-13](prd/test.md#e2-13) · [e2-20](prd/test.md#e2-20).
 
 ## 수집 (extract) — 서버에서 문서 목록을 정하고 받아 오기까지
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -58,7 +58,7 @@
 | 엔진 지문(p0) 범위 = 엔진 폴더의 모든 `.py` + 엔진 실행 파일 + 엔진이 import하는 pipeline 파일 | 이름과 폴더가 다른 엔진(html_stdlib·msg_extract·rapidocr_ko·office)을 고쳐도 지문이 바뀌게. 등급 A | done | [pl-47](prd/transform-cleanup.md#pl-47) |  |
 | 명부·사전·원본 해시·매니페스트·엔진 지문은 프로세스마다 한 번만 읽고, 엔진 결과는 자식이 한 번에 쓰고, 1건 중복 확인은 자식 없이 | 결과는 바이트 그대로. 등급 A | done | [pl-49](prd/transform-cleanup.md#pl-49) |  |
 | 결과를 바꾸는 파일은 층 지문 목록에 들고, 기록·DB 표 정의는 지문 계산에서 빠진다. extract → transform → load 방향은 자동 점검(`check_modules` ⑫, 예외 없음) | 빠지면 고쳐도 옛 결과를 다시 쓰고, 넘치면 상관없는 수정에도 재처리 경보가 남. 등급 A | done | [pl-50](prd/transform-cleanup.md#pl-50) |  |
-| `dbtool`에 첫 이관 도구(`dbcompare`·`stamp`)가 없고(0.2.0 배포 뒤), 이미지 의존성에는 앱 코드가 쓰는 패키지만 | 첫 이관 도구와 안 쓰는 패키지는 이미지와 점검 범위만 키운다. 패키지를 빼면 새 이미지 버전 | todo | [pl-53](prd/transform-cleanup.md#pl-53) | `dbcompare`·`stamp`가 있음(0.2.0 배포 대기), `requirements*`에 `google-adk`·`litellm` — 지시서 `agent.py`만 import, 뺄지 미정 |
+| `dbtool`에 첫 이관 도구(`dbcompare`·`stamp`)가 없고(0.2.0 배포 뒤), 이미지 의존성에는 앱 코드가 쓰는 패키지만 | 첫 이관 도구와 안 쓰는 패키지는 이미지와 점검 범위만 키운다. 패키지를 빼면 새 이미지 버전 | done | [pl-53](prd/transform-cleanup.md#pl-53) |  |
 | 쪽 수 세기는 함수 하나 — `pdf_kind.doc_pages`와 `vlmcall.page_count`가 같은 규칙 | 쪽 수가 자리마다 다르면 제한 시간·쪽 VLM 상한이 어긋난다. `vlmcall.py`는 엔진 지문에 들어가 사람 검토(등급 A) | todo | [pl-60](prd/transform.md#pl-60) | 두 함수가 따로 있음 |
 
 ## 적재 (load) — 검색 DB(pgvector)·게시·저장 구조·DB 스키마
@@ -121,7 +121,7 @@
 | 서버는 `/mcp`(기본 127.0.0.1:8765) 또는 `--stdio`로 뜬다. 내부망 주소만, 0.0.0.0 거부, 루프백이 아니면 `MCP_TOKEN` 필수 + DNS 리바인딩 막기. 서버에서 PG 접속 칸이 비면 시작 거부 | 공용 내부 서비스라 위험한 노출을 거부 | done | [mc-09](prd/mcp.md#mc-09) |  |
 | 과부하 보호 — 동시 8개, 대기 32개(동시 × 4) 넘으면 바로 `busy`, 도구당 30초(`parse_document`는 자기 시간 + 10초) | 늘 떠 있게. `/health`는 예열 중 503, 새 적재는 30초마다 확인 | done | [mc-09](prd/mcp.md#mc-09) |  |
 | 요청 권한 관리 — 머리글(`Authorization`)로 신원을 확인(agent별 토큰 또는 사내 로그인이 서명한 사용자 증표)한 뒤, DB 권한 표로 그 신원이 볼 수 있는 범위만 돌려준다(`search`·원문·`query_edw` 결과 거르기). 도구 계약은 그대로, 감사 기록에 확인된 신원 | 요청에 적힌 user id·agent id는 꾸밀 수 있어 신원 확인이 먼저다. 부서·고객 담당에 따라 볼 문서가 다르다 | todo | [mc-20](prd/mcp.md#mc-20) | 코드에 없다 — 지금은 공용 토큰 하나로 허용 클라이언트인지만 본다. 방식(agent 토큰·사내 로그인)·권한 단위·검색 DB 거르기 칸은 미정 |
-| 질문 유형 표(`question_type.TYPE_TABLE`)는 쓰는 값만 가진다 | 쓰지 않는 칸(첫 도구·검색 설정)은 고칠 때 헷갈리게 한다 | todo | [mc-21](prd/mcp.md#mc-21) | 쓰는 곳은 `rank_rules.weights()`의 `aggregate` 판정 하나뿐(`first_tool`·`search` 칸은 아무도 안 읽음) |
+| 질문 유형 표(`question_type.TYPE_TABLE`)는 쓰는 값만 가진다 | 쓰지 않는 칸(첫 도구·검색 설정)은 고칠 때 헷갈리게 한다 | done | [mc-21](prd/mcp.md#mc-21) |  |
 
 ## 운영 (ops) — 서버 러너(run_pipeline)·실행 관리·종료 정리·계정·모델 가드·설정
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -180,8 +180,8 @@
 | 이미지 반입 관문 — `build_ship.sh`로 빌드하고 `selftest_gate.sh`가 종료 코드가 아니라 `[판정]` 줄로 판단(알려진 실패 밖 FAIL 0) | 서버는 반입 시험을 통과한 이미지만 받는다 | done | [e2-08](prd/test.md#e2-08) |  |
 | 코드만 바뀌면 코드 폴더 바꾸기(이미지는 그대로) | 이미지를 다시 만들지 않는다 | done | [e2-08](prd/test.md#e2-08) |  |
 | PC 일반 시험의 알려진 실패 0(`GENERAL_KNOWN_FAIL = {}`, `known_fail.txt` 빔) — 시험은 공용 PG를 읽지 않고, 지운 모듈의 시험은 없다 | 리팩토링 전부터 있던 실패를 없앴다 | done | [e2-11](prd/test.md#e2-11) |  |
-| 옛 오버레이 패치 흔적이 없다 — 버전 읽기(`common/core/fingerprint.py`)에 `common/PATCH_VERSION` 후보 없음, 읽는 곳 없는 `deploy/docker/IMAGE_BASE` 없음(지울지는 사용자가 정함) | `fingerprint.py`는 레이어 지문 파일이라 고치면 서버 문서가 모두 다시 처리된다 — 지문 배치에 | todo | [e2-21](prd/test.md#e2-21) | `fingerprint.py`가 `PATCH_VERSION`을 후보로 읽고, `IMAGE_BASE`가 읽는 곳 없이 남아 있다 |
-| 지시서 폴더 찾기(`paths.resolve_agent_dir`)는 있는 폴더 갈래만 본다 | `paths.py`를 고치면 레이어 지문이 모두 바뀌어 다음 지문 배치에 | todo | [e2-15](prd/test.md#e2-15) | 없는 갈래 셋(`resources/prompts/mcp`·`validation/e2e`·`dev_tools/unit_test/fixtures`)과 설명 주석이 남아 있다 |
+| 옛 오버레이 패치 흔적이 없다 — 버전 읽기(`common/core/fingerprint.py`)에 `common/PATCH_VERSION` 후보 없음, 읽는 곳 없는 `deploy/docker/IMAGE_BASE` 없음 | 없어진 길만 읽던 것이 남으면 헷갈린다 | done | [e2-21](prd/test.md#e2-21) |  |
+| 지시서 폴더 찾기(`paths.resolve_agent_dir`)는 있는 폴더 갈래만 본다 | 없는 폴더를 찾는 갈래는 헷갈린다 | done | [e2-15](prd/test.md#e2-15) |  |
 | PC 스모크 — 문서 2~3건으로 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색(README §4-4) | 릴리스 전에 사슬 전체를 증명 | done | [e2-01](prd/test.md#e2-01) |  |
 | PC Docker 스모크(`valid_env/docker/smoke_test.sh`)가 검색까지 통과한다 | 이미지 사슬 전체를 PC에서 증명 | todo | [e2-13](prd/test.md#e2-13) | mc-10을 고친 뒤 다시 돌리지 않았다 |
 | 시험 자료 `valid_env/` — 문서 `object_storage/{SFDC,CRMS}/<uuid>/<파일>`, 합성 EDW `edw/` | 서버와 같은 배치. 서버 반입 시험은 자료를 임시 폴더에 만들어 쓴다 | done | [e2-09](prd/test.md#e2-09) |  |

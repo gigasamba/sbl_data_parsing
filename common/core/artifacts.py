@@ -5,6 +5,7 @@ parse·structure·load·search 코드는 import하지 않는다(계약 코드는
 여기는 2개 이상 이미지가 쓰는 계약만 둔다(파싱 전용 함수는 pipeline/shared·pipeline/transform/parse).
 """
 
+import functools
 import hashlib
 import json
 import subprocess
@@ -207,8 +208,17 @@ def _common_deps(files, base):
 
 def code_fp(layer, root=None):
     """그 층을 만드는 소스 파일(글로브) + 그 파일들이 실제로 import하는 common 모듈의 정렬된 내용 → sha256[:12].
-    root(기본 DEV) — selftest가 임시 복사본으로 건드려 보게 받을 수 있다(실제 코드 수정 없이)."""
-    base = Path(root) if root else DEV
+    root(기본 DEV) — selftest가 임시 복사본으로 건드려 보게 받을 수 있다(실제 코드 수정 없이).
+    root 없이(실행 중 코드)는 프로세스마다 층당 한 번만 계산한다 — 실행 중에는 코드가 바뀌지 않는다."""
+    return _code_fp(layer, Path(root)) if root else _live_fp(layer)
+
+
+@functools.cache
+def _live_fp(layer):
+    return _code_fp(layer, DEV)
+
+
+def _code_fp(layer, base):
     own = {p for g in LAYER_CODE[layer] for p in base.glob(g) if p.is_file()}
     files = sorted(own | _common_deps(own, base))
     h = hashlib.sha256()

@@ -61,22 +61,23 @@ def test_version_file():
     v = (root / "VERSION").read_text(encoding="utf-8").strip()
     parts = v.split(".")
     assert len(parts) == 3 and all(p.isdigit() for p in parts), v
-    if not (root / "common" / "PATCH_VERSION").exists():  # 오버레이 패치가 올라가 있으면 그 버전이 더 높을 수 있음
-        assert pipeline_version() == v
+    assert pipeline_version() == v
 
 
-def test_pipeline_version_picks_higher():
-    """VERSION과 PATCH_VERSION 중 높은 버전 — 오버레이 패치(0.1.1)는 이미지(0.1.0)를 이기고, 새 이미지(0.2.0) 뒤 남은 낮은 패치는 지지 않는다."""
+def test_pipeline_version_reads_version_only():
+    """VERSION 하나만 본다 — 옛 오버레이 패치 파일 common/PATCH_VERSION이 남아 있어도 무시, SemVer가 아닌 VERSION은 버전으로 쓰지 않는다."""
     import tempfile
 
-    with tempfile.TemporaryDirectory() as td:
-        common = Path(td) / "common"
-        common.mkdir()
-        (Path(td) / "VERSION").write_text("0.1.0\n", encoding="utf-8")
-        assert pipeline_version(common) == "0.1.0"
-        (common / "PATCH_VERSION").write_text("0.1.1\n", encoding="utf-8")
-        assert pipeline_version(common) == "0.1.1"
-        (Path(td) / "VERSION").write_text("0.2.0\n", encoding="utf-8")
-        assert pipeline_version(common) == "0.2.0"
-        (common / "PATCH_VERSION").write_text("20261016-e305b14+patch-abc1234\n", encoding="utf-8")  # SemVer가 아닌 꼴은 무시
-        assert pipeline_version(common) == "0.2.0"
+    for version, patch, want in (
+        ("0.2.0\n", None, "0.2.0"),
+        ("0.2.0\n", "0.9.9\n", "0.2.0"),
+        ("20261016-e305b14\n", None, None),
+    ):
+        with tempfile.TemporaryDirectory() as td:
+            common = Path(td) / "common"
+            common.mkdir()
+            (Path(td) / "VERSION").write_text(version, encoding="utf-8")
+            if patch:
+                (common / "PATCH_VERSION").write_text(patch, encoding="utf-8")
+            got = pipeline_version(common)
+            assert got == want if want else got != version.strip(), (version, patch, got)

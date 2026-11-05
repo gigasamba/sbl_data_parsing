@@ -66,8 +66,8 @@ def _demo():
     assert resolve_agent_dir("nested_figure") == RES_ROOT / "prompts" / "pipeline" / "nested_figure"
     assert (RES_ROOT / "prompts" / "common" / "_common" / "tail.md").is_file() and CRITERIA_FILE.is_file()
     assert STACK_FILE.is_file() and (GLOSSARY_ROOT / "domain_terms.csv").is_file()
-    if (PROJ_ROOT / "dev_tools").is_dir():  # 저장소 체크아웃에서만(이미지엔 dev_tools 없음)
-        assert resolve_agent_dir("example_agentic") == PROJ_ROOT / "dev_tools" / "unit_test" / "fixtures" / "example_agentic"
+    if (PROJ_ROOT / "valid_env").is_dir():  # 저장소 체크아웃에서만(이미지엔 valid_env 없음)
+        assert resolve_agent_dir("rag_qa") == PROJ_ROOT / "valid_env" / "answer_test" / "rag_qa"
     try:
         resolve_agent_dir("_no_such_agent_")
         raise AssertionError("없는 agent_id면 FileNotFoundError여야 함")

@@ -290,3 +290,54 @@ def selftest():
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통
     selftest()
+
+
+def _infer_old(docs, head=400, roster=None):
+    """거르기(may_hit) 전 infer_clients 몸통 그대로 — 새 결과와 견줄 기준."""
+    from pipeline.transform.structure import client_roster as ST
+
+    for d in docs:
+        text = d.get("full_text") or ""
+        scored = []
+        for c, al in roster.items():
+            names = [n for n in [c, *al] if n]
+            cnt = sum(ST.name_hits(n, text) for n in names)
+            if cnt == 0:
+                continue
+            in_head = any(ST.name_hits(n, text[:head]) for n in names)
+            if cnt >= 2 or in_head:
+                scored.append(((1 if in_head else 0, cnt), c))
+        scored.sort(key=lambda x: (-x[0][0], -x[0][1], x[1]))
+        if scored:
+            d["clients"] = [c for _, c in scored]
+            d["client"], d["client_src"] = d["clients"][0], "text"
+
+
+def test_infer_clients_prefilter_same():
+    """pl-49 — 이름 조각 거르기(may_hit)를 더해도 infer_clients 결과가 옛 몸통과 똑같다(겹치는 이름·별칭·대소문자·공백·조사·re.I 특수 글자)."""
+    import copy
+
+    rosters = [
+        {"Pfizer": ["PFE"], "Pfizer Inc.": ["화이자"], "MSD": [], "Celltrion": ["셀트리온", "CT"]},
+        {"Contoso Pharma": ["콘토소"], "미르하제약(주)": ["미르하제약", "MRH"], "㈜한빛": ["한빛바이오"], "": ["X"]},
+        {"Samsung Bio": ["SBL", "삼성바이오로직스"], "Kirin": ["Kyowa Kirin"], "Ilsung": [], "Ascend": ["ascend  bio"]},
+    ]
+    texts = [
+        "",
+        None,
+        "Supply Agreement · PFIZER INC. / pfizer 2024 · MSDS sheet only",
+        "QBR — 미르하제약(주) / MRH-ADC-04 · 미르하제약과 MRH가 협의",
+        "ContosoPharma 계약 · contoso\npharma 부록 · 콘토소는 고객",
+        "x" * 500 + " Celltrion과 셀트리온은 같은 회사 · CT 약어 · ct",
+        "Kyowa Kirin(Kelvin Kirin) · ſamsung Bio · İlsung · ılsung · SBL",
+        "머리 Ascend Bio ascend  bio · 한빛바이오 · ㈜한빛",
+        "PFE PFE-01 pfe · 화이자의 공급 · Pfizer와",
+    ]
+    for roster in rosters:
+        for head in (400, 10):
+            docs = [{"full_text": t} for t in texts]
+            want = copy.deepcopy(docs)
+            _infer_old(want, head, roster)
+            infer_clients(docs, head, roster=roster)
+            assert docs == want, (roster, head, [(d.get("clients"), w.get("clients")) for d, w in zip(docs, want)])
+    assert any(d.get("clients") for d in want)  # 사례가 실제로 고객을 찾는다(빈 비교가 아님)

@@ -56,7 +56,7 @@
 5. 표는 applog 판 `0002_applog`(Alembic)가 만든다 — 앱은 DDL을 실행하지 않는다. PG 접속 정보가 없으면(PC) 대역 sqlite `<standin_dir>/applog.sqlite`에 표 정의로 바로 만든다. 서버(dev·prd)는 대역을 쓰지 않고 멈춘다. `ops.log.log_db_enabled`와 관계없이 쓴다.
 
 ### QA
-- `tests/server/pipeline/test_skip_docs.py`(이유 사례 표 → 쓴 행·횟수 · rdb:csv가 모두 지원 안 함이면 0건으로 끝남 · `list --skip-done`이 뺌) · `tests/server/pipeline/test_stage_batch.py`(거르기가 뺀 DRM·압축이 표에 들어감) · `dbtool check --target applog`(판과 실제 DB).
+- `tests/server/pipeline/test_skip_docs.py`(이유 사례 표 → 쓴 행·횟수 · rdb:csv가 모두 지원 안 함이면 0건으로 끝남 · `list --skip-done`이 뺌) · `tests/server/pipeline/test_stage_batch.py`(거르기가 뺀 DRM·압축이 표에 들어감) · `dbtool check --target applog`(DB 판).
 - Status: dev
 
 <a id="pl-48"></a>

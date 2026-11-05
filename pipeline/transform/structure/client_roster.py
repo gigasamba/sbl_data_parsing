@@ -35,6 +35,24 @@ def name_hits(name, text):
     return len(_hit_pat(name).findall(text)) if name else 0
 
 
+_PLAIN_NAME = re.compile(r"[\x00-\x7f가-힣ㄱ-ㅎㅏ-ㅣ]*")  # lower()가 re.I와 똑같이 가르는 글자(ASCII·한글)
+_ODD_FOLD = ("İ", "ı", "ſ")  # İ ı ſ — re.I는 ASCII i·s와 같게 보는데 lower()로는 안 바뀜
+
+
+def fold_text(text):
+    """may_hit용 본문 — text.lower(), 다만 re.I와 lower()가 다르게 가르는 글자가 있으면 None(거르지 않음)."""
+    return None if any(c in text for c in _ODD_FOLD) else text.lower()
+
+
+def may_hit(name, low):
+    """name_hits(name, text) > 0의 필요조건 — 이름의 공백 조각이 low(fold_text(text))에 모두 들어 있나. 정규식보다 훨씬 싸다.
+    low가 None이거나 이름에 ASCII·한글 밖 글자가 있으면(대소문자 규칙을 장담 못 함) True — 정규식이 가른다."""
+    n = name.lower()
+    if low is None or not _PLAIN_NAME.fullmatch(n):
+        return True
+    return all(p in low for p in n.split(" "))
+
+
 def seed_roster(path=None):
     """구조화 기본 고객 명부 seed — 사람이 아는 주요 바이오·제약사 공개 한/영 표기만(지어낸 이름 없음),
     CLIENT_ROSTER(서버 SFDC 내보내기)·GLOSSARY_DIR org_client가 비어 있어도 gold_bundle.infer_clients()가 바닥값으로

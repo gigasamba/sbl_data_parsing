@@ -15,7 +15,7 @@ from pathlib import Path
 
 CONTRACT = 2  # 인계 파일 형식 버전 — 형식이 바뀌면 올림(지문은 코드가 바뀌면 자동으로 바뀜)
 
-_ROOT = Path(__file__).resolve().parent.parent  # 공용 패키지 루트(common/) — HANDOFF_FILES·_unclassified·PATCH_VERSION 기준
+_ROOT = Path(__file__).resolve().parent.parent  # 공용 패키지 루트(common/) — HANDOFF_FILES·_unclassified 기준
 
 # 선정 기준 — parse→structure·structure→load 두 경계 양쪽이 **같은 값을 각자 계산해서 맞춰야 하는** 파일만.
 # 한쪽 모듈만 내부적으로 쓰거나(결과를 다른 쪽이 다시 계산해 맞출 필요가 없음) 연결·캐시·로그 같은 운영 코드는
@@ -120,21 +120,16 @@ def _semver(text):
 
 
 def pipeline_version(root=None):
-    """버전 표기(한 곳) — 두 이미지 공통 SemVer. 후보는 저장소 루트 VERSION(이미지 /app/deploy/VERSION)과
-    common/PATCH_VERSION(make_patch 오버레이 패치 묶음 — 이미지 위에 올린 코드의 버전) 둘이고, 더 높은 버전을 쓴다(새 이미지로 바꾼 뒤
-    코드 폴더에 남은 옛 PATCH_VERSION이 이기지 않게). 둘 다 SemVer 꼴이 아니면 env PIPELINE_VERSION → 'unknown'.
+    """버전 표기(한 곳) — 두 이미지 공통 SemVer, 저장소 루트 VERSION(이미지 /app/deploy/VERSION).
+    SemVer 꼴이 아니거나 없으면 env PIPELINE_VERSION → 'unknown'.
     publish(AI.ParsingMeta.pipeline_version)·실행 보드(run_board)·parse_parallel이 같이 씀."""
     import os
 
     base = Path(root) if root else _ROOT
-    found = []
-    for f in (base.parent / "VERSION", base / "PATCH_VERSION"):
-        try:
-            v = f.read_text(encoding="utf-8").strip()
-        except OSError:
-            continue
-        if _semver(v):
-            found.append(v)
-    if found:
-        return max(found, key=_semver)
+    try:
+        v = (base.parent / "VERSION").read_text(encoding="utf-8").strip()
+    except OSError:
+        v = ""
+    if _semver(v):
+        return v
     return os.environ.get("PIPELINE_VERSION") or "unknown"  # env 남김 — 내부 신호

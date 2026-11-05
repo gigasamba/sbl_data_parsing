@@ -50,7 +50,7 @@ def show_stack(a=None):
     print("| 형식 | 파싱 엔진(우선순위) |\n|---|---|")
     for f, es in sorted(st["parse"].items()):
         print(f"| {f} | {' → '.join(es)} |")
-    print(f"청킹 {st['chunk']} · 임베딩 {st['embed']} · 그래프 {st['graph']} · 검색 {st['retrieve']} · 상위 k {st['k']}")
+    print(f"청킹 {st['chunk']} · 임베딩 {st['embed']} · 검색 {st['retrieve']} · 상위 k {st['k']}")
 
 
 # ── 파싱 모듈(run_pipeline이 문서마다 부름) ──────────

@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
 """pgvector 우리 스키마 판 관리 명령.
   python -m common.store.db.dbtool up      --target search|all [--schema S] [--dim N | --bundle B] [--create-extension]
-  python -m common.store.db.dbtool stamp   --target …   — 이미 있는 DB에 실행 없이 판만 기록(비교 차이 0일 때만)
   python -m common.store.db.dbtool current --target …   — 지금 판·코드의 끝 판
-  python -m common.store.db.dbtool check   --target …   — 표 정의 ↔ 실제 DB 비교(차이·판이 끝이 아니면 종료 코드 1)
-  python -m common.store.db.dbtool --pg-cases orca_<이름>  — PC 전용 PG 시험(새 시험 DB — 기본 스키마·vector 확장 자리)
+  python -m common.store.db.dbtool check   --target …   — current와 같고, 판이 끝이 아니면 종료 코드 1
   python -m common.store.db.dbtool maintain --target applog  — 현재+2개월 파티션 생성/만료 기록 정리(매일 예약)
   python -m common.store.db.dbtool master load [--schema S] [--dir D]  — 마스터 표(`<S>_master`)를 CSV(기본 git resources/vocab/glossary)로 통째로 바꿈(up --target master 뒤)
   이미지: `migrate up --target all --bundle …`(entrypoint — pipeline 이미지, load와 같은 잠금).
 · 갈래 search = 기준 스키마(PG_SCHEMA — --schema로 바꿈) 하나 + 원천 스키마 5벌 `<기준>_sfdc|crms|las|faq|other`(판 0002가 만듦).
   판 기록 표·공용 doc_id 시퀀스는 기준 스키마에(<기준>.alembic_version).
-· up: 판 기록이 없는데 표가 있는 스키마(판 관리 전에 만든 DB)는 먼저 비교 — 차이가 기준판이 고치는 것(표·색인·뷰 없음, 뷰 칸 다름)뿐이면 고치고
-  판 기록(기준판이 IF NOT EXISTS·뷰는 DROP 뒤 다시 만듦), 칸 이름·형식·NULL·기본값·키가 다르거나 남는 표가 있으면 거부. 적재 앞 자동 길
-  (pgvector_load deploy)은 판 기록 없는 기존 스키마면 비교·DDL 없이 경고만. 검색 스키마는 지금 deploy와 같은 확인을 먼저 —
+· up: 판 기록이 없는데 표가 있는 스키마(판 관리 전에 만든 DB)는 거부 — 새 스키마로 올려 전체를 다시 적재한다. 적재 앞 자동 길
+  (pgvector_load deploy)은 판 기록 없는 기존 스키마면 DDL 없이 경고만. 검색 스키마는 지금 deploy와 같은 확인을 먼저 —
   vector 확장(없으면 멈춤, --create-extension이면 직접 생성 — PC·단독 시험만)·남의 스키마 거부(판 표 alembic_version 없음)·차원(DB와 다르면 새 PG_SCHEMA).
 · 차원은 --dim 또는 --bundle <묶음>/meta.json, 있는 스키마는 DB 차원(설정 칸 없음).
 · 적재 전 판 확인(require_current): 판 기록 없음 = 경고 뒤 계속(기준판 = 지금 스키마), 끝보다 낮거나 모르는 판 = 거부. MCP(읽기)는 안 봄.
@@ -36,6 +33,7 @@ TARGETS = (
 )  # master = 용어집·고객 명부(`<기준>_master`) · 서버에 struct 스키마가 남아 있어도 코드는 읽지 않음(DB 담당자가 두거나 지움)
 _SCHEMA_RE = re.compile(r"[a-z_][a-z0-9_]{0,62}")  # common/store/pg.conf()의 PG_SCHEMA 규칙(그 함수 안 정규식)과 같음
 _SCRIPTS: dict = {}
+DIM_SQL = "SELECT atttypmod AS d FROM pg_attribute WHERE attrelid = to_regclass('{schema}.chunk') AND attname = 'embedding'"
 
 
 class DbToolError(SystemExit):
@@ -75,15 +73,19 @@ def known(target):
 
 # ── 판 상태 — q는 SQL 글자 → [dict] 함수(psycopg PG.q·SQLAlchemy 연결 둘레) ───────────────────
 def schema_of(target, schema=None):
-    """갈래의 스키마 — search는 기준 스키마 그대로, master는 `<기준>_master`(pl-38 — 개발자마다 기준이 다르니 이름도 따라감), applog는 고정 이름."""
+    """갈래의 스키마 — search는 기준 스키마 그대로, master는 `<기준>_master`(pl-38 — 개발자마다 기준이 다르니 이름도 따라감), applog는 고정 이름
+    (기록하는 쪽이 늘 `applog`에 쓰므로 다른 이름은 거부 — PC 시험 스키마 `test_*`만 예외)."""
     if target == "master":
         from common.store.master import schema_name
 
         return schema_name(schema_of("search", schema))
     if target == "applog":
         schema = schema or "applog"
-        if not _SCHEMA_RE.fullmatch(schema) or schema == "public":
-            raise DbToolError("applog 스키마 이름이 틀림")
+        if not _SCHEMA_RE.fullmatch(schema) or not (schema == "applog" or schema.startswith("test_")):
+            raise DbToolError(
+                f"applog 표는 applog 스키마에만 만든다(로그를 쓰는 쪽이 늘 applog에 씀) — --schema {schema!r}는 안 됨. "
+                "--target applog에는 --schema를 빼거나 applog로(PC 시험 스키마 test_*만 예외)"
+            )
         return schema
     if schema is None:
         from common.store.pg import conf
@@ -127,7 +129,7 @@ def require_current(q, target, schema):
     if st == "없음":
         print(
             f"[migrate] 경고: {schema} 판 기록 없음(alembic_version) — 기준판과 같은 스키마로 보고 계속. "
-            f"서버는 `migrate check --target {target}` 뒤 `migrate stamp`(또는 up)로 판을 기록(docs/operations/release-and-patch.md §5-5)",
+            "판 기록이 있는 새 스키마로 올려 전체를 다시 적재(docs/operations/release-and-patch.md §5-5)",
             file=sys.stderr,
             flush=True,
         )
@@ -203,15 +205,13 @@ def precheck_search(q, schema, dim, create_extension=False):
         and not q(f"SELECT 1 FROM information_schema.tables WHERE table_schema='{schema}' AND table_name='alembic_version'")
     ):
         raise SystemExit(
-            f"deploy 거부: 스키마 {schema}에 표가 있지만 우리 표식(판 표 alembic_version)이 없음 — 남의 기존 스키마일 수 있음(다른 PG_SCHEMA 사용). "
-            "판 기록 전 옛 우리 스키마면 `migrate check` 뒤 `migrate stamp`"
+            f"deploy 거부: 스키마 {schema}에 표가 있지만 우리 표식(판 표 alembic_version)이 없음 — 남의 기존 스키마이거나 판 기록 전 옛 스키마(다른 PG_SCHEMA 사용)"
         )
     check_dim(q, schema, dim)
 
 
 def check_dim(q, schema, dim):
     """있는 chunk 표의 차원(없으면 None) — 원천 스키마 5벌을 차례로 보고, 기준 스키마 자체(판 0001의 한 벌)도 본다. dim과 다르면 거부."""
-    from common.store.db.dbcompare import DIM_SQL
     from common.store.db.models import search_tables as ST
 
     for s in (*(ST.src_schema(schema, src) for src in ST.SOURCES), schema):
@@ -231,10 +231,8 @@ def index_kind(dim):
 
 # ── 판 올리기·기록 ─────────────────────────────────────────────────────
 def upgrade(target, schema, dim=None, conn=None):
-    """판을 끝까지(한 트랜잭션). 판 기록 없는 기존 스키마는 먼저 비교(위 설명). 반환: 비교 보고(올리기 전 — 없으면 None)."""
+    """판을 끝까지(한 트랜잭션). 판 기록 없는 기존 스키마는 거부(위 설명)."""
     from alembic import command
-
-    from common.store.db import dbcompare
 
     if conn is None:
         with engine().begin() as c:
@@ -247,24 +245,11 @@ def upgrade(target, schema, dim=None, conn=None):
     st, have = status(q, target, schema)
     if st == "모름":
         raise DbToolError(f"{schema} 판 {have} — 이 코드가 모르는 판(코드보다 새 판?) — 올리지 않음")
-    before = None
     if st == "없음" and has_tables(q, schema):
-        before = dbcompare.compare(conn, target, schema, dim)
-        bad = before.blocking()
-        if bad:
-            raise DbToolError(
-                f"{schema}: 판 기록 없는 기존 스키마가 표 정의와 다름 — 올리지 않음(사람 확인·DB 담당 협의):\n" + "\n".join(before.lines())
-            )
-        if before.diffs:
-            print(
-                f"[migrate] {schema}: 판 기록 없는 기존 스키마 — 기준판이 고치는 것만(없는 표·색인·뷰 만들기, 뷰 다시 만들기) 고치고 판 기록:\n"
-                + "\n".join(before.lines()),
-                file=sys.stderr,
-            )
+        raise DbToolError(f"{schema}: 표는 있는데 판 기록이 없음 — 올리지 않음. 새 스키마로 올려 전체를 다시 적재(DB 담당 협의)")
     command.upgrade(_config(conn, target=target, schema=schema, dim=dim, create_schema=True), f"{target}@head")
     if target == "applog":
         maintain_applog(schema, conn=conn, prune=False)
-    return before
 
 
 def maintain_applog(schema="applog", *, conn=None, prune=True, now=None):
@@ -287,45 +272,15 @@ def maintain_applog(schema="applog", *, conn=None, prune=True, now=None):
         return applog_parts.ensure_partitions(op, schema, now)
 
 
-def stamp(target, schema, dim=None, conn=None):
-    """실행 없이 판만 기록 — 비교 차이 0일 때만. 모르는 판이 있으면 올리기와 같이 거부. conn = 호출자 트랜잭션(없으면 새로)."""
-    from alembic import command
-
-    from common.store.db import dbcompare
-
-    if conn is None:
-        with engine().begin() as c:
-            return stamp(target, schema, dim, c)
-    q = _q(conn)
-    st, have = status(q, target, schema)
-    if st == "모름":
-        raise DbToolError(f"{schema} 판 {have} — 이 코드가 모르는 판(코드보다 새 판?) — stamp 안 함")
-    if target == "search":
-        dim = check_dim(q, schema, dim) or dim
-    rep = dbcompare.compare(conn, target, schema, dim)
-    if rep.diffs:
-        raise DbToolError(f"{schema}: 표 정의와 다름 — stamp 안 함(없는 것만이면 up이 만듦):\n" + "\n".join(rep.lines()))
-    for line in rep.info:
-        print(f"[migrate] (알림) {line}", file=sys.stderr)
-    command.stamp(_config(conn, target=target, schema=schema, dim=dim, create_schema=False), f"{target}@head")
-
-
-def check(target, schema, dim=None, conn=None):
-    """(판 상태, 판 번호들, 비교 보고) — 읽기만(conn이 없으면 새 연결에서 하고 되돌림)."""
-    from common.store.db import dbcompare
-
+def check(target, schema, conn=None):
+    """(판 상태, 판 번호들) — 읽기만(conn이 없으면 새 연결에서 하고 되돌림)."""
     if conn is None:
         with engine().connect() as c:
             try:
-                return check(target, schema, dim, c)
+                return check(target, schema, c)
             finally:
                 c.rollback()
-    q = _q(conn)
-    st, have = status(q, target, schema)
-    if target == "search":
-        dim = check_dim(q, schema, dim) or dim
-    rep = dbcompare.compare(conn, target, schema, dim) if (has_tables(q, schema) or st != "없음") else None
-    return st, have, rep
+    return status(_q(conn), target, schema)
 
 
 # ── SQLite 대역(pg_standin) — 판 관리 밖, 표 정의에서 바로 ───────────────────────────────
@@ -386,7 +341,7 @@ def master_load(base=None, folder=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
-    ap.add_argument("cmd", nargs="?", choices=["up", "stamp", "current", "check", "maintain", "master"])
+    ap.add_argument("cmd", choices=["up", "current", "check", "maintain", "master"])
     ap.add_argument("sub", nargs="?", choices=["load"], help="master load — 마스터 표를 git CSV로 채움(pl-38)")
     ap.add_argument("--target", choices=[*TARGETS, "all"], default="all")
     ap.add_argument("--schema", help="기준 스키마(기본 settings PG_SCHEMA — 원천 스키마는 <기준>_<원천>)")
@@ -394,18 +349,13 @@ def main(argv=None):
     ap.add_argument("--bundle", help="묶음 폴더 — meta.json의 dim")
     ap.add_argument("--dir", help="master load — CSV 폴더(기본 git resources/vocab/glossary · 서버 기밀 명부는 서버 폴더)")
     ap.add_argument("--create-extension", action="store_true", help="vector 확장이 없으면 만들기(PC·단독 시험만)")
-    ap.add_argument(
-        "--pg-cases", metavar="DB", help="PC 전용 PG 시험 — 새 시험 DB(orca_…)를 만들어 기본 스키마·vector 확장 자리 사례(VS8a B-1·R-9)"
-    )
     a = ap.parse_args(argv)
-    if a.pg_cases:
-        return 1 if pg_cases(a.pg_cases) else 0
     if a.cmd == "maintain" and a.target != "applog":
         ap.error("maintain은 --target applog만 지원")
     if (a.cmd == "master") != (a.sub == "load"):
         ap.error("master는 `master load`로만")
-    if not a.cmd:
-        ap.error("명령: up·stamp·current·check")
+    if a.target == "applog":
+        schema_of("applog", a.schema)  # 스키마 이름 거부는 접속 확인보다 먼저
     from common.store.pg import has_conn
 
     if not has_conn():
@@ -426,124 +376,16 @@ def main(argv=None):
                     upgrade(target, schema, dim, conn)
             else:
                 upgrade(target, schema, dim)
-            st, have, rep = check(target, schema, dim)
-            print(
-                f"[migrate] {target} {schema}: 판 {have} (끝 {head(target)})" + ("" if not rep or not rep.diffs else " — 올린 뒤에도 차이:")
-            )
-            if rep and rep.diffs:
-                print("\n".join(rep.lines()))
-                rc = 1
-        elif a.cmd == "stamp":
-            stamp(target, schema, dim)
-            print(f"[migrate] {target} {schema}: 판 {head(target)} 기록(실행 없이 — 비교 차이 0)")
+            print(f"[migrate] {target} {schema}: 판 {check(target, schema)[1]} (끝 {head(target)})")
         else:
-            st, have, rep = check(target, schema, dim)
+            st, have = check(target, schema)
             print(
                 f"[migrate] {target} {schema}: 판 {st} {have or ''} · 코드의 끝 판 {head(target)}"
-                + ("" if rep is not None else " · 표 없음(새 스키마 — up으로 만듦)")
+                + (" · 판 기록 없음(새 스키마면 up으로 만듦)" if st == "없음" else "")
             )
             if a.cmd == "check":
-                if rep is not None:
-                    print(
-                        "  비교: "
-                        + ("차이 없음" if not rep.diffs else f"차이 {len(rep.diffs)}")
-                        + (f" · 알림 {len(rep.info)}" if rep.info else "")
-                    )
-                    print("\n".join(rep.lines()))
-                rc = max(rc, 0 if st == "끝" and rep is not None and not rep.diffs else 1)
+                rc = max(rc, 0 if st == "끝" else 1)
     return rc
-
-
-# ── PC 전용 PG 시험 — 새 시험 DB를 만들어 비교·거부가 스키마 배치와 무관한지 ──────────────────────
-def pg_cases(name):
-    """새 시험 DB `<name>`·`<name>_e1`·`<name>_e2`를 만들어(이미 있으면 거부 — 아무것도 지우지 않음) 확인한다:
-    ① 우리 스키마 = 연결의 기본 스키마(current_schema()) 세 꼴 — PG_SCHEMA=public · 역할 이름 = 스키마("$user") · search_path = 스키마
-       : up 뒤 check 차이 0, 판 표를 지우고 남는 칸·형식 다름을 넣으면 check가 그 둘을 보이고 up·stamp 거부
-    ② vector 확장이 다른 스키마(e1 — 차원 8·4096)·우리 스키마(e2 — 4096)에 있을 때 up 뒤 check 차이 0(색인 글자 정규화).
-    PC(RUN_ENV=local)·이름 orca_… 만. 반환: 실패 수."""
-    from common.core import paths
-
-    if not paths.LOCAL_RUN:
-        raise DbToolError("pg_cases는 PC 전용(RUN_ENV=local)")
-    if not re.fullmatch(r"orca_[a-z0-9_]{1,40}", name):
-        raise DbToolError(f"시험 DB 이름은 orca_[a-z0-9_]…: {name!r}")
-    from common.store.db.dbcompare import VERSION_TABLE
-
-    dbs = (name, f"{name}_e1", f"{name}_e2")
-    with engine(dbname="postgres").connect() as c:
-        c = c.execution_options(isolation_level="AUTOCOMMIT")
-        user = c.exec_driver_sql("SELECT current_user").scalar()
-        if c.exec_driver_sql("SELECT 1 FROM pg_database WHERE datname = ANY(%(n)s)", {"n": list(dbs)}).first():
-            raise DbToolError(f"시험 DB가 이미 있음({'·'.join(dbs)} 중) — 새 이름으로")
-        for d in dbs:
-            c.exec_driver_sql(f"CREATE DATABASE {d}")
-    fails = []
-
-    def run(db, sql, options=None):
-        with engine(dbname=db, **({"options": options} if options else {})).begin() as c:
-            for stmt in sql.split(";"):
-                if stmt.strip():
-                    c.exec_driver_sql(stmt)
-
-    def ok(cond, what):
-        print(f"[pg_cases] {'통과' if cond else '실패'} — {what}")
-        if not cond:
-            fails.append(what)
-
-    def same(db, target, schema, dim, options=None, label=""):
-        eng = lambda: engine(dbname=db, **({"options": options} if options else {}))  # 단계마다 새 엔진(첫 연결 때 기본 스키마를 정함)
-        with eng().begin() as c:
-            upgrade(target, schema, dim, c)
-        with eng().connect() as c:
-            cur = c.exec_driver_sql("SELECT current_schema()").scalar()
-            st, have, rep = check(target, schema, dim, c)
-        ok(
-            st == "끝" and rep is not None and not rep.diffs,
-            f"{label} {schema}(current_schema={cur}): up 뒤 check 차이 0 — {st} {[] if rep is None else rep.diffs}",
-        )
-        return eng, cur
-
-    def bad_case(target, schema, opts, label):
-        eng, cur = same(name, target, schema, 8, opts, label)
-        ok(cur == schema, f"{label}: 기본 스키마가 우리 스키마({cur})")
-        bad = (
-            f"DROP TABLE {schema}.{VERSION_TABLE}; ALTER TABLE {schema}_sfdc.doc ADD COLUMN file_sha256 CHAR(64); "
-            f"ALTER TABLE {schema}_sfdc.chunk ALTER COLUMN n_terms TYPE BIGINT"
-        )
-        run(name, bad, opts)
-        with eng().connect() as c:
-            kinds = {k for k, _ in check(target, schema, None, c)[2].diffs}
-        ok({"남는 칸", "칸 형식 다름"} <= kinds and "표 없음" not in kinds, f"{label}: 남는 칸·형식 다름이 보임 {sorted(kinds)}")
-        for fn in (upgrade, stamp):
-            try:
-                with eng().begin() as c:
-                    fn(target, schema, None, c)
-                ok(False, f"{label}: {fn.__name__} 거부")
-            except DbToolError as e:
-                ok(e.code == 2, f"{label}: {fn.__name__} 거부(종료 2)")
-        with eng().connect() as c:
-            ok(versions(_q(c), schema) is None, f"{label}: 판 기록 안 생김")
-
-    def guarded(fn, *args):
-        try:
-            fn(*args)
-        except Exception as e:  # 한 사례가 깨져도 나머지는 돎(오류 종류만 — SQL 글자는 길어 줄임)
-            ok(False, f"{args[-1]}: {type(e).__name__}: {str(e).splitlines()[0][:160]}")
-
-    run(name, "CREATE EXTENSION IF NOT EXISTS vector")
-    guarded(bad_case, "search", "public", None, "PG_SCHEMA=public")  # 기본 search_path "$user", public — 사용자 스키마가 아직 없음
-    run(name, f"CREATE SCHEMA {user}")  # 역할 이름 = 스키마 — "$user"가 고름
-    guarded(bad_case, "search", user, None, "역할 이름 = 스키마")
-    guarded(bad_case, "search", "orca_sp", "-c search_path=orca_sp,public", "search_path = 스키마(역할 설정 꼴)")
-    run(f"{name}_e1", "CREATE SCHEMA ext; CREATE EXTENSION vector SCHEMA ext")
-    for dim in (8, 4096):
-        guarded(
-            same, f"{name}_e1", "search", f"orca_v{dim}", dim, "-c search_path=public,ext", f"vector 확장이 다른 스키마(ext) · 차원 {dim}"
-        )
-    run(f"{name}_e2", "CREATE SCHEMA orca_v; CREATE EXTENSION vector SCHEMA orca_v")
-    guarded(same, f"{name}_e2", "search", "orca_v", 4096, "-c search_path=orca_v", "vector 확장이 우리 스키마 · 차원 4096")
-    print(f"[pg_cases] {'모두 통과' if not fails else f'실패 {len(fails)}'} — 시험 DB {'·'.join(dbs)}(남겨 둠)")
-    return len(fails)
 
 
 if __name__ == "__main__":
