@@ -10,13 +10,11 @@ psycopg[binary]==3.3.6     # PostgreSQL + pgvector
 psycopg-pool==3.3.3        # PG 연결 풀(PGPool, S12) — 검색 MCP 여러 스레드가 동시에 쓰는 연결(PG_POOL_MAX)
 pymssql==2.4.2             # RDB 문서 위치 메타(AD44, modules/parse/source.py) — EDW=Azure SQL/SQL Server(파싱 단계가 rdb 받기를 함 — S6b부터 data-pipeline 이미지)
 mcp==1.30.0               # 검색 MCP 서버(modules/search/mcp_server.py) — uvicorn·starlette·httpx·anyio 포함
-google-adk[mcp]==2.9.2    # 모델 호출(GA) — common/adk.py, 루트 pyproject와 같은 버전
 pydantic-settings==2.16.1  # 설정 읽기(S7a, D-015·D-028 ⑪) — 전에는 mcp·litellm 간접 의존으로 같은 판이 들어 있었음(직접 명시만)
 PyYAML==6.0.3              # settings.yaml 읽기(S7a) — 전에는 google-adk·huggingface-hub 등 간접 의존으로 같은 판(직접 명시만)
 SQLAlchemy==2.1.6          # S8a — pgvector 표 정의·연결(common/store/db — postgresql+psycopg, D-016 승인 10-26) · 새 패키지(폐쇄망 휠 반입 — refactor.md)
 alembic==1.20.1            # S8a — pgvector 판 관리(migrate — common.store.db.dbtool, D-016)
 Mako==1.4.3                # alembic 의존(D-016 승인 목록) — MarkupSafe는 이미 있음(jinja2 등)
-litellm==1.101.0
 boto3==1.43.98            # Object Storage(S3 호환) — common/objectstore.py·load/parsing_meta.py S3Store(OP21, 근거
                           # 이미지 원천 재접근·publish). 전엔 litellm이 끌어오는 걸로만 받았음(프리즈 전 감사,
                           # 10-16) — 직접 명시, 버전은 지금 받던 것과 그대로(uv.lock 고정)

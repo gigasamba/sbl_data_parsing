@@ -41,10 +41,9 @@
 - 이유: 첫 이관용 도구와 앱이 쓰지 않는 패키지는 이미지와 점검 범위만 키운다.
 - 요건(되어야 할 모습):
   1. DB 도구 `dbtool`에는 첫 이관용 기능이 없다 — 옛 스키마와 견주는 비교(`dbcompare`)와 판만 기록하는 `stamp`. `check`는 판 상태만 보고(끝 판이 아니면 종료 1), `up`은 표는 있는데 판 기록이 없는 스키마를 거부한다(새 스키마로 다시 적재).
-  2. 이미지 의존성(`deploy/docker/requirements*`)에는 앱 코드가 쓰는 패키지만 둔다. 빼면 `deps_hash`가 바뀌어 새 이미지 버전이 필요하다.
-- 비고(현재와 다른 점, 11-05 확인):
-  - `requirements-core.txt`·`requirements-image.txt`·`requirements.txt`에 `google-adk`·`litellm`이 있다. 앱 코드는 둘 다 import하지 않고, 지시서 패키지의 `resources/prompts/**/agent.py`(지시서 지문 파일)만 `google-adk`를 import한다 — 뺄지는 그 파일 처리와 함께 정한다(미정).
-- Status: todo
+  2. 이미지 의존성(`deploy/docker/requirements*`)에는 앱 코드가 쓰는 패키지만 둔다 — `google-adk`·`litellm`은 없다(지시서 패키지의 `agent.py`는 지시서 지문으로 바이트만 읽고 import하지 않는다). 빼면 `deps_hash`가 바뀌어 새 이미지 버전이 필요하다.
+- 반영: 0.3.0(11-05) — `deps_hash` `f0fcc30bd067bc2f` → `da796674b39fd674`(새 실행 이미지 — refactor.md C-98).
+- Status: done
 
 <a id="pl-47"></a>
 ## pl-47 · 엔진 지문(p0) 범위 — 모든 엔진 폴더
