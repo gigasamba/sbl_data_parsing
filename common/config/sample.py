@@ -203,7 +203,7 @@ NOTES = {
     "common.host.image_stage_dir": "prune_images.sh가 정리할 조각·tar 폴더 (null = 정리 안 함)",
     "common.host.prune_keep": "남길 이미지 판 수",
     "common.host.devbox.ssh_port": "개발 작업 공간 SSH 포트(dev만 — 개발자마다 다르게) · 예 2222 (null = 끔)",
-    "common.host.devbox.opencode_config": "opencode 설정 파일(호스트 절대 경로) · 예 /home/sbl/dev-hong/opencode.json (null = 이미지의 틀)",
+    "common.host.devbox.opencode_config": "opencode 설정 파일(호스트 절대 경로) · 예 /home/sbl/opencode.json (null = 이미지의 틀)",
     "pipeline.host.parse_cpus": "data-pipeline 컨테이너 CPU(호스트 CPU 수 이하)",
     "pipeline.host.parse_mem_limit": "data-pipeline 메모리 · 예 16g",
     "pipeline.host.data_parsing_cpus": "parse MCP 서비스 컨테이너 CPU",

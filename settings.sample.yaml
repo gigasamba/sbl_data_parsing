@@ -435,4 +435,4 @@ option:
   # ---- 개발 작업 공간 — SSH·opencode(개발 서버 dev만) ----
   devbox:
     ssh_port: null                            # 개발 작업 공간 SSH 포트(dev만 — 개발자마다 다르게) · 예 2222 (null = 끔)
-    opencode_config: null                     # opencode 설정 파일(호스트 절대 경로) · 예 /home/sbl/dev-hong/opencode.json (null = 이미지의 틀)
+    opencode_config: null                     # opencode 설정 파일(호스트 절대 경로) · 예 /home/sbl/opencode.json (null = 이미지의 틀)
