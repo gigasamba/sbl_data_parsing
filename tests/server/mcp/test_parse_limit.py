@@ -32,7 +32,7 @@ def test_proxy_limit():
     with COMMON.env(DATA_PARSING_MAX_MB="1"):
         assert parse_limit.max_bytes() == MB and parse_limit.body_cap() == MB * 3 // 2 + MB
         sent: list = []
-        with patch.object(parse_proxy, "_parse_service", _stub(sent)):  # 완료까지 폴링 1회(1초)
+        with patch.object(parse_proxy, "_run_mcp_parsing", _stub(sent)):  # 완료까지 폴링 1회(1초)
             ok = parse_proxy.do_parse_document(content_b64=_b64(int(0.9 * MB)), filename="a.txt")
             assert ok == {"text": "ok", "status": "done"} and sent[0] == ("POST", "/jobs"), (ok, sent)
             sent.clear()
@@ -78,7 +78,7 @@ def test_http_body_cap():
         free.append(holder[0].value)
         return stub(method, path, payload, timeout)
 
-    with COMMON.env(DATA_PARSING_MAX_MB="1"), patch.object(parse_proxy, "_parse_service", watched), patch.object(main, "_BIG_BODY", 1000):
+    with COMMON.env(DATA_PARSING_MAX_MB="1"), patch.object(parse_proxy, "_run_mcp_parsing", watched), patch.object(main, "_BIG_BODY", 1000):
         try:
             asyncio.run(run())
         finally:

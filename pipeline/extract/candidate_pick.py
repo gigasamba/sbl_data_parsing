@@ -202,7 +202,7 @@ def _tree_files(src):
 
 
 def pick_new(src, out, max_new, only=None):
-    """이번 실행에서 처음 파싱할 문서(ParsingMeta에 성공 행이 없는 것)를 max_new개까지 → 목록 파일 경로. only(목록 파일 — prepare_batch가
+    """이번 실행에서 처음 파싱할 문서(ParsingMeta에 성공 행이 없는 것)를 max_new개까지 → 목록 파일 경로. only(목록 파일 — stage_batch가
     이미 끝난 문서를 뺀 목록)가 있으면 그 안에서만(EDW를 다시 읽지 않음)."""
     names = sorted(p.name for p in Path(src).iterdir() if p.is_file())
     if only:
@@ -262,3 +262,162 @@ def rdb_pick(table, state, limit=0, done=frozenset()):
     name_of = {r["key"]: name_of[r["key"]] for r in rows}
     rows = sorted(rows, key=lambda r: r["key"])[: limit or None]
     return {name_of[r["key"]]: r for r in rows}, len(every) - len(name_of)
+
+
+# ── 원천 목록(run_pipeline이 컨테이너 안에서 한 번 부름) ──────────────────────────
+# `python -m pipeline.extract.candidate_pick list --filter RFP,proposal --start-offset N [--limit N] [--seqs 3,7] [--skip-done]
+#  [--max-docs N] [--faq-seen <파일>] --out <목록 파일>` — EDW FileStorageMap 목록(파일 크기 오름차순) → 끝난 문서 빼기(--skip-done) →
+# FAQ 먼저(--faq-seen, --seqs·--limit 실행은 건너뜀) → 앞 --max-docs개. 목록 파일(JSON): {"total": 목록 행 수, "start": 시작 자리,
+# "docs": [{"seq", "id", "s3_key", "original_filename", "file_size"}, …]} — 처리 순서대로, seq = 목록 안 자리(FAQ 덧붙임 포함).
+FSM_SQL = (
+    "SELECT id, s3_key, original_filename, file_size FROM AI.FileStorageMap WHERE ({cond}) AND file_size IS NOT NULL ORDER BY file_size ASC"
+)
+FAQ_PREFIX = "FAQ/"
+
+
+def edw_rows(edw, keywords=(), faq=False):
+    """FileStorageMap 행(파일 크기 오름차순) — 이름 키워드(대소문자 무시, 하나라도 들면) 또는 faq=True면 FAQ 전체."""
+    if faq:
+        return edw.q(FSM_SQL.format(cond="s3_key LIKE ?"), [FAQ_PREFIX + "%"])
+    if not keywords:
+        raise SystemExit("[list] --filter 키워드가 비어 있음")
+    cond = " OR ".join(["LOWER(original_filename) LIKE ?"] * len(keywords))
+    return edw.q(FSM_SQL.format(cond=cond), [f"%{k.lower()}%" for k in keywords])
+
+
+def faq_status():
+    """ParsingMeta의 FAQ 키 → parse_status(읽기 계정)."""
+    from common.store import parsing_meta_db as PMDB
+
+    db = PMDB.make_db("read")
+    try:
+        return db.status_like(FAQ_PREFIX)
+    finally:
+        db.close()
+
+
+def faq_sync(reset, out):
+    """gold faq 교체 확인 — 적재 명령(pgvector_load faq-sync)을 자식으로. 결과(지운 수·남은 gold faq)를 못 읽으면 None(지웠는지 모름)."""
+    import subprocess
+
+    from common.core.paths import child_env
+
+    out = Path(out)
+    out.unlink(missing_ok=True)
+    cmd = [sys.executable, "-m", "pipeline.load.pgvector_load", "faq-sync", *(["--reset"] if reset else []), "--out", str(out)]
+    try:
+        rc = subprocess.run(cmd, env=child_env(), timeout=1800).returncode
+    except subprocess.TimeoutExpired:  # ponytail: 자식이 끝까지 돌았는지 모름 — 다음 실행의 채움이 메움
+        rc = -1
+    try:
+        return json.loads(out.read_text(encoding="utf-8")) if rc == 0 else None
+    except (OSError, ValueError):
+        return None
+
+
+def faq_first(rows, order, faq_rows, status, seen_f, sync):
+    """FAQ는 판을 잇지 않고 통째로 교체. 새 FAQ(교체를 마친 키 목록 seen_f에 없는 키)가 있으면 sync(reset=True)로 gold faq를 비우고
+    FAQ 전체를 맨 앞에 넣는다(--filter·--skip-done과 상관없이 — 목록에 없는 FAQ 행은 rows 뒤에 덧붙임). 새 FAQ가 없으면 지우지 않고
+    gold에 없는 FAQ만 넣는다(중간에 멈춘 교체·파싱 실패를 채움 — 완전 중복 skipped_dup은 gold에 안 올라가므로 뺌). sync 결과를 못 읽으면
+    FAQ 전체를 넣고 seen_f는 그대로 둬 다음 실행이 교체를 다시 시도한다(적재는 이미 있는 문서를 건너뜀).
+    ParsingMeta는 새 FAQ 판정에 쓰지 않는다(--seqs·--limit 실행이 교체 없이 기록할 수 있어서)."""
+    seen = set(seen_f.read_text(encoding="utf-8").splitlines()) if seen_f.exists() else set()
+    seq = {r["s3_key"]: i for i, r in enumerate(rows)}
+    for r in faq_rows:
+        if r["s3_key"] not in seq:
+            seq[r["s3_key"]] = len(rows)
+            rows.append(r)
+    faq = [seq[r["s3_key"]] for r in faq_rows]
+    new = [r["s3_key"] for r in faq_rows if r["s3_key"] not in seen]
+    got = sync(bool(new))
+    if got is not None and new:  # 교체가 끝난 뒤에만 적음 — 실패하면 다음 실행이 다시 교체
+        seen_f.parent.mkdir(parents=True, exist_ok=True)
+        seen_f.write_text("".join(f"{k}\n" for k in sorted(seen | set(new))), encoding="utf-8")
+    if got is None or new:
+        print(
+            f"[경고] FAQ 교체 확인(faq-sync) 결과 없음 — FAQ {len(faq)}건 전체를 넣음(이미 있는 문서는 적재가 건너뜀)"
+            if got is None
+            else f"FAQ 교체: 새 FAQ {len(new)}건 — gold faq 문서 {got['faq_reset']}건을 지우고 지금 FAQ {len(faq)}건 전체를 맨 앞에서 다시 처리",
+            flush=True,
+        )
+        want = faq
+    else:
+        gold = set(got["gold"])
+        want = [seq[r["s3_key"]] for r in faq_rows if r["s3_key"] not in gold and status.get(r["s3_key"]) != "skipped_dup"]
+        if want:
+            print(f"FAQ 채움: gold에 없는 FAQ {len(want)}건을 다시 처리(지우지 않음)", flush=True)
+    keep = set(want)
+    return want + [s for s in order if s not in keep]
+
+
+def list_targets(keywords, start, limit=0, seqs=(), skip_done=False, max_docs=0, faq_seen=None, sync=None):
+    """이번 실행의 대상 → (rows, order, start, total). rows = 목록 행(FAQ 덧붙임 포함), order = 처리할 rows 자리 순서,
+    total = 키워드 목록 행 수. faq_seen(교체를 마친 FAQ 키 파일)을 주면 FAQ 먼저 — sync(reset) = faq_sync 자리."""
+    from common.store import mssql
+
+    use_faq = faq_seen is not None and not (seqs or limit)
+    edw = mssql.EdwReader()
+    try:
+        rows = edw_rows(edw, keywords)
+        faq_rows = edw_rows(edw, faq=True) if use_faq else []
+    finally:
+        edw.close()
+    total = len(rows)
+    if start >= len(rows):  # 대상은 없어도 FAQ 교체는 확인 — 할 일이 없으면 빈 목록
+        print(f"start-offset {start} ≥ 대상 {len(rows)}건", flush=True)
+        start = len(rows)
+    order = sorted(seqs) if seqs else list(range(start, len(rows) if not limit else min(len(rows), start + limit)))
+    if skip_done:
+        from common.store.parsing_meta_db import DONE_STATUSES
+
+        done = done_keys()
+        before = len(order)
+        order = [s for s in order if rows[s]["s3_key"] not in done]
+        print(f"skip-done: {before - len(order)}건 이미 완료({'·'.join(DONE_STATUSES)}) — 남은 {len(order)}건 처리", flush=True)
+    if use_faq:
+        order = faq_first(rows, order, faq_rows, faq_status(), Path(faq_seen), sync)
+    elif faq_seen is not None:
+        print("FAQ 교체 확인(pl-41) 건너뜀 — --seqs·--limit 실행", flush=True)
+    if max_docs and len(order) > max_docs:
+        print(f"max-docs: {len(order)}건 중 앞 {max_docs}건만(나머지는 다음 실행)", flush=True)
+        order = order[:max_docs]
+    return rows, order, start, total
+
+
+def _list_cmd(argv):
+    import argparse
+
+    ap = argparse.ArgumentParser(prog="pipeline.extract.candidate_pick list")
+    ap.add_argument("--filter", default="RFP,proposal", help="원본 파일 이름 키워드(쉼표 — 하나라도 들면)")
+    ap.add_argument("--start-offset", type=int, default=0)
+    ap.add_argument("--limit", type=int, default=0, help="시험 — 이 개수만")
+    ap.add_argument("--seqs", default="", help="목록 자리(쉼표) — 주면 연속 범위 대신 이것만")
+    ap.add_argument("--skip-done", action="store_true", help="ParsingMeta에 끝난(ok·partial — gold_version도, skipped_dup) 문서 뺌")
+    ap.add_argument("--max-docs", type=int, default=0, help="앞에서 이 개수만(0 = 상한 없음)")
+    ap.add_argument("--faq-seen", default=None, help="교체를 마친 FAQ 키 파일 — 주면 FAQ 먼저(--seqs·--limit 실행은 건너뜀)")
+    ap.add_argument("--out", required=True, help="목록 파일(JSON)")
+    a = ap.parse_args(argv)
+    keywords = [k.strip() for k in a.filter.split(",") if k.strip()]
+    seqs = [int(x) for x in a.seqs.split(",") if x.strip()]
+    out = Path(a.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    sync = lambda reset: faq_sync(reset, out.with_name("faq_sync.json"))  # 결과는 목록 파일 옆
+    rows, order, start, total = list_targets(keywords, a.start_offset, a.limit, seqs, a.skip_done, a.max_docs, a.faq_seen, sync)
+    docs = [{"seq": s, **{k: rows[s][k] for k in ("id", "s3_key", "original_filename", "file_size")}} for s in order]
+    out.write_text(json.dumps({"total": total, "start": start, "docs": docs}, ensure_ascii=False, default=str), encoding="utf-8")
+    print(f"[list] 대상 {len(docs)}건 → {out}", flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    from common.config import setarg
+    from common.core.console import utf8_stdout
+
+    setarg.apply()  # --set 이름=값(run_pipeline이 넘김)
+    utf8_stdout()
+    if sys.argv[1:2] != ["list"]:
+        raise SystemExit("사용: python -m pipeline.extract.candidate_pick list --out <목록 파일> [...]")
+    from pipeline.shared import runtrace
+
+    with runtrace.run("candidate_list", sys.argv[1:]):
+        raise SystemExit(_list_cmd(sys.argv[2:]))

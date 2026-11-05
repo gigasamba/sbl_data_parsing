@@ -5,7 +5,7 @@ from pathlib import Path
 
 def pdf_kind(path):
     """스캔 PDF 판정 하나(엔진 고르기·그림 VLM·parse_document 공용) — 글자층이 쪽당 평균 20자 미만이면 pdf_image.
-    레인 고르기(run_docs 작업자 배분)는 목적이 달라 extract/doc_lane_group(앞 3쪽 쪽당 300자)을 따로 쓴다."""
+    레인 고르기(run_pipeline 작업자 배분)는 목적이 달라 extract/doc_lane_group(앞 3쪽 쪽당 300자)을 따로 쓴다."""
     try:
         import pypdfium2 as pdfium
 

@@ -18,7 +18,7 @@
 | `resources/` | 코드가 **읽는 데이터** — 프롬프트 `prompts/{common,pipeline,mcp}`, `config/`, `mappings/`, `vocab/` | 코드(.py 로직), 비밀값, 서버마다 다른 값 | 둘 다 |
 | `deploy/docker/` | Dockerfile, requirements, entrypoint, `wheels/` | 앱 로직 | (빌드 원본) |
 | `deploy/release/` | 빌드·전송·굽기·배포 판정 스크립트, `known_fail.txt`, `lint_changed.sh` | 앱 로직 | 일부(배포 판정 파일) |
-| `deploy/host/` | **서버 호스트**에서 실행하는 compose, systemd, 셸 스크립트, `run_docs.py` | 컨테이너 안에서 실행되는 코드 | 아니요 |
+| `deploy/host/` | **서버 호스트**에서 실행하는 compose, systemd, 셸 스크립트, `run_pipeline.py` | 컨테이너 안에서 실행되는 코드 | 아니요 |
 | `tests/` | 테스트 — `server/`(이미지 안에서 배포 판정에 쓰는 테스트, 외부 접속 없이 실행됨), `general/`(PC 전용 — PG·Docker가 필요하거나 느린 테스트), `runner.py` | 앱 코드 | `server/`만 |
 | `validation/` | PC 전용 **검증 도구 코드** — `search_ui/`(검증 페이지), `e2e/`(평가·비교·answer_gen) | 서버에서 실행되는 코드, 데이터 번들 | 아니요 |
 | `valid_env/` | PC 전용 **데이터** — 외부 시스템 대역: 테스트 문서(`object_storage/` — 버킷 모양, `CRMS`·`SFDC`·`LAS`·`FAQ`), 합성 EDW·회사 DB 표(`edw/`), 답변 점검 agent(`answer_test/`), PC 테스트 Docker(`docker/`) | 코드 로직, 비밀값, 운영 데이터 | 아니요 |
@@ -83,7 +83,7 @@ PYTHONPATH=. .venv/bin/python -c "import common as c; from common.core import ar
 지금 기준값은 PRD [e2-02](docs/prd/test.md#e2-02)에 있다.
 
 **운영 접속 가드(필수):**
-- `deploy/host/scripts/run_docs.py`는 **PC에서 실행하지 않는다**(운영 EDW와 Object Storage에 접속한다). PC에서는 문법 확인, `--help`, `configure()`까지만 확인한다.
+- `deploy/host/scripts/run_pipeline.py`는 **PC에서 실행하지 않는다**(운영 EDW와 Object Storage에 접속한다). PC에서는 문법 확인, `--help`, `configure()`까지만 확인한다.
 - PC에서 운영 DB나 운영 EDW에 접속하지 않는다.
 
 ---

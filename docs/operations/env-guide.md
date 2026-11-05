@@ -45,7 +45,7 @@
 - 서버(dev·prd)는 바꿀 값이 있으면 `settings.yaml`을 직접 고치고 상주 컨테이너를 다시 띄운다(또는 0-2 `--set`). 오버레이 설정 파일 도구는 서버에서 종료 2.
 - 서버에서 설정 파일을 못 읽거나(권한) 그 이미지 절이 틀리면 컨테이너가 이유(칸 경로·오류 종류만)를 찍고 **시작하지 않는다**(종료 2).
 - 호스트 칸만 꺼내 보기(비밀 없음 — 인자는 모델 경로): `bash deploy/host/scripts/load_settings.sh pipeline.host common.host`. 호스트 python에는 PyYAML만 있으면 된다(칸 목록 `deploy/host/scripts/host_settings.tsv` — 설정 모델을 고치면 `PYTHONPATH=. python deploy/release/gen_host_keys.py`로 다시 만듦).
-- `run_docs.py`(서버 전용)도 같은 파일을 읽는다 — 필요한 칸이 없으면 칸 경로만 찍고 종료 2.
+- `run_pipeline.py`(서버 전용)도 같은 파일을 읽는다 — 필요한 칸이 없으면 칸 경로만 찍고 종료 2.
 - 라이브러리가 읽는 env(`TZ`·`OMP_NUM_THREADS`·`HF_HUB_OFFLINE`·`TESSDATA_PREFIX` 등 — 허용 목록 `common.config.settings.LIB_ENV_NAMES`)는 `ops.runtime.lib_env` 사전에 적는다. 목록 밖 이름은 검증 오류.
 
 ### 0-2. 한 번 실행에만 다른 값 — `--set 이름=값`(서버 포함)
@@ -133,7 +133,7 @@
 |---|---|
 | `OS_ENDPOINT`·`OS_REGION`·`OS_ACCESS_KEY`·`OS_SECRET_KEY`·`OS_VERIFY_TLS` | `required.object_storage`(`endpoint`·`region`·`access_key`·`secret_key`·`verify_tls`) — 서버만, PC는 비움(게시는 `file://` 폴더). `region` 비우면 `us-east-1` · `verify_tls` 비우면 `1`, 사내 CA면 CA 파일 경로(`0`이면 검증 끔 — 경고) |
 | `RDB_CONNECT_KWARGS` | EDW 연결 추가 인자(JSON — 비밀) |
-| `RDB_WRITE_USER`·`RDB_WRITE_PASSWORD`(`required.edw.write_user`·`write_password`) | 쓰기 계정 — ParsingMeta 게시(INSERT·UPDATE)만, 파이프라인 이미지에만. 서버는 `run_docs` 시작 때 빠지면 멈춤 · PC는 비움 |
+| `RDB_WRITE_USER`·`RDB_WRITE_PASSWORD`(`required.edw.write_user`·`write_password`) | 쓰기 계정 — ParsingMeta 게시(INSERT·UPDATE)만, 파이프라인 이미지에만. 서버는 `run_pipeline` 시작 때 빠지면 멈춤 · PC는 비움 |
 | `PM_BUCKET`·`PM_PREFIX`(`required.publish.bucket`·`prefix`) | silver 게시 위치 — 서버: 버킷 이름(원천 원본 버킷과 달라야 함) · PC(local): `file://<가짜 Object Storage 폴더 절대 경로>`(그 폴더에 씀 — S3 접속 칸 불필요). `prefix`는 버킷(폴더) 안 경로 접두(비우면 맨 위). ⚠ **첫 게시 전 EDW 표를 DBA가 한 번 만든다**: [`parsing_meta_mssql.sql`](parsing_meta_mssql.sql)(코드는 표를 만들지 않음 — 없으면 첫 INSERT에서 실패) |
 | `PM_TABLE`(`required.edw.parsing_meta_table`) | 게시할 EDW 표(비우면 `AI.ParsingMeta`) — PC 가짜 EDW는 표 이름 `ParsingMeta` 고정(이 칸 안 봄) |
 | `EDW_CHAIN_FILE`(`ops.paths.edw_chain`) | EDW 조인 사슬 파일 — 적재와 검색 MCP가 같은 칸을 읽는다. 비우면 코드의 `resources/config/edw_chain.yaml`, 서버 사본을 쓰려면 `/etc/rag/edw_chain.yaml`. 쓰는 법: [release-and-patch §8-6](release-and-patch.md#8-6-edw-조인-사슬-파일-고쳐-쓰기서버--pl-29) |
@@ -143,7 +143,7 @@
 
 | 이름 | 뜻 |
 |---|---|
-| `NIGHTLY_TIME`(`ops.nightly.time`) | 시작 시각 HH:MM(서버 시간) — 타이머는 5분마다 깨우고 그 시각부터 5분 안에 `run_docs.py --start-offset 0 --skip-done` |
+| `NIGHTLY_TIME`(`ops.nightly.time`) | 시작 시각 HH:MM(서버 시간) — 타이머는 5분마다 깨우고 그 시각부터 5분 안에 `run_pipeline.py --start-offset 0 --skip-done` |
 | `NIGHTLY_MAX_DOCS`(`ops.nightly.max_docs`) | 한 번에 처리할 새 문서 수 상한(1 이상) |
 | `NIGHTLY_DEADLINE`(`ops.nightly.deadline`) | 마감 HH:MM(시작보다 이르면 다음 날, 시작보다 5분 넘게 뒤) — 지나면 새 문서를 받지 않고 받은 문서는 끝까지 |
 
@@ -197,4 +197,4 @@ ls -l ../settings.yaml                # 서버(코드 폴더에서): 주인 1000
 | 용어집·고객 명부는 PG 마스터 표 | `migrate master load`(§8-3 5) · CSV를 고치면 다시 하고 검색 MCP 재시작 |
 | 사슬 파일 칸 `ops.paths.edw_chain`(새 — 비우면 기본 파일) | 서버 EDW 이름이 다를 때만 §8-6 |
 | 지운 칸(예 `ops.paths.glossary_dir`·`client_roster`·`mcp_bundle`, `common.models.transport.transport`, `required.env.run_mode`, `search.server.warmup`, `required.tokens.data_parsing`·`parse_proxy`, `ops.mcp_host.jobs_dir` — C-95) | 지운다 — 남으면 시작 거부(칸 이름만 알림) |
-| run_docs가 `--set`으로 넘기던 값(VLM 동시 수·후처리 목록·CPU 문턱·임베딩 동시 수 등) → `ops.run_docs.*` | 비우면 지금 값 그대로 — 바꿀 때만 적는다 |
+| run_pipeline이 `--set`으로 넘기던 값(VLM 동시 수·후처리 목록·CPU 문턱·임베딩 동시 수 등) → `ops.run_pipeline.*` | 비우면 지금 값 그대로 — 바꿀 때만 적는다 |

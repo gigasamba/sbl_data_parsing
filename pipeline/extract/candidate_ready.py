@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""파싱 대상 받기 — 고른 문서(candidate_pick)를 폴더 또는 Object Storage에서 받아 파싱 입력 폴더로 · 미리 받기(warm) · 중복 정리 호출 · 끝 정리.
+"""파싱 대상 받기 — 고른 문서(candidate_pick)를 폴더 또는 Object Storage(staging)에서 받아 → 같은 내용은 하나만 → 형식·DRM·암호 거르기 →
+파싱 입력 폴더(prepared/) · 끝 정리. 원본을 받는 길은 staging 하나다(stage 명령과 pipeline.cli parse --source가 같은 stage_batch를 부름).
 
   --source <서버 폴더>               같은 서버 폴더(샘플 데이터) — 그대로 씀
-  --source rdb:csv:<경로>            문서 위치 표(csv — run_docs가 EDW FileStorageMap에서 만든 batch.csv)의 키만 Object Storage에서 받음
+  --source rdb:csv:<경로>            문서 위치 표(csv — run_pipeline이 목록 파일에서 만든 batch.csv)의 키만 Object Storage에서 staging으로 받음
 
 Object Storage 원본 처리: 대표 결과가 나온 문서의 내려받은 원본은 parse 뒤 바로 지움.
 처리한 객체(ETag 또는 (key, 증분값))는 output/parse/_source/processed.jsonl에 기록 → 다음 실행에서 다시 받지 않음. 실패한 문서는 남겨 다음 실행이 다시 시도.
@@ -11,7 +12,6 @@ Object Storage 원본 처리: 대표 결과가 나온 문서의 내려받은 원
 받기 전 대조 — size가 있으면 ContentLength와 비교(크기 불일치는 참고 기록만).
 """
 
-import csv
 import hashlib
 import json
 import os
@@ -19,7 +19,6 @@ import shutil
 import sys
 import threading
 import time
-from contextlib import contextmanager
 from pathlib import Path
 
 from common.config import settings as C
@@ -38,248 +37,115 @@ def _s3():
     return client()
 
 
-# ── warm 저장소(프리페치) ──────────────────────────────────────────────
-# 다음 배치 원본을 미리 받아 두는 1회용 캐시. `python -m pipeline.extract.candidate_ready warm --csv <배치csv>`(프리페치)가
-# 파일을 내려 warm에 심고, 실제 파싱의 fetch_one이 같은 (bucket,key)를 만나면 네트워크 다운로드를 건너뛰고
-# 곧바로 가져간다(warm에서 지움 — 사본 중복 저장 없음). SOURCE_WARM 미설정이면 전부 꺼진다(기존 동작 그대로).
+# ── staging(미리 받기) — 원본을 받는 유일한 자리 ─────────────────────────────
+# Object Storage 원본은 SOURCE_STAGING/<sha1(버킷|키)>.bin으로 한 번만 받는다(같은 크기 파일이 이미 있으면 다시 받지 않음 — 완성된 파일만 그 이름으로 보임).
+# 파싱 입력 폴더(_source_files/<이름>)에는 하드 링크로 놓는다(같은 볼륨 — 사본·두 번째 다운로드 없음). staging 파일은 게시가 끝난 뒤
+# run_pipeline이 지운다(파싱·게시 실패면 남아 다음 실행이 다시 받지 않음).
 
 
-def _warm_dir():
-    """SOURCE_WARM — warm 저장소 폴더. 없으면 None(기능 꺼짐)."""
-    v = pc.cfg().extract.source.warm  # S7c — 설정 객체
-    return Path(v) if v else None
+def _staging_dir():
+    """SOURCE_STAGING — 미리 받기 폴더. 비었으면 rdb:csv 원본을 받을 수 없어 멈춤."""
+    v = pc.cfg().extract.source.staging  # S7c — 설정 객체
+    if not v:
+        raise RuntimeError("[source] extract.source.staging(SOURCE_STAGING) 미설정 — rdb:csv 원본을 받을 자리가 없음")
+    return Path(v)
 
 
-def _warm_index_path(wd):
-    return wd / "_warm_index.jsonl"
-
-
-def _warm_key_path(wd, bucket, key):
+def _staging_path(wd, bucket, key):
     return wd / (hashlib.sha1(f"{bucket}|{key}".encode()).hexdigest() + ".bin")
 
 
-@contextmanager
-def _warm_locked(wd):
-    """warm 인덱스(읽기→고치기→쓰기)를 파싱(fetch_one의 _warm_take)·프리페치(warm 명령) 양쪽에서 잠근다
-    (flock — 프로세스 간에도 유효). 잠금이 다르면 최악이 중복 다운로드일 뿐(맞잠금 실패해도 폴백 안전)."""
+def download(rows, state, workers=1):
+    """고른 행(candidate_pick.rdb_pick 값)의 원본을 staging에 받는다 — 같은 크기(ContentLength) 파일이 이미 있으면 건너뜀(크기가 다르면
+    새 판으로 보고 다시 받음). RDB 크기와의 불일치는 state/size_mismatch.log에 참고 기록만. 파일(=문서) 1건 = extract.download span 1행.
+    반환: 받지 못한 행 수."""
+    wd = _staging_dir()
     wd.mkdir(parents=True, exist_ok=True)
-    f = (wd / "_warm.lock").open("a+")
-    try:
-        try:
-            import fcntl
-
-            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-        except ImportError:  # 비리눅스 개발 환경 — 잠금 없이 진행
-            pass
-        yield
-    finally:
-        try:
-            import fcntl
-
-            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
-        except Exception:
-            pass
-        f.close()
-
-
-def _warm_read(wd):
-    """인덱스의 살아있는 행들(bucket·key·path 있는 행만, 깨진 줄은 조용히 버림)."""
-    p = _warm_index_path(wd)
-    if not p.exists():
-        return []
-    out = []
-    for ln in p.read_text(encoding="utf-8").splitlines():
-        try:
-            r = json.loads(ln)
-            if r.get("bucket") and r.get("key") and r.get("path"):
-                out.append(r)
-        except ValueError:
-            pass
-    return out
-
-
-def _warm_write(wd, rows):
-    _warm_index_path(wd).write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
-
-
-def _warm_take(o, dest, name):
-    """fetch_one 안에서 — 이 (bucket,key)가 warm에 있으면 파일을 dest/name으로 옮겨 와 반환(다운로드 스킵).
-    1회용(warm 인덱스와 파일에서 제거). csv 쪽 크기가 알려져 있고 warm 사본과 어긋나면(새 판이 올라온 경우)
-    그 항목은 버리고 None(=네트워크 다운로드로)."""
-    wd = _warm_dir()
-    if not wd:
-        return None
-    with _warm_locked(wd):
-        rows = _warm_read(wd)
-        hit = next((i for i, r in enumerate(rows) if r["bucket"] == o["bucket"] and r["key"] == o["key"]), None)
-        if hit is None:
-            return None
-        r = rows.pop(hit)
-        _warm_write(wd, rows)
-    p = Path(r["path"])
-    if o["size"] is not None and r.get("size") is not None and int(r["size"]) != int(o["size"]):
-        p.unlink(missing_ok=True)  # warm 사본이 새 판과 어긋남 — 버리고 재다운로드
-        return None
-    if not p.exists():
-        return None
-    dest.mkdir(parents=True, exist_ok=True)
-    f = _safe_join(dest, name)
-    try:
-        os.replace(p, f)  # 같은 볼륨(/app/output 안이면 rename)
-    except OSError:
-        shutil.move(str(p), str(f))  # 다른 볼륨일 때 폴백
-    return f
-
-
-def _warm_cmd(argv):
-    """`python -m pipeline.extract.candidate_ready warm --csv <batch.csv> [--workers N]` — 다음 배치 원본을 미리 받아
-    SOURCE_WARM에 심는 프리페치(배치 러너가 현재 배치 파싱 중에 백그라운드로 돌린다). watermark·처리 기록·
-    manifest는 전혀 건드리지 않고 파일만 내려놓는다 — 실제 파싱(fetch_one)이 warm 적중으로 가져간다.
-    한 건 실패는 그 배치가 늦어질 뿐(일반 다운로드로 폴백)이라 조용히 넘어간다."""
-    import argparse
-
-    ap = argparse.ArgumentParser(prog="pipeline.extract.candidate_ready warm")
-    ap.add_argument("--csv", required=True, help="make_batch.py가 만든 다음 배치 csv(id·s3_key·original_filename·file_size)")
-    ap.add_argument("--workers", type=int, default=max(1, int(pc.cfg().extract.source.fetch_workers)))  # 11-04 원본 받기와 같은 칸
-    a = ap.parse_args(argv)
-    wd = _warm_dir()
-    if not wd:
-        print("[source] warm: SOURCE_WARM 미설정 — 받아 둘 곳이 없어 종료", flush=True)
-        return 0
-    cols = CP._rdb_cols()
-    with open(a.csv, encoding="utf-8-sig", newline="") as fh:
-        rows = list(csv.DictReader(fh))
-    targets = []
-    for r in rows:
-        bucket, key = CP._rdb_bucket_and_key(cols, r)
-        targets.append(
-            {
-                "bucket": bucket,
-                "key": key,
-                "size": int(r[cols["size"]]) if r.get(cols["size"]) not in (None, "") else None,
-                "filename": r.get(cols["filename"]) or None,
-            }
-        )
-    with _warm_locked(wd):
-        targets = [t for t in targets if not any(x["bucket"] == t["bucket"] and x["key"] == t["key"] for x in _warm_read(wd))]
-    if not targets:
-        print("[source] warm: 이미 전부 받아 둠 — 다운로드 0건", flush=True)
+    todo = list(rows)
+    if not todo:
         return 0
     cli = _s3()
-    t0 = time.time()
+    book = threading.Lock()  # 병렬 받기에서 size_mismatch.log 쓰기를 잠금
 
-    def _one(t):
-        """파일(=문서) 1건 = extract.download span 1행 — doc_id는 extract.parse와 같은 파일 이름."""
-        name = t["filename"] or t["key"]
-        with SP.span("extract.download", "extract", doc_id=name, ext=Path(name).suffix.lower(), file_bytes=t["size"]) as sp:
-            return _fetch(t, sp)
+    def _one(o):
+        name = o["filename"] or o["key"]
+        with SP.span("extract.download", "extract", doc_id=name, ext=Path(name).suffix.lower(), file_bytes=o["size"]) as sp:
+            return _fetch(o, sp)
 
-    def _fetch(t, sp):
-        p = _warm_key_path(wd, t["bucket"], t["key"])
-        p.unlink(missing_ok=True)  # 인덱스엔 없는데 파일만 남은 잔여도 이번에 갈아치움
+    def _fetch(o, sp):
+        p = _staging_path(wd, o["bucket"], o["key"])
         tmp = wd / (p.name + ".part")
         on_wire = False  # head·전송 중의 실패는 원인이 외부(스토리지·네트워크)라 err_kind=external — botocore 예외는 이름으로 못 가림
         try:
             on_wire = True
             t_head = time.monotonic()
-            actual = cli.head_object(Bucket=t["bucket"], Key=t["key"]).get("ContentLength")
+            actual = cli.head_object(Bucket=o["bucket"], Key=o["key"]).get("ContentLength")
             head_ms = (time.monotonic() - t_head) * 1000
-            if t["size"] is not None and actual is not None and int(actual) != int(t["size"]):
-                print(f"[source] warm: 크기 불일치(참고) — RDB({t['size']}) ≠ OS({actual}): {t['bucket']}/{t['key']}", flush=True)
+            if o["size"] is not None and actual is not None and int(actual) != int(o["size"]):
+                # RDB file_size가 Object Storage와 어긋날 수 있어 필수 비교에서 뺀다 — 문서 식별은 키, 내용은 sha256. 크기는 참고 기록만.
+                rec = {"doc_id": o["doc_id"], "bucket": o["bucket"], "key": o["key"], "size_rdb": o["size"], "size_store": actual}
+                with book, (state / "size_mismatch.log").open("a", encoding="utf-8") as f:
+                    f.write(json.dumps({**rec, "at": time.strftime("%Y-%m-%dT%H:%M:%S")}, ensure_ascii=False) + "\n")
+                print(
+                    f"[source] 크기 불일치(참고만 — 받기 진행) — RDB({o['size']}) ≠ Object Storage({actual}): {o['bucket']}/{o['key']}",
+                    flush=True,
+                )
+            if p.exists() and actual is not None and p.stat().st_size == int(actual):  # 이미 받아 둠(앞선 실행이 게시 전에 멈춤)
+                sp.add(head_ms=round(head_ms), reused=1)
+                return True
             t_dl = time.monotonic()
-            cli.download_file(t["bucket"], t["key"], str(tmp))
+            cli.download_file(o["bucket"], o["key"], str(tmp))
             download_ms = (time.monotonic() - t_dl) * 1000
             on_wire = False
-            os.replace(tmp, p)  # 인덱스에 보이는 파일은 항상 완전한 내용
-            size = int(actual) if actual is not None else t["size"]
+            os.replace(tmp, p)  # 그 이름으로 보이는 파일은 항상 완전한 내용
+            size = int(actual) if actual is not None else o["size"]
             if size is not None:
                 sp.set(file_bytes=size)
-            # 순수 전송 속도(head·잠금 대기 제외) — 네트워크 문제인지 코드 문제인지 가르는 값
+            # 순수 전송 속도(head 제외) — 네트워크 문제인지 코드 문제인지 가르는 값
             sp.add(head_ms=round(head_ms), download_ms=round(download_ms))
             if size and download_ms > 0:
                 sp.add(mbps=round(size * 8 / 1e6 / (download_ms / 1000), 2))
-            t_lock = time.monotonic()
-            with _warm_locked(wd):
-                sp.add(lock_wait_ms=round((time.monotonic() - t_lock) * 1000))
-                rs = _warm_read(wd)
-                rs.append(
-                    {
-                        "bucket": t["bucket"],
-                        "key": t["key"],
-                        "size": t["size"],
-                        "path": str(p),
-                        "filename": t["filename"],
-                        "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                    }
-                )
-                _warm_write(wd, rs)
-            print(f"[source] warm: {t['filename'] or t['key']} ({actual if actual is not None else '?'}B) 완료", flush=True)
+            print(f"[source] staging: {o['filename'] or o['key']} ({actual if actual is not None else '?'}B) 받음", flush=True)
             return True
         except Exception as e:
-            p.unlink(missing_ok=True)
             tmp.unlink(missing_ok=True)
             code, kind = SP.classify(e)
             sp.result(code, "external" if on_wire and code == "fail" else kind, e)
-            print(f"[source] warm: 실패(무시·폴백) — {t['bucket']}/{t['key']}: {type(e).__name__}: {str(e)[:120]}", flush=True)
+            print(f"[source] staging: 받기 실패 — {o['bucket']}/{o['key']}: {type(e).__name__}: {str(e)[:120]}", flush=True)
             return False
 
-    with SP.span("extract.warm", "extract", total=len(targets)) as sp:  # 프리페치 1회 = 1행(받은 수·실패 수)
-        if a.workers > 1 and len(targets) > 1:
+    t0 = time.time()
+    with SP.span("extract.staging", "extract", total=len(todo)) as sp:  # 받기 1회 = 1행(받은 수·실패 수)
+        if workers > 1 and len(todo) > 1:
             import concurrent.futures as _cf
 
-            with _cf.ThreadPoolExecutor(max_workers=a.workers) as ex:
-                done = sum(1 for r in ex.map(SP.carry(_one), targets) if r)  # 풀 스레드에 run_id·부모 span을 이어줌
+            with _cf.ThreadPoolExecutor(max_workers=min(workers, len(todo))) as ex:
+                got = sum(1 for r in ex.map(SP.carry(_one), todo) if r)  # 풀 스레드에 run_id·부모 span을 이어줌
         else:
-            done = sum(1 for r in (_one(t) for t in targets) if r)
-        sp.add(done=done, failed=len(targets) - done)
-    print(f"[source] warm: {done}/{len(targets)}건 · {time.time() - t0:.1f}s → {wd}", flush=True)
-    return 0
+            got = sum(1 for r in (_one(o) for o in todo) if r)
+        sp.add(done=got, failed=len(todo) - got)
+    print(f"[source] staging: {got}/{len(todo)}건 · {time.time() - t0:.1f}s → {wd}", flush=True)
+    return len(todo) - got
 
 
 def _rdb_plan(table, state, limit=0, done=frozenset()):
-    """문서 위치 표(csv:)의 대상 행 → (names, fetch_one(name,dest)→Path, state). resolve()가 부르고 모든 이름을 즉시 받는다.
-    받기 전 대조는 크기(ContentLength — 불일치는 참고 기록만). 다른 원천의 같은 내용 파일도 따로 받는다(원천마다 독립)."""
+    """문서 위치 표(csv:)의 대상 행 → (names, fetch_one(name,dest)→Path, state). 고르고(rdb_pick) staging에 받은 뒤(download)
+    fetch_one이 staging 파일을 dest/name으로 하드 링크한다(받지 못한 문서가 있으면 멈춤). 다른 원천의 같은 내용 파일도 따로 받는다."""
     by_name, n_seen = CP.rdb_pick(table, state, limit, done)
     names = sorted(by_name)
-    cli = _s3()
-    book = threading.Lock()  # 병렬 fetch(SOURCE_FETCH_WORKERS)에서 기록(manifest 재작성·append)을 잠금
+    failed = download(list(by_name.values()), state, max(1, int(pc.cfg().extract.source.fetch_workers)))
+    if failed:
+        raise RuntimeError(f"[source] staging에 받지 못한 문서 {failed}건 — 멈춤(다음 실행이 다시 받음)")
+    wd = _staging_dir()
+    book = threading.Lock()  # 병렬 fetch(SOURCE_FETCH_WORKERS)에서 manifest 재작성을 잠금
 
     def fetch_one(name, dest):
         o = by_name[name]
-        if o["size"] is not None:
-            actual = cli.head_object(Bucket=o["bucket"], Key=o["key"]).get("ContentLength")
-            if actual != o["size"]:
-                # RDB file_size가 Object Storage와 어긋나 있어 필수 비교에서 제외:
-                # 문서 식별은 uuid(doc_id·key)·내용은 sha256(hash) 기준만 쓰고, 크기는 참고 로그로만 남긴다.
-                with book:
-                    with (state / "size_mismatch.log").open("a", encoding="utf-8") as f:
-                        f.write(
-                            json.dumps(
-                                {
-                                    "table": table,
-                                    "doc_id": o["doc_id"],
-                                    "bucket": o["bucket"],
-                                    "key": o["key"],
-                                    "size_rdb": o["size"],
-                                    "size_store": actual,
-                                    "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                                },
-                                ensure_ascii=False,
-                            )
-                            + "\n"
-                        )
-                print(
-                    f"[source] 크기 불일치(참고만 — 다운로드 진행) — RDB({o['size']}) ≠ Object Storage({actual}): {o['bucket']}/{o['key']}",
-                    flush=True,
-                )
-        # size가 없으면 받기 전 대조 생략(비교할 근거가 없음) — 그대로 받는다
         dest.mkdir(parents=True, exist_ok=True)
-        f = _warm_take(o, dest, name)  # warm 프리페치 — 받아 둔 다음 배치 원본이면 즉시 이동
-        if f is not None:
-            print(f"[source] warm 적중 — 다운로드 생략: {o['bucket']}/{o['key']}", flush=True)
-        else:
-            f = _safe_join(dest, name)  # (기존 경로) 원격에서 내려받기
-            cli.download_file(o["bucket"], o["key"], str(f))
+        f = _safe_join(dest, name)
+        if f.exists() or f.is_symlink():
+            f.unlink()
+        os.link(_staging_path(wd, o["bucket"], o["key"]), f)  # staging과 같은 볼륨 — 사본 없음
         with book:  # manifest.jsonl 재작성(전체 읽기→쓰기) — 병렬 fetch에서 반드시 잠금
             man_f = state / "manifest.jsonl"
             man = {r["file_name"]: r for r in jl(man_f)} if man_f.exists() else {}
@@ -303,8 +169,7 @@ def _rdb_plan(table, state, limit=0, done=frozenset()):
     if not man_f.exists():  # fetch_one이 한 번도 안 불려도(대상 0건) 파일이 있어야 — 없으면 ids.source_uri가 조용히 file://로 떨어짐
         man_f.touch()
     C.put(SOURCE_MANIFEST=str(man_f))  # S7e2 — 덮기 파일(이 프로세스·하위 프로세스) + 인계 키라 env에도(contract.py)
-    label = table
-    print(f"[source] rdb:{label} · 대상 {len(names)}개(끝난 문서·처리 기록·지원 안 함 {n_seen}개 제외)", flush=True)
+    print(f"[source] rdb:{table} · 대상 {len(names)}개(끝난 문서·처리 기록·지원 안 함 {n_seen}개 제외)", flush=True)
     return names, fetch_one, state
 
 
@@ -426,11 +291,15 @@ def finish(state, local, rep_index):
     )
 
 
-def prepare_batch(source, out, limit, run_step):
-    """파싱 전 extract — 끝난 문서(ParsingMeta ok·partial) 빼고 고르기 → 원본 가져오기 → 중복 확인.
-    → (원본 폴더, 파싱할 이름 목록(받은 순서), 상태 폴더). run_step(args) → 종료 코드: 여러 건 중복 확인을 자식 프로세스로."""
+def stage_batch(source, out, prepared, limit, run_step, done=frozenset(), scan_rotate=True):
+    """파싱 전 extract 한 번 — 고르기(처리 기록·지원 안 함·done) → 받기(rdb:csv는 staging) → 같은 내용은 하나만(dedup) →
+    형식·DRM·암호 거르기와 방향 보정(filter_and_rotate → prepared/). DRM·암호 문서는 건너뜀 기록만 남긴다.
+    → (원본 폴더, 남은 이름 목록(받은 순서), 상태 폴더, 남은 이름 목록 파일 only.txt). run_step(args) → 종료 코드(자식 프로세스).
+    scan_rotate=False면 이미지 PDF는 돌리지 않는다(run_pipeline의 스캔 문서 정책)."""
+    from pipeline import parse_steps
+
     out = Path(out)
-    local, names, state = resolve(source, out, limit, CP.done_keys())
+    local, names, state = resolve(source, out, limit, done)
     if not CP.is_remote(source):
         C.put(DOC_DIR=str(Path(local).resolve()))  # 원본 위치 주소 = 이 폴더의 file:///
     (state / "selected.txt").write_text("\n".join(names) + "\n", encoding="utf-8")
@@ -448,7 +317,35 @@ def prepare_batch(source, out, limit, run_step):
     if rc != 0:
         raise SystemExit(rc)
     keep = set((out / "dedup" / "keep.txt").read_text(encoding="utf-8").splitlines())
-    return local, [n for n in names if n in keep], state
+    keep_names = [n for n in names if n in keep]
+    only = state / "only.txt"
+    rc = parse_steps.place_inputs(run_step, local, prepared, keep_names, only, scan_rotate)
+    if rc != 0:
+        raise SystemExit(rc)
+    left = [n for n in keep_names if (Path(prepared) / n).exists()]  # 거르기를 지난 것만 파싱
+    only.write_text("\n".join(left) + "\n", encoding="utf-8")
+    return local, left, state, only
+
+
+def _stage_cmd(argv):
+    """`python -m pipeline.extract.candidate_ready stage --csv <문서 위치 표> --out <결과 폴더> --prepared <준비 폴더>` — run_pipeline이
+    문서마다 부른다: 받기(staging) → 중복 → 거르기 → <out>/parse/_source/only.txt(파싱할 이름). 파싱은 `pipeline.cli parse --staged`."""
+    import argparse
+
+    from common.core.paths import child_env
+    from pipeline.parse_steps import run_step
+
+    ap = argparse.ArgumentParser(prog="pipeline.extract.candidate_ready stage")
+    ap.add_argument("--csv", required=True, help="문서 위치 표(id·s3_key·original_filename·file_size)")
+    ap.add_argument("--out", required=True, help="문서 결과 폴더(_source_files·parse/_source·dedup이 여기에)")
+    ap.add_argument("--prepared", required=True, help="파싱 입력 폴더(거르기를 지난 파일)")
+    ap.add_argument("--no-scan-rotate", action="store_true", help="이미지 PDF는 방향 보정 안 함(스캔 문서 정책)")
+    a = ap.parse_args(argv)
+    _, left, _, only = stage_batch(
+        f"rdb:csv:{a.csv}", a.out, a.prepared, 0, lambda args: run_step(args, child_env()).returncode, scan_rotate=not a.no_scan_rotate
+    )
+    print(f"[source] stage: 파싱할 문서 {len(left)}건 → {only}", flush=True)
+    return 0
 
 
 def _derive_source_from_key(key):
@@ -468,10 +365,11 @@ def _derive_source_from_key(key):
 if __name__ == "__main__":
     from common.config import setarg
 
-    setarg.apply()  # --set 이름=값(호스트 run_docs.py의 warm이 SOURCE_WARM을 넘김)
+    setarg.apply()  # --set 이름=값(run_pipeline의 stage가 SOURCE_STAGING 등을 넘김)
     utf8_stdout()
-    if len(sys.argv) > 1 and sys.argv[1] == "warm":
-        from pipeline.shared import runtrace
+    if sys.argv[1:2] != ["stage"]:
+        raise SystemExit("사용: python -m pipeline.extract.candidate_ready stage --csv <표> --out <폴더> --prepared <폴더>")
+    from pipeline.shared import runtrace
 
-        with runtrace.run("source_warm", sys.argv[1:]):  # run_docs가 부르는 자기 실행 1건
-            raise SystemExit(_warm_cmd(sys.argv[2:]))  # 프리페치 — 다음 배치 원본을 SOURCE_WARM에 미리 받아 둠
+    with runtrace.run("source_stage", sys.argv[1:]):  # run_pipeline이 부르는 자기 실행 1건
+        raise SystemExit(_stage_cmd(sys.argv[2:]))

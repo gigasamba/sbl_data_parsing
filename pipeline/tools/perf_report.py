@@ -491,7 +491,7 @@ def main(argv=None):
     ap.add_argument("--compare", nargs="+", metavar="RUN_ID", help="이 실행과 비교할 다른 run_id들")
     ap.add_argument("--file", nargs="+", help="DB 대신 logsink 대체 기록 JSON Lines 파일")
     ap.add_argument(
-        "--since", type=float, metavar="HOURS", help="최근 N시간의 모든 실행을 합쳐 분석(run_docs는 문서·단계마다 실행이 따로 생김)"
+        "--since", type=float, metavar="HOURS", help="최근 N시간의 모든 실행을 합쳐 분석(run_pipeline은 문서·단계마다 실행이 따로 생김)"
     )
     ap.add_argument("--top", type=int, default=10, help="느린 문서 개수")
     ap.add_argument("--json", action="store_true", help="표 대신 JSON")

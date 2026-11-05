@@ -12,7 +12,7 @@
   문서마다 그 형식의 엔진(stack.json)을 **동시에**(엔진마다 별도 자식 프로세스 `--one` — 세그폴트가 전체를
     멈추지 않음). --workers N: 문서 N개를 동시에. --procs N: 문서를 N조각으로 나눠 프로세스 N개가 동시에(스레드는 코어 ÷ N).
   OCR 엔진(OCR_ENGINES — rapidocr_ko)은 파싱 엔진으로 돌지 않는다 — 이미지·스캔 문서는 VLM 엔진만.
-    글자 PDF 안의 스캔 쪽은 여기서 OCR 엔진을 더하지 않고 대표 결과(build_rep)의 쪽 VLM이 그 쪽만 채운다.
+    글자 PDF 안의 스캔 쪽은 여기서 OCR 엔진을 더하지 않고 대표 결과(doc_represent)의 쪽 VLM이 그 쪽만 채운다.
   진행 현황: 콘솔 큐 줄만.
   엔진 범위는 stack 하나: 문서마다 형식 키
     (.pdf_text/.pdf_image/확장자, stack.json과 같은 키)의 stack.json parse 목록만 돈다. --engines는 그 안에서 더 좁힐 뿐(비교 실험은
@@ -241,7 +241,7 @@ def page_timeout(eng, pages, first=False):
 
 
 IDLE_MARK = "[engine-scope] stack 목록 밖이라 안 돎"  # 명시 --engines 중 일부가 안 돎(알림 — 거의 매 실행)
-NO_JOB_MARK = "[engine-scope] 돌 엔진 없음"  # 명시 --engines가 하나도 못 돎 — parse_service가 이 줄로 스캔 PDF를 가름
+NO_JOB_MARK = "[engine-scope] 돌 엔진 없음"  # 명시 --engines가 하나도 못 돎 — run_mcp_parsing이 이 줄로 스캔 PDF를 가름
 
 
 def engines_for_doc(doc, stack_parse, types, logged_missing):
@@ -558,7 +558,7 @@ def main():
             )  # 큐 진행(콘솔)
 
     with runtrace.Progress(total=len(jobs), done=lambda: done[0], unit="doc_engine"):  # 60초마다 run.progress
-        _run_docs(jobs, run_job, a.workers)
+        _run_pipeline(jobs, run_job, a.workers)
     for doc, eng, dst, sha, first in deferred:  # 사본: 먼저 돈 결과가 성공이면 복사, 아니면 사본은 기록 안 함(다음 실행에서 다시 판단)
         if first.exists():
             dst.write_bytes(first.read_bytes())
@@ -616,7 +616,7 @@ def run_procs(a, docs):
         list(ex.map(SP.carry(one), range(k)))
 
 
-def _run_docs(jobs, run_job, workers):
+def _run_pipeline(jobs, run_job, workers):
     """문서 workers개를 동시에, 한 문서의 엔진들도 모두 동시에(엔진마다 별도 프로세스 — run_job)."""
     by_doc = {}
     for job in jobs:

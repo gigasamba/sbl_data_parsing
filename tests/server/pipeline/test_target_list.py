@@ -1,0 +1,113 @@
+"""rn-05 — 대상 목록 `python -m pipeline.extract.candidate_pick list`(run_pipeline이 컨테이너 안에서 한 번 부름): EDW FileStorageMap에서
+이름 키워드로 고르고(파일 크기 오름차순, 크기 없는 행 뺌) → 시작 자리·시험 개수·골라 돌리기 → 끝난 문서 빼기(ok·partial은 gold_version도,
+skipped_dup) → FAQ 먼저(새 FAQ면 교체 + 전체, 아니면 gold에 없는 것만, 결과 없으면 전체) → 앞 max-docs개. 임시 SQLite EDW 대역만 — 외부 접속 없음."""
+
+import json
+import sqlite3
+import tempfile
+from pathlib import Path
+from unittest import mock
+
+from common.config.settings import COMMON
+from common.store.parsing_meta_db import SqliteStore
+from pipeline.extract import candidate_pick as CP
+
+# FileStorageMap 행 (id, s3_key, original_filename, file_size)
+FSM = [
+    (1, "SFDC/a/rfp_big.pdf", "RFP_big.pdf", 500),
+    (2, "SFDC/b/prop.docx", "proposal.docx", 100),
+    (3, "SFDC/c/x.pdf", "x.pdf", 50),  # 키워드 없음
+    (4, "SFDC/d/rfp_nosize.pdf", "rfp_nosize.pdf", None),  # 크기 없음 — 빠짐
+    (5, "SFDC/e/rfp_ok.pdf", "RFP_ok.pdf", 200),
+    (6, "SFDC/f/rfp_dup.pdf", "rfp_dup.pdf", 300),
+    (7, "SFDC/g/rfp_nogold.pdf", "rfp_nogold.pdf", 400),
+    (8, "FAQ/u1/q.xlsx", "q.xlsx", 10),  # FAQ — 키워드 없음(FAQ 먼저일 때 덧붙음)
+    (9, "FAQ/u2/rfp_faq.xlsx", "rfp_faq.xlsx", 20),  # FAQ이면서 키워드
+]
+# ParsingMeta (원본 키, parse_status, gold_version 있음?)
+PM = [
+    ("SFDC/e/rfp_ok.pdf", "ok", True),  # 끝남
+    ("SFDC/f/rfp_dup.pdf", "skipped_dup", False),  # 끝남(완전 중복)
+    ("SFDC/g/rfp_nogold.pdf", "ok", False),  # gold에 안 올라감 — 다시 고름
+    ("FAQ/u2/rfp_faq.xlsx", "ok", True),
+    ("FAQ/u1/q.xlsx", "skipped_dup", False),
+]
+# 키워드 목록(크기순) = rfp_faq · prop · rfp_ok · rfp_dup · rfp_nogold · rfp_big (자리 0~5), FAQ 덧붙임 q.xlsx = 자리 6
+K = {
+    "faq2": "FAQ/u2/rfp_faq.xlsx",
+    "prop": "SFDC/b/prop.docx",
+    "ok": "SFDC/e/rfp_ok.pdf",
+    "dup": "SFDC/f/rfp_dup.pdf",
+    "nogold": "SFDC/g/rfp_nogold.pdf",
+    "big": "SFDC/a/rfp_big.pdf",
+    "faq1": "FAQ/u1/q.xlsx",
+}
+BOTH = [K["faq1"], K["faq2"]]
+# (인자, 교체를 마친 FAQ 키(None이면 --faq-seen 없음), faq-sync 결과, 기대 키 순서, 실행 뒤 교체를 마친 키, 기대 faq-sync reset)
+CASES = [
+    ([], None, None, ["faq2", "prop", "ok", "dup", "nogold", "big"], None, None),  # 키워드(대소문자 무시) · 크기순 · 크기 없음 뺌
+    (["--start-offset", "2", "--limit", "2"], [], None, ["ok", "dup"], [], None),  # 시험 개수 — FAQ 교체 건너뜀
+    (["--seqs", "5,1"], [], None, ["prop", "big"], [], None),  # 골라 돌리기(자리 정렬) — FAQ 건너뜀
+    (["--start-offset", "9"], None, None, [], None, None),  # 시작 자리가 목록 밖 — 빈 목록
+    (["--skip-done"], None, None, ["prop", "nogold", "big"], None, None),  # ok+gold·skipped_dup 뺌, gold 없는 ok는 남음
+    (["--skip-done"], [], {"faq_reset": 1, "gold": []}, ["faq1", "faq2", "prop", "nogold", "big"], BOTH, True),  # 새 FAQ — 교체+전체
+    (
+        ["--skip-done"],
+        BOTH,
+        {"faq_reset": 0, "gold": [K["faq2"]]},
+        ["prop", "nogold", "big"],
+        BOTH,
+        False,
+    ),  # gold에 없는 q는 skipped_dup — 안 채움
+    (["--skip-done"], BOTH, {"faq_reset": 0, "gold": []}, ["faq2", "prop", "nogold", "big"], BOTH, False),  # gold에 없는 FAQ만 채움
+    (
+        ["--skip-done"],
+        [K["faq2"]],
+        None,
+        ["faq1", "faq2", "prop", "nogold", "big"],
+        [K["faq2"]],
+        True,
+    ),  # 교체 결과 없음 — 전체, 기록 그대로
+    (["--skip-done", "--max-docs", "2"], None, None, ["prop", "nogold"], None, None),  # 앞 max-docs개
+]
+
+
+def _edw(tmp):
+    """EDW 대역 sqlite 하나 — FileStorageMap(스키마 AI로 붙여 읽음)과 ParsingMeta."""
+    path = Path(tmp) / "edw.sqlite"
+    db = SqliteStore(str(path))
+    db.insert_new(
+        [{"source_system": k.split("/")[0], "source_key": k, "doc_key": f"d{i}", "parse_status": st} for i, (k, st, _) in enumerate(PM)]
+    )
+    db.cn.executemany("UPDATE ParsingMeta SET gold_version = '0.2.0' WHERE source_key = ?", [(k,) for k, _, g in PM if g])
+    db.cn.commit()
+    db.close()
+    cn = sqlite3.connect(path)
+    cn.execute("CREATE TABLE FileStorageMap (id INTEGER, s3_key TEXT, original_filename TEXT, file_size INTEGER)")
+    cn.executemany("INSERT INTO FileStorageMap VALUES (?, ?, ?, ?)", FSM)
+    cn.commit()
+    cn.close()
+    return path
+
+
+def test_target_list():
+    with tempfile.TemporaryDirectory() as tmp:
+        edw = _edw(tmp)
+        out, seen_f = Path(tmp) / "targets.json", Path(tmp) / "faq_seen.txt"
+        for args, seen, sync_out, want, seen_after, reset in CASES:
+            resets = []
+            argv = [*args, "--out", str(out)]
+            if seen is not None:
+                seen_f.write_text("".join(f"{k}\n" for k in seen), encoding="utf-8")
+                argv += ["--faq-seen", str(seen_f)]
+            with (
+                COMMON.env(RUN_ENV="local", RDB_SQLITE=str(edw)),
+                mock.patch.object(CP, "faq_sync", lambda r, _p, so=sync_out, rs=resets: rs.append(r) or so),
+            ):
+                assert CP._list_cmd(argv) == 0
+            got = json.loads(out.read_text(encoding="utf-8"))
+            assert [d["s3_key"] for d in got["docs"]] == [K[w] for w in want], (args, seen, got["docs"])
+            assert got["total"] == 6 and all(set(d) == {"seq", "id", "s3_key", "original_filename", "file_size"} for d in got["docs"])
+            if seen_after is not None:
+                assert sorted(seen_f.read_text(encoding="utf-8").split()) == sorted(seen_after), args
+            assert resets == ([] if reset is None else [reset]), (args, resets)

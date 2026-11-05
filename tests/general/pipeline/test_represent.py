@@ -1,4 +1,4 @@
-"""pipeline.transform.represent.build_rep 시험."""
+"""pipeline.transform.represent.doc_represent 시험."""
 
 import json
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 from common.config.settings import COMMON
 from common.core.contract import source_record
 from pipeline import config as pc
-from pipeline.transform.represent.build_rep import (
+from pipeline.transform.represent.doc_represent import (
     apply_post,
     fill_scan_pages,
     fix_tables,
@@ -379,7 +379,7 @@ def selftest():
         with pc.PIPE.env(PARSE_POST="figures"):  # 쪽 VLM 꺼짐 — 덮지 않으면 쪽 전체 그림은 그림 VLM 대상
             assert not any(f["loc"].get("page_vlm") for f in _figures(scan6) if f["loc"].get("page_render"))
             assert all(f["loc"].get("page_vlm") for f in _figures(scan6, page_covered=True) if f["loc"].get("page_render"))
-        # run_docs light 레인처럼 vlm_page 없이 figures만 — VLM 엔진이 옮긴 문서의 쪽 전체 그림은 그림 VLM 0회
+        # run_pipeline light 레인처럼 vlm_page 없이 figures만 — VLM 엔진이 옮긴 문서의 쪽 전체 그림은 그림 VLM 0회
         from pipeline.transform.figures import figure_extract as _fig_mod
 
         fig_calls = []
@@ -394,7 +394,7 @@ def selftest():
     finally:
         _vc.vlm_page = orig_vlm_page
     # covered 판정 표 — 대표가 VLM 엔진·본문 있음·이미지/스캔 형식(run_all과 같은 형식 키)일 때만
-    from pipeline.transform.represent.build_rep import _vlm_transcribed as _vt
+    from pipeline.transform.represent.doc_represent import _vlm_transcribed as _vt
 
     def _r(engine, text):
         return {"rep": {"engine": engine}, "text": text}

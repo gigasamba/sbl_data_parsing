@@ -9,7 +9,7 @@
   후보정(apply_post — vlm_page·figures·charts·supsub·attachments) → 표 제자리 넣기(table_inline).
   표기가 갈린 엔진 충돌은 _rep/conflicts.jsonl에도 모은다.
 산출 = 엔진 공통 출력 계약(text·tables·facts·boxes) + "rep" — 구조화(gold_bundle)는 이것만 읽는다.
-사용: python -m pipeline.transform.represent.build_rep [--stack stack.json] [--parse-dir output/parse]
+사용: python -m pipeline.transform.represent.doc_represent [--stack stack.json] [--parse-dir output/parse]
 """
 
 import argparse
@@ -731,7 +731,7 @@ def represent(stack, parse_dir, src=None):
         doc_path = Path(source["path"]) if source else None
         # 쪽 VLM은 PARSE_POST에 vlm_page가 있을 때만, 문서당 한 번만.
         # 이미지·스캔 문서를 VLM 엔진이 이미 옮겼으면 쪽 VLM을 안 부르고 쪽 전체 그림 VLM도 생략(쪽마다 VLM 한 번)
-        # covered는 vlm_page 기능과 무관하게(그림 VLM 생략에도 씀 — run_docs light 레인처럼 vlm_page 없이 figures만 켠 경우)
+        # covered는 vlm_page 기능과 무관하게(그림 VLM 생략에도 씀 — run_pipeline light 레인처럼 vlm_page 없이 figures만 켠 경우)
         covered, vp_pages = _vlm_transcribed(rep, dd), None
         if "vlm_page" in feats and doc_path and Path(doc_path).exists():
             from pipeline.transform.figures import scan_page_vlm as vp_mod

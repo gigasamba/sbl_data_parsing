@@ -1,4 +1,4 @@
-"""parse_document 서비스 — mcp-data-parsing 컨테이너(11-03 — 옛 data-pipeline-parse; 작업 서비스가 주 프로세스, compose.data-parsing.yml)의 작업 서비스(parse_service)에 넘기는 프록시.
+"""parse_document 서비스 — mcp-data-parsing 컨테이너(11-03 — 옛 data-pipeline-parse; 작업 서비스가 주 프로세스, compose.data-parsing.yml)의 작업 서비스(run_mcp_parsing)에 넘기는 프록시.
 S5(10-26, refactor_plan 5-1·D-007 — 코디네이터 답 Q5 a)에 mcp_server/main.py(옛 data_retrieval/mcp_server.py)에서 옮김 — 내용 그대로
 (설정 상수만 mcp_server/config.py의 CFG로). S7d(D-028 ⑨): 토큰은 설정 객체에서, 코드에 박혀 있던 대체 토큰은 지움 — 설정 필수.
 """
@@ -25,10 +25,10 @@ def _token():
     return tok
 
 
-# ── 텍스트 파싱 프록시(2026-10-21 사용자 요청) — mcp-data-parsing 컨테이너(11-03 — 옛 data-pipeline-parse)의 작업 서비스(parse_service,
+# ── 텍스트 파싱 프록시(2026-10-21 사용자 요청) — mcp-data-parsing 컨테이너(11-03 — 옛 data-pipeline-parse)의 작업 서비스(run_mcp_parsing,
 #    그 컨테이너의 주 프로세스 — 토큰은 두 컨테이너가 같은 칸 required.tokens.mcp)
 #    를 localhost HTTP로 호출 — 구조화·임베딩·EDW/OS 적재·그림[VLM] 파싱 없이 text 파싱 대표 결과만. ──
-def _parse_service(method, path, payload=None, timeout=10):
+def _run_mcp_parsing(method, path, payload=None, timeout=10):
     """parse 서비스 HTTP — 토큰은 _token()."""
     import urllib.request
 
@@ -71,7 +71,7 @@ def do_parse_document(path=None, content_b64=None, filename=None, time_out_thres
             return {"error": msg}
     t0 = time.time()  # 등록(큰 본문 전송) 시간도 time_out_threshold 안 — 바깥 창구(_bg_long, 기준 + 10초)보다 먼저 job_id를 돌려주게
     try:
-        job = _parse_service("POST", "/jobs", payload, timeout=60)  # 11-03 — 100MB(base64 약 133MB) 본문을 받아 풀고 쓰는 동안 기다림
+        job = _run_mcp_parsing("POST", "/jobs", payload, timeout=60)  # 11-03 — 100MB(base64 약 133MB) 본문을 받아 풀고 쓰는 동안 기다림
     except NoToken as e:
         return {"error": str(e)}  # S7d — 설정 없음(연결 실패와 가름, 값 없음)
     except urllib.error.HTTPError as e:
@@ -91,7 +91,7 @@ def do_parse_document(path=None, content_b64=None, filename=None, time_out_thres
     while time.time() - t0 < thr:
         time.sleep(1.0)
         try:
-            j = _parse_service("GET", f"/jobs/{job_id}")
+            j = _run_mcp_parsing("GET", f"/jobs/{job_id}")
         except Exception:
             continue
         if j.get("status") in ("done", "failed"):

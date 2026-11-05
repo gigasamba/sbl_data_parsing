@@ -1,6 +1,6 @@
 """nightly_batch.sh scheduled 시각 게이트(pl-32) — settings.yaml ops.nightly.time·max_docs·deadline(NIGHTLY_TIME·
-NIGHTLY_MAX_DOCS·NIGHTLY_DEADLINE) 중 하나라도 비면 조용히 끝, 시작 시각부터 5분 안이면 run_docs.py(새벽 배치 = run_docs)에
-상한·마감을 넘김, 꼴이 틀리면 종료 2. nightly_batch.sh에서 게이트 블록만 떼어 bash로 돌린다(date·python3은 셸 함수로 바꿔 끼움 — run_docs는 돌지 않음, 설정·docker 없음, PC 전용)."""
+NIGHTLY_MAX_DOCS·NIGHTLY_DEADLINE) 중 하나라도 비면 조용히 끝, 시작 시각부터 5분 안이면 run_pipeline.py(새벽 배치 = run_pipeline)에
+상한·마감을 넘김, 꼴이 틀리면 종료 2. nightly_batch.sh에서 게이트 블록만 떼어 bash로 돌린다(date·python3은 셸 함수로 바꿔 끼움 — run_pipeline은 돌지 않음, 설정·docker 없음, PC 전용)."""
 
 import os
 import re
@@ -12,7 +12,7 @@ from common.core.paths import DEPLOY_ROOT
 
 ROOT = DEPLOY_ROOT  # 저장소 루트(paths 상수)
 
-CASES = [  # (NIGHTLY_TIME, 지금, 종료 코드, run_docs를 부름?) — 상한 50·마감 06:00
+CASES = [  # (NIGHTLY_TIME, 지금, 종료 코드, run_pipeline을 부름?) — 상한 50·마감 06:00
     ("", "01:00", 0, False),  # 비움 = 새벽 배치 없음
     ("  ", "01:00", 0, False),  # 공백만 = 비움
     ("01:00", "01:00", 0, True),
@@ -26,7 +26,7 @@ CASES = [  # (NIGHTLY_TIME, 지금, 종료 코드, run_docs를 부름?) — 상�
     ("24:00", "00:00", 2, False),
     ("01:30:00", "01:30", 2, False),
 ]
-OTHER = [  # (NIGHTLY_MAX_DOCS, NIGHTLY_DEADLINE, 종료 코드, run_docs를 부름?) — 시작 01:00·지금 01:00(셋 다 있어야 돎)
+OTHER = [  # (NIGHTLY_MAX_DOCS, NIGHTLY_DEADLINE, 종료 코드, run_pipeline을 부름?) — 시작 01:00·지금 01:00(셋 다 있어야 돎)
     ("", "06:00", 0, False),
     ("50", "", 0, False),
     ("  ", " ", 0, False),
@@ -63,7 +63,7 @@ def test_scheduled_gate():
         ("01:00", "01:00", n, dl, rc, runs) for n, dl, rc, runs in OTHER
     ]
     for t, now, n, dl, rc, runs in cases:
-        script = f'date() {{ echo "{now}"; }}\npython3() {{ echo "RUN_DOCS $*"; }}\nmod=scheduled\n{gate}echo "mod=$mod"\n'
+        script = f'date() {{ echo "{now}"; }}\npython3() {{ echo "RUN_PIPELINE $*"; }}\nmod=scheduled\n{gate}echo "mod=$mod"\n'
         r = subprocess.run(
             [bash, "-c", script],
             env={
@@ -79,5 +79,7 @@ def test_scheduled_gate():
             timeout=30,
         )
         assert r.returncode == rc, (t, now, n, dl, r.returncode, r.stderr)
-        want = f"RUN_DOCS deploy/host/scripts/run_docs.py --start-offset 0 --skip-done --max-docs {n.strip()} --deadline {dl.strip()}"
+        want = (
+            f"RUN_PIPELINE deploy/host/scripts/run_pipeline.py --start-offset 0 --skip-done --max-docs {n.strip()} --deadline {dl.strip()}"
+        )
         assert (want in r.stdout) is runs, (t, now, n, dl, r.stdout)

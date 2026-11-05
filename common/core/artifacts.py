@@ -46,7 +46,7 @@ LAYER_CODE = {
     + [
         f"pipeline/transform/represent/{n}.py"
         for n in (
-            "build_rep",
+            "doc_represent",
             "crosscheck",
             "parse_scoring",
             "mail_attachments",

@@ -74,7 +74,7 @@ def _code_fp():
 
 def _start_row(run_id, command, argv):
     cfg = C.cfg()
-    db_on = cfg.log.db_enabled  # 켜져 있을 때만 씀 — code_fp는 층마다 파일을 다시 읽어 run_docs 프로세스마다 시작을 늦춘다
+    db_on = cfg.log.db_enabled  # 켜져 있을 때만 씀 — code_fp는 층마다 파일을 다시 읽어 run_pipeline 프로세스마다 시작을 늦춘다
     return {
         "run_id": run_id,
         "command": command,

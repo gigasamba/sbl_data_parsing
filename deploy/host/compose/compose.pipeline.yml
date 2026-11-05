@@ -1,6 +1,6 @@
 # 파이프라인 컨테이너(docs/operations/server-guide.md §0) — 수집 서버. 서버 이미지는 2개 — data-pipeline(파싱·구조화·적재·게시)
 #   · mcp-server(검색 MCP). 상주 컨테이너: data-pipeline(일괄 — `idle` — 일 없이 떠 있음) · mcp-data-parsing(MCP parse_document
-#   작업 서비스 전용 — CPU 우선). run_docs.py·pipe_exec.sh(parse·publish·도구·migrate·show-stack)가 그 안에서 docker exec로 돈다
+#   작업 서비스 전용 — CPU 우선). run_pipeline.py·pipe_exec.sh(parse·publish·도구·migrate·show-stack)가 그 안에서 docker exec로 돈다
 #   (in_container.sh in_pipeline). 컨테이너마다 compose 파일 하나: 이 파일 = data-pipeline ·
 #   compose.data-parsing.yml = mcp-data-parsing · compose.mcp-server.yml = 검색 MCP mcp-server(mcp_keepalive.sh). 개발 서버 코드 폴더 덧붙임은 짝 파일 compose.code*.yml.
 #   준비(저장소 루트에서): docker build -f deploy/docker/Dockerfile --target pipeline -t data-pipeline:<태그> .
@@ -20,7 +20,7 @@
 #   붙여 덮기 파일의 base가 컨테이너 안에 없음). 셸 env로 덮을 수 있는 것은 compose 치환 값(이미지·자원·포트·호스트 경로)뿐.
 x-settings: &settings "${SETTINGS_FILE:?SETTINGS_FILE=<settings.yaml 절대 경로> 필요 — deploy/host/scripts/load_settings.sh load_settings가 export(refactor.md C-09)}:/etc/rag/settings.yaml:ro,z"
 services:
-  # 일괄 상주 컨테이너(일 없이 떠 있음, entrypoint `idle`): run_docs.py가 docker exec로 문서별 warm·파싱·게시·구조화·적재를 돌린다.
+  # 일괄 상주 컨테이너(일 없이 떠 있음, entrypoint `idle`): run_pipeline.py가 docker exec로 대상 목록·문서별 미리 받기·파싱·게시·구조화·적재를 돌린다.
   # MCP parse_document 작업 서비스는 compose.data-parsing.yml의 mcp-data-parsing.
   # 자원 상한: PARSE_CPUS·PARSE_MEM_LIMIT(settings.yaml ops.pipeline_host.parse_cpus·parse_mem_limit) — 기본 CPU 5 · 메모리 24g
   #   (설정 모델 기본값과 같음).

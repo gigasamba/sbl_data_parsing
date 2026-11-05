@@ -337,6 +337,7 @@ def main():
         "--dpi", type=int, default=pc.cfg().extract.ocr.dpi, help="PDF 쪽 렌더 해상도 — 기본 extract.ocr.dpi(쪽·그림 VLM과 같은 값)"
     )
     ap.add_argument("--probe-px", type=int, default=1280)
+    ap.add_argument("--no-scan-rotate", action="store_true", help="이미지 PDF(스캔)는 방향 보정 안 함 — run_pipeline 스캔 문서 정책")
     a = ap.parse_args()
     from PIL import Image
 
@@ -395,7 +396,7 @@ def main():
         elif ext == ".pdf" and _locked(p, skipped, skipped_log):  # 열기 암호 PDF — 기록하고 건너뜀(한 파일 때문에 묶음 전체가 멈추지 않게)
             continue
         elif (
-            ext == ".pdf" and rotate_on and is_image_pdf(p)
+            ext == ".pdf" and rotate_on and not a.no_scan_rotate and is_image_pdf(p)
         ):  # 회전은 extract.prepare.rotate(기본 꺼짐)일 때만 · 꺼지면 회전용 OCR 없이 그대로 놓음
             import pypdfium2 as pdfium
 

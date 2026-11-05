@@ -101,7 +101,7 @@ def test_run_all_job_spans_and_usage():
                 pass
 
         with span.span("extract.plan") as plan:
-            run_all._run_docs([(Path("a.pdf"), "e1"), (Path("a.pdf"), "e2"), (Path("b.pdf"), "e1")], job, 2)
+            run_all._run_pipeline([(Path("a.pdf"), "e1"), (Path("a.pdf"), "e2"), (Path("b.pdf"), "e1")], job, 2)
         jobs = [r for r in rows if r["stage"] == "extract.parse"]
         assert len(jobs) == 3 and {r["parent_id"] for r in jobs} == {plan.span_id}
 

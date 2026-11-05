@@ -4,7 +4,7 @@
 #   docker run --rm --init -v <settings.yaml>:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=<dev|prd> \
 #     -v <원본>:/data/docs:ro -v <결과>:/app/output data-pipeline:<버전> <명령>
 # 명령: help · check · resources · services · check-modules · tool <이름> [인자] · mcp ·
-#       ask --q …  (서버 입구는 run_docs 하나)
+#       ask --q …  (서버 입구는 run_pipeline 하나)
 #
 #   tool <이름> = 고정 표의 도구 하나(check_env·ping_models·check_modules·cli·rdb_discover·gen_roster·glossary_suggest — pipe_exec.sh가 쓰는 자리)
 #     이름만 받는다(다른 형태는 종료 64).
@@ -13,7 +13,7 @@
 #     common.store.db.dbtool) — data-pipeline 이미지만, up·stamp는 load와 같은 잠금(current·check는 읽기만 — 잠금 없음). 서버 절차 docs/operations/release-and-patch.md §5-5
 #   show-stack = 지금 엔진 구성(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 코드 폴더 바꾸기) — 두 이미지. docs/architecture/resources.md §1
 #   이미지 2개: RAG_MODULE마다 쓸 수 있는 명령이 다름(아래 case가 거름):
-#     pipeline(data-pipeline)=parse·publish·show-stack·idle·migrate·parse-service ·
+#     pipeline(data-pipeline)=parse·publish·show-stack·idle·migrate·run-mcp-parsing ·
 #     mcp(mcp-server)=mcp·ask·show-stack · 공통(모든 이미지) = help·check·resources·services·
 #     check-modules·tool·selftest(서버 반입 시험 /app/deploy/tests/server를 파일마다, 다른 이미지(RAG_MODULE) 폴더 사례·다른 이미지 패키지가 없어서만 실패한 사례는 SKIP,
 #     서드파티 패키지가 없으면 FAIL — 반입 판정은 /app/docker/selftest_gate.sh)
@@ -47,8 +47,8 @@ cmd="${1:-help}"; shift || true
 # 이미지마다 자기 앱만 들어 있음(RAG_MODULE pipeline·mcp) — 없는 앱의 명령은 바로 거부(종료 코드 64)
 case "${RAG_MODULE:-}:$cmd" in
   pipeline:mcp|pipeline:ask)
-    echo "[오류] '$cmd'는 이 이미지(data-pipeline)에 없음 — 검색/질문(mcp·ask)은 mcp-server. 이 이미지는 parse·publish·show-stack·idle·migrate·parse-service"; exit 64;;
-  mcp:parse|mcp:publish|mcp:idle|mcp:migrate|mcp:parse-service)
+    echo "[오류] '$cmd'는 이 이미지(data-pipeline)에 없음 — 검색/질문(mcp·ask)은 mcp-server. 이 이미지는 parse·publish·show-stack·idle·migrate·run-mcp-parsing"; exit 64;;
+  mcp:parse|mcp:publish|mcp:idle|mcp:migrate|mcp:run-mcp-parsing)
     echo "[오류] '$cmd'는 이 이미지(mcp-server)에 없음 — 파싱·구조화·적재·판 관리(migrate)는 data-pipeline. 이 이미지는 mcp·ask·show-stack만"; exit 64;;
 esac
 # 실행 환경(RUN_ENV) 없이는 앱 명령을 시작하지 않음. 이미지 ENV에는 넣지 않는다(서버가 dev·prd를
@@ -130,9 +130,9 @@ case "$cmd" in
   show-stack|selftest)   # pipeline.cli 점검 명령 — 두 이미지 모두(mcp-server에도 pipeline/cli.py가 있음 — selftest_gate.sh가 이미지마다 부름)
     preflight; exec python -m pipeline.cli "$cmd" "$@";;
   # idle — 상주 컨테이너 data-pipeline은 일을 하지 않고 떠 있기만 한다.
-  # run_docs.py가 그 안에서 docker exec로 문서별 작업을 돌린다. MCP parse_document 작업 서비스는 위 parse-service(전용 컨테이너 mcp-data-parsing — 여기에 띄우지 않음, 8766 겹침).
-  parse-service)   # MCP parse_document 작업 서비스(127.0.0.1:8766), 전용 상주 컨테이너 mcp-data-parsing의 주 프로세스
-    preflight; exec python -u -m pipeline.parse_service;;
+  # run_pipeline.py가 그 안에서 docker exec로 문서별 작업을 돌린다. MCP parse_document 작업 서비스는 위 run-mcp-parsing(전용 컨테이너 mcp-data-parsing — 여기에 띄우지 않음, 8766 겹침).
+  run-mcp-parsing)   # MCP parse_document 작업 서비스(127.0.0.1:8766), 전용 상주 컨테이너 mcp-data-parsing의 주 프로세스
+    preflight; exec python -u -m pipeline.run_mcp_parsing;;
   idle)
     preflight
     exec sleep infinity;;

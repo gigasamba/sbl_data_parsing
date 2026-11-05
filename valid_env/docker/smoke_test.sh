@@ -4,7 +4,7 @@
 #   SMOKE_SETTINGS=<settings.yaml: mcp.server.token · common.models.embed(base_url·model — 내부망)> SMOKE_PG_PASSWORD=<시험용> \
 #   SMOKE_SYSTEM=<원천 — 예 SFDC> [SMOKE_LIMIT=10] [SMOKE_KEEP=1 — 끝나도 pg 남김] bash valid_env/docker/smoke_test.sh [질문]   (PC 시험 Docker)
 #   [PY=호스트 python(PYTHONPATH=저장소 루트로 mcp_server.cli.mcp_smoke 등 -m 호출)]
-#   원본은 DOC_SRC 폴더 하나(/data/docs). 게시(publish)는 서버 run_docs·pipe_exec.sh publish로 확인.
+#   원본은 DOC_SRC 폴더 하나(/data/docs). 게시(publish)는 서버 run_pipeline·pipe_exec.sh publish로 확인.
 # 종료 코드: 0 통과 · 그 밖 = 실패 단계의 종료 코드. 비밀값은 설정 파일에만(이 스크립트는 출력하지 않음).
 # 컨테이너는 SMOKE_SETTINGS를 읽기 전용으로 붙여 읽는다(서버 compose와 같은 꼴). 이 스크립트가
 #   호스트에서 쓰는 값(MCP 토큰)은 그 파일에서 꺼낸다(PY에 PyYAML 필요 — BaseLoader로 쓴 글자 그대로).
@@ -54,8 +54,8 @@ step "시험용 PostgreSQL" $DC up -d --wait pg               # 적재(load)·�
 step "⓪ 마스터 판(migrate up --target master)" $DC run --rm load migrate up --target master
 step "⓪ 마스터 표 채우기(migrate master load)" $DC run --rm load migrate master load
 step "① 파싱(data-pipeline)" $DC run --rm parse parse
-step "② 구조화(data-pipeline — run_docs와 같은 gold_bundle)" $DC run --rm --entrypoint python structure -m pipeline.transform.structure.gold_bundle --parse-dir /app/output/parse --out /app/output/edw/bundle
-# 적재는 서버 실제 길(run_docs.py와 같은 `python -m pipeline.load.pgvector_load load` — README §4-4).
+step "② 구조화(data-pipeline — run_pipeline과 같은 gold_bundle)" $DC run --rm --entrypoint python structure -m pipeline.transform.structure.gold_bundle --parse-dir /app/output/parse --out /app/output/edw/bundle
+# 적재는 서버 실제 길(run_pipeline.py와 같은 `python -m pipeline.load.pgvector_load load` — README §4-4).
 #   표·vector 확장은 migrate가 먼저(실행 중 DDL 없음, 차원은 묶음 meta.json). 마스터 표는 맨 앞(⓪ — 구조화가 읽음).
 step "③-0 판(migrate up --target all — 묶음 차원·vector 확장)" $DC run --rm load migrate up --target all --bundle /app/output/edw/bundle --create-extension
 step "③ 적재(data-pipeline → pg — pgvector_load load)" $DC run --rm --entrypoint python load -m pipeline.load.pgvector_load load --bundle /app/output/edw/bundle
