@@ -107,7 +107,7 @@ bash deploy/host/scripts/pipe_exec.sh migrate up --target applog
 # 기대: [migrate] applog applog: 판 ['0002_applog'] (끝 0002_applog)
 bash deploy/host/scripts/pipe_exec.sh migrate up --target search                # 판이 그대로면 바뀌는 것 없이 같은 줄
 bash deploy/host/scripts/pipe_exec.sh migrate up --target master
-bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 기대: 갈래마다 "  비교: 차이 없음", 종료 코드 0
+bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 기대: 갈래마다 "판 끝 [...] · 코드의 끝 판 ...", 종료 코드 0
 ```
 - 갈래(`--target`)마다 따로 올리면 어느 갈래가 바뀌었는지 출력에서 바로 보인다. 한 번에는 `--target all`.
 - 0.3.0의 applog `0002_applog`는 새 표 `skip_doc_info` 하나만 만든다. **첫 `run_pipeline.py` 전에** 올린다 — 없으면 대상 목록·받기가 표 없음으로 멈춘다.
@@ -207,7 +207,7 @@ SC=applog                                                                     # 
 $DOCKER exec "$PG_C" psql -U "$PG_U" -d "$PG_D" -c "ALTER SCHEMA $SC RENAME TO ${SC}_rollback_$(date +%m%d)"   # 지우지 않고 비켜 둠
 $DOCKER exec "$PG_C" psql -U "$PG_U" -d "$PG_D" -c "CREATE SCHEMA $SC"        # pg_restore -n은 스키마 자체를 만들지 않는다
 $DOCKER exec -i "$PG_C" pg_restore -U "$PG_U" -d "$PG_D" -n "$SC" < "$BK/pg.dump"
-bash deploy/host/scripts/pipe_exec.sh migrate check --target applog           # 기대: 앞 판 코드로 "비교: 차이 없음"
+bash deploy/host/scripts/pipe_exec.sh migrate check --target applog           # 기대: 앞 판 코드로 "판 끝 [...]", 종료 코드 0
 ```
 - 권한(GRANT)은 DB 담당이 원래대로 맞춘다. 비켜 둔 스키마는 확인 뒤 DB 담당이 지운다.
 - 그 사이 새 판이 쓴 applog 행·검색 적재는 되살린 스키마에 없다(비켜 둔 스키마에 남음).
