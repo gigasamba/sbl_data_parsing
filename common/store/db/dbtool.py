@@ -73,15 +73,19 @@ def known(target):
 
 # ── 판 상태 — q는 SQL 글자 → [dict] 함수(psycopg PG.q·SQLAlchemy 연결 둘레) ───────────────────
 def schema_of(target, schema=None):
-    """갈래의 스키마 — search는 기준 스키마 그대로, master는 `<기준>_master`(pl-38 — 개발자마다 기준이 다르니 이름도 따라감), applog는 고정 이름."""
+    """갈래의 스키마 — search는 기준 스키마 그대로, master는 `<기준>_master`(pl-38 — 개발자마다 기준이 다르니 이름도 따라감), applog는 고정 이름
+    (기록하는 쪽이 늘 `applog`에 쓰므로 다른 이름은 거부 — PC 시험 스키마 `test_*`만 예외)."""
     if target == "master":
         from common.store.master import schema_name
 
         return schema_name(schema_of("search", schema))
     if target == "applog":
         schema = schema or "applog"
-        if not _SCHEMA_RE.fullmatch(schema) or schema == "public":
-            raise DbToolError("applog 스키마 이름이 틀림")
+        if not _SCHEMA_RE.fullmatch(schema) or not (schema == "applog" or schema.startswith("test_")):
+            raise DbToolError(
+                f"applog 표는 applog 스키마에만 만든다(로그를 쓰는 쪽이 늘 applog에 씀) — --schema {schema!r}는 안 됨. "
+                "--target applog에는 --schema를 빼거나 applog로(PC 시험 스키마 test_*만 예외)"
+            )
         return schema
     if schema is None:
         from common.store.pg import conf
@@ -350,6 +354,8 @@ def main(argv=None):
         ap.error("maintain은 --target applog만 지원")
     if (a.cmd == "master") != (a.sub == "load"):
         ap.error("master는 `master load`로만")
+    if a.target == "applog":
+        schema_of("applog", a.schema)  # 스키마 이름 거부는 접속 확인보다 먼저
     from common.store.pg import has_conn
 
     if not has_conn():

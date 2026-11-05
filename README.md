@@ -95,7 +95,7 @@ pgvector의 표는 코드가 실행 중에 만들지 않는다. 모두 Alembic �
 | 갈래(`--target`) | 스키마 | 끝 판 |
 |---|---|---|
 | `search` | 기준 스키마(`required.pg.pg_schema`) + 원천 스키마 5벌 `<기준>_{sfdc,crms,las,faq,other}` | `0005_search`(0001→0005 차례로) |
-| `applog` | `applog`(고정 이름) | `0002_applog`(0001→0002 — 0002는 영구 건너뜀 표 `skip_doc_info`) |
+| `applog` | `applog`(고정 이름 — 다른 `--schema`는 종료 2, PC 시험 스키마 `test_*`만 예외) | `0002_applog`(0001→0002 — 0002는 영구 건너뜀 표 `skip_doc_info`) |
 | `master` | `<기준>_master` | `0001_master` — 채우기는 `master load` |
 
 | 명령 | 하는 일 |
