@@ -14,7 +14,7 @@
 1. 파싱 입력(`--source`, 설정 `pipeline.extract.input_source`)은 둘 중 하나여야 한다 — 폴더, 또는 `rdb:csv:<경로>`(문서 위치 표 CSV). 그 밖의 값이면 → 오류로 멈춘다.
 2. `rdb:csv`의 칸 이름은 설정 `pipeline.connections.rdb.columns`가 정한다 — 기본 `doc_id`=`id`, `key`=`s3_key`, `filename`=`original_filename`, `size`=`file_size`, `content_version`=`content_version_id`.
 2. 서버 러너 `run_docs.py`가 FileStorageMap에서 대상(파일 이름 키워드 `--filter`, 작은 파일부터)을 골라 `batch.csv`를 만들고 `rdb:csv`로 넘긴다(대상 고르기 규칙은 [ops.md#pl-23](ops.md#pl-23)).
-4. 미리 받기: `python -m pipeline.extract.fetch_docs warm`이 표의 파일을 `pipeline.extract.source.warm` 폴더에 먼저 받는다(비면 미리 받기 꺼짐). 받기에 실패한 파일은 파싱 때 직접 받는다.
+4. 미리 받기: `python -m pipeline.extract.candidate_ready warm`이 표의 파일을 `pipeline.extract.source.warm` 폴더에 먼저 받는다(비면 미리 받기 꺼짐). 받기에 실패한 파일은 파싱 때 직접 받는다.
 
 ### QA
 - `tests/server/pipeline/test_candidate.py` · `tests/server/pipeline/test_rdb_discover.py`.

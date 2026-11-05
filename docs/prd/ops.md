@@ -31,10 +31,10 @@
 - 규칙:
   1. "새 문서" = `AI.FileStorageMap`에 있고 `AI.ParsingMeta`에 끝난 행이 없는 것. 키 = `s3_key`(갱신 시각은 보지 않음).
   2. "끝난 행" = `parse_status`가 `skipped_dup`, 또는 `ok`·`partial`이면서 `gold_version`이 있음(`gold_version` 칸이 없는 EDW에서는 `parse_status`만 봄). `not_parsed`·`skipped_disk_cap`·실패·행 없음은 다시 고른다. 코드 두 곳이 같은 목록을 쓴다 — `common/store/parsing_meta_db.DONE_STATUSES`·`run_docs.py DONE_STATUSES`.
-  3. 파싱 입구(`pipeline.cli parse` → `pipeline/extract/fetch_docs.py` `unparsed`)는 EDW를 한 번 읽는다(읽기 계정, PC는 sqlite 대역). 못 읽으면 RUN_ENV가 local이 아니면 종료 4, 그 밖은 받은 목록 그대로 + 로그 한 줄. 키 = 수집 manifest의 `key`(없으면 이름).
+  3. 파싱 입구(`pipeline.cli parse` → `pipeline/extract/candidate_pick.py` `unparsed`·`done_keys`)는 EDW를 한 번 읽는다(읽기 계정, PC는 sqlite 대역). 못 읽으면 RUN_ENV가 local이 아니면 종료 4, 그 밖은 받은 목록 그대로 + 로그 한 줄. 키 = 수집 manifest의 `key`(없으면 이름).
   4. 전체 재파싱은 사람이 전체 e2e를 시작할 때만([pl-54](#pl-54)).
   5. 새벽 배치: settings.yaml `ops.nightly.time`(시작 HH:MM)·`max_docs`(새 문서 수 상한, 1 이상)·`deadline`(마감 HH:MM, 시작보다 5분 넘게 뒤) — 하나라도 비면 돌지 않는다. systemd `data-pipeline-nightly.timer`(`OnCalendar=*:0/5`)가 `nightly_batch.sh scheduled`를 부르고, 시작 시각부터 5분 안이면 `run_docs.py --start-offset 0 --skip-done --max-docs <n> --deadline <hh:mm>`. 형식 오류면 종료 2. 서비스 `TimeoutStartSec=6h`.
-- 파일: `pipeline/extract/fetch_docs.py`(`unparsed`), `common/store/parsing_meta_db.py`, `deploy/host/scripts/{run_docs.py,nightly_batch.sh}`, `deploy/host/systemd/data-pipeline-nightly.{timer,service}`.
+- 파일: `pipeline/extract/candidate_pick.py`(`done_keys`·`unparsed`), `common/store/parsing_meta_db.py`, `deploy/host/scripts/{run_docs.py,nightly_batch.sh}`, `deploy/host/systemd/data-pipeline-nightly.{timer,service}`.
 - QA: `tests/general/deploy/test_trigger_gate.py`·`tests/server/pipeline/test_nightly_time.py`·`test_run_docs`(`deadline_at`, `test_done_keys_match_parsing_meta`) · 통과. 서버 확인 refactor.md C-72.
 - Status: done
 
@@ -244,6 +244,6 @@
   5. `cpu_ms`·`rss_peak_mb`는 Linux에서 프로세스에 하나만 도는 span만 채우고, 겹치거나 측정 못 하면 NULL.
   6. 분석: `python -m pipeline.tools.perf_report [<run_id>] [--since <시간>] [--top N] [--compare <run_id>…] [--runs] [--file output/logs/*.jsonl]` — 읽기 전용.
      다운로드(`extract.download`)는 `--since` 요약에 ■ 다운로드 표(크기 구간별 순수 전송 mbps·head·잠금 대기)로 나온다. 서버에서는 `podman exec data-pipeline python -m pipeline.tools.perf_report --since <시간>`으로 본다.
-- 파일: `common/core/{jsonlog,span,exitclean}.py`, `common/store/logsink.py`, `mcp_server/services/call_log.py`, `pipeline/shared/runtrace.py`, `pipeline/tools/perf_report.py`, `pipeline/extract/{doc_lane_group,fetch_docs}.py`.
+- 파일: `common/core/{jsonlog,span,exitclean}.py`, `common/store/logsink.py`, `mcp_server/services/call_log.py`, `pipeline/shared/runtrace.py`, `pipeline/tools/perf_report.py`, `pipeline/extract/{doc_lane_group,candidate_ready}.py`.
 - QA: `tests/server/common/test_{jsonlog,logsink,span,span_soft,call_event}.py`·`tests/server/mcp/test_call_log.py`·`tests/server/pipeline/test_{runtrace,perf,span_stages,doc_group}.py`·`tests/general/common/test_applog_pg.py`(PC 임시 PG 스키마) · 통과. 서버 적용 refactor.md C-79·C-80.
 - Status: done

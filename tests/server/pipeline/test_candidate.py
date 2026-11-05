@@ -1,4 +1,4 @@
-"""pipeline.extract.candidate_ready 시험."""
+"""pipeline.extract.candidate_pick(고르기)·candidate_ready(받기·끝 정리) 시험."""
 
 import contextlib
 import json
@@ -7,9 +7,10 @@ from pathlib import Path
 import pipeline.extract.candidate_ready as M
 from common.core.contract import jl
 from pipeline import config as pc
+from pipeline.extract import candidate_pick as CP
+from pipeline.extract.candidate_pick import _safe_name
 from pipeline.extract.candidate_ready import (
     _safe_join,
-    _safe_name,
     finish,
     resolve,
 )
@@ -81,6 +82,8 @@ def _selftest_rdb_cols():
     M._s3 = lambda: _FakeS3({("rag-docs", f"clients/d{i}.pdf"): ("unused", b"docA") for i in range(3)})
     try:
         with pc.PIPE.env(RDB_COL_DOC_ID="doc_id", RDB_COL_KEY="object_key", RDB_COL_SIZE="size_bytes"):
+            # ParsingMeta에 끝난 키는 받기 전에 빠짐(다운로드·manifest 없음)
+            assert resolve(f"rdb:csv:{p}", d / "pre", done={"clients/d1.pdf"})[1] == ["d0", "d2"]
             _, names, state = resolve(f"rdb:csv:{p}", d)
             assert names == ["d0", "d1", "d2"], names
             man = {r["file_name"]: r for r in jl(state / "manifest.jsonl")}
@@ -260,7 +263,7 @@ def test_folder_tree():
 
 
 def test_prepare_batch():
-    """파싱 전 extract — 같은 내용은 하나만, ParsingMeta에 끝난 문서(unparsed가 뺀 것)는 빠짐 · pick_new는 상한·목록 안에서만."""
+    """파싱 전 extract — ParsingMeta에 끝난 문서(done_keys)는 고를 때(받기 전) 빠지고, 같은 내용은 하나만 · pick_new는 상한·목록 안에서만."""
     import tempfile
     from unittest import mock
 
@@ -278,13 +281,13 @@ def test_prepare_batch():
         dedup.run_folder(src, root / "out" / "dedup")
         return 0
 
-    with mock.patch.object(M, "unparsed", lambda names, out: [n for n in names if n != "c.txt"]):
+    with mock.patch.object(CP, "done_keys", lambda: {"c.txt"}):
         local, keep, state = M.prepare_batch(str(src), root / "out", 0, run_step)
         assert steps == ["pipeline.extract.deduplication"] and Path(local) == src
         assert len(keep) == 1 and keep[0] in ("a.txt", "b.txt"), keep
-        assert (state / "selected.txt").read_text(encoding="utf-8").split() == ["a.txt", "b.txt", "c.txt"]
+        assert (state / "selected.txt").read_text(encoding="utf-8").split() == ["a.txt", "b.txt"]  # 끝난 c.txt는 고를 때 빠짐
         only = root / "only.txt"
         only.write_text("b.txt\n", encoding="utf-8")
         for max_new, sel, want in ((1, None, ["a.txt"]), (5, only, ["b.txt"])):
-            f = M.pick_new(src, root / "out", max_new, sel)
+            f = CP.pick_new(src, root / "out", max_new, sel)
             assert f.read_text(encoding="utf-8").split() == want, (max_new, want)

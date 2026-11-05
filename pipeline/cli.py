@@ -80,6 +80,7 @@ def parse_module(a):
     """파싱 모듈: (--source면) 가져오기·시험 표본 → 중복 확인 → 방향 보정 → 파싱 → 채점 → 대표 결과 → 끝 표시 → (s3) 원본 정리.
     임베딩·DB 연결 없음 — 수집 서버에 이것만 보낼 수 있음. --source 없으면 --src(이미 준비된 폴더)를 그대로."""
     from common.core.paths import child_env
+    from pipeline.extract import candidate_pick as PICK
     from pipeline.extract import candidate_ready as SRC
     from pipeline.transform.parse import engine_check
     from pipeline.transform.parse import parse_engines as RE
@@ -105,7 +106,7 @@ def parse_module(a):
             raise SystemExit(rc)
         lim = ["--docs-from", only]
     if a.max_new:
-        lim = ["--docs-from", SRC.pick_new(a.src, OUT, a.max_new, lim[1] if lim else None)]
+        lim = ["--docs-from", PICK.pick_new(a.src, OUT, a.max_new, lim[1] if lim else None)]
     env = C.child_env(child_env(), VLM_CONCURRENCY=str(RE.vlm_doc_concurrency(a, lim)), LLM_BASE_URL=None)  # 파싱 모듈은 LLM을 부르지 않음
 
     def step(args):  # 단계마다 걸린 시간(docflow-step 로그 — parse_engines는 parse)
@@ -139,7 +140,7 @@ def parse_module(a):
     ):
         return
     if src_info:
-        if SRC.is_remote(a.source):
+        if PICK.is_remote(a.source):
             SRC.finish(src_info[0], src_info[1], OUT / "parse" / "_rep" / "index.json")
 
 
