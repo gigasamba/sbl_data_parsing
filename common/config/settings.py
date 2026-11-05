@@ -1499,7 +1499,7 @@ class CommonHost(Section):
         "INSTANCE",
         "한 서버에 여러 벌(개발자별 등) 띄울 때 이 루트의 이름(영소문자·숫자·-) — 컨테이너 이름·compose 묶음·systemd 타이머 이름 끝에 -<이름>으로 붙음."
         " 비우면 이름 그대로(한 벌). 적으면 PG 스키마·EDW 기록 표 끝에 _<이름>(-는 _로), 개발 서버(dev) 게시 경로에 <접두>/<이름>."
-        " 포트(search.server.port · ops.services.data_parsing.port)는 벌마다 다르게(기본값 그대로면 시작 거부) · prd에서는 쓰지 않음(시작 거부)",
+        " 포트(search.server.mcp_port · ops.services.data_parsing.data_parsing_port)는 벌마다 다르게(기본값 그대로면 시작 거부) · prd에서는 쓰지 않음(시작 거부)",
     )
     image_stage_dir: str | None = F(None, "IMAGE_STAGE_DIR", "prune_images.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값)")
     output_root: str | None = F(

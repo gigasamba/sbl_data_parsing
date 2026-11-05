@@ -176,7 +176,7 @@ def test_read_settings_new_layout(tmp_path):
     """러너는 파일 배치를 모델 배치로 바꿔 읽고(글자 그대로), 옛 배치·같은 칸 두 번은 거부."""
     f = tmp_path / "settings.yaml"
     f.write_text(
-        "required:\n  env: {run_env: dev}\n  edw: {read_password: '0123'}\nops:\n  run_pipeline:\n    staging: {max_docs: '30'}\n    structure: {max_backlog: null}\n",
+        "required:\n  env: {run_env: dev}\n  edw: {edw_read_password: '0123'}\nops:\n  run_pipeline:\n    staging: {staging_max_docs: '30'}\n    structure: {structure_max_backlog: null}\n",
         encoding="utf-8",
     )
     doc, err = RD.read_settings(f)
@@ -189,7 +189,8 @@ def test_read_settings_new_layout(tmp_path):
     doc, err = RD.read_settings(f)
     assert doc == {} and "common.run_env → required.env.run_env" in err
     f.write_text(
-        "required:\n  env: {run_env: dev}\nops:\n  host: {docker: podman}\nops:\n  nightly: {start_time: '01:00'}\n", encoding="utf-8"
+        "required:\n  env: {run_env: dev}\nops:\n  host: {docker: podman}\nops:\n  nightly: {nightly_start_time: '01:00'}\n",
+        encoding="utf-8",
     )
     doc, err = RD.read_settings(f)
     assert doc == {} and "같은 칸 두 번: ops" in err  # 앱 settings와 같은 거부(layout.reject_dup_keys)

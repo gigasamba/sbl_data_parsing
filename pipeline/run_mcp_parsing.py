@@ -2,7 +2,7 @@
 """텍스트 파싱 작업 서비스 — mcp-data-parsing 컨테이너의 주 프로세스(compose.data-parsing.yml — 죽으면 restart가 다시 띄움).
 검색 MCP(mcp-server)의 parse_document 도구가 localhost HTTP로 부른다(비정형 파일 → 텍스트 파싱 대표 결과).
 범위 — 준비 → parse_engines(문서의 엔진들 동시에) → 채점 → 대표 결과까지. 구조화·임베딩·적재 없음 · 이미지 파일은 받지 않음 ·
-스캔 PDF는 내부망 VLM(qwen_vlm). 토큰은 settings.yaml required.tokens.mcp(검색 MCP와 같은 칸, 없으면 시작 거부).
+스캔 PDF는 내부망 VLM(qwen_vlm). 토큰은 settings.yaml required.tokens.mcp_token(검색 MCP와 같은 칸, 없으면 시작 거부).
 API(127.0.0.1:8766 · Bearer):  POST /jobs {content_b64+filename | path} → 202 {job_id, queue_position}
   GET /health  → {ok, ready, running, queued} · GET /jobs/<id> → {status, result, elapsed_ms}"""
 
@@ -304,7 +304,7 @@ class Handler(BaseHTTPRequestHandler):
             n = int(self.headers.get("Content-Length") or 0)
             if n > parse_limit.body_cap():  # 상한 안 파일이면 크기 판정은 _submit의 _check_size가 함
                 raise ValueError(
-                    f"요청 본문이 크기 상한보다 큼 — 파일 상한 {common_cfg().runtime.parse_max_mb:g}MB(ops.services.data_parsing.max_file_mb)"
+                    f"요청 본문이 크기 상한보다 큼 — 파일 상한 {common_cfg().runtime.parse_max_mb:g}MB(ops.services.data_parsing.mcp_parse_max_file_mb)"
                 )
             source = json.loads(self.rfile.read(n) or b"{}")
             job_id, ahead = _submit(source)
@@ -328,7 +328,7 @@ if __name__ == "__main__":
     )  # S7a(D-028 ②) — 실행 환경 없으면 시작 거부(서버면 설정 검증 실패도 — S7e2 U-1)
     if not TOKEN:  # D-028 ⑨(S7c) — 옛 코드 기본 토큰 없앰: 설정에 없으면 시작 거부(값은 찍지 않음)
         print(
-            "[설정] run_mcp_parsing: 토큰 없음 — settings.yaml required.tokens.mcp를 적음(검색 MCP와 같은 칸)",
+            "[설정] run_mcp_parsing: 토큰 없음 — settings.yaml required.tokens.mcp_token를 적음(검색 MCP와 같은 칸)",
             file=sys.stderr,
         )
         raise SystemExit(2)

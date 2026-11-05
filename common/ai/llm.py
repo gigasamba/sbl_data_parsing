@@ -250,7 +250,7 @@ def chat(messages, temperature=0.0, max_tokens=1024, json_mode=False, allow_exte
         return last_user[:200] + "[FAKE]"
     base, model = cfg().models.llm.base_url, cfg().models.llm.model
     if not (base and model):
-        raise LLMUnavailable("LLM_BASE_URL·LLM_MODEL 미설정(settings.yaml required.llm.base_url·model)")
+        raise LLMUnavailable("LLM_BASE_URL·LLM_MODEL 미설정(settings.yaml required.models.llm_base_url·llm_model)")
     if not is_internal(base) and not external_ok(allow_external or cfg().models.llm.allow_external):
         why = run_env_block()
         raise LLMUnavailable(

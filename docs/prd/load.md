@@ -76,7 +76,7 @@
 
 ### 규칙
 1. `load()`에서 `require_vectors` 바로 뒤(EDW 조인·분류·쓰기 전): 5벌의 `doc.embed_model`(빈 칸 제외, 표가 없는 스키마는 건너뜀)을 모아 묶음 `meta.json` `embed_model`과 `embed.model_key`로 비교한다(`openai/` 앞붙이는 같게 봄). 모은 것이 비었거나 묶음 모델 하나와 같으면 통과.
-2. 다르면 → 아무것도 쓰지 않고 종료 2. stderr에 `[load] 임베딩 모델이 다름 — 적재 거부(…)` 한 줄, `ops.log.db_enabled`가 켜져 있으면 `applog.pipe_event` 한 행: `layer` `load` · `stage` `load.embed_guard` · `model` 묶음 모델 · `status` `fail` · `err_kind` `env` · `err` `embed_model_mismatch: expected <기존>, got <묶음> (bundle <경로>)`.
+2. 다르면 → 아무것도 쓰지 않고 종료 2. stderr에 `[load] 임베딩 모델이 다름 — 적재 거부(…)` 한 줄, `ops.log.log_db_enabled`가 켜져 있으면 `applog.pipe_event` 한 행: `layer` `load` · `stage` `load.embed_guard` · `model` 묶음 모델 · `status` `fail` · `err_kind` `env` · `err` `embed_model_mismatch: expected <기존>, got <묶음> (bundle <경로>)`.
 3. 모델을 바꾸려면 새 검색 스키마에 적재한다(`--replace`도 거부).
 
 ### QA
@@ -98,11 +98,11 @@
 
 ### 규칙
 1. 올리는 것: 대표 결과 `.md`(`render_md` — 본문 + 표) + 같은 폴더에 대표 결과 JSON(`<이름>_<날짜>.json`)·엔진별 원결과(`engine/<엔진>_<판>_<이름>.json`)·그림 기록(`engine/vlm_<모델>_<이름>.jsonl`). 원본 파일은 올리지 않는다. `.md`를 마지막에 써서 완료 표시로 삼는다.
-2. 대표 결과 키 = `<required.publish.prefix>/<source_system>/<원본 키 폴더들>/<원본 파일 이름(확장자 뺌)>_<parse_date>.md`. 조각마다 파일 이름에 쓸 수 없는 글자를 정리하고, 정리로 원본 키와 달라지면 마지막 조각에 `__h<원본 키 sha1 앞 10자>`를 붙인다. `parse_date` = `YYYY-MM-DD_HHMMSS`. 같은 키가 이미 있으면 `<parse_date>-2`, `-3` …으로 새 폴더 — 덮어쓰지 않는다. ParsingMeta `rep_key`는 그 폴더(끝 `/`).
+2. 대표 결과 키 = `<required.publish.publish_prefix>/<source_system>/<원본 키 폴더들>/<원본 파일 이름(확장자 뺌)>_<parse_date>.md`. 조각마다 파일 이름에 쓸 수 없는 글자를 정리하고, 정리로 원본 키와 달라지면 마지막 조각에 `__h<원본 키 sha1 앞 10자>`를 붙인다. `parse_date` = `YYYY-MM-DD_HHMMSS`. 같은 키가 이미 있으면 `<parse_date>-2`, `-3` …으로 새 폴더 — 덮어쓰지 않는다. ParsingMeta `rep_key`는 그 폴더(끝 `/`).
 3. ParsingMeta에는 INSERT만 한다 — 키(`source_system`, `source_key` = 원본 전체 키)가 이미 있으면 건너뛴다. UPDATE 예외는 [pl-12](#pl-12) 규칙 3뿐.
-4. 상태 `parse_status` = `ok` · `partial`(교차 정확도 < 0.95 — [transform.md#pl-04](transform.md#pl-04)) · `failed` · `skipped_drm` · `skipped_dup` · `not_parsed` · `skipped_disk_cap`. 올리는 상태는 `tuning.load.publish.upload_statuses`(기본 `ok`·`partial`).
+4. 상태 `parse_status` = `ok` · `partial`(교차 정확도 < 0.95 — [transform.md#pl-04](transform.md#pl-04)) · `failed` · `skipped_drm` · `skipped_dup` · `not_parsed` · `skipped_disk_cap`. 올리는 상태는 `tuning.load.publish.publish_upload_statuses`(기본 `ok`·`partial`).
 5. `skipped_drm`·`failed`는 EDW에 쓰지 않고 `output/publish/excluded_<날짜>.md` 보고서에만.
-6. 게시 버킷이 원천 원본 버킷과 같은지는 검사하지 않는다(rn-07 — `run_pipeline`가 늘 끄던 검사를 지움). `required.publish.bucket`을 원천 버킷과 다르게 두는 것은 운영자 몫.
+6. 게시 버킷이 원천 원본 버킷과 같은지는 검사하지 않는다(rn-07 — `run_pipeline`가 늘 끄던 검사를 지움). `required.publish.publish_bucket`을 원천 버킷과 다르게 두는 것은 운영자 몫.
 
 ### QA
 - `tests/server/pipeline/test_publish_parse.py` · `tests/server/common/test_no_deleted.py`.
@@ -113,9 +113,9 @@
 
 ### 규칙
 1. 게시(silver → Object Storage + EDW)는 기본이자 유일한 방식이다 — 끄는 선택지가 없다. `run_pipeline`는 문서마다 늘 게시한다([ops.md#pl-24](ops.md#pl-24) — gold 전).
-2. 게시·EDW 칸은 settings.yaml `required` 한곳에 있다 — 게시 위치 `required.publish.bucket`·`prefix`, Object Storage 접속 `required.object_storage`(`endpoint`·`region`·`access_key`·`secret_key`·`verify_tls`), EDW `required.edw`(`parsing_meta_table`·`host`·`port`·`database`·`read_*`·`write_*`·`local_sqlite_file`). 칸마다 주석에 서버·PC에 넣을 값을 적는다. 옛 자리(`required.source.publish_*`·`dev.connections.rdb.sqlite`·`common.connections.…`)도 경고 한 번 뒤 읽는다.
-3. 서버(`run_pipeline`)는 게시 버킷·접두, Object Storage 주소·키, EDW 주소·읽기·쓰기 계정이 비면 칸 이름을 찍고 시작을 거부한다(종료 2). `region`·`verify_tls`·`port`·`parsing_meta_table`은 비우면 코드 기본값(`us-east-1`·`1`·1433·`AI.ParsingMeta`).
-4. PC(`local`)는 로컬 대역만 적는다 — 게시 버킷 `file://<가짜 Object Storage 폴더 절대 경로>`(S3 접속 칸 비움), EDW `required.edw.local_sqlite_file`(가짜 EDW 파일 — 접속 칸 비움). 가짜 EDW는 `local`에서만 열린다(서버 설정에 있으면 EDW를 쓸 때 거부). PC에서는 운영 EDW·Object Storage에 접속하지 않는다(CLAUDE.md §4).
+2. 게시·EDW 칸은 settings.yaml `required` 한곳에 있다 — 게시 위치 `required.publish.publish_bucket`·`publish_prefix`, Object Storage 접속 `required.object_storage`(`object_storage_endpoint`·`object_storage_region`·`object_storage_access_key`·`object_storage_secret_key`·`object_storage_verify_tls`), EDW `required.edw`(`parsing_meta_table`·`edw_host`·`edw_port`·`edw_database`·`read_*`·`write_*`·`edw_local_sqlite_file`). 칸마다 주석에 서버·PC에 넣을 값을 적는다. 옛 자리(`required.source.publish_*`·`dev.connections.rdb.sqlite`·`common.connections.…`)도 경고 한 번 뒤 읽는다.
+3. 서버(`run_pipeline`)는 게시 버킷·접두, Object Storage 주소·키, EDW 주소·읽기·쓰기 계정이 비면 칸 이름을 찍고 시작을 거부한다(종료 2). `object_storage_region`·`object_storage_verify_tls`·`edw_port`·`parsing_meta_table`은 비우면 코드 기본값(`us-east-1`·`1`·1433·`AI.ParsingMeta`).
+4. PC(`local`)는 로컬 대역만 적는다 — 게시 버킷 `file://<가짜 Object Storage 폴더 절대 경로>`(S3 접속 칸 비움), EDW `required.edw.edw_local_sqlite_file`(가짜 EDW 파일 — 접속 칸 비움). 가짜 EDW는 `local`에서만 열린다(서버 설정에 있으면 EDW를 쓸 때 거부). PC에서는 운영 EDW·Object Storage에 접속하지 않는다(CLAUDE.md §4).
 
 ### QA
 - 칸 자리·옛 자리: `tests/server/common/test_layout.py::test_publish_edw_keys_in_required`. 서버 시작 검사는 `run_pipeline.py` `SETTINGS_REQUIRED`(자동 시험 없음).

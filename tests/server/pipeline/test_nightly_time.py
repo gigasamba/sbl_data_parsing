@@ -1,4 +1,4 @@
-"""settings.yaml ops.nightly.start_time·stop_time(모델 pipeline.host.nightly — NIGHTLY_TIME·NIGHTLY_DEADLINE, pl-32·사용자 11-02): 비움·공백만 = 새벽 배치 없음(None),
+"""settings.yaml ops.nightly.nightly_start_time·nightly_stop_time(모델 pipeline.host.nightly — NIGHTLY_TIME·NIGHTLY_DEADLINE, pl-32·사용자 11-02): 비움·공백만 = 새벽 배치 없음(None),
 HH:MM만 받음, 틀린 꼴은 서버(STRICT)가 설정 읽기에서 거부. max_docs(NIGHTLY_MAX_DOCS)는 1 이상 정수.
 PR #44 리뷰 — `start_time: ""`가 꼴 검사에 걸려 서버 시작이 막히던 것. 외부 접속 없음, 임시 폴더만."""
 

@@ -147,14 +147,14 @@ def selftest():
         bad.write_text(
             _new(f"common:\n  connections:\n    pg:\n      port: abc\n      password: [{secret}]\n      hots: x\n"), encoding="utf-8"
         )
-        ok, msg = raises(lambda: load(_TApp, file=bad, environ={}), "required.pg.port", "common.connections.pg.hots")
+        ok, msg = raises(lambda: load(_TApp, file=bad, environ={}), "required.pg.pg_port", "common.connections.pg.hots")
         check("검증 오류: 칸 경로·오타 칸을 알림", ok)
         check("검증 오류: 비밀 칸 값은 메시지에 없음", ok and secret not in msg)
         (d / "empty.yaml").write_text("", encoding="utf-8")
         # 입력값은 어떤 칸에서도 찍지 않음: 비밀 칸 이름을 틀린 값(extra_forbidden)·형식 틀린 글자 값
         typo = d / "typo.yaml"
         typo.write_text(_new(f"common:\n  connections:\n    pg:\n      pasword: {secret}\n      port: wrong-{secret}\n"), encoding="utf-8")
-        ok, msg = raises(lambda: load(_TApp, file=typo, environ={}), "pg.pasword", "extra_forbidden", "pg.port")
+        ok, msg = raises(lambda: load(_TApp, file=typo, environ={}), "pg.pasword", "extra_forbidden", "pg_port")
         check(
             "검증 오류(R-1): 비밀 칸 오타·형식 오류에서도 입력값 없음(경로·오류 종류만)", ok and secret not in msg and "wrong-" not in msg
         )
@@ -450,7 +450,7 @@ def selftest():
             "덮기 파일 모르는 이름·형식 오류(R-3): 서버는 거부(이름·칸 경로만) · local은 경고 뒤 그 칸 버림",
             raises(lambda: load(CommonAppSettings, file=d / "ovs.yaml", environ={}), "PG_HSOT")[0]
             and (lambda r: r[0] and "54x32" not in r[1])(
-                raises(lambda: load(CommonAppSettings, file=d / "ovf.yaml", environ={}), "pg.port")
+                raises(lambda: load(CommonAppSettings, file=d / "ovf.yaml", environ={}), "pg_port")
             )
             and loc.common.connections.pg.port is None
             and loc._dropped == {"PG_PORT"}

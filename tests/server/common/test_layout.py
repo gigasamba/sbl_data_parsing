@@ -12,20 +12,20 @@ PC_NEW = """required:
   env:
     run_env: local
   pg:
-    host: 127.0.0.1
-    port: 55433
-    database: rag
-    user: rag
-    password: dummy-pg
-    db_schema: rag_test
-  embed:
-    base_url: http://127.0.0.1:9/v1
-    model: test-embed
-    api_key: dummy-key
+    pg_host: 127.0.0.1
+    pg_port: 55433
+    pg_database: rag
+    pg_user: rag
+    pg_password: dummy-pg
+    pg_schema: rag_test
+  models:
+    embed_base_url: http://127.0.0.1:9/v1
+    embed_model: test-embed
+    embed_api_key: dummy-key
 search:
   server:
-    bind_host: 127.0.0.1
-    port: 8765
+    mcp_bind_host: 127.0.0.1
+    mcp_port: 8765
 tuning:
   ops:
     runtime:
@@ -35,22 +35,22 @@ dev:
     guard:
       daily_budget_usd: 1.5
   search_ui:
-    mcp_url: http://127.0.0.1:8765/mcp
+    search_ui_mcp_url: http://127.0.0.1:8765/mcp
 """
 
 # 거부하는 칸 — (파일 본문, 읽는 앱, 오류에 나와야 하는 글자). 옛 자리는 새 자리를 알려 주고, 지운 칸·오타는 칸 이름만.
 REFUSED = (
-    ("common:\n  connections:\n    pg: {host: h}\n", "pipeline", "common.connections.pg.host → required.pg.host"),
+    ("common:\n  connections:\n    pg: {host: h}\n", "pipeline", "common.connections.pg.host → required.pg.pg_host"),
     ("common:\n  models:\n    guard: {spend_file: x}\n", "pipeline", "common.models.guard.spend_file → dev.models.guard.spend_ledger_file"),
     ("ops:\n  runtime: {pipe_procs: 2}\n", "pipeline", "ops.runtime.pipe_procs → ops.runtime.engine_processes"),  # 옛 이름 → 새 이름
-    ("required:\n  models: {llm_model: m}\n", "pipeline", "required.models.llm_model"),
+    ("required:\n  llm: {llm_model: m}\n", "pipeline", "required.llm.llm_model"),  # 모델 접속은 required.models 한 곳
     (
         "common:\n  models:\n    embed: {allow_external: true}\n",
         "pipeline",
-        "common.models.embed.allow_external → dev.models.embed.allow_external",
+        "common.models.embed.allow_external → dev.models.embed.embed_allow_external",
     ),
     ("dev:\n  pg_standin: {host: h}\n", "pipeline", "dev.pg_standin.host"),  # dev 절은 PC 전용 칸만
-    ("search:\n  weights: {bm25: 3}\n", "mcp", "search.weights.bm25 → tuning.search.weights.bm25"),
+    ("search:\n  weights: {bm25: 3}\n", "mcp", "search.weights.bm25 → tuning.search.weights.bm25_weight"),
     ("required:\n  source: {publish_bucket: b}\n", "pipeline", "required.source.publish_bucket"),
     ("required:\n  deploy: {mcp_store: pg}\n", "pipeline", "required.deploy.mcp_store"),
     ("required:\n  pg: {hots: h}\n", "pipeline", "required.pg.hots"),
@@ -126,7 +126,7 @@ def test_duplicate_key_rejected():
         assert _raises(lambda: read_settings(f), "같은 칸 두 번: search", "5행")
         f.write_text("required:\n  env: {run_env: local, run_env: dev}\n", encoding="utf-8")
         assert _raises(lambda: read_settings(f), "같은 칸 두 번: run_env")
-        f.write_text("required:\n  env: {run_env: local}\ndev:\n  search_ui:\n    <<: {port: 1}\n", encoding="utf-8")
+        f.write_text("required:\n  env: {run_env: local}\ndev:\n  search_ui:\n    <<: {search_ui_port: 1}\n", encoding="utf-8")
         assert read_settings(f)[0]["mcp"]["dev"]["ui_port"] == "1"  # 병합 열쇠는 거부하지 않음
         f.write_text("required:\n  env: {run_env: local}\n? [a]\n: 1\n", encoding="utf-8")
         assert _raises(lambda: read_settings(f), "YAML 형식 오류")  # 못 쓰는 열쇠도 TypeError가 아닌 설정 오류

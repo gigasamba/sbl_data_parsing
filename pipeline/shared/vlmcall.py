@@ -64,7 +64,7 @@ def dpi():
 
 
 def page_max():
-    """문서당 VLM으로 옮길 쪽 수 상한 `transform.vlm.max_pages_per_doc` — None = 전부, 0 = 끔, N = 앞 N쪽(엔진 qwen_vlm·쪽 VLM 공통)."""
+    """문서당 VLM으로 옮길 쪽 수 상한 `transform.vlm.vlm_max_pages_per_doc` — None = 전부, 0 = 끔, N = 앞 N쪽(엔진 qwen_vlm·쪽 VLM 공통)."""
     pc.checked("VLM_PAGE_MAX")  # 형식이 틀리면 여기서 실패(기본값이 '제한 없음'이라 조용히 넘기지 않음)
     v = pc.cfg().transform.vlm.page_max
     return None if v is None else int(v)
