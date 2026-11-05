@@ -18,7 +18,7 @@
     (.pdf_text/.pdf_image/확장자, stack.json과 같은 키)의 stack.json parse 목록만 돈다. --engines는 그 안에서 더 좁힐 뿐(비교 실험은
     stack json을 고쳐서). stack.json에 그 키가 없으면 핵심 엔진 합집합으로 대체(누락 방지)+형식별 1회 로그.
   앞 실행 결과를 다시 쓰지 않는다(실행마다 새 작업 폴더): 요청한 문서×엔진은 늘 돈다. runs.jsonl은 이번 실행의
-    시간·오류 기록(보고 도구가 읽음). 같은 실행 안의 같은 내용 사본(sha 같음)은 한 번만 파싱해 복사(runs에 reused_from).
+    시간·오류 기록(보고 도구가 읽음). 같은 내용 문서는 받은 뒤 중복 제외(candidate_ready)가 이미 하나만 남긴다.
   미설치·미설정(환경) 엔진은 이번 실행(프로세스) 안에서 처음 실패한 문서 뒤로 같은 엔진은 나머지 문서를 시도하지 않고
     runs.jsonl에 '건너뜀(환경 — 첫 실패 <문서>)'로 기록(문서마다 프로세스 기동·import 비용 반복 방지). 시간 초과·그 밖의 예외는 문서 탓일 수 있어 그대로 매 문서 시도.
     --procs 자식 프로세스끼리는 공유하지 않음(프로세스마다 다시 한 번 확인).
@@ -367,12 +367,8 @@ def main():
     src, out = Path(a.src), Path(a.out)
     if not a.shard:  # 배치 시작 1회(--shard로 포크된 자식은 건너뜀), p0_key·_rep·결정 기록은 안 지움
         purge_caches(out)
-    files = sorted(
-        p for p in src.iterdir() if p.is_file() and p.name not in (".gitkeep", "rotation.csv")
-    )  # 평면 · filter_and_rotate 기록 제외
-    docs = [p for p in files if registry.engines_for(p.suffix)]
-    doc_set = set(docs)  # 목록 안 찾기를 집합으로
-    skipped = Counter(p.suffix.lower() or "(없음)" for p in files if p not in doc_set)
+    # 평면 · filter_and_rotate 기록 제외 · 처리 엔진 없는 확장자는 거르기(filter_and_rotate)가 이미 뺌 — 남아도 엔진 후보가 없어 작업 0건
+    docs = sorted(p for p in src.iterdir() if p.is_file() and p.name not in (".gitkeep", "rotation.csv"))
     pc.checked("MAX_FILE_MB")  # 파일 크기 상한 — 형식 틀리면 실패(조용히 '제한 없음'이 되지 않게)
     max_mb = float(pc.cfg().extract.max_file_mb)  # 기본 0 · 큰 파일(수백 MB 스캔 PDF 등)은 메모리·시간 폭주 원인 — 0이면 제한 없음
     if max_mb:
@@ -387,7 +383,7 @@ def main():
         docs = [d for d in docs if d.name in names]
     if a.shard:
         i, k = map(int, a.shard.split("/"))
-        docs = [d for d in docs if int(_sha(d), 16) % k == i]  # 같은 내용 사본은 같은 조각 → 1번만 파싱 후 복사
+        docs = [d for d in docs if int(_sha(d), 16) % k == i]  # 내용 sha로 나눔(조각 사이 겹침 없음)
     want = registry.select(a.engines)  # 비우면 핵심 엔진(registry.CORE) · all이면 전부
     want_before_drop = want
     want = _drop_uninstalled(
@@ -405,8 +401,7 @@ def main():
     unverified = {e for e, (_, m) in registry.engines().items() if e in m.UNVERIFIED}
     run_id = os.environ.get("PARSE_RUN_ID") or None  # env 남김 — 내부 신호 · pipeline.cli가 넘기는 이번 실행 id(없으면 run_id 칸 없이 기록)
     # 앞 실행의 runs.jsonl로 건너뛰거나 결과를 복사하지 않는다(실행마다 새 작업 폴더 — runs.jsonl은 이번 실행 기록만).
-    # 같은 실행 안의 같은 내용 사본은 한 번만 파싱 후 복사(planned·deferred).
-    jobs, skip, planned, deferred = [], Counter(), {}, []
+    jobs = []
     with SP.span("extract.plan", docs=len(docs)) as plan_sp:  # 계획 단계 시간과 결정 요약을 span 1행으로(문서×엔진마다 행을 만들지 않음)
         # 엔진 범위는 stack 하나: 문서 형식별 stack.json 목록만
         stack = (
@@ -432,22 +427,14 @@ def main():
                     continue
                 dst = out / eng / (doc.name + ".json")
                 dst.parent.mkdir(parents=True, exist_ok=True)
-                if (eng, sha) in planned:  # 같은 실행 안의 같은 내용 사본 — 먼저 도는 것 결과를 끝나고 복사
-                    deferred.append((doc, eng, dst, sha, planned[(eng, sha)]))
-                    continue
-                planned[(eng, sha)] = dst
                 jobs.append((doc, eng, dst, sha))
-        if deferred:
-            skip["같은 내용 사본(1번만 파싱 후 복사)"] += len(deferred)
-        plan_sp.add(jobs=len(jobs), skipped=dict(skip), deferred=len(deferred))
+        plan_sp.add(jobs=len(jobs))
     # 범위는 stack 하나: 명시 --engines 중 stack 형식별 목록 밖(또는 이 문서들 형식에 없음)은 안 돎 — 조용히 빠지지 않게 1줄
-    idle = sorted(set(want or ()) - {e for _, e, _, _ in jobs} - {e for _, e, _, _, _ in deferred})
+    idle = sorted(set(want or ()) - {e for _, e, _, _ in jobs})
     if idle:
         print(f"{IDLE_MARK}(비교하려면 stack json을 고침): {', '.join(idle)}", flush=True)
-    if want and not jobs and not deferred:
+    if want and not jobs:
         print(NO_JOB_MARK, flush=True)
-    if skip:
-        print("건너뜀: " + " · ".join(f"{k} {v}" for k, v in skip.items()), flush=True)
     out.mkdir(parents=True, exist_ok=True)
     log, lock = RunLog(out / "runs.jsonl"), threading.Lock()
     print(f"이번 실행 {len(jobs)}건", flush=True)
@@ -559,23 +546,10 @@ def main():
 
     with runtrace.Progress(total=len(jobs), done=lambda: done[0], unit="doc_engine"):  # 60초마다 run.progress
         _run_pipeline(jobs, run_job, a.workers)
-    for doc, eng, dst, sha, first in deferred:  # 사본: 먼저 돈 결과가 성공이면 복사, 아니면 사본은 기록 안 함(다음 실행에서 다시 판단)
-        if first.exists():
-            dst.write_bytes(first.read_bytes())
-            rec = _with_run_id(
-                {"doc": doc.name, "engine": eng, "sec": 0, "error": None, "sha": sha, "reused_from": first.name[:-5], "chars": _chars(dst)},
-                run_id,
-            )
-            with lock:
-                log.write(json.dumps(rec, ensure_ascii=False) + "\n")
-                log.flush()
-                print(f"copy {eng:18s}          {doc.name}  ← {first.name[:-5]}", flush=True)
-    if skipped:
-        print("건너뜀(처리 엔진 없음):", ", ".join(f"{k} {v}" for k, v in skipped.most_common()))
 
 
 def run_procs(a, docs):
-    """문서를 N조각(내용 sha 기준 — 같은 내용 사본은 같은 조각)으로 나눠 프로세스 N개가 동시에(엔진 묶음이 아니라 문서 조각).
+    """문서를 N조각(내용 sha 기준)으로 나눠 프로세스 N개가 동시에(엔진 묶음이 아니라 문서 조각).
     조각마다 문서 안 엔진들은 동시에·엔진마다 별도 프로세스(run_job)라 조각 프로세스 자체는 세그폴트로 죽지 않는다."""
     from common.core import resources
 

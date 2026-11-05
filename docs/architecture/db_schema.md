@@ -166,7 +166,7 @@ PC 대역 EDW(`valid_env/edw/sfdc.sql`)에만 있는 **예시 칸**이다. 서�
 | original_filename | NVARCHAR(512) | 원본 파일 이름 | 〃 | 없음 | 삭제 |
 | file_format | NVARCHAR(32) | 형식 | 〃 | 없음 | 삭제 |
 | file_size | BIGINT | 크기 | 〃 | 없음 | 삭제 |
-| sha256 | NVARCHAR(64) | 원본 sha256 — 원문 도구 `doc_key`(입력·출력) · 같은 내용 묶기에 씀("파싱 정보만"의 예외) | publish_parse_result `plan` | mcp `fulltext_svc`(`list_doc_fulltext` `doc_key` 입력·출력) | 유지 |
+| sha256 | NVARCHAR(64) | 원본 sha256 — 원문 도구 `doc_key`(입력·출력) · 같은 내용 묶기에 씀("파싱 정보만"의 예외) | publish_parse_result `plan` | mcp `fulltext_svc`(`list_doc_fulltext` `doc_key` 입력·출력), parsing_meta_db `done_by_sha`(받은 파일 중복 제외 — candidate_ready `_dedup`, pl-02) | 유지 |
 | rep_bucket | NVARCHAR(256) | 대표 결과 버킷 | publish_parse_result `plan` | mcp `fulltext_svc`(`parsing_meta_db.rows_where`·`pick_rep` — 원문 도구가 부를 때 읽음) | 유지 |
 | rep_key | NVARCHAR(2048) | 대표 결과 폴더 | publish_parse_result `apply` | 〃(목록 `rep_uri`·sfid 발급, 등록 시각 가드의 폴더 → 원본 찾기) | 유지 |
 | rep_etag | NVARCHAR(128) | 대표 결과 etag | 〃 | 없음 | 삭제 |

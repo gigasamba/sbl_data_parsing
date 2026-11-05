@@ -17,6 +17,7 @@
 4. 만약 형식 키가 구성에 없으면 → 그 확장자를 읽는 등록 엔진 모두(OCR 엔진 제외)로 돌리고 형식마다 한 번 로그를 남긴다.
 5. 지원 형식 = 구성의 `parse` 키 43개: `.pptx` `.doc` `.docx` `.hwpx` `.png` `.jpg` `.jpeg` `.tif` `.tiff` `.bmp` `.eml` `.mht` `.mhtml` `.txt` `.html` `.htm` `.pdf_image` `.pdf_text` `.xls` `.xlsm` `.xlsx` `.ppt` `.msg` `.docm` `.pptm` `.rtf` `.csv` `.tsv` `.md` `.odt` `.ods` `.odp` `.xlsb` `.dotx` `.xltx` `.potx` `.ppsx` `.dot` `.xlt` `.pot` `.json` `.xml` `.log`. `.hwp`는 아직 아니다([pl-45](#pl-45)), 압축 파일은 지원하지 않는다.
 6. 구성의 엔진이 등록부(`pipeline/transform/parse/engines`)에 없거나 설치되지 않았으면 → 시작하지 않는다(종료 2).
+7. 파싱(`parse_engines`)은 입력 폴더의 파일을 그대로 문서로 본다 — 같은 내용 사본을 한 번만 돌려 복사하는 일과 확장자 거르기를 하지 않는다(중복 제외·미지원 거르기는 [pl-02](extract.md#pl-02)). 처리 엔진 없는 확장자 파일이 들어오면 엔진 후보가 없어 그 문서는 작업 0건이다. `--shard i/k`는 내용 sha256으로 문서를 나눈다.
 
 ### QA
 - `tests/server/pipeline/test_engine_check.py` · `tests/server/pipeline/test_engine_run.py`.

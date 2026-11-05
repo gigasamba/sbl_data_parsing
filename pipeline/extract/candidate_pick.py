@@ -222,12 +222,22 @@ def done_keys():
     """EDW ParsingMeta에 끝난 행(parsing_meta_db.done_source_keys — ok·partial 등)이 있는 원본 키 집합. EDW를 한 번 읽는다
     (읽기 계정, PC는 EDW 대역 sqlite `RDB_SQLITE`). 통째 실패는 ParsingMeta에 안 쓰므로 실패한 문서는 행이 없어 다음 실행이 다시 고른다.
     못 읽으면: 서버(RUN_ENV dev·prd·모르는 값)는 종료 4(전체 재파싱 안 함), PC는 빈 집합(받은 목록 그대로) + 로그 한 줄."""
+    return _read_done(lambda db: db.done_source_keys(), set())
+
+
+def done_by_sha(shas):
+    """EDW ParsingMeta에 끝난 행(done_keys와 같은 상태) 중 원본 sha256이 shas에 있는 것 → {sha256: (원본 키, parse_status)}.
+    못 읽을 때는 done_keys와 같다(서버 종료 4, PC는 빈 사전)."""
+    return _read_done(lambda db: db.done_by_sha(shas), {}) if shas else {}
+
+
+def _read_done(read, empty):
     from common.store import parsing_meta_db as PMDB
 
     try:
         db = PMDB.make_db("read")
         try:
-            return db.done_source_keys()
+            return read(db)
         finally:
             db.close()
     except (Exception, SystemExit) as ex:  # make_db는 접속 정보가 없으면 SystemExit
@@ -237,7 +247,7 @@ def done_keys():
             )
             raise SystemExit(4) from None
         print(f"[parse] EDW ParsingMeta 못 읽음({type(ex).__name__}) — 이력 없이 받은 목록 그대로 처리", flush=True)
-        return set()
+        return empty
 
 
 def unparsed(names, out):

@@ -17,7 +17,7 @@ from pipeline.extract.candidate_ready import (
 
 
 def mark_done(state, done_names, is_s3):
-    """시험용 — 파싱이 끝난 것처럼 처리 기록(processed.jsonl)만 남긴다(운영은 finish()가 같은 줄을 쓰고 원본도 지움)."""
+    """시험용 — 파싱이 끝난 것처럼 처리 기록(processed.jsonl)만 남긴다(운영은 finish()가 같은 줄을 씀)."""
     assert is_s3
     man = {r["file_name"]: r for r in jl(state / "manifest.jsonl")}
     with (state / "processed.jsonl").open("a", encoding="utf-8") as f:
@@ -204,8 +204,8 @@ def _selftest_same_key_new_version():
 
 
 def _selftest_finish_keep():
-    """SI39 요건⑧(2026-10-08) — 파싱이 끝나면 원본을 즉시 지운다(보존 스위치 KEEP_LOCAL_ORIGINALS는 op-08에 지움).
-    지우기 전에 sha256을 manifest에 남겨 publish_parse가 로컬 없이도 EDW 행을 쓸 수 있게 한다."""
+    """pl-02 — finish는 처리 기록과 sha256만 남기고 원본은 지우지 않는다(삭제는 게시 뒤 run_pipeline drop_original 한 곳).
+    sha256을 manifest에 남겨 publish_parse가 로컬 원본 없이도 EDW 행을 쓸 수 있게 한다."""
     import tempfile
 
     d = Path(tempfile.mkdtemp())
@@ -220,9 +220,10 @@ def _selftest_finish_keep():
     rep.write_text(json.dumps({"docs": [{"doc": "a.txt", "engine": "eng1"}]}), encoding="utf-8")
     finish(state, local, rep)
     man = {r["file_name"]: r for r in jl(state / "manifest.jsonl")}
-    assert not (local / "a.txt").exists(), "SI39 요건⑧ — 원본이 즉시 지워지지 않음"
+    assert (local / "a.txt").exists(), "finish가 원본을 지움 — 삭제는 drop_original 한 곳"
+    assert [json.loads(x)["key"] for x in (state / "processed.jsonl").read_text(encoding="utf-8").splitlines()] == ["k1"]
     assert man["a.txt"].get("sha256"), "지우기 전에 sha256을 manifest에 안 남김(publish_parse가 로컬 없이 EDW 행을 못 씀)"
-    print("[selftest] SI39 요건⑧ — 파싱 끝나면 원본 즉시 삭제 + sha256 기록 통과")
+    print("[selftest] finish — 처리 기록 + sha256 기록, 원본은 남김 통과")
 
 
 def test_main():  # 옛 `if "--selftest" in sys.argv:` 갈래
@@ -266,8 +267,7 @@ def test_stage_batch():
     """파싱 전 extract 한 번 — ParsingMeta에 끝난 문서(done)는 고를 때(받기 전) 빠지고, 같은 내용은 하나만, 거르기(filter_and_rotate)를 지난 것만
     only.txt에 남음 · pick_new는 상한·목록 안에서만."""
     import tempfile
-
-    from pipeline.extract import deduplication as dedup
+    from unittest import mock
 
     root = Path(tempfile.mkdtemp())
     src = root / "src"
@@ -277,20 +277,18 @@ def test_stage_batch():
     prepared = root / "prepared"
     steps = []
 
-    def run_step(args):  # 자식 대신 — 중복 확인은 같은 함수, 거르기는 그 결과를 흉내(압축은 건너뜀)
+    def run_step(args):  # 자식 대신 — 거르기 결과를 흉내(압축은 건너뜀). 중복 제외는 같은 프로세스
         steps.append(args[0])
-        if args[0] == "pipeline.extract.deduplication":
-            dedup.run_folder(src, root / "out" / "dedup")
-        else:
-            prepared.mkdir(exist_ok=True)
-            names = Path(args[args.index("--only") + 1]).read_text(encoding="utf-8").split()
-            for n in names:
-                if not n.endswith(".zip"):
-                    (prepared / n).write_text("x", encoding="utf-8")
+        prepared.mkdir(exist_ok=True)
+        names = Path(args[args.index("--only") + 1]).read_text(encoding="utf-8").split()
+        for n in names:
+            if not n.endswith(".zip"):
+                (prepared / n).write_text("x", encoding="utf-8")
         return 0
 
-    local, left, state, only = M.stage_batch(str(src), root / "out", prepared, 0, run_step, done={"c.txt"})
-    assert steps == ["pipeline.extract.deduplication", "pipeline.extract.filter_and_rotate"] and Path(local) == src
+    with mock.patch.object(CP, "done_by_sha", lambda shas: {}):  # ParsingMeta 읽기 없음
+        local, left, state, only = M.stage_batch(str(src), root / "out", prepared, 0, run_step, done={"c.txt"})
+    assert steps == ["pipeline.extract.filter_and_rotate"] and Path(local) == src
     assert (state / "selected.txt").read_text(encoding="utf-8").split() == ["a.txt", "b.txt", "d.zip"]  # 끝난 c.txt는 고를 때 빠짐
     assert len(left) == 1 and left[0] in ("a.txt", "b.txt") and only.read_text(encoding="utf-8").split() == left, (
         left

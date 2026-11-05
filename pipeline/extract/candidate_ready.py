@@ -5,7 +5,7 @@
   --source <서버 폴더>               같은 서버 폴더(샘플 데이터) — 그대로 씀
   --source rdb:csv:<경로>            문서 위치 표(csv — run_pipeline이 목록 파일에서 만든 batch.csv)의 키만 Object Storage에서 staging으로 받음
 
-Object Storage 원본 처리: 대표 결과가 나온 문서의 내려받은 원본은 parse 뒤 바로 지움.
+Object Storage 원본 처리: 대표 결과가 나온 문서는 parse 뒤 처리 기록·sha256만 남김(finish). 원본 삭제는 게시가 끝난 뒤 run_pipeline drop_original 한 곳.
 처리한 객체(ETag 또는 (key, 증분값))는 output/parse/_source/processed.jsonl에 기록 → 다음 실행에서 다시 받지 않음. 실패한 문서는 남겨 다음 실행이 다시 시도.
 검색 결과의 원본 위치(source_uri) = s3://버킷/키(SOURCE_MANIFEST로 common.core.ids.source_uri가 읽음).
 접속: OS_ENDPOINT · OS_ACCESS_KEY · OS_SECRET_KEY · OS_REGION(기본 us-east-1) · OS_VERIFY_TLS(기본 1, 사내 CA면 경로) — 비밀값은 settings.yaml에만.
@@ -244,7 +244,7 @@ def _folder_tree(src, files, out, state):
 
 
 def _record_sha_before_delete(state, local, done, field="sha256"):
-    """지우기 전에 sha256을 manifest.jsonl에 남겨 둠(원본을 즉시 지워도 publish_parse_result가 로컬 없이도 EDW 행을 쓸 수 있게). 못 읽으면(파일이 이미 없는 등) 그 문서만 건너뜀."""
+    """sha256을 manifest.jsonl에 남겨 둠(원본이 지워진 뒤에도 publish_parse_result가 로컬 없이 EDW 행을 쓸 수 있게). 못 읽으면(파일이 이미 없는 등) 그 문서만 건너뜀."""
     man_f = state / "manifest.jsonl"
     man = {r["file_name"]: r for r in jl(man_f)}
     changed = False
@@ -261,9 +261,9 @@ def _record_sha_before_delete(state, local, done, field="sha256"):
 
 
 def finish(state, local, rep_index):
-    """Object Storage에서 받은 원본: 대표 결과가 나온 문서는 처리 완료로 기록하고 로컬 원본·사본을 **바로** 지움
-    (publish_parse_result가 원본을 올리지 않으므로 기다릴 이유가 없다).
-    지우기 전에 항상 sha256을 manifest에 남긴다(`_record_sha_before_delete`) — publish_parse_result `plan()`이 로컬 원본 없이도 이 값으로 EDW 행을 쓸 수 있게."""
+    """Object Storage에서 받은 원본: 대표 결과가 나온 문서는 처리 완료로 기록하고(processed.jsonl) sha256을 manifest에 남긴다
+    (`_record_sha_before_delete` — publish_parse_result `plan()`이 로컬 원본 없이도 이 값으로 EDW 행을 쓸 수 있게).
+    파일은 지우지 않는다 — 원본 삭제는 게시가 끝난 뒤 run_pipeline `drop_original()` 한 곳."""
     man_f = state / "manifest.jsonl"
     if not man_f.exists():
         return
@@ -278,53 +278,75 @@ def finish(state, local, rep_index):
         for r in done:
             f.write(json.dumps({"key": r["key"], "etag": r["etag"], "ver": r.get("updated_at")}, ensure_ascii=False) + "\n")
     _record_sha_before_delete(state, local, done)
-    gone = 0
-    for r in done:
-        for p in (Path(local) / r["file_name"], Path(local).parent / "prepared" / r["file_name"]):
-            if p.exists() or p.is_symlink():
-                p.unlink()
-                gone += 1
-    print(
-        f"[source] 처리 완료 {len(done)}개 기록 · 내려받은 원본·사본 {gone}개 즉시 지움(SI39 요건⑧ — 업로드를 "
-        "기다리지 않음, 실패 문서는 다시 시도하도록 남김)",
-        flush=True,
-    )
+    print(f"[source] 처리 완료 {len(done)}개 기록(원본은 게시 뒤 drop_original이 지움)", flush=True)
 
 
 def stage_batch(source, out, prepared, limit, run_step, done=frozenset(), scan_rotate=True):
-    """파싱 전 extract 한 번 — 고르기(처리 기록·지원 안 함·done) → 받기(rdb:csv는 staging) → 같은 내용은 하나만(dedup) →
-    형식·DRM·암호 거르기와 방향 보정(filter_and_rotate → prepared/). DRM·암호 문서는 건너뜀 기록만 남긴다.
+    """파싱 전 extract 한 번 — 세 단계를 이 순서로 한 번씩:
+    1. 받기 — `resolve`: 고르기(처리 기록·지원 안 함·done) → rdb:csv는 staging에 받아(`download`) 파싱 원본 폴더에 놓음.
+    2. 중복 제외 — `_dedup`: 받은 파일의 sha256으로 같은 묶음 안 같은 내용은 대표 하나만, 남은 것 중 ParsingMeta에 끝난 다른 원본과
+       sha256이 같으면 뺀다. <out>/dedup/keep.txt = 남은 이름(게시가 빠진 문서를 skipped_dup로 씀).
+    3. 거르기 — filter_and_rotate(only.txt의 이름만 → prepared/): DRM·암호·지원 안 함은 건너뜀 기록만(처리하지 않음), 방향 보정.
+    건너뛴 문서는 문서마다 `skip_event` 1행(applog.pipe_event — status=skip, err_kind=doc).
     → (원본 폴더, 남은 이름 목록(받은 순서), 상태 폴더, 남은 이름 목록 파일 only.txt). run_step(args) → 종료 코드(자식 프로세스).
     scan_rotate=False면 이미지 PDF는 돌리지 않는다(run_pipeline의 스캔 문서 정책)."""
-    from pipeline import parse_steps
-
     out = Path(out)
-    local, names, state = resolve(source, out, limit, done)
+    local, names, state = resolve(source, out, limit, done)  # 1. 받기
     if not CP.is_remote(source):
         C.put(DOC_DIR=str(Path(local).resolve()))  # 원본 위치 주소 = 이 폴더의 file:///
     (state / "selected.txt").write_text("\n".join(names) + "\n", encoding="utf-8")
-    if sum(1 for f in Path(local).iterdir() if f.is_file() and f.name != ".gitkeep") <= 1:  # 1건은 자식 없이 같은 함수로
-        from pipeline.extract import deduplication as dedup
-
-        try:
-            dedup.run_folder(local, out / "dedup")
-            rc = 0
-        except Exception as e:  # 자식 실패와 같게 종료 코드로
-            print(f"[dedup] 실패: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
-            rc = 1
-    else:
-        rc = run_step(["pipeline.extract.deduplication", "--src", local, "--out", out / "dedup"])
-    if rc != 0:
-        raise SystemExit(rc)
-    keep = set((out / "dedup" / "keep.txt").read_text(encoding="utf-8").splitlines())
-    keep_names = [n for n in names if n in keep]
+    keep_names = _dedup(local, names, out / "dedup", state)  # 2. 중복 제외
     only = state / "only.txt"
-    rc = parse_steps.place_inputs(run_step, local, prepared, keep_names, only, scan_rotate)
+    only.write_text("\n".join(keep_names) + "\n", encoding="utf-8")
+    extra = [] if scan_rotate else ["--no-scan-rotate"]
+    rc = run_step(["pipeline.extract.filter_and_rotate", "--src", local, "--out", prepared, "--only", only, *extra])  # 3. 거르기
     if rc != 0:
         raise SystemExit(rc)
     left = [n for n in keep_names if (Path(prepared) / n).exists()]  # 거르기를 지난 것만 파싱
     only.write_text("\n".join(left) + "\n", encoding="utf-8")
     return local, left, state, only
+
+
+def _dedup(local, names, dedup_dir, state):
+    """받은 파일의 sha256으로 중복 제외 → 남은 이름(names 순서). 같은 묶음 안(이번 names만 해시 — 폴더에 남은 앞 실행 파일은 안 봄)은
+    deduplication.run_folder(대표 하나), 그다음 ParsingMeta에 끝난 행(candidate_pick.done_by_sha)이 같은 sha256을 다른 원본 키로
+    가지면 뺀다(같은 키면 그 문서의 재처리라 남김). 원본 키 = manifest의 "key"(없으면 이름 — 게시와 같은 규칙).
+    keep.txt = 폴더 파일 중 이번에 중복으로 뺀 것만 없는 목록(게시가 빠진 것만 skipped_dup로 쓰고, 앞 실행의 남은 문서는 그대로 둠)."""
+    from pipeline.extract import deduplication as dedup
+
+    batch = set(names)
+    keep, rows, _ = dedup.run_folder(local, dedup_dir, batch)
+    rep = {r["group"]: r["file"] for r in rows if r["representative"]}
+    dropped = set()
+    for r in rows:
+        if not r["representative"]:
+            skip_event(r["file"], "dup_batch", dup_of=rep[r["group"]])
+            dropped.add(r["file"])
+    man_f = state / "manifest.jsonl"
+    key_of = {r["file_name"]: r.get("key") for r in jl(man_f)} if man_f.exists() else {}
+    picked = [n for n in names if n in keep]
+    seen = CP.done_by_sha({keep[n] for n in picked})
+    left = []
+    for n in picked:
+        hit = seen.get(keep[n])
+        if hit and hit[0] != (key_of.get(n) or n):
+            skip_event(n, "dup_done", dup_of=hit[0])
+            dropped.add(n)
+        else:
+            left.append(n)
+    rest = sorted(f.name for f in Path(local).iterdir() if f.is_file() and f.name != ".gitkeep" and f.name not in dropped)
+    (Path(dedup_dir) / "keep.txt").write_text("\n".join(rest) + "\n", encoding="utf-8")
+    return left
+
+
+def skip_event(name, reason, **metrics):
+    """건너뛴 문서 1건 = extract.skip span 1행(applog.pipe_event): status=skip, err_kind=doc, err·metrics.reason = 이유
+    (dup_batch·dup_done·drm_*·encrypted_*·unsupported_*), 중복이면 metrics.dup_of = 남긴 문서(이름 또는 ParsingMeta 원본 키)."""
+    with SP.span("extract.skip", "extract", doc_id=name, ext=Path(name).suffix.lower()) as sp:
+        sp.add(reason=reason, **metrics)
+        sp.result("skip", "doc", SP.safe(reason))
+    if metrics.get("dup_of"):
+        print(f"[dedup] {name}: {reason} — {metrics['dup_of']}와 같은 내용, 건너뜀", flush=True)
 
 
 def _stage_cmd(argv):
