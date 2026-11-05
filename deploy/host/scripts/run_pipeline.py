@@ -191,7 +191,7 @@ def configure(settings_file=None):
                 return [f"여러 벌 — {_host().layout().to_yaml(p)}가 기본값({d}) 그대로: 벌마다 다른 포트를 적음"]
     # 여러 벌 — host_ctl.sh가 띄운 이 루트의 컨테이너(load_settings.sh NAME_SUFFIX와 같은 규칙)
     PIPE_C = "data-pipeline" + (f"-{inst}" if inst else "")
-    MCP_JOBS_DIR = DOCSPACE / "_mcp_parse" / "jobs"  # mcp-data-parsing의 작업 폴더(같은 결과 폴더 — parse_service.JOBS_DIR)
+    MCP_JOBS_DIR = DOCSPACE / "_mcp_parse" / "jobs"  # mcp-data-parsing의 작업 폴더(같은 결과 폴더 — run_mcp_parsing.JOBS_DIR)
     SOURCE_BUCKET = _host().get(doc, "pipeline.connections.rdb.bucket")
     PG_CONTAINER = _host().get(doc, "common.host.pg_container")
     PG_USER, PG_DB = _host().get(doc, "common.connections.pg.user"), _host().get(doc, "common.connections.pg.db")
@@ -816,7 +816,7 @@ def pg_count():
 
 def mcp_busy():
     """MCP 업로드 처리 중이면 True(공유 볼륨 _mcp_parse/jobs/<id>의 파일 mtime이 30초 내 갱신).
-    5초마다 불리므로 작업 폴더 전체가 아니라 이름 날짜(<YYYYMMDD>-…, parse_service)가 어제·오늘·내일인 폴더만 본다(
+    5초마다 불리므로 작업 폴더 전체가 아니라 이름 날짜(<YYYYMMDD>-…, run_mcp_parsing)가 어제·오늘·내일인 폴더만 본다(
     지난 날의 끝난 작업 파일까지 stat하지 않게, 호스트·컨테이너 시간대가 달라도 걸리게 앞뒤 하루)."""
     # ponytail: 날짜 이름 거르기 — 하루 넘게 도는 MCP 작업은 놓침(작업은 분 단위), 필요하면 작업 서비스가 심장 박동 파일을 씀
     if not MCP_JOBS_DIR.exists():

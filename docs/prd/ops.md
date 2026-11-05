@@ -8,7 +8,7 @@
 ## pl-10 · 실행 관리 — 서버 입구는 `run_pipeline.py` 하나
 - 이유: 서버는 문서 수천 건을 사람 없이 돌린다.
 - 규칙:
-  1. CLI `pipeline.cli`는 `parse`·`show-stack`·`selftest`. 이미지 entrypoint(`deploy/docker/entrypoint.sh`)가 `publish`·`migrate`·`check`·`services`·`resources`·`tool`·`ask`·`mcp`·`parse-service`·`idle`을 더한다. `idle` = 상주 컨테이너가 떠 있기만 한다(run_pipeline이 `docker exec`).
+  1. CLI `pipeline.cli`는 `parse`·`show-stack`·`selftest`. 이미지 entrypoint(`deploy/docker/entrypoint.sh`)가 `publish`·`migrate`·`check`·`services`·`resources`·`tool`·`ask`·`mcp`·`run-mcp-parsing`·`idle`을 더한다. `idle` = 상주 컨테이너가 떠 있기만 한다(run_pipeline이 `docker exec`).
   2. 서버 실행은 호스트 python의 `deploy/host/scripts/run_pipeline.py`(PyYAML·pymssql 필요)가 상주 컨테이너 `data-pipeline` 안에서 문서마다 명령을 `docker exec`로 돌린다. 컨테이너 명령은 settings.yaml `ops.host.docker`(없으면 podman). PC에서는 실행하지 않는다.
   3. 시작: 설정 파일 = `--settings` → `SETTINGS_FILE` → `<루트>/settings.yaml`(루트 = 코드 폴더의 부모 — op-13). `required.env.run_env`가 dev·prd가 아니거나 필요한 칸이 없으면 칸 경로만 찍고 종료 2. 코드 폴더 = `--code`(없으면 스크립트가 든 코드 폴더) — 그 안의 `common/config/layout.py`·`deploy/host/scripts/host_settings.tsv`로 설정 배치와 컨테이너 안 경로를 읽는다.
   4. 대상 목록(컨테이너 안 `python -m pipeline.extract.candidate_pick list` — run_pipeline은 목록 파일 `<결과 자리>/_docflow/targets.json`만 읽음): EDW `SELECT id, s3_key, original_filename, file_size FROM AI.FileStorageMap WHERE (<이름 조건>) AND file_size IS NOT NULL ORDER BY file_size ASC`. 이름 조건 = `--filter`(기본 `RFP,proposal`)의 낱말마다 `LOWER(original_filename) LIKE '%낱말%'`를 OR. 순번(seq)은 이 순서. `--start-offset N`(기본 1072 — 새벽 배치는 0)부터, `--seqs`면 그 순번만, `--skip-done`이면 끝난 문서([pl-23](#pl-23))를 빼고, FAQ 먼저([load.md#pl-41](load.md#pl-41)), `--max-docs`면 그 뒤 앞에서 N건, `--limit`은 시험용(그 전에 자름). `--filter`는 글자·숫자·`_` `,` `.` `-`만, `--seqs`는 숫자와 쉼표만(아니면 종료 2).
@@ -104,8 +104,8 @@
 <a id="rn-03"></a>
 ## rn-03 · MCP `parse_document`에 CPU 먼저 주기
 - 이유: 일괄 파싱이 CPU를 다 쓰면 사람이 기다리는 `parse_document`가 느려진다. 컨테이너끼리는 cgroup CPU 가중치가 정한다(nice는 한 세션 안에서만).
-- 규칙: `parse_document` 작업 서비스는 전용 컨테이너 `mcp-data-parsing`(같은 이미지, entrypoint `parse-service` = `pipeline.parse_service`, 127.0.0.1:8766). 자원 = settings.yaml `ops.pipeline_host.data_parsing_cpus`(기본 3)·`data_parsing_mem_limit`(8g)·`data_parsing_cpu_shares`(4096 — 일괄 `data-pipeline`은 1024). 결과 폴더만 붙인다. 죽으면 `restart`, 꺼지면 `mcp_keepalive.sh`(keepalive 타이머)가 띄운다. 일괄 엔진 자식은 nice +10.
-- 파일: `deploy/host/compose/compose.data-parsing.yml`(개발 서버 짝 `compose.code.data-parsing.yml`), `pipeline/parse_service.py`, `common/core/resources.py`.
+- 규칙: `parse_document` 작업 서비스는 전용 컨테이너 `mcp-data-parsing`(같은 이미지, entrypoint `run-mcp-parsing` = `pipeline.run_mcp_parsing`, 127.0.0.1:8766). 자원 = settings.yaml `ops.pipeline_host.data_parsing_cpus`(기본 3)·`data_parsing_mem_limit`(8g)·`data_parsing_cpu_shares`(4096 — 일괄 `data-pipeline`은 1024). 결과 폴더만 붙인다. 죽으면 `restart`, 꺼지면 `mcp_keepalive.sh`(keepalive 타이머)가 띄운다. 일괄 엔진 자식은 nice +10.
+- 파일: `deploy/host/compose/compose.data-parsing.yml`(개발 서버 짝 `compose.code.data-parsing.yml`), `pipeline/run_mcp_parsing.py`, `common/core/resources.py`.
 - QA: `tests/general/deploy/test_compose.py` · 통과.
 - Status: dev — 서버에서 일괄 파싱 중 `parse_document` 응답 시간 확인(refactor.md C-83 ①)만 남음.
 
@@ -136,7 +136,7 @@
 - 이유(사용자 11-04): 같은 일을 하는 코드가 여러 곳에 있으면 한쪽만 고쳐져 어긋난다. 이름만 보고 하는 일을 알 수 있어야 한다.
 - 요건(되어야 할 모습):
   1. 범위는 저장소 전체(`pipeline`·`common`·`mcp_server`·`deploy/host`·`deploy/release`·`validation`). 보호 파일(엔진 폴더, `common/core/{contract,repfmt,terms,text}.py`)은 이 규칙으로 고치지 않는다.
-  2. 같은 일을 하는 코드는 한 벌이다 — 파싱 단계 사슬(준비 → 엔진 → 채점 → 대표 결과)과 프로세스 묶음 실행은 `pipeline/parse_steps.py` 하나를 `pipeline.cli parse`와 MCP 작업 서비스 `pipeline.parse_service`가 함께 쓴다. 검색 MCP의 날짜 조건 해석(`_when`)도 한 벌.
+  2. 같은 일을 하는 코드는 한 벌이다 — 파싱 단계 사슬(준비 → 엔진 → 채점 → 대표 결과)과 프로세스 묶음 실행은 `pipeline/parse_steps.py` 하나를 `pipeline.cli parse`와 MCP 작업 서비스 `pipeline.run_mcp_parsing`가 함께 쓴다. 검색 MCP의 날짜 조건 해석(`_when`)도 한 벌.
   3. 서버·릴리스 스크립트 이름은 하는 일이다 — `host_ctl.sh`·`nightly_batch.sh`(새벽 배치만)·`pipe_exec.sh`(parse·publish 등 컨테이너 명령)·`mcp_keepalive.sh`·`in_container.sh`·`prune_images.sh`·`load_settings.sh`·`settings_to_env.py`·`host_settings.tsv`, `deploy/release/{bake_prod_image.sh,stage_images.sh,gen_host_keys.py}`. compose 호출은 서비스마다 자기 compose 파일만 쓴다. 예외: `load.sh`(이미지 저장소에 같은 이름), `assets.py`(Dockerfile이 복사 — 이름을 바꾸면 새 이미지), systemd 단위 이름.
   4. 저장소 안에서 같은 파일 이름을 두 번 쓰지 않는다(엔진 파일·앱마다 `config.py`·지시서 `agent.py` 예외 — CLAUDE.md §1).
   5. 공용 모듈(`common/**`)과 `pipeline/shared/**`는 이 규칙으로 이름·자리를 바꾸지 않는다(레이어 코드 핑거프린트 유지). 파이프라인 폴더 배치는 [rn-08](#rn-08).
@@ -181,9 +181,9 @@
   1. `remove_at_exit(경로)` — 이 프로세스가 끝날 때(정상·오류·SIGTERM) 지운다. `track(Popen, group)` — 끝날 때 아직 돌면 끝내고 `wait`로 회수. `stop(p, group)` — POSIX는 (묶음째) SIGTERM → 10초 → SIGKILL, Windows는 `taskkill /T`.
   2. import 때 SIGTERM 처리기를 단다(기본 처리기일 때만): 바로 정리한 뒤 `SystemExit(143)`. 정리 중 두 번째 SIGTERM은 무시. 순서: 자식 전부 SIGTERM → 10초 → 남은 것 SIGKILL·회수 → 파일 지움. 정리를 시작한 뒤 띄운 자식은 바로 끝낸다.
   3. 파일 주인: `settings.put`·`child_env`의 덮기 파일 = 만든 프로세스 · `settings.isolated` = 블록 끝 · `--set`(`setarg` — POSIX는 `execve`로 다시 뜸) = 다시 뜬 프로세스 · `python -m common.config.overrides` 출력 = 지우지 않음.
-  4. 연결: `resources.gated_popen`(파이프라인 자식 전부), `resources.kill_group`(→ `stop(group=True)`), `parse_service` 작업 자식과 PID 기록 `service.json`.
+  4. 연결: `resources.gated_popen`(파이프라인 자식 전부), `resources.kill_group`(→ `stop(group=True)`), `run_mcp_parsing` 작업 자식과 PID 기록 `service.json`.
   5. 한계: `subprocess.run`의 짧은 자식은 추적 안 함 · 주 스레드가 아닌 곳에서 처음 import되면 SIGTERM 처리기 없음 · SIGKILL·OOM은 정리 못 함 · 컨테이너 PID 1 고아 회수는 compose `init: true`.
-- 파일: `common/core/exitclean.py`, `common/config/{settings,setarg}.py`, `common/core/resources.py`, `pipeline/parse_service.py`.
+- 파일: `common/core/exitclean.py`, `common/config/{settings,setarg}.py`, `common/core/resources.py`, `pipeline/run_mcp_parsing.py`.
 - QA: `tests/server/common/test_exitclean.py`(SIGTERM·`--set` 사례는 POSIX만) · 통과. 서버 확인 refactor.md C-68.
 - Status: done
 

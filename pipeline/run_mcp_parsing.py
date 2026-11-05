@@ -323,11 +323,11 @@ if __name__ == "__main__":
     from common.config.settings import require_run_env
 
     require_run_env(
-        "parse_service", sections=("pipeline",)
+        "run_mcp_parsing", sections=("pipeline",)
     )  # S7a(D-028 ②) — 실행 환경 없으면 시작 거부(서버면 설정 검증 실패도 — S7e2 U-1)
     if not TOKEN:  # D-028 ⑨(S7c) — 옛 코드 기본 토큰 없앰: 설정에 없으면 시작 거부(값은 찍지 않음)
         print(
-            "[설정] parse_service: 토큰 없음 — settings.yaml required.tokens.mcp를 적음(검색 MCP와 같은 칸)",
+            "[설정] run_mcp_parsing: 토큰 없음 — settings.yaml required.tokens.mcp를 적음(검색 MCP와 같은 칸)",
             file=sys.stderr,
         )
         raise SystemExit(2)

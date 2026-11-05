@@ -36,7 +36,7 @@ def test_resident_containers():
         assert set(s) == {name} and s[name]["container_name"] == container + "${NAME_SUFFIX:-}", (f, set(s))
         assert set(_services(code)) == {name}, code  # 짝 파일은 그 컨테이너만 — 혼자 띄워도 됨
         svc[name] = s[name]
-    assert svc["data-pipeline"]["command"] == ["idle"] and svc["mcp-data-parsing"]["command"] == ["parse-service"]
+    assert svc["data-pipeline"]["command"] == ["idle"] and svc["mcp-data-parsing"]["command"] == ["run-mcp-parsing"]
     assert _default(svc["mcp-data-parsing"]["cpu_shares"]) > _default(svc["data-pipeline"]["cpu_shares"])
     up = (DEPLOY_ROOT / "deploy" / "host" / "scripts" / "mcp_keepalive.sh").read_text(encoding="utf-8")
     assert "compose.data-parsing.yml" in up and "compose.code.data-parsing.yml" in up
@@ -45,7 +45,7 @@ def test_resident_containers():
 def test_no_patch_overlay():
     assert not list(COMPOSE.glob("compose.patch*.yml"))
     entry = (DEPLOY_ROOT / "deploy" / "docker" / "entrypoint.sh").read_text(encoding="utf-8")
-    assert "  parse-service)" in entry and "pipeline.parse_service" in entry
+    assert "  run-mcp-parsing)" in entry and "pipeline.run_mcp_parsing" in entry
 
 
 def test_edw_chain_mount():

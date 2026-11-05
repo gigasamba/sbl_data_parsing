@@ -85,7 +85,7 @@ for c in data-pipeline mcp-data-parsing; do   # 여러 벌이면 이름 끝 -<op
 | 서비스(`host_ctl.sh`) | 컨테이너 | compose 파일(실행 이미지면 + 코드 폴더 파일) | 하는 일 |
 |---|---|---|---|
 | `data-pipeline` | `data-pipeline` | `compose.pipeline.yml`(+ `compose.code.yml`) | 일 없이 떠 있음(entrypoint `idle`) — `run_pipeline.py`·`pipe_exec.sh`가 `exec` |
-| `mcp-data-parsing` | `mcp-data-parsing` | `compose.data-parsing.yml`(+ `compose.code.data-parsing.yml`) | `parse_document` 작업 서비스(entrypoint `parse-service`) |
+| `mcp-data-parsing` | `mcp-data-parsing` | `compose.data-parsing.yml`(+ `compose.code.data-parsing.yml`) | `parse_document` 작업 서비스(entrypoint `run-mcp-parsing`) |
 | `mcp` | `mcp-server` | `compose.mcp-server.yml`(+ `compose.code.mcp-server.yml`) | 검색 MCP |
 
 - 모두 `bash deploy/host/scripts/host_ctl.sh …`로 다룬다(compose 직접 호출 금지 — README §5-3 ①). 죽으면 `restart: unless-stopped`, 꺼져 있으면 keepalive 타이머(`mcp_keepalive.sh`)가 `mcp-data-parsing`·`mcp`를 다시 띄운다.

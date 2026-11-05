@@ -1,4 +1,4 @@
-"""파싱 단계 실행 — 파이프라인 입구(pipeline.cli parse)와 MCP 작업 서비스(pipeline.parse_service)가 함께 쓴다(rn-06)."""
+"""파싱 단계 실행 — 파이프라인 입구(pipeline.cli parse)와 MCP 작업 서비스(pipeline.run_mcp_parsing)가 함께 쓴다(rn-06)."""
 
 import subprocess
 import sys

@@ -153,7 +153,7 @@
   4. 서비스 등록 요청 대기 60초.
   5. 받는 확장자 = 엔진 구성의 parse 키(`pipeline/transform/parse/engine_check.py` `allowed_exts()`).
 - 운영과 다른 점: 파일 크기 상한 기본 100MB(운영 64MB) · 스캔 PDF를 내부망 VLM으로 파싱([mc-18](#mc-18)) · 받는 확장자가 더 많다.
-- 파일: `common/core/parse_limit.py`(크기 상한·본문 상한 — 두 쪽이 함께 씀), `mcp_server/services/parse_proxy.py`, `pipeline/parse_service.py`, `mcp_server/main.py`.
+- 파일: `common/core/parse_limit.py`(크기 상한·본문 상한 — 두 쪽이 함께 씀), `mcp_server/services/parse_proxy.py`, `pipeline/run_mcp_parsing.py`, `mcp_server/main.py`.
 - QA: `tests/server/mcp/test_parse_limit.py`·`tests/server/pipeline/test_parse_svc.py`(상한 1 MB로 덮고 0.9 MB 받음·1.1 MB 거부, 두 길) · 통과. 서버 확인 refactor.md C-85.
 - Status: done
 
@@ -166,7 +166,7 @@
   4. VLM 설정(`required.models.vlm_base_url`·`vlm_model`)이 비면 파이프라인 없이 빈 결과 + note "스캔 PDF — VLM 미설정".
   5. VLM이 돌았는데 대표 결과가 없으면 note "스캔 PDF — VLM 파싱 실패".
   6. 글자층과 스캔 쪽이 섞인 PDF는 범위 밖.
-- 파일: `pipeline/parse_service.py`.
+- 파일: `pipeline/run_mcp_parsing.py`.
 - QA: `tests/server/pipeline/test_parse_svc.py` · 통과.
 - Status: done
 

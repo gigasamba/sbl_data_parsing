@@ -64,7 +64,7 @@ flowchart TD
 | 17 | load | PostgreSQL에 쓰기, ParsingMeta에 `gold_version` 기록 | 컨테이너 | `pipeline/load/pgvector_load.py` | `_load_src()` → `_mark_loaded()` |
 | 18 | — | 문서 임시 폴더 삭제(실패·시간 초과면 그 문서 프로세스도 끔) | 호스트 | `deploy/host/scripts/run_pipeline.py` | `drop_temp()` · `sweep_cmd()` |
 
-PC에서는 `python -m pipeline.cli parse`를 바로 부른다 — `--source`를 주면 4행의 `stage_batch()`를 같은 명령 안에서 돌린 뒤 8행부터 같은 함수로 간다(§2-2). 검색 MCP의 `parse_document`는 4행의 거르기(`place_inputs()`)와 9~11행만 같은 함수로 돈다(`pipeline/parse_service.py` — §6).
+PC에서는 `python -m pipeline.cli parse`를 바로 부른다 — `--source`를 주면 4행의 `stage_batch()`를 같은 명령 안에서 돌린 뒤 8행부터 같은 함수로 간다(§2-2). 검색 MCP의 `parse_document`는 4행의 거르기(`place_inputs()`)와 9~11행만 같은 함수로 돈다(`pipeline/run_mcp_parsing.py` — §6).
 
 ---
 
@@ -207,7 +207,7 @@ flowchart TD
 
 ### 4-1. 채점과 대표 결과 (`pipeline.cli parse` 안)
 
-`pipeline.transform.parse.parse_engines`이 끝나면 단계 사슬 `pipeline.parse_steps.parse_chain()`(일괄 파싱 `pipeline.cli`와 작업 서비스 `pipeline.parse_service`가 함께 씀)이 `pipeline.transform.represent.parse_scoring` → `pipeline.transform.represent.doc_represent`를 자식 프로세스로 부르고(runs.jsonl이 없으면 건너뜀), `pipeline.cli.parse_module()`은 대표 결과가 바뀌었을 때만 끝 표시 `_rep/_DONE.json`을 새로 쓴다.
+`pipeline.transform.parse.parse_engines`이 끝나면 단계 사슬 `pipeline.parse_steps.parse_chain()`(일괄 파싱 `pipeline.cli`와 작업 서비스 `pipeline.run_mcp_parsing`가 함께 씀)이 `pipeline.transform.represent.parse_scoring` → `pipeline.transform.represent.doc_represent`를 자식 프로세스로 부르고(runs.jsonl이 없으면 건너뜀), `pipeline.cli.parse_module()`은 대표 결과가 바뀌었을 때만 끝 표시 `_rep/_DONE.json`을 새로 쓴다.
 
 ```mermaid
 flowchart TD
@@ -436,7 +436,7 @@ flowchart TD
     Q["common/ai/embed.py 질문 임베딩 (query_cache.sqlite)"]
     O["evidence_shape.py → schemas/evidence.py 근거 13칸"]
     FT["fulltext_tool.py → services/fulltext_svc.py: ParsingMeta 위치 → Object Storage"]
-    PD["parse_tool.py → parse_proxy.py → mcp-data-parsing 의 pipeline/parse_service.py"]
+    PD["parse_tool.py → parse_proxy.py → mcp-data-parsing 의 pipeline/run_mcp_parsing.py"]
     M --> S --> H --> R --> P --> O
     R --> Q
     M --> FT
@@ -445,7 +445,7 @@ flowchart TD
 
 - `search`: 거르기에 맞는 문서 범위 안에서만 하이브리드 검색, 결과를 근거 칸으로 다듬음.
 - `list_doc_fulltext`·`get_doc_fulltext`: 대표 결과 위치는 PG가 아니라 EDW ParsingMeta에서 그때 읽고, 서명된 `sfid`로 Object Storage에서 받음.
-- `parse_document`: 파일 하나를 `mcp-data-parsing` 컨테이너의 작업 서비스(`127.0.0.1:8766`)에 넘김 → 같은 `filter_and_rotate` → `parse_engines` → `parse_scoring` → `doc_represent`(사슬 `pipeline.parse_steps`)를 (`pipeline.parse_service`가) `output/_mcp_parse/`에서 돌림(구조화·적재 없음).
+- `parse_document`: 파일 하나를 `mcp-data-parsing` 컨테이너의 작업 서비스(`127.0.0.1:8766`)에 넘김 → 같은 `filter_and_rotate` → `parse_engines` → `parse_scoring` → `doc_represent`(사슬 `pipeline.parse_steps`)를 (`pipeline.run_mcp_parsing`가) `output/_mcp_parse/`에서 돌림(구조화·적재 없음).
 - `query_edw`·`edw_meta`: EDW 읽기 전용 질의·카탈로그(`services/edw_query.py`·`edw_meta.py`).
 - 호출마다 `applog.mcp_log` 한 행(`services/call_log.py`).
 

@@ -18,7 +18,7 @@ mcp_server/config.py(common + mcp 절). 이 파일은 common 절 모델과 두 �
     숫자·켜기·JSON 칸은 YAML이 푼 값 그대로.
 파일 찾기: SETTINGS_FILE(env) > RUN_ENV가 없거나 local이면 저장소 루트 settings.yaml(있을 때만 — settings.sample.yaml 옆).
 RUN_ENV: env RUN_ENV > YAML required.env.run_env. local·dev·prd. 없거나 dev·prd인데 파일이 없으면 거부.
-앱 시작 관문 require_run_env() — pipeline.cli(selftest 빼고)·mcp_server.main·parse_service·컨테이너 boot가 맨 먼저 부른다. 서버(dev·prd)면
+앱 시작 관문 require_run_env() — pipeline.cli(selftest 빼고)·mcp_server.main·run_mcp_parsing·컨테이너 boot가 맨 먼저 부른다. 서버(dev·prd)면
 설정 파일을 못 읽거나 그 앱 절 검증에 실패해도 이유(칸 경로·오류 종류만)를 찍고 종료 2. 틀린 파일은 import common 때도
 서버면 바로 실패(pin_env — STRICT), local이면 경고 뒤 기본값.
 비밀 칸은 SecretStr — 출력·로그·검증 오류에 값이 나오지 않는다.

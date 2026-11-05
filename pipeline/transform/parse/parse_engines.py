@@ -241,7 +241,7 @@ def page_timeout(eng, pages, first=False):
 
 
 IDLE_MARK = "[engine-scope] stack 목록 밖이라 안 돎"  # 명시 --engines 중 일부가 안 돎(알림 — 거의 매 실행)
-NO_JOB_MARK = "[engine-scope] 돌 엔진 없음"  # 명시 --engines가 하나도 못 돎 — parse_service가 이 줄로 스캔 PDF를 가름
+NO_JOB_MARK = "[engine-scope] 돌 엔진 없음"  # 명시 --engines가 하나도 못 돎 — run_mcp_parsing이 이 줄로 스캔 PDF를 가름
 
 
 def engines_for_doc(doc, stack_parse, types, logged_missing):
