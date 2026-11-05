@@ -41,8 +41,8 @@ def test_warm_span_counts():
         batch.write_text("size,name,key\n1,a,ok\n1,b,bad\n", encoding="utf-8")
         with (
             mock.patch.object(source, "_warm_dir", lambda: Path(tmp)),
-            mock.patch.object(source, "_rdb_cols", lambda: cols),
-            mock.patch.object(source, "_rdb_bucket_and_key", lambda c, r: ("b", r["key"])),
+            mock.patch.object(source.CP, "_rdb_cols", lambda: cols),
+            mock.patch.object(source.CP, "_rdb_bucket_and_key", lambda c, r: ("b", r["key"])),
             mock.patch.object(source, "_s3", Client),
         ):
             assert source._warm_cmd(["--csv", str(batch), "--workers", "2"]) == 0

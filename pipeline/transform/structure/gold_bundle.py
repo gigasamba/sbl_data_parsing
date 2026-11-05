@@ -387,7 +387,7 @@ def main(argv=None):
         help="저장소(doc.file_path)에 기록할 원본 경로 접두(서버의 실제 보관 위치) — 없으면 --src 절대 경로",
     )
     ap.add_argument("--embed", default="api", choices=["api", "none"])
-    ap.add_argument("--chunk", default=None, help="기본 = stack.json chunk(없으면 structure)")
+    ap.add_argument("--chunk", default=None, choices=["structure"], help="기본 = stack.json chunk(없으면 structure)")
     ap.add_argument("--stack", default=None, help="엔진 구성 파일(PC 실험·시험용 — 비우면 설정 common.paths.stack_file)")
     ap.add_argument("--images-dir", default=None, help="그림 기록 index.jsonl 폴더(L1, 기본 = --parse-dir/_images) — 없으면 그림 청크 0건")
     ap.add_argument("--out", default="output/edw/bundle")

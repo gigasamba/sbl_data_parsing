@@ -11,7 +11,7 @@ import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
@@ -25,7 +25,7 @@ class StackBody(BaseModel):
     parse: dict[str, list[str]]
     source: str | None = None
     embed: str
-    chunk: str
+    chunk: Literal["structure"]  # 청커는 structure 하나(pipeline/transform/structure/chunking.py CHUNKERS)
     graph: str
     retrieve: str
     k: int

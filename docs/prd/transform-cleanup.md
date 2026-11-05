@@ -53,7 +53,7 @@
 - 요건(되어야 할 모습):
   1. 층 지문 p0 범위 = 엔진 폴더(`pipeline/transform/parse/engines/`)의 모든 `.py` + 엔진 실행 파일 `parse_engines.py` + 엔진이 import하는 pipeline 파일(`config.py`·`shared/{raw_cache,env_error,pdf_kind,vlmcall}.py`)(`common/core/artifacts.py` `LAYER_CODE`).
   2. 문서×엔진 결과 재사용 열쇠는 `parse_engines.engine_code_fp()`(등록부의 엔진 폴더 + `_common`)다 — 층 지문이 아니다.
-- QA: `tests/server/pipeline/test_parse_engines.py::test_p0_layer_covers_every_engine_folder`.
+- QA: `tests/server/pipeline/test_engine_run.py::test_p0_layer_covers_every_engine_folder`.
 - Status: done
 
 <a id="pl-49"></a>

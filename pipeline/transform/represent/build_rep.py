@@ -433,24 +433,9 @@ from pipeline.transform.figures.chart_values import chart_text  # noqa: E402
 from pipeline.transform.represent import fragment_vote as fuse_mod  # noqa: E402
 from pipeline.transform.represent import table_inline  # noqa: E402
 
+
 # 후보정 기능 — transform.represent.post: 없음/"all" = 전부 · "none" = 꺼짐 · 콤마 목록("supsub,charts") = 그것만.
 # "context"는 "figures" 없이는 효과 없음(그림 기록이 있어야 캡션·값 확인을 붙임).
-FEATURES = ("vlm_page", "supsub", "charts", "figures", "context", "attachments")
-
-
-def active_features(config=None):
-    """PARSE_POST 글자 → 켠 기능 집합(결정적 — 순서 섞이지 않게 set 아닌 frozenset도 괜찮지만 멤버십만 씀)."""
-    if config is None:  # 없음 = "all", 빈 글자 = 끔
-        v = pc.cfg().transform.represent.post
-        config = "all" if v is None else v
-    config = (config or "").strip()
-    if config in ("", "none"):
-        return frozenset()
-    if config == "all":
-        return frozenset(FEATURES)
-    return frozenset(f.strip() for f in config.split(",") if f.strip())
-
-
 def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_pages=None, page_covered=False):
     """후보정 패키지 적용 — base 본문에 쪽 VLM 옮기기·차트·그림 기록 블록을 덧붙이고, 첨자(supsub)는 그 줄만 base 안에서
     바꿔 넣는다(본문이 두 배가 되지 않게). rep.post{config, features, code_fp, supsub(첨자 표기본 전체 — 색인에는 안 들어감)}를 남긴다.
@@ -606,7 +591,7 @@ def represent(stack, parse_dir, src=None):
     from pipeline.transform.represent.crosscheck import build
 
     meta = build(parse_dir, src) if src else {}  # 교차 확인 (라벨, 값) — 엔진별 결과가 있는 파싱 모듈에서 미리 → 구조화는 _rep만 읽음
-    feats = active_features()  # PARSE_POST(기본 all)
+    feats = pc.active_features()  # PARSE_POST(기본 all)
 
     def _doc_one(_pair):
         """문서 1개 → index 행(정상 대표·이전 결과 재사용·성공 엔진 없음)."""

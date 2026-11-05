@@ -205,13 +205,14 @@ def pick_new(src, out, max_new, only=None):
     """이번 실행에서 처음 파싱할 문서(ParsingMeta에 성공 행이 없는 것)를 max_new개까지 → 목록 파일 경로. only(목록 파일 — prepare_batch가
     이미 끝난 문서를 뺀 목록)가 있으면 그 안에서만(EDW를 다시 읽지 않음)."""
     names = sorted(p.name for p in Path(src).iterdir() if p.is_file())
-    new = names if only else unparsed(names, out)
+    if only:
+        sel = set(Path(only).read_text(encoding="utf-8").splitlines())
+        new = [n for n in names if n in sel]
+    else:
+        new = unparsed(names, out)
     pick = new[:max_new]
     f = Path(out) / "parse" / "_batch_docs.txt"
     f.parent.mkdir(parents=True, exist_ok=True)
-    if only:
-        sel = set(Path(only).read_text(encoding="utf-8").splitlines())
-        pick = [n for n in pick if n in sel]
     f.write_text("\n".join(pick) + "\n", encoding="utf-8")
     print(f"[parse] 새·실패 문서 {min(len(new), max_new)}/{len(new)}개(PARSE_MAX_NEW {max_new}) — 나머지는 다음 실행", flush=True)
     return f
@@ -250,13 +251,14 @@ def unparsed(names, out):
 
 def rdb_pick(table, state, limit=0, done=frozenset()):
     """문서 위치 표(csv:)에서 이번에 받을 행 → {문서 이름: 행}(받기 전 — 다운로드 없음). 처리 기록(processed.jsonl)에 있는 판·
-    ParsingMeta에 끝난 원본 키(done — done_keys())·압축·엔진 없는 확장자를 뺀다. 반환: (by_name, 처리 기록 키 수)."""
+    ParsingMeta에 끝난 원본 키(done — done_keys())·압축·엔진 없는 확장자를 뺀다. 반환: (by_name, 이번에 뺀 행 수)."""
     seen = _load_done(state)
-    rows = [r for r in _rdb_rows(table) if not _rdb_is_done(seen, r["key"], r["etag"], r["updated_at"]) and r["key"] not in done]
+    every = _rdb_rows(table)
+    rows = [r for r in every if not _rdb_is_done(seen, r["key"], r["etag"], r["updated_at"]) and r["key"] not in done]
     name_of = _rdb_names(rows)  # original_filename(또는 doc_id) — 충돌하면 doc_id 접두로 구분
     rows, skipped = _filter_unsupported_rows(rows, name_of)  # 압축·엔진 없는 확장자는 받기 전에 걸러냄
     if skipped:
         _record_source_skipped(state, skipped)
     name_of = {r["key"]: name_of[r["key"]] for r in rows}
     rows = sorted(rows, key=lambda r: r["key"])[: limit or None]
-    return {name_of[r["key"]]: r for r in rows}, len(seen)
+    return {name_of[r["key"]]: r for r in rows}, len(every) - len(name_of)

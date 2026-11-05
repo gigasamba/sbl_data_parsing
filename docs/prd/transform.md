@@ -19,7 +19,7 @@
 6. 구성의 엔진이 등록부(`pipeline/transform/parse/engines`)에 없거나 설치되지 않았으면 → 시작하지 않는다(종료 2).
 
 ### QA
-- `tests/server/pipeline/test_engine_check.py` · `tests/server/pipeline/test_parse_engines.py`.
+- `tests/server/pipeline/test_engine_check.py` · `tests/server/pipeline/test_engine_run.py`.
 - Status: done
 
 <a id="pl-22"></a>
@@ -44,7 +44,7 @@
 - 글자 엔진, 5쪽, 엔진의 첫 문서 아님 → 5 × 10 + 10 = 60초. 같은 문서가 엔진의 첫 문서 → max(50, 60) + 10 = 70초. 넘으면 140초로 한 번 더.
 
 ### QA
-- `tests/server/pipeline/test_parse_engines.py`(page_timeout·OCR 끔) · `tests/server/pipeline/test_vlm_page.py`(`pick_pages`) · `tests/general/pipeline/test_represent.py`(쪽 VLM 채우기).
+- `tests/server/pipeline/test_engine_run.py`(page_timeout·OCR 끔) · `tests/server/pipeline/test_vlm_page.py`(`pick_pages`) · `tests/general/pipeline/test_represent.py`(쪽 VLM 채우기).
 - Status: done
 
 <a id="pl-43"></a>

@@ -386,6 +386,22 @@ def stack():
     return {"name": a.name, "body_sha": a.body_sha, **a.body}
 
 
+FEATURES = ("vlm_page", "supsub", "charts", "figures", "context", "attachments")
+
+
+def active_features(config=None):
+    """PARSE_POST 글자 → 켠 기능 집합(결정적 — 순서 섞이지 않게 set 아닌 frozenset도 괜찮지만 멤버십만 씀)."""
+    if config is None:  # 없음 = "all", 빈 글자 = 끔
+        v = cfg().transform.represent.post
+        config = "all" if v is None else v
+    config = (config or "").strip()
+    if config in ("", "none"):
+        return frozenset()
+    if config == "all":
+        return frozenset(FEATURES)
+    return frozenset(f.strip() for f in config.split(",") if f.strip())
+
+
 if __name__ == "__main__":
     from common.config import show
 

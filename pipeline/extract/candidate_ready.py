@@ -29,7 +29,6 @@ from common.core.contract import jl
 from common.core.contract import safe_path_join as _safe_join  # 경로 잇기(load 단계와 같은 함수)
 from pipeline import config as pc
 from pipeline.extract import candidate_pick as CP
-from pipeline.extract.candidate_pick import _known_source, _processed_path, _rdb_bucket_and_key, _rdb_cols, _rdb_names, _tree_files
 
 
 def _s3():
@@ -147,12 +146,12 @@ def _warm_cmd(argv):
     if not wd:
         print("[source] warm: SOURCE_WARM 미설정 — 받아 둘 곳이 없어 종료", flush=True)
         return 0
-    cols = _rdb_cols()
+    cols = CP._rdb_cols()
     with open(a.csv, encoding="utf-8-sig", newline="") as fh:
         rows = list(csv.DictReader(fh))
     targets = []
     for r in rows:
-        bucket, key = _rdb_bucket_and_key(cols, r)
+        bucket, key = CP._rdb_bucket_and_key(cols, r)
         targets.append(
             {
                 "bucket": bucket,
@@ -305,7 +304,7 @@ def _rdb_plan(table, state, limit=0, done=frozenset()):
         man_f.touch()
     C.put(SOURCE_MANIFEST=str(man_f))  # S7e2 — 덮기 파일(이 프로세스·하위 프로세스) + 인계 키라 env에도(contract.py)
     label = table
-    print(f"[source] rdb:{label} · 대상 {len(names)}개(이미 처리 {n_seen}개 제외)", flush=True)
+    print(f"[source] rdb:{label} · 대상 {len(names)}개(끝난 문서·처리 기록·지원 안 함 {n_seen}개 제외)", flush=True)
     return names, fetch_one, state
 
 
@@ -341,7 +340,7 @@ def resolve(source, out, limit=0, done=frozenset()):
             raise RuntimeError("[source] rdb 모드인데 SOURCE_MANIFEST 파일이 없음 — 원본 위치가 조용히 file://로 떨어질 수 있어 멈춤")
         return local, ok, state
     src = Path(source)
-    files = _tree_files(src)
+    files = CP._tree_files(src)
     if files is None:  # 평평한 폴더 — 그대로(키 = 파일 이름)
         names = sorted(p.name for p in src.iterdir() if p.is_file() and p.name != ".gitkeep" and p.name not in done)[: limit or None]
         print(f"[source] 폴더 {src} · 대상 {len(names)}개", flush=True)
@@ -357,7 +356,7 @@ def _folder_tree(src, files, out, state):
     local = out / "_source_files"
     local.mkdir(parents=True, exist_ok=True)
     rows = [{"key": p.relative_to(src).as_posix(), "filename": p.name, "doc_id": p.parent.name, "path": p} for p in files]
-    name_of = _rdb_names(rows)
+    name_of = CP._rdb_names(rows)
     man = []
     for r in rows:
         name = name_of[r["key"]]
@@ -368,7 +367,7 @@ def _folder_tree(src, files, out, state):
                 "uri": r["path"].resolve().as_uri(),
                 "key": r["key"],
                 "original_filename": r["filename"],
-                "source_system": _derive_source_from_key(r["key"]) or _known_source(r["key"].split("/", 1)[0]),
+                "source_system": _derive_source_from_key(r["key"]) or CP._known_source(r["key"].split("/", 1)[0]),
             }
         )
     man_f = state / "manifest.jsonl"
@@ -410,7 +409,7 @@ def finish(state, local, rep_index):
         else set()
     )
     done = [man[n] for n in ok if n in man]
-    with _processed_path(state).open("a", encoding="utf-8") as f:
+    with CP._processed_path(state).open("a", encoding="utf-8") as f:
         for r in done:
             f.write(json.dumps({"key": r["key"], "etag": r["etag"], "ver": r.get("updated_at")}, ensure_ascii=False) + "\n")
     _record_sha_before_delete(state, local, done)
