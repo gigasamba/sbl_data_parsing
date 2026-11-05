@@ -9,9 +9,9 @@ from pathlib import Path
 from unittest import mock
 
 from common.core.paths import STACK_FILE
-from pipeline.extract.engines import registry
-from pipeline.extract.run_engines import engines_for_doc
 from pipeline.shared.ext_groups import IMG_EXTS
+from pipeline.transform.parse.engines import registry
+from pipeline.transform.parse.parse_engines import engines_for_doc
 
 IMAGES = (".jpeg", ".tif", ".tiff", ".bmp")
 NEW = (*IMAGES, ".mhtml", ".hwpx")
@@ -43,8 +43,8 @@ def test_images_parse():
     """이미지 4종 — 견본 그림을 그 형식으로 저장해 qwen_vlm으로 파싱(VLM 호출만 가짜: 받은 쪽 그림 크기를 돌려줌)."""
     from PIL import Image
 
-    from pipeline.extract.engines.qwen_vlm import parser as Q
     from pipeline.shared import vlmcall as V
+    from pipeline.transform.parse.engines.qwen_vlm import parser as Q
 
     with tempfile.TemporaryDirectory() as td:
         for ext in IMAGES:
@@ -58,7 +58,7 @@ def test_images_parse():
 
 def test_mhtml_parse():
     """.mhtml — MIME 묶음(html 한 부분) 견본을 mhtml 엔진으로 파싱."""
-    from pipeline.extract.engines.mhtml import parser as M
+    from pipeline.transform.parse.engines.mhtml import parser as M
 
     body = (
         "From: <Saved by Blink>\r\nSubject: sample\r\nMIME-Version: 1.0\r\n"
@@ -75,7 +75,7 @@ def test_mhtml_parse():
 
 def test_hwpx_parse():
     """.hwpx — Contents/section0.xml(hp:p·hp:t) 하나 든 zip 견본을 hwpx 엔진으로 파싱."""
-    from pipeline.extract.engines.hwpx import parser as H
+    from pipeline.transform.parse.engines.hwpx import parser as H
 
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>'

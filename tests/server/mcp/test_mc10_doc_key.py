@@ -24,7 +24,7 @@ def _bundle(doc):
 def test_doc_key_bundle():
     path = "/data/docs/a.txt"
     cases = [
-        {"file_path": path, "doc_key": path},  # 새 묶음 — doc_key만(file_name·file_sha256 없음, build_bundle 그대로)
+        {"file_path": path, "doc_key": path},  # 새 묶음 — doc_key만(file_name·file_sha256 없음, gold_bundle 그대로)
         {"file_path": path, "file_name": "a.txt", "file_sha256": "a" * 64},  # 옛 묶음 — file_sha256만
     ]
     for doc in cases:

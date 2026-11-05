@@ -26,6 +26,7 @@ from common.config.settings import (  # noqa: F401 — token_text: 토큰 규칙
     image_default,
     token_text,
 )
+from common.config.settings import cfg as common_cfg
 
 # ── settings.yaml mcp 절 모델(S7a) — 칸 표는 refactor_plan 부록 D ─────────────────────────────
 
@@ -60,7 +61,6 @@ class McpEdwMeta(Section):
 
 
 class McpEdwQuery(Section):
-    enabled: bool | None = F(True, "EDW_QUERY", "query_edw 도구 스위치 — 0이면 끔", off=("0",))
     max_bytes: int | None = F(2000000, "EDW_QUERY_MAX_BYTES", "query_edw 응답 크기 상한(바이트)")
     max_rows: int | None = F(1000, "EDW_QUERY_MAX_ROWS", "query_edw 실효 행 수 상한(도구 요청 max_rows와 작은 쪽)")
     timeout_sec: float | None = F(20.0, "EDW_QUERY_TIMEOUT_SEC", "query_edw 질의 시간 상한(초)")
@@ -69,17 +69,11 @@ class McpEdwQuery(Section):
 class McpHost(Section):
     cpus: float | None = F(1.0, "MCP_CPUS", "mcp-server 컨테이너 CPU 한도(compose cpus)")
     image: str | None = F(None, "MCP_SERVER_IMAGE", "mcp-server 컨테이너 이미지 이름:태그")
-    jobs_dir: str | None = F(None, "MCP_JOBS_DIR", "MCP parse_document 업로드 작업 폴더(공유 볼륨) — medium 레인 양보 감지용")
     mem_limit: str | None = F("4g", "MCP_MEM_LIMIT", "mcp-server 컨테이너 메모리 한도(compose mem_limit)")
 
 
 class McpOutput(Section):
     max_chars: int | None = F(20000, "MCP_MAX_CHARS", "search 응답 크기 상한(JSON UTF-8 바이트) — 넘으면 근거 본문을 줄임")
-
-
-class McpParseProxy(Section):
-    token: SecretStr | None = F(None, "PARSE_SERVICE_TOKEN", "parse_document가 작업 서비스(mcp_parse_service)를 부를 때 쓰는 토큰")
-    url: str | None = F("http://127.0.0.1:8766", "PARSE_SERVICE_URL", "parse_document가 부르는 작업 서비스 주소")
 
 
 class McpSearch(Section):
@@ -101,9 +95,7 @@ class McpServer(Section):
     max_queue: int | None = F(None, "MCP_MAX_QUEUE", "도구 대기열 상한(개) — 넘으면 즉시 busy 응답, 0이면 무제한")
     port: Port | None = F(8765, "MCP_PORT", "MCP 서버 포트")
     reload_check_sec: float | None = F(30.0, "MCP_RELOAD_CHECK_SEC", "적재 버전 변경 확인 간격(초) — 바뀌면 검색기·edw_meta 다시 읽음")
-    token: SecretStr | None = F(None, "MCP_TOKEN", "MCP 서버 Bearer 토큰(비루프백 바인드면 필수)")
     tool_timeout_sec: float | None = F(30.0, "MCP_TOOL_TIMEOUT_SEC", "도구 1회 실행 시간 상한(초) — 넘으면 timeout 응답, 0이면 무제한")
-    warmup: bool | None = F(True, "MCP_WARMUP", "기동 때 검색 1회로 예열 — 0이면 끔", off=("0",))
 
 
 class McpAudit(Section):
@@ -119,7 +111,6 @@ class McpSettings(Section):
     edw_query: McpEdwQuery = Field(default_factory=McpEdwQuery)
     host: McpHost = Field(default_factory=McpHost)
     output: McpOutput = Field(default_factory=McpOutput)
-    parse_proxy: McpParseProxy = Field(default_factory=McpParseProxy)
     search: McpSearch = Field(default_factory=McpSearch)
     server: McpServer = Field(default_factory=McpServer)
 
@@ -177,13 +168,12 @@ class MCPConfig:
     def __init__(self):
         c = cfg()
         self.MAX_CHARS = c.output.max_chars  # GH1-13: cap()이 이 값을 바이트(UTF-8)로 씀 — 이름·기본값은 그대로(실측 재조정은 서버에서)
-        self.MAX_K = 50
         self.CORE = ("vector", "bm25", "id")
         self.DEFAULT_METHODS = list(c.search.methods)  # 10-12 구조 검토: graph 기본에서 뺌 —
         # 그래프 단독 효과를 처음 따로 잼(9세트): 근거 지표 이득 0, 잡음 비율↑(4clients .366→.459), distractors-v2 정답 값 적중 .80→.72 ·
         # G10(10-02)의 비교형 6→12/12 개선은 분해(decompose) 몫 · 다시 켜기: MCP_METHODS=vector,bm25,id,graph
-        # parse_document 프록시가 부르는 작업 서비스 주소(services/parse_proxy.py)
-        self.PARSE_URL = c.parse_proxy.url
+        # parse_document 프록시가 부르는 작업 서비스 주소(services/parse_proxy.py) — 포트는 작업 서비스와 같은 칸 하나
+        self.PARSE_URL = f"http://127.0.0.1:{common_cfg().runtime.data_parsing_port}"
 
 
 CFG = MCPConfig()

@@ -12,7 +12,7 @@
 - 호출: `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"<도구>","arguments":{…}}}`. 결과는 `result.content[0].text`의 JSON 글자다(클라이언트가 파싱).
 - 상태 확인: `GET /health`(토큰 없음). 기동 직후 예열하는 동안은 503 `{"warming": true}`, 끝나면 200 `{"ready": true}`.
 - 토큰이 없거나 틀리면 HTTP 401 `{"error":"unauthorized"}`.
-- 도구 하나의 시간 상한은 서버 설정 `tuning.search.server.tool_timeout_sec`(기본 30초)다. 넘으면 `{"error":"timeout"}`. 클라이언트 쪽 제한 시간은 60초 이상으로 넉넉히 둔다.
+- 도구 하나의 시간 상한은 서버 설정 `tuning.search.server.mcp_tool_timeout_sec`(기본 30초)다. 넘으면 `{"error":"timeout"}`. 클라이언트 쪽 제한 시간은 60초 이상으로 넉넉히 둔다.
 - 동시에 돌 수 있는 수를 넘어 대기열까지 차면 바로 `{"error":"busy"}` — 잠시 뒤 다시 부른다.
 
 ## 2. 도구 목록
@@ -30,13 +30,13 @@
 
 ## 3. 지원 확장자
 
-<!-- 시험이 대조하는 목록: 바꿀 때는 resources/config/pipeline_stack.json(parse)·pipeline/extract/engines/registry.py(EXTRA_FORMATS)를 먼저 고친다 -->
+<!-- 시험이 대조하는 목록: 바꿀 때는 resources/config/pipeline_stack.json(parse)·pipeline/transform/parse/engines/registry.py(EXTRA_FORMATS)를 먼저 고친다 -->
 - **검색 대상(파이프라인이 파싱해 적재하는 형식)** — 엔진 구성 파일 `resources/config/pipeline_stack.json`의 `parse` 표: `.bmp` `.csv` `.doc` `.docm` `.docx` `.dot` `.dotx` `.eml` `.htm` `.html` `.hwpx` `.jpeg` `.jpg` `.json` `.log` `.md` `.mht` `.mhtml` `.msg` `.odp` `.ods` `.odt` `.pdf` `.png` `.pot` `.potx` `.ppsx` `.ppt` `.pptm` `.pptx` `.rtf` `.tif` `.tiff` `.tsv` `.txt` `.xls` `.xlsb` `.xlsm` `.xlsx` `.xlt` `.xltx` `.xml`
-  - 2차 확장자(pl-45): 매크로·서식·쇼 파일(`.docm` `.pptm` `.dotx` `.xltx` `.potx` `.ppsx` `.dot` `.xlt` `.pot` `.xlsb`), 오픈문서(`.odt` `.ods` `.odp`), `.rtf`, 글자 자료(`.csv` `.tsv` `.md`), 데이터·기록(`.json` `.xml` `.log` — 파일 글을 그대로 읽음). `.hwp`는 아직 아니다.
+  - `.json` `.xml` `.log`는 파일 글을 그대로 읽는다. `.hwp`는 지원하지 않는다.
   - `.pdf`는 글자 PDF와 스캔(이미지) PDF를 따로 판정해 다른 엔진으로 읽는다. 압축 파일(`.zip` 등)과 위 목록 밖 형식은 파싱 대상이 아니다.
-- **`parse_document`가 받는 형식** — `pipeline/parse_service.py`의 `allowed_exts()`(검색 대상 − 이미지): `.csv` `.doc` `.docm` `.docx` `.dot` `.dotx` `.eml` `.htm` `.html` `.hwpx` `.json` `.log` `.md` `.mht` `.mhtml` `.msg` `.odp` `.ods` `.odt` `.pdf` `.pot` `.potx` `.ppsx` `.ppt` `.pptm` `.pptx` `.rtf` `.tsv` `.txt` `.xls` `.xlsb` `.xlsm` `.xlsx` `.xlt` `.xltx` `.xml`
+- **`parse_document`가 받는 형식** — `pipeline/transform/parse/engine_check.py`의 `allowed_exts()`(검색 대상 − 이미지): `.csv` `.doc` `.docm` `.docx` `.dot` `.dotx` `.eml` `.htm` `.html` `.hwpx` `.json` `.log` `.md` `.mht` `.mhtml` `.msg` `.odp` `.ods` `.odt` `.pdf` `.pot` `.potx` `.ppsx` `.ppt` `.pptm` `.pptx` `.rtf` `.tsv` `.txt` `.xls` `.xlsb` `.xlsm` `.xlsx` `.xlt` `.xltx` `.xml`
   - 이미지 파일은 받지 않는다(그림 VLM 단계를 돌리지 않음). 스캔 PDF는 내부망 VLM으로 읽는다(쪽마다 VLM 호출이라 글자 PDF보다 오래 걸림 — 작업 제한 시간 하나). VLM 설정(주소·모델)이 없으면 text가 비고 "스캔 PDF — VLM 미설정", VLM이 실패하면 "스캔 PDF — VLM 파싱 실패"가 붙는다.
-  - **⚠ 운영과 다름:** 받는 확장자가 운영보다 많고(위 2차 확장자), 운영은 스캔 PDF를 VLM으로 읽지 않는다.
+  - **⚠ 운영과 다름:** 운영은 매크로·서식·쇼 파일(`.docm` `.pptm` `.dotx` `.xltx` `.potx` `.ppsx` `.dot` `.xlt` `.pot` `.xlsb`), 오픈문서(`.odt` `.ods` `.odp`), `.rtf`, `.csv` `.tsv` `.md`, `.json` `.xml` `.log`를 받지 않고, 운영은 스캔 PDF를 VLM으로 읽지 않는다.
 
 ## 4. `search`
 
@@ -102,7 +102,7 @@
 | `contract_no` | 글자 또는 null | 계약 번호 — 그 원천의 `contract_id` 거르기 키 값(CRMS 계약 코드·LAS 관리 번호, SFDC는 null) |
 | `doc_date` | 글자 또는 null | 문서 날짜 |
 | `version` | 글자 또는 null | 문서 판 — 수집 목록(manifest)에 값이 있을 때만 |
-| `superseded` | null | 구판 표시 — 지금은 늘 null([mc-05](../prd/mcp.md#mc-05): 본문 글자로 추정한 값은 내보내지 않음) |
+| `superseded` | null | 구판 표시 — 늘 null(본문 글자로 추정한 값은 내보내지 않음) |
 | `chunk_key` | 글자 | 청크를 다시 가리키는 키 `<doc_id>:<seq>` ⚠ 운영은 `<file_path>:<순번>` |
 | `attrs` | 객체 | 원천 메타 `{키: 값}` — 그 원천의 근거 키(`edw_meta` `search_attrs.<원천>.evidence`) 모두, 값이 없으면 null. 근거 키가 없는 원천(FAQ·Other)은 `attrs` 자체가 null. 예 SFDC `sf_op_id`·`sf_op_name`·`project_code__c`·`service_type`·`contract_date` |
 <!-- /guide:evidence -->
@@ -253,7 +253,7 @@ EDW 읽기 전용 SQL. 요약 없이 원래 행만 돌려준다(집계는 SQL에
 | `time_out_threshold` | 정수 | 아니요 | 300 | 초. 이 안에 끝나면 결과, 못 끝내면 `{"error": "시간 안에 수행 못했습니다", "job_id": …}` — 같은 파일을 바로 다시 내면 새 작업이 생긴다 |
 | `max_chars` | 정수 | 아니요 | 200000 | 응답 `text` 상한 — 넘으면 잘리고 `text_truncated` |
 
-- 파일 크기 상한 100 MB(`path`·`content_b64` 같음 — 설정 `ops.runtime.parse_max_mb`). **⚠ 운영과 다름:** 운영은 64 MB. 넘으면 `{"error": "파일이 크기 상한(100MB)보다 큼(…MB) — …"}`. `content_b64`는 검색 MCP가 서비스로 보내기 전에 거른다. base64라 요청 본문은 파일의 약 1.33배(100 MB 파일 ≈ 134 MB) — 검색 MCP 앞에 리버스 프록시를 두면 그 본문 상한(nginx `client_max_body_size` 기본 1 MB 등)과 클라이언트 쪽 제한 시간을 그만큼 늘린다.
+- 파일 크기 상한 100 MB(`path`·`content_b64` 같음 — 설정 `ops.services.data_parsing.mcp_parse_max_file_mb`). **⚠ 운영과 다름:** 운영은 64 MB. 넘으면 `{"error": "파일이 크기 상한(100MB)보다 큼(…MB) — …"}`. `content_b64`는 검색 MCP가 서비스로 보내기 전에 거른다. base64라 요청 본문은 파일의 약 1.33배(100 MB 파일 ≈ 134 MB) — 검색 MCP 앞에 리버스 프록시를 두면 그 본문 상한(nginx `client_max_body_size` 기본 1 MB 등)과 클라이언트 쪽 제한 시간을 그만큼 늘린다.
 
 돌려주는 모양(완료): `text`(대표 본문, 표 포함) · `tables_std` · `tables` · `facts` · `fields` · `engine`(대표 엔진) · `rep_path`(전체 대표 결과 JSON 경로) · `ms`. 대기열이 차면 HTTP 429.
 
@@ -273,7 +273,7 @@ EDW 표·칸의 한글 설명을 정적 자료에서 3단으로 찾는다(DB 접
 
 모르는 이름은 `{"error": …, "suggestions": [...]}`. SQL을 쓸 때는 결과의 `qualified_name`을 쓴다.
 
-인자 없이 부르면 스키마 요약에 `search_attrs`가 붙는다 — `search`의 원천별 `attrs` 키(EDW 사슬 파일 그대로, [pl-52](../prd/load-schema.md#pl-52)):
+인자 없이 부르면 스키마 요약에 `search_attrs`가 붙는다 — `search`의 원천별 `attrs` 키(EDW 사슬 파일 그대로):
 `{"SFDC": {"filter": {"project_id": "project_code__c", …, "doc_class": "doc_class"}, "attrs": ["contract_date", …], "evidence": ["sf_op_id", …]}, "CRMS": …}`.
 `filter`는 `search` 인자 이름 → `attrs` 키(`search` 인자에 없는 사슬 `filter:` 이름은 여기 나오지 않고 `attrs` 키로만 쓴다), `attrs`는 `attrs` 거르기에 줄 수 있는 키 전부,
 `evidence`는 근거 `attrs`에 나오는 키다. 요약이 오류(데이터셋 미구성 등)면 `search_attrs`를 붙이지 않는다. **⚠ 운영과 다름:** 운영 `edw_meta`에는 `search_attrs`가 없다.

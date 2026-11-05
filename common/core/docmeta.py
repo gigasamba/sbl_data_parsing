@@ -1,10 +1,9 @@
-"""문서 최신성 메타데이터(백로그 L3-1·W15) — 날짜·개정·구판 표시를 뽑는 규칙 한 곳 + 같은 사건 사본 묶기(copy_key·copy_groups).
-structure(build_bundle.py)가 docs.jsonl에 적고, 검색 근거가 그 칸(doc_date·version·superseded)을 그대로 보여 준다.
-pl-38(사용자 11-03): 판 묶음(family — id_patterns로 같은 문서군을 묶던 것)과 그 묶음으로 옛 판을 뒤로 밀던 최신성 순위(recency_rerank)를 지움 —
-잠재 문제(같은 문서의 다른 판이 s3_key가 달라 '최신' 질문에서 옛 판이 위로 올 수 있음)는 PRD pl-38에 남김.
+"""문서 최신성 메타데이터 — 날짜·개정·구판 표시를 뽑는 규칙 한 곳 + 같은 사건 사본 묶기(copy_key·copy_groups).
+structure(gold_bundle.py)가 docs.jsonl에 적고, 검색 근거가 그 칸(doc_date·version·superseded)을 그대로 보여 준다.
+판 묶음·최신성 순위는 없다 — 같은 문서의 다른 판이 '최신' 질문에서 위로 올 수 있는 문제는 PRD pl-38.
 
-날짜 우선순위는 **본문 먼저, 파일명은 다음**(파일명이 내용과 다를 수 있음 — holdout 실측: final_real.docx(본문 2025-06) vs
-final_v2.docx(본문 2025-09), 파일명에는 날짜가 아예 없어 속지는 않지만 버전 낱말도 내용이 아니라 이름이 우선이면 거꾸로 판단할 수 있음)."""
+날짜 우선순위는 **본문 먼저, 파일명은 다음**(파일명이 내용과 다를 수 있음 — 예: final_real.docx(본문 2025-06) vs
+final_v2.docx(본문 2025-09)는 이름의 버전 낱말을 우선하면 거꾸로 판단한다)."""
 
 import re
 from pathlib import Path
@@ -25,7 +24,7 @@ _RE_YM = re.compile(r"(20\d{2})[-_./](\d{1,2})(?!\d)")
 _RE_KO_YM = re.compile(r"(20\d{2})\s*년\s*(\d{1,2})\s*월")
 _RE_MY_EN = re.compile(rf"\b({_MON_RE})\.?\s+(20\d{{2}})\b", re.I)
 _RE_Y = re.compile(r"(20\d{2})(?!\d)")
-# 본문의 연도만은 "2026년"처럼 날짜로 적은 것만(F6 — 본문 속 맨 연도 "planned for 2027"은 문서 날짜가 아님)
+# 본문의 연도만은 "2026년"처럼 날짜로 적은 것만(본문 속 맨 연도 "planned for 2027"은 문서 날짜가 아님)
 _RE_KO_Y = re.compile(r"(20\d{2})\s*년")
 
 _VER_WORD = r"(?:rev(?:ision)?|version|ver|amendment|개정판?|수정판?)"
@@ -103,7 +102,7 @@ def is_superseded(text):
 
 
 def doc_meta(filename, text):
-    """structure(build_bundle.py)가 docs.jsonl에 적는 한 벌 — doc_date·version·superseded(family는 pl-38에 지움)."""
+    """structure(gold_bundle.py)가 docs.jsonl에 적는 한 벌 — doc_date·version·superseded."""
     return {
         "doc_date": extract_date(filename, text),
         "version": extract_version(filename, text),
@@ -118,7 +117,7 @@ _COPY_FMT_RE = re.compile(
 
 
 def copy_key(filename):
-    """R2-c 요건① 사본 그룹 규칙(engine-qa CONCERN 반영, 문서화) — 1차 후보 키는 평가 풀 접두·형식 접두를 뗀
+    """사본 그룹 규칙 — 1차 후보 키는 평가 풀 접두·형식 접두를 뗀
     소문자 파일명 stem. **규칙과 의도**: 같은 copy_key 후보 안에서만(그래야 전혀 다른 문서가 섞이지 않음) 본문
     5-gram Jaccard ≥ 0.6(copy_groups)이어야 비로소 "같은 사건의 사본"으로 묶는다 — 이름만 비슷해도 내용이
     다르면(예: 같은 양식의 다른 계약서) 안 묶고, 확장자·접두가 달라도(.eml/.msg/mailshot_*.png 등) 내용이
@@ -135,11 +134,11 @@ def _copy_shingles(t, k=5):
 
 
 def copy_groups(items, text_sim=0.6):
-    """R2-c 요건① — items: [{"file_name", "text"}, ...](do_search 근거 순서, 보통 수십 건 이하) →
+    """items: [{"file_name", "text"}, ...](do_search 근거 순서, 보통 수십 건 이하) →
     {대표 인덱스: [사본 인덱스, ...]}. 같은 copy_key 후보 안에서만 본문 정규화 완전 일치 또는 5-gram
     Jaccard ≥ text_sim(실 코퍼스 실측: 같은 메일의 .eml/.msg/mailshot 0.6~0.72, 다른 계약서 0.02~0.43)이면
-    사본으로 묶는다. 대표 = 그룹 안에서 원래 순서(검색 순위)가 가장 앞선 항목 — **지우지 않는다**(RV11 회귀:
-    "점수 가장 높은 사본만 남김"은 gold가 특정 사본을 지목하면 오히려 miss가 됐다 — 호출자가 variants로 보존)."""
+    사본으로 묶는다. 대표 = 그룹 안에서 원래 순서(검색 순위)가 가장 앞선 항목 — **지우지 않는다**(
+    "점수 가장 높은 사본만 남김"은 gold가 특정 사본을 지목하면 miss가 된다 — 호출자가 variants로 보존)."""
     cand = {}
     for idx, it in enumerate(items):
         cand.setdefault(copy_key(it.get("file_name")), []).append(idx)
@@ -193,10 +192,10 @@ def _format_tier(filename):
 
 
 def copy_representative(members):
-    """engine-qa CONCERN(QA066) 반영 — 사본 그룹 안에서 **근거 텍스트로 쓸 대표**를 고른다(슬롯 자리는 그대로
+    """사본 그룹 안에서 **근거 텍스트로 쓸 대표**를 고른다(슬롯 자리는 그대로
     최상위 순위 — copy_groups의 대표 인덱스 선택과 무관, do_search가 그 자리의 내용만 바꿔 끼운다).
-    QA066 결함: 최상위 순위가 하필 mailshot(이미지 OCR) 청크라, eml·msg에만 온전히 있던 배치 수 문장이
-    대표 텍스트에서 빠졌다. 그래서 순위가 아니라 **형식 우선순위**(eml > msg > htm/mht > docx/pdf류 > 이미지,
+    최상위 순위가 이미지 OCR(mailshot) 청크면 eml·msg에만 온전히 있는 문장이
+    대표 텍스트에서 빠진다. 그래서 순위가 아니라 **형식 우선순위**(eml > msg > htm/mht > docx/pdf류 > 이미지,
     본문 텍스트가 원래부터 있는 형식일수록 위) → 동일 형식이면 **본문이 더 긴 쪽**으로 고른다.
     members: [{"file_name", "text"}, ...](그룹 원소, 순서 임의) → members 안 인덱스(동점이면 먼저 나온 원소)."""
     return max(range(len(members)), key=lambda i: (_format_tier(members[i].get("file_name")), len(members[i].get("text") or ""), -i))

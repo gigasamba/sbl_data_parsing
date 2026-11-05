@@ -8,6 +8,8 @@ import inspect
 import sys
 import traceback
 
+from common.core.console import utf8_stdout
+
 
 def tests_of(mod):
     """(이름, 함수) — 모듈에 정의된 순서(이름이 test_로 시작하는 함수)."""
@@ -19,9 +21,8 @@ def main(argv=None):
     if len(argv) != 1:
         print("사용: python -m tests.runner <시험 모듈>(예 tests.server.pipeline.test_overlay)", file=sys.stderr)
         return 2
-    for s in (sys.stdout, sys.stderr):
-        if hasattr(s, "reconfigure"):
-            s.reconfigure(encoding="utf-8", errors="replace")
+    utf8_stdout()
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # 실패 출력(traceback)도 한글 — utf8_stdout은 stdout만
     mod = importlib.import_module(argv[0])
     found = tests_of(mod)
     if not found:

@@ -1,4 +1,4 @@
-"""pipeline.transform.figures.shape_detect 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.figures.shape_detect`."""
+"""pipeline.transform.figures.shape_detect 시험."""
 
 from pipeline.transform.figures.shape_detect import docx_has_shapes, xlsx_has_shapes
 

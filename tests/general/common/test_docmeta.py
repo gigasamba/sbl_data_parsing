@@ -1,4 +1,4 @@
-"""common.core.docmeta 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.core.docmeta`."""
+"""common.core.docmeta 자기 점검."""
 
 from common.core.docmeta import (
     _format_tier,
@@ -22,7 +22,7 @@ def selftest():
     assert extract_date("spec.docx", "Rev. May 2026") == "2026-05"
     assert extract_date("spec_2026.docx", "") == "2026"
     assert extract_date("spec.docx", "본 문서는 2026년 작성됨") == "2026"
-    assert extract_date("faq.xlsx", "commercial perfusion is planned for 2027. | 46236 |") is None  # F6 — 본문 맨 연도는 날짜 아님
+    assert extract_date("faq.xlsx", "commercial perfusion is planned for 2027. | 46236 |") is None  # 본문 맨 연도는 날짜 아님
     assert extract_date("plan_2027.xlsx", "planned for 2030") == "2027"  # 파일명의 연도는 그대로
     assert extract_date("spec.docx", "") is None
     # 본문 우선(파일명이 속일 수 있음 — holdout 실측 패턴)
@@ -45,9 +45,7 @@ def selftest():
     assert is_superseded("정상 문서 본문") is False
     print("[selftest] 구판 표지 통과")
 
-    # family 키·최신성 순위(recency_rerank)·연도 지목은 pl-38(사용자 11-03)에 지움 — 잠재 문제는 PRD pl-38
-
-    # R2-c 요건① — 사본 그룹(실 코퍼스 실측 수치로 보정한 임계값): 같은 메일 다른 형식은 묶고, 다른 계약서는 안 묶음
+    # 사본 그룹(실 코퍼스 실측 수치로 보정한 임계값): 같은 메일 다른 형식은 묶고, 다른 계약서는 안 묶음
     body = "MRH-MAB-01 기술이전 관련 문의드립니다. 1차 트랜스퍼 배치 완료, 추가 배치 3회 계획입니다. 제안 단가 434,000,000 KRW/batch"
     items = [
         {"file_name": "MAIL-MRH-02.eml", "text": f"From: a\nTo: b\nSubject: x\n{body}"},
@@ -61,7 +59,7 @@ def selftest():
     assert copy_groups([{"file_name": "a.pdf", "text": "x"}]) == {}  # 1건이면 그룹 없음
     print("[selftest] 사본 그룹(copy_key 후보 + 본문 유사도) 통과")
 
-    # engine-qa CONCERN(QA066) — 대표 텍스트는 순위가 아니라 형식(eml>msg>htm/mht>docx/pdf류>이미지)·본문 길이로
+    # 대표 텍스트는 순위가 아니라 형식(eml>msg>htm/mht>docx/pdf류>이미지)·본문 길이로
     assert (
         _format_tier("x.eml")
         > _format_tier("x.msg")
@@ -84,5 +82,5 @@ def selftest():
     print("[selftest] 사본 대표 선택(형식 우선·동률이면 긴 본문, QA066 재발 방지) 통과")
 
 
-def test_main():  # 옛 `if __name__ == "__main__":` 몸통
+def test_main():
     selftest()

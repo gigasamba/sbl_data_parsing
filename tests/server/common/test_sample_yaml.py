@@ -1,6 +1,6 @@
-"""op-05 — settings.sample.yaml(모든 칸 + 코드 기본값)을 그대로 복사한 settings.yaml로 서버(run_env: dev — STRICT)가 시작되고, 적힌 값은
-코드 기본값과 같다(sample을 복사해도 동작이 바뀌지 않음). 적었는지로 동작이 갈리는 칸(given()·_f·own·pinned)은 sample에 적지 않는다.
-외부 접속 없음, 임시 폴더만."""
+"""op-05 — settings.sample.yaml(모든 칸 + 코드 기본값, 기본 없음은 null)을 그대로 복사한 settings.yaml로 서버(run_env: dev — STRICT)가 시작되고,
+적힌 값은 코드 기본값과 같다(sample을 복사해도 동작이 바뀌지 않음). 적었는지로 동작이 갈리는 칸(given()·_f)은 대체값이 모델 기본값과 같거나
+sample.SET_MATTERS(null로 냄)에 있어야 한다. 외부 접속 없음, 임시 폴더만."""
 
 import re
 import tempfile
@@ -13,6 +13,7 @@ from common.config.settings import CommonAppSettings, _is_set, app_classes, env_
 from common.core.paths import DEPLOY_ROOT
 
 _SET_READ = re.compile(r"\b(?:given|_given|_f|own|setting)\(\s*[\"']([A-Z][A-Z0-9_]+)[\"']")
+_FALLBACK = re.compile(r"\b_f\(\s*[\"']([A-Z][A-Z0-9_]+)[\"']\s*,\s*(-?[0-9.]+)\s*\)")  # _f("X", 숫자) — 안 적었을 때 쓰는 값
 
 
 def _get(obj, path):
@@ -21,22 +22,21 @@ def _get(obj, path):
     return obj
 
 
-def _set_read_names():
-    """코드에서 '준 값만' 읽는 이름(given("X")·resources._f("X")·model_matrix.own("X") 등) — 이 이미지에 있는 폴더만.
-    코드 루트는 DEPLOY_ROOT(PC = 저장소 루트, 이미지 = /app/deploy — PROJ_ROOT는 이미지에서 /app이라 코드가 없음, 이미지 관문 10-30)."""
-    out = set()
+def _code():
+    """앱 코드 글자 — 이 이미지에 있는 폴더만. 코드 루트는 DEPLOY_ROOT(PC = 저장소 루트, 이미지 = /app/deploy — PROJ_ROOT는 이미지에서 /app이라 코드가 없음)."""
     for top in ("common", "pipeline", "mcp_server", "validation"):
         for f in (DEPLOY_ROOT / top).rglob("*.py") if (DEPLOY_ROOT / top).is_dir() else ():
-            out |= set(_SET_READ.findall(f.read_text(encoding="utf-8")))
-    return out
+            yield f.read_text(encoding="utf-8")
 
 
 def test_copied_sample_starts_with_defaults():
-    text = sample.build().replace("\n    run_env: ", "\n    run_env: dev", 1)  # 주석 열을 맞춘 공백 자리에 값을 넣음
+    text = sample.build().replace("\n    run_env:  ", "\n    run_env: dev", 1)
     tree = yaml.safe_load(text)
     assert tree["required"]["env"]["run_env"] == "dev"
-    names = _set_read_names()
-    assert "PIPE_RESERVE_GB" in names  # 검색이 코드를 실제로 찾았는지(common/core/resources.py — 두 이미지 다 있음)
+    code = list(_code())
+    names = {n for t in code for n in _SET_READ.findall(t)}
+    fallbacks = [m for t in code for m in _FALLBACK.findall(t)]
+    assert "PIPE_RESERVE_GB" in names and fallbacks  # 검색이 코드를 실제로 찾았는지(common/core/resources.py — 두 이미지 다 있음)
     with tempfile.TemporaryDirectory() as d:
         y = Path(d) / "settings.yaml"
         y.write_text(text, encoding="utf-8")
@@ -47,6 +47,10 @@ def test_copied_sample_starts_with_defaults():
                     v = _get(tree, layout.to_yaml(p))
                     if v is not None and p != "common.run_env":
                         assert _get(st, p) == v, (p, _get(st, p), v)
-            for name, p in env_map(cls).items():
-                if name in names and p != "common.run_env":
-                    assert not _is_set(st, p), (name, p, "적었는지로 동작이 갈리는 칸 — sample.SET_MATTERS에 더함")
+            em = env_map(cls)
+            for name, p in em.items():
+                if name in sample.SET_MATTERS:
+                    assert not _is_set(st, p), (name, p, "SET_MATTERS 칸은 sample에 null")
+            for name, lit in fallbacks:  # 적은 기본값 = 안 적었을 때 대체값이어야 sample 복사가 동작을 안 바꿈
+                if name in em and name not in sample.SET_MATTERS and _is_set(st, em[name]):
+                    assert float(_get(st, em[name])) == float(lit), (name, lit, "대체값 ≠ 모델 기본값 — SET_MATTERS에 더하거나 맞춤")

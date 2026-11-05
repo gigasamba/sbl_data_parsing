@@ -1,9 +1,9 @@
-"""코드·스크립트가 읽는 환경변수 이름 모으기 — 설정 분류표(refactor_plan 부록 D)와 설정 모델이 빠진 키 없이 맞는지 본다(S7a, D-015).
-모으는 규칙은 refactor_plan 9-4 그대로다(git 추적 파일 — valid_env/·.claude/·docs/ 제외):
+"""코드·스크립트가 읽는 환경변수 이름 모으기 — 설정 모델과 빠진 키 없이 맞는지 본다.
+모으는 규칙(git 추적 파일 — valid_env/·.claude/·docs/ 제외):
   파이썬 — os.environ.get·os.getenv·environ.get·setdefault·os.environ["X"](대입 제외)·"X" in os.environ·지역 도우미
            (_f·_cap·g·_list·_case·_flag·base_env.get·env.get·c.get·conf.get)·동적 이름 f"{prefix}_X"(LLM·VLM·EMBED·RERANK)
   셸 — ${X:-…}(그 파일에서 대입해도 입력) · ${X}·$X 중 그 파일에서 대입하지 않은 것 · compose·systemd — ${X} 전부
-  (valid_env/ 중 PC 시험 Docker valid_env/docker/는 넣음 — 5-3 C)
+  (valid_env/ 중 PC 시험 Docker valid_env/docker/는 넣음)
 이름 목록을 돌며 읽는 키(for k in ("PG_HOST", …))처럼 규칙으로 못 잡는 것은 NAME_LIST에 적는다.
 --check: 모은 키 = 설정 모델 칸(옛 env 이름) + NOT_SETTINGS(YAML에 안 넣는 것)인지 대조 — 빠진 키·모르는 칸을 찍고 rc 1.
 사용: python -m common.config.keyscan [--json] [--where KEY] [--check]
@@ -25,20 +25,19 @@ _SKIP = (
     "docs/",
     "output/",
     "deploy/release/lint_changed.sh",
-)  # 마지막 — PC 개발 점검 스크립트(FIX 등 셸 스위치는 설정 키가 아님, S12)
-_KEEP = ("valid_env/docker/",)  # PC 시험 Docker(compose·smoke_test.sh — S6b에 docker/에서 옮김, 5-3 C)
+)  # 마지막 — PC 개발 점검 스크립트(FIX 등 셸 스위치는 설정 키가 아님)
+_KEEP = ("valid_env/docker/",)  # PC 시험 Docker(compose·smoke_test.sh)
 PREFIXES = ("LLM", "VLM", "EMBED")
 
-# 규칙(아래 정규식)으로 못 잡는 읽기 — 이름 목록·동적 이름(9-4 "이름 목록") · S7a에 다시 모으며 찾음
+# 규칙(아래 정규식)으로 못 잡는 읽기 — 이름 목록·동적 이름
 NAME_LIST = {
     "VLM_EXTRA_BODY": "common/ai/llm.py(_EXTRA_ENV_KEY 표)",
     **{
-        f"RDB_COL_{f}": "pipeline/extract/fetch_docs.py(_rdb_cols — 설정 칸 extract.connections.rdb.columns)"
+        f"RDB_COL_{f}": "pipeline/extract/candidate_pick.py(_rdb_cols — 설정 칸 tuning.extract.source_columns.source_column_*)"
         for f in ("CONTENT_VERSION", "DOC_ID", "FILENAME", "KEY", "SIZE")
     },
 }
-# YAML에 넣지 않는 이름(refactor_plan 부록 D "처리") — env로 남김(5-3 H·라이브러리가 읽음) · 인자(5-3 B 빌드·반입·시험 스크립트) ·
-# (옛 이름 '삭제 후보' 목록은 0.2.0에 지움 — pl-46: 코드가 읽지 않는 이름은 대조하지 않음)
+# YAML에 넣지 않는 이름 — env로 남김(라이브러리가 읽음) · 인자(빌드·반입·시험 스크립트). 코드가 읽지 않는 이름은 대조하지 않는다.
 NOT_SETTINGS = {
     "APPLOG_CONTEXT": ("env로 남김", "내부 신호 — 부모 → 자식 request/run/span ID(JSON), 설정 아님"),
     "SETTINGS_FILE": ("env로 남김", "설정 파일 위치(새 — D-015)"),
@@ -49,13 +48,13 @@ NOT_SETTINGS = {
     **{
         f"APP_{k.upper()}": (
             "env로 남김",
-            "컨테이너 안 약속 경로 — settings.IMAGE_PATHS 고정값(settings_env.sh가 냄, compose 마운트 자리 — 사용자 11-02)",
+            "컨테이너 안 약속 경로 — settings.IMAGE_PATHS 고정값(load_settings.sh가 냄, compose 마운트 자리 — 사용자 11-02)",
         )
         for k in ("output_root", "code_root", "docs_mount")
     },
     "SETTINGS_LOADED": (
         "env로 남김",
-        "내부 신호 — settings_env.sh load_settings가 이미 낸 설정 파일(하위 스크립트가 다시 안 읽게, 새 — S7e1)",
+        "내부 신호 — load_settings.sh load_settings가 이미 낸 설정 파일(하위 스크립트가 다시 안 읽게, 새 — S7e1)",
     ),
     "PYTHONUTF8": ("env로 남김", "파이썬 실행 옵션(이미지·셸)"),
     "DO_NOT_TRACK": ("env로 남김", "외부 라이브러리 원격 측정 끄기 — Dockerfile ENV(U-1, S7a2) · settings·빈 틀에서만 뺌(S7e)"),
@@ -77,7 +76,7 @@ NOT_SETTINGS = {
     "USERNAME": ("env로 남김", "OS 사용자 이름(Windows)"),
     "ALLOW_NO_ASSETS": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     **{
-        n: ("인자", "빌드·굽기 스크립트 변수(build_ship.sh·bake.sh·ship_stage.sh — op-06·op-07)")
+        n: ("인자", "빌드·굽기 스크립트 변수(build_ship.sh·bake_prod_image.sh·stage_images.sh — op-06·op-07)")
         for n in ("APP_VERSION", "VCS_REF", "BAKE_TEST", "CODE_BUNDLE", "CODE_DIR", "CODE_OUT")
     },
     "NF": ("인자", "awk 내장 변수($NF — build_ship.sh tar 권한 점검), 설정 아님"),
@@ -101,15 +100,19 @@ NOT_SETTINGS = {
     "APP_VERSION": ("인자", "Dockerfile 빌드 인자 — 이미지에 버전을 새김(build_ship.sh가 VERSION 파일에서, op-09)"),
     "VCS_REF": ("인자", "Dockerfile 빌드 인자 — 이미지에 커밋을 새김(build_ship.sh, op-09)"),
     "CODE_OUT": ("인자", "build_ship.sh — 코드 묶음 출력 파일(op-09)"),
-    "CODE_BUNDLE": ("인자", "ship_stage.sh — 실행 이미지와 함께 옮길 코드 묶음 파일(bake.sh가 넘김, op-09)"),
-    "BAKE_TEST": ("인자", "bake.sh — PC 시험 태그면 1(태그가 VERSION과 달라도 멈추지 않음, op-09)"),
+    "CODE_BUNDLE": ("인자", "stage_images.sh — 실행 이미지와 함께 옮길 코드 묶음 파일(bake_prod_image.sh가 넘김, op-09)"),
+    "BAKE_TEST": ("인자", "bake_prod_image.sh — PC 시험 태그면 1(태그가 VERSION과 달라도 멈추지 않음, op-09)"),
     "CODE_DIR": (
         "인자",
-        "호스트 스크립트 변수 — 개발 서버 코드 폴더(image_vars.sh가 실행 이미지일 때 pwd로 채움, compose.code*.yml 마운트 — op-09)",
+        "호스트 스크립트 변수 — 개발 서버 코드 폴더(in_container.sh가 실행 이미지일 때 pwd로 채움, compose.code*.yml 마운트 — op-09)",
     ),
     "RAG_ROOT": (
         "인자",
-        "호스트 스크립트 변수 — 서버 루트(코드 폴더의 부모 — settings_env.sh가 구해 compose edw_chain.yaml 마운트에, op-13)",
+        "호스트 스크립트 변수 — 서버 루트(코드 폴더의 부모 — load_settings.sh가 구해 compose edw_chain.yaml 마운트에, op-13)",
+    ),
+    "NAME_SUFFIX": (
+        "인자",
+        "호스트 스크립트 변수 — 여러 벌 이름 끝 -<ops.host.instance_name>(load_settings.sh가 구해 compose container_name·묶음 이름·타이머에, op-15)",
     ),
     "POSTGRES_DB": ("env로 남김", "PG 컨테이너 env — compose가 PG_DB로 채움(설정 칸은 op-08에 지움)"),
     "POSTGRES_USER": ("env로 남김", "PG 컨테이너 env — compose가 PG_USER로 채움(설정 칸은 op-08에 지움)"),
@@ -123,7 +126,7 @@ IGNORE = {
     "DC_ROOT",
     "DC_UNIT_DIR",
     "DC_FAKE",
-}  # NF=awk `$NF`(op-09) · PATH·DC_*=dc.sh 시험용(#138)
+}  # NF=awk `$NF` · PATH·DC_*=host_ctl.sh 시험용
 
 _K = r"([A-Z][A-Z0-9_]{1,})"
 _PY = [
@@ -132,7 +135,7 @@ _PY = [
     re.compile(r'os\.environ\[\s*["\']' + _K + r'["\']\s*\](?!\s*=[^=])'),
     re.compile(r'["\']' + _K + r'["\']\s+(?:not\s+)?in\s+(?:os\.)?environ'),
     re.compile(r'(?<![\w.])(?:_f|_cap|g|_list|_case|_flag|_int|_float|_bool|_envf?|env_int|env_float|env_flag)\(\s*["\']' + _K + r'["\']'),
-    re.compile(r'\bMM\.(?:own|setting)\(\s*["\']' + _K + r'["\']'),  # S7e2 — PC 평가 도구(validation/e2e)가 설정 칸을 옛 env 이름으로 읽음
+    re.compile(r'\bMM\.(?:own|setting)\(\s*["\']' + _K + r'["\']'),  # PC 평가 도구(validation/e2e)가 설정 칸을 옛 env 이름으로 읽음
 ]
 _PY_DYN = re.compile(r'f["\']\{[a-z_]+\}_' + _K + r'["\']')
 _SH_USE = re.compile(r"\$\{" + _K + r"(?=[:}\-?=+#%/])|\$" + _K + r"\b")
@@ -226,22 +229,9 @@ def scan(root=ROOT):
     return {k: sorted(set(v)) for k, v in sorted(found.items())}
 
 
-def mentioned(keys, root=ROOT):
-    """keys 중 추적 코드 파일(파이썬·셸·compose 등)에 이름이 단어로 한 번이라도 나오는 것 — 규칙 밖으로 읽는 키 대조용."""
-    texts = []
-    for rel in _tracked():
-        if _kind(rel):
-            try:
-                texts.append((root / rel).read_text(encoding="utf-8"))
-            except (OSError, UnicodeDecodeError):
-                pass
-    blob = "\n".join(texts)
-    return {k for k in keys if re.search(r"(?<![A-Z0-9_])" + re.escape(k) + r"(?![A-Z0-9_])", blob)}
-
-
 def object_reads():
-    """설정 객체로 읽는 칸의 옛 env 이름 — common 칸(S7b — common/·pipeline/ 코드가 cfg()·by_env·given으로 읽음)·pipeline 칸(S7c —
-    pipeline/ 코드가 pipeline.config의 cfg()·given으로 읽음)·mcp 칸(S7d — mcp_server/ 코드가 mcp_server.config의 cfg()·given으로 읽음). 정적 근사(알리기용 — 빠진 키 판정에는 안 씀), 파일마다: `.<절>.<칸>`이
+    """설정 객체로 읽는 칸의 옛 env 이름 — common 칸(common/·pipeline/ 코드가 cfg()·by_env·given으로 읽음)·pipeline 칸(
+    pipeline/ 코드가 pipeline.config의 cfg()·given으로 읽음)·mcp 칸(mcp_server/ 코드가 mcp_server.config의 cfg()·given으로 읽음). 정적 근사(알리기용 — 빠진 키 판정에는 안 씀), 파일마다: `.<절>.<칸>`이
     나오거나, `= ….<절>`로 절을 변수에 받은 파일에 `.<칸>`이 나오거나, 옛 env 이름 글자가 나오거나(by_env("X")·given("X")·checked("X")),
     역할 접두로 짓는 이름(`{prefix}_BASE_URL` 꼴 — PREFIXES)의 꼬리가 나오면 읽는 것으로 친다."""
     from common.config import settings as S
@@ -289,7 +279,7 @@ def object_reads():
 
 def check(found=None):
     """(빠진 키, 모델에만 있는 칸) — 빠진 키: 코드가 읽는데 모델 칸·NOT_SETTINGS 어디에도 없음(0이어야 함).
-    모델에만 있는 칸: 새 칸(아직 안 읽는 것)이나 지운 읽기 — 알리기만(설정 객체로 읽는 칸은 읽는 것으로 침 — S7b)."""
+    모델에만 있는 칸: 새 칸(아직 안 읽는 것)이나 지운 읽기 — 알리기만(설정 객체로 읽는 칸은 읽는 것으로 침)."""
     from common.config import settings as S
 
     found = scan() if found is None else found

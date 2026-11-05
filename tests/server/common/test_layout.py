@@ -1,6 +1,6 @@
-"""op-08 ② — settings.yaml 새 배치(required·역할 절·tuning — common.config.layout).
-칸 자리 ↔ 모델 경로가 1:1인지, PC에서 흔히 쓰는 꼴의 새 배치 파일이 두 앱에서 읽히는지, 같은 내용의 옛 배치 파일을 migrate가 같은 값으로
-바꾸는지, 옛 배치·자리가 바뀐 칸은 migrate 안내와 함께 거부하는지 본다. 외부 접속 없음, 임시 폴더만(값은 시험용 가짜)."""
+"""settings.yaml 배치(required·역할 절·tuning·dev — common.config.layout).
+칸 자리 ↔ 모델 경로가 1:1인지, PC에서 흔히 쓰는 꼴의 파일이 두 앱에서 읽히는지, 옛 배치·옛 자리·모르는 칸은 칸 이름과 함께 거부하는지 본다.
+외부 접속 없음, 임시 폴더만(값은 시험용 가짜)."""
 
 import tempfile
 from pathlib import Path
@@ -11,75 +11,74 @@ from common.config.settings import SettingsError, app_classes, load, read_settin
 PC_NEW = """required:
   env:
     run_env: local
-    run_mode: prod
   pg:
-    host: 127.0.0.1
-    port: 55433
-    db: rag
-    user: rag
-    password: dummy-pg
-    db_schema: rag_test
-  embed:
-    base_url: http://127.0.0.1:9/v1
-    model: test-embed
-    api_key: dummy-key
+    pg_host: 127.0.0.1
+    pg_port: 55433
+    pg_database: rag
+    pg_user: rag
+    pg_password: dummy-pg
+    pg_schema: rag_test
+  models:
+    embed_base_url: http://127.0.0.1:9/v1
+    embed_model: test-embed
+    embed_api_key: dummy-key
 search:
   server:
-    host: 127.0.0.1
-    port: 8765
+    mcp_bind_host: 127.0.0.1
+    mcp_port: 8765
 tuning:
   ops:
     runtime:
-      cpu_max_load: 4
+      max_cpu_load: 4
 dev:
   models:
     guard:
-      budget_usd: 1.5
-  mcp:
-    mcp_url: http://127.0.0.1:8765/mcp
-"""
-PC_OLD = """common:
-  run_env: local
-  connections:
-    pg:
-      host: 127.0.0.1
-      port: 55433
-      db: rag
-      user: rag
-      password: dummy-pg
-      db_schema: rag_test
-  models:
-    guard:
-      budget_usd: 1.5
-    embed:
-      base_url: http://127.0.0.1:9/v1
-      model: test-embed
-      api_key: dummy-key
-  store:
-    run_mode: prod
-  runtime:
-    cpu_max_load: 4
-  paths:
-    mcp_bundle: output/bundle
-pipeline:
-  transform:
-    structure:
-      embed: api
-mcp:
-  server:
-    host: 127.0.0.1
-    port: 8765
-  dev:
-    mcp_url: http://127.0.0.1:8765/mcp
+      daily_budget_usd: 1.5
+  search_ui:
+    search_ui_mcp_url: http://127.0.0.1:8765/mcp
 """
 
+# 거부하는 칸 — (파일 본문, 읽는 앱, 오류에 나와야 하는 글자). 옛 자리는 새 자리를 알려 주고, 지운 칸·오타는 칸 이름만.
+REFUSED = (
+    ("common:\n  connections:\n    pg: {host: h}\n", "pipeline", "common.connections.pg.host → required.pg.pg_host"),
+    ("common:\n  models:\n    guard: {spend_file: x}\n", "pipeline", "common.models.guard.spend_file → dev.models.guard.spend_ledger_file"),
+    ("ops:\n  runtime: {pipe_procs: 2}\n", "pipeline", "ops.runtime.pipe_procs → ops.runtime.engine_processes"),  # 옛 이름 → 새 이름
+    ("required:\n  llm: {llm_model: m}\n", "pipeline", "required.llm.llm_model"),  # 모델 접속은 required.models 한 곳
+    (
+        "common:\n  models:\n    embed: {allow_external: true}\n",
+        "pipeline",
+        "common.models.embed.allow_external → dev.models.embed.embed_allow_external",
+    ),
+    ("dev:\n  pg_standin: {host: h}\n", "pipeline", "dev.pg_standin.host"),  # dev 절은 PC 전용 칸만
+    ("search:\n  weights: {bm25: 3}\n", "mcp", "search.weights.bm25 → tuning.search.weights.bm25_weight"),
+    ("required:\n  source: {publish_bucket: b}\n", "pipeline", "required.source.publish_bucket"),
+    ("required:\n  deploy: {mcp_store: pg}\n", "pipeline", "required.deploy.mcp_store"),
+    ("required:\n  pg: {hots: h}\n", "pipeline", "required.pg.hots"),
+    (  # 옮긴 required 칸(layout.MOVED) — 빈 줄이어도 새 자리를 알려 줌
+        "required:\n  edw: {edw_local_sqlite_file: }\n",
+        "pipeline",
+        "required.edw.edw_local_sqlite_file → dev.local.local_edw_sqlite_file",
+    ),
+    ("required:\n  env: {run_mode: prod}\n", "pipeline", "required.env.run_mode"),
+    ("required:\n  tokens: {parse_proxy: tok-123456}\n", "mcp", "required.tokens.parse_proxy"),
+    ("search:\n  server: {warmup: false}\n", "mcp", "warmup"),
+    ("dev:\n  models:\n    guard: {no_paid_calls: true}\n", "pipeline", "no_paid_calls"),
+    ("ops:\n  paths: {mcp_bundle: x}\n", "pipeline", "mcp_bundle"),
+    ("pipeline:\n  extract: {}\n", "pipeline", "pipeline"),  # 옛 배치(최상위 앱 절)
+)
 
-def _raises(fn, *needles):
+
+def _err(fn):
     try:
         fn()
     except SettingsError as e:
-        return all(n in str(e) for n in needles)
-    return False
+        return str(e)
+    return ""
+
+
+def _raises(fn, *needles):
+    msg = _err(fn)
+    return bool(msg) and all(n in msg for n in needles)
 
 
 def test_layout_is_one_to_one():
@@ -92,7 +91,7 @@ def test_layout_is_one_to_one():
     assert set(layout.SECTIONS) >= {y.split(".", 1)[0] for y in seen}
 
 
-def test_pc_file_new_layout_and_migrate():
+def test_pc_file_new_layout():
     classes = app_classes()
     with tempfile.TemporaryDirectory() as d:
         new = Path(d) / "settings.yaml"
@@ -100,75 +99,27 @@ def test_pc_file_new_layout_and_migrate():
         for name, cls in classes.items():
             st = load(cls, file=new, environ={})
             c = st.common
-            assert c.run_env == "local" and c.store.run_mode == "prod" and c.connections.pg.port == 55433, name
+            assert c.run_env == "local" and c.connections.pg.port == 55433, name
             assert c.connections.pg.password.get_secret_value() == "dummy-pg" and c.models.embed.model == "test-embed", name
             assert c.models.guard.budget_usd == 1.5 and c.runtime.cpu_max_load == 4.0, name
-            assert not hasattr(c.paths, "mcp_bundle"), name  # mc-19 — 지운 칸: 남아 있어도 경고만(시작은 함)
             if name == "mcp":
                 assert st.mcp.server.port == 8765 and st.mcp.dev.mcp_url == "http://127.0.0.1:8765/mcp"
-        gone = Path(d) / "gone.yaml"  # 11-03 지운 PC 비용 칸 5개 — 남아 있어도 경고만(시작은 함)
-        gone.write_text(
-            PC_NEW.replace(
-                "      budget_usd: 1.5\n",
-                "      budget_usd: 1.5\n      no_paid_calls: true\n      max_calls: 40\n      external_max_docs: 3\n      external_max_questions: 3\n      external_scope: x\n",
-            ),
-            encoding="utf-8",
-        )
-        g = load(next(iter(classes.values())), file=gone, environ={}).common.models.guard
-        assert g.budget_usd == 1.5 and not any(hasattr(g, k) for k in ("no_paid_calls", "max_calls", "external_scope")), g
-        moved = Path(d) / "moved.yaml"  # 11-04(op-05) — PC 전용 칸의 옛 자리(common.models.guard)도 경고 뒤 읽음
-        moved.write_text("required:\n  env: {run_env: local}\ncommon:\n  models:\n    guard: {budget_usd: 1.5}\n", encoding="utf-8")
-        assert load(next(iter(classes.values())), file=moved, environ={}).common.models.guard.budget_usd == 1.5
-        moved.write_text(PC_NEW + "common:\n  models:\n    guard: {budget_usd: 2}\n", encoding="utf-8")
-        assert _raises(lambda: load(next(iter(classes.values())), file=moved, environ={}), "두 자리", "dev.models.guard.budget_usd")
-        moved.write_text("required:\n  env: {run_env: local}\ndev:\n  connections:\n    pg: {host: h}\n", encoding="utf-8")
-        assert _raises(lambda: read_settings(moved), "dev.connections.pg.host → required.pg.host")  # dev 절은 PC 전용 칸만
-        old = Path(d) / "old.yaml"
-        old.write_text(PC_OLD, encoding="utf-8")
-        assert _raises(lambda: load(next(iter(classes.values())), file=old, environ={}), "common.config.migrate")
-        if {"pipeline", "mcp"} <= set(classes):  # migrate는 두 앱 모델이 다 있는 코드에서만(PC·코드 폴더)
-            from common.config import migrate
-
-            doc, report = migrate.convert_yaml(old, classes)
-            out = Path(d) / "migrated.yaml"
-            out.write_text(migrate.dump_yaml(doc), encoding="utf-8")
-            assert (
-                report["칸"] == 16
-                and report["삭제됨"] == ["common.paths.mcp_bundle", "pipeline.transform.structure.embed"]
-                and not report["모름"]
-            ), report  # mc-19·op-05 지운 칸
-            assert read_settings(out) == read_settings(new)
 
 
-def test_misplaced_and_unknown_keys():
+def test_refused_keys():
+    """모르는 칸·옛 자리·지운 칸은 시작 거부 — 오류에는 칸 자리만(값 없음)."""
+    classes = app_classes()
     with tempfile.TemporaryDirectory() as d:
         f = Path(d) / "s.yaml"
-        f.write_text("required:\n  env: {run_env: local}\ncommon:\n  connections:\n    pg: {host: h}\n", encoding="utf-8")
-        assert _raises(lambda: read_settings(f), "common.connections.pg.host → required.pg.host", "migrate")
-        f.write_text("required:\n  env: {run_env: local}\n  pg: {hots: h}\n", encoding="utf-8")
-        assert _raises(lambda: read_settings(f), "모르는 칸", "required.pg.hots")
+        for body, app, needle in REFUSED:
+            if app not in classes:
+                continue
+            head = "" if body.startswith("required:") else "required:\n  env: {run_env: local}\n"
+            f.write_text(head + body, encoding="utf-8")
+            msg = _err(lambda: load(classes[app], file=f, environ={"RUN_ENV": "local"}))  # noqa: B023 — 바로 부름
+            assert needle in msg and "tok-123456" not in msg, (body, msg)
         f.write_text("required:\n  env: {run_env: local}\nextract:\n", encoding="utf-8")
         assert read_settings(f)[0] == {"common": {"run_env": "local"}}  # 빈 절 머리는 괜찮음
-        f.write_text("required:\n  env: {run_env: local}\n  deploy: {mcp_store: pg}\n", encoding="utf-8")
-        assert read_settings(f)[0] == {"common": {"run_env": "local"}}  # 지운 자리(RETIRED — mc-01 11-01)는 경고만, 거부 안 함
-        # 11-04 — tuning으로 옮긴 칸(TUNING_RARE)의 옛 역할 자리도 읽음 · 새 자리와 둘 다 적으면 거부
-        f.write_text("required:\n  env: {run_env: local}\nsearch:\n  weights: {bm25: 3}\n", encoding="utf-8")
-        assert read_settings(f)[0]["mcp"]["search"]["weights"]["bm25"] == "3"
-        f.write_text(
-            "required:\n  env: {run_env: local}\nsearch:\n  weights: {bm25: 3}\ntuning:\n  search:\n    weights: {bm25: 4}\n",
-            encoding="utf-8",
-        )
-        assert _raises(lambda: read_settings(f), "두 자리", "tuning.search.weights.bm25")
-    classes = app_classes()
-    if "pipeline" in classes:  # 11-04 합친 칸 — 옛 자리(역할·tuning)에 남아도 경고만(시작은 함)
-        with tempfile.TemporaryDirectory() as d:
-            f = Path(d) / "s.yaml"
-            f.write_text(
-                "required:\n  env: {run_env: local}\nextract:\n  prefetch_workers: 3\ntuning:\n  ops:\n    nightly_run: {workers: 5}\n",
-                encoding="utf-8",
-            )
-            st = load(classes["pipeline"], file=f, environ={})
-            assert not hasattr(st.pipeline.extract, "prefetch_workers") and not hasattr(st.pipeline.night, "workers")
 
 
 def test_duplicate_key_rejected():
@@ -180,53 +131,7 @@ def test_duplicate_key_rejected():
         assert _raises(lambda: read_settings(f), "같은 칸 두 번: search", "5행")
         f.write_text("required:\n  env: {run_env: local, run_env: dev}\n", encoding="utf-8")
         assert _raises(lambda: read_settings(f), "같은 칸 두 번: run_env")
-        f.write_text("required:\n  env: {run_env: local}\ndev:\n  mcp:\n    <<: {ui_port: 1}\n", encoding="utf-8")
+        f.write_text("required:\n  env: {run_env: local}\ndev:\n  search_ui:\n    <<: {search_ui_port: 1}\n", encoding="utf-8")
         assert read_settings(f)[0]["mcp"]["dev"]["ui_port"] == "1"  # 병합 열쇠는 거부하지 않음
         f.write_text("required:\n  env: {run_env: local}\n? [a]\n: 1\n", encoding="utf-8")
         assert _raises(lambda: read_settings(f), "YAML 형식 오류")  # 못 쓰는 열쇠도 TypeError가 아닌 설정 오류
-
-
-def test_removed_warned_once():
-    """F7(11-03 PC 시험) — 지운 칸 경고는 프로세스마다 이름 하나에 한 번(설정을 여러 번 읽어도)."""
-    import contextlib
-    import io
-
-    buf = io.StringIO()
-    with contextlib.redirect_stderr(buf):
-        for _ in range(3):
-            layout.warn_removed("test.once.key")
-    assert buf.getvalue().count("지운 칸 무시: test.once.key") == 1, buf.getvalue()
-
-
-# 11-04 — 게시·EDW 칸을 required 한곳에: (옛 자리, 새 자리, 모델 경로). 옛 자리는 경고 뒤 읽고, 둘 다 적으면 거부.
-TO_REQUIRED_CASES = (
-    ("required.source.publish_bucket", "required.publish.bucket", "pipeline.load.publish.bucket"),
-    ("required.source.publish_prefix", "required.publish.prefix", "pipeline.load.publish.prefix"),
-    ("dev.connections.rdb.sqlite", "required.edw.sqlite", "common.connections.rdb.sqlite"),
-    ("common.connections.rdb.port", "required.edw.port", "common.connections.rdb.port"),
-    ("common.connections.parsing_meta.table", "required.edw.parsing_meta_table", "common.connections.parsing_meta.table"),
-    ("common.connections.object_storage.region", "required.object_storage.region", "common.connections.object_storage.region"),
-    ("common.connections.object_storage.verify_tls", "required.object_storage.verify_tls", "common.connections.object_storage.verify_tls"),
-)
-
-
-def test_publish_edw_keys_in_required():
-    def doc(*spots):
-        out = {"required": {"env": {"run_env": "local"}}}
-        for i, y in enumerate(spots):
-            layout.set_path(out, y, f"v{i}")
-        return out
-
-    for old, new, model in TO_REQUIRED_CASES:
-        assert layout.to_yaml(model) == new, model
-        for spot in (new, old):
-            m = layout.to_model(doc(spot))
-            for k in model.split("."):
-                m = m[k]
-            assert m == "v0", (spot, m)
-        try:
-            layout.to_model(doc(old, new))
-        except layout.LayoutError as e:
-            assert "두 자리" in str(e) and new in str(e), e
-        else:
-            raise AssertionError(f"두 자리 거부 안 함: {old} · {new}")

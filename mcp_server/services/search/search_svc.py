@@ -1,6 +1,5 @@
 """검색 서비스 — do_search(하드 거르기 범위 안의 하이브리드 근거 검색·질의 기록). 계약 모양은 mcp_server/schemas/evidence.py.
-S5(10-26)에 mcp_server/main.py에서 옮김 · 11-01(mc-16) 운영 계약으로 — question 필수(덤프 방식 지움), 거르기 14칸(attrs — pl-52), 맨 위 5칸·근거 13칸,
-이름 있는 색인(index_id·AD41)·옛 입력(methods·decompose·limit)·옛 출력(subs·store·images·notes·ms) 지움.
+question 필수, 거르기 14칸(attrs 포함), 맨 위 5칸·근거 13칸.
 """
 
 import functools
@@ -11,9 +10,9 @@ from common.store import edw_chain as EC
 from common.store.db.models import search_tables as ST
 from mcp_server.config import CFG
 from mcp_server.schemas.evidence import EVIDENCE_KEYS, K_MAX, SEARCH_FILTERS
+from mcp_server.services.search.evidence_shape import _evidence, cap, evidence_status
 from mcp_server.services.search.internal_docs import _manifest_by_name
 from mcp_server.services.search.server_state import _retriever
-from mcp_server.services.search.shaping import _evidence, cap, evidence_status
 
 KST = timezone(timedelta(hours=9))  # 시간대 없는 등록 시각은 KST(운영 계약)
 _SYSTEMS = tuple(s.upper() for s in ST.SOURCES)
@@ -22,7 +21,7 @@ NO_SOURCE = "source_system is required — exactly one of SFDC, CRMS, LAS, FAQ, 
 
 
 def chain():
-    """검색이 쓰는 EDW 사슬(pl-52) — 설정 ops.paths.edw_chain(적재와 같은 칸), 비우면 기본 파일. 파일이 바뀌면(수정 시각) 다시 읽음.
+    """검색이 쓰는 EDW 사슬 — 설정 ops.paths.edw_chain_file(적재와 같은 칸), 비우면 기본 파일. 파일이 바뀌면(수정 시각) 다시 읽음.
     틀린 파일은 ValueError(common.store.edw_chain.load)."""
     p = EC.chain_path()
     try:
@@ -42,9 +41,9 @@ def _vals(v):
     return [s for x in (v if isinstance(v, list | tuple) else [v]) if x is not None and (s := str(x).strip())]
 
 
-def _when(v, upper):
-    """created_since/created_until 글자 → (비교 연산자, 시각). 날짜만이면 since = 그날 00:00 KST, until = 다음 날 00:00 미만(그날 전체).
-    시간대 없는 시각은 KST. 형식이 틀리면 ValueError."""
+def kst_bound(v, upper):
+    """날짜 거르기 글자(search created_*·원문 도구 since/until·created_* 공용) → (비교 연산자, KST 시각). 날짜만이면 since = 그날 00:00 KST,
+    until = 다음 날 00:00 미만(그날 전체). 시간대 없는 시각은 KST. 형식이 틀리면 ValueError."""
     s = str(v).strip()
     try:
         day = date.fromisoformat(s)  # 날짜만(2025-03-01·20250301)
@@ -52,10 +51,9 @@ def _when(v, upper):
         day = None
     if day is not None:
         d = datetime.combine(day, datetime.min.time(), KST)
-        return ("<", (d + timedelta(days=1)).isoformat()) if upper else (">=", d.isoformat())
+        return ("<", d + timedelta(days=1)) if upper else (">=", d)
     t = datetime.fromisoformat(s)
-    # KST로 맞춰 글자로 — 적재 값(pgvector_load._kst)과 같은 시간대 표기라 SQLite 대역의 글자 비교도 맞음(PG는 시각으로 비교)
-    return ("<=" if upper else ">="), (t if t.tzinfo else t.replace(tzinfo=KST)).astimezone(KST).isoformat()
+    return ("<=" if upper else ">="), (t if t.tzinfo else t.replace(tzinfo=KST)).astimezone(KST)
 
 
 def _like(x):
@@ -104,8 +102,8 @@ def _norm_attrs(raw, sysv, fmap):
 
 def _scope_sql(hard, src, fmap):
     """정규화한 거르기 → (WHERE 글자, 값) — 원천 스키마 src의 v_chunk_source 칸에서. 다른 거르기는 AND, 같은 거르기의 목록은 OR, 모두 정확 일치
-    (client_like만 부분 일치). 이름 있는 거르기는 fmap(사슬의 filter → attrs 키, pl-52)으로 doc.attrs 키에 — 그 원천에 이어진 키가 없는 거르기
-    (예: crms에서 sf_op_id)는 0건(오류 아님). attrs 거르기는 키 그대로(_norm_attrs가 검사한 키만). 고객은 client_edw만(C6, 사용자 11-02)."""
+    (client_like만 부분 일치). 이름 있는 거르기는 fmap(사슬의 filter → attrs 키)으로 doc.attrs 키에 — 그 원천에 이어진 키가 없는 거르기
+    (예: crms에서 sf_op_id)는 0건(오류 아님). attrs 거르기는 키 그대로(_norm_attrs가 검사한 키만). 고객은 client_edw만."""
     have = set(ST.view_columns(src))
     conds, vals = [], []
 
@@ -126,13 +124,14 @@ def _scope_sql(hard, src, fmap):
         elif name == "FAQ_group":  # 청크 칸(faq만 — C4)
             any_of("faq_group = %s", vs, lambda x: [x]) if "faq_group" in have else conds.append("1 = 0")
         elif name in ("created_since", "created_until"):
-            op, t = _when(v, name == "created_until")
+            op, t = kst_bound(v, name == "created_until")
             conds.append(f"created_at {op} %s")  # created_at이 없는 문서는 빠짐
-            vals.append(t)
+            # KST 글자로 — 적재 값(pgvector_load._kst)과 같은 시간대 표기라 SQLite 대역의 글자 비교도 맞음(PG는 시각으로 비교)
+            vals.append(t.isoformat())
         elif name == "attrs":  # 담김(@>) — GIN(jsonb_ops) 색인을 탐(->> 비교는 못 탐). 값은 글자(attrs는 늘 글자 — P1-1)
             for key, xs in v.items():
                 any_of("attrs @> %s::jsonb", _vals(xs), lambda x, key=key: [json.dumps({key: str(x)})])
-        elif fmap.get(name):  # 옛 이름 → 사슬의 attrs 키
+        elif fmap.get(name):  # 거르기 이름 → 사슬의 attrs 키
             any_of("attrs @> %s::jsonb", vs, lambda x, key=fmap[name]: [json.dumps({key: str(x)})])
         else:  # 이 원천에 이어진 키가 없음
             conds.append("1 = 0")
@@ -148,7 +147,7 @@ def _hard_filter_scope(hard, src, fmap):
 
 
 def _doc_attrs(src, paths):
-    """근거 문서 file_path → doc.attrs dict(pl-52 — PG는 dict, SQLite 대역은 JSON 글자)."""
+    """근거 문서 file_path → doc.attrs dict(PG는 dict, SQLite 대역은 JSON 글자)."""
     paths = sorted(p for p in paths if p)
     if not paths:
         return {}
@@ -179,9 +178,9 @@ def _out(question, evidence, status, hard, scope_docs):
 
 
 def do_search(question=None, k=8, **filters):
-    """운영 search 계약(mc-16). question 필수(비면 {"error"}) · k 기본 8·상한 50 · 거르기(SEARCH_FILTERS)는 모두 AND, 같은 거르기의 목록은 OR ·
+    """운영 search 계약. question 필수(비면 {"error"}) · k 기본 8·상한 50 · 거르기(SEARCH_FILTERS)는 모두 AND, 같은 거르기의 목록은 OR ·
     모르는 인자는 무시 · 맞는 문서가 없으면 오류가 아니라 빈 결과(scope_docs 0, evidence_status none).
-    source_system은 필수·값 하나(G20 — 그 원천 스키마만 찾음, 사용자 11-02 — 운영과 다름). R2-c — 같은 사건의 사본은 한 자리로 묶는다(응답 모양은 같음).
+    source_system은 필수·값 하나(그 원천 스키마만 찾음 — 운영과 다름). 같은 사건의 사본은 한 자리로 묶는다(응답 모양은 같음).
     본문 고객 라벨로 앞으로 올리던 길(AD38)·고객별 하위 검색(BR23)은 11-02에 지움 — 고객은 client_edw 거르기만(C6)."""
     question = question.strip() if isinstance(question, str) else None
     if not question:
@@ -192,7 +191,7 @@ def do_search(question=None, k=8, **filters):
         user_k = 8
     hard = _norm_filters(filters)
     sysv = hard.get("source_system")
-    if not sysv or isinstance(sysv, list) and len(sysv) != 1:  # G20(사용자 11-02) — 원천 하나 필수(운영과 다름)
+    if not sysv or isinstance(sysv, list) and len(sysv) != 1:  # 원천 하나 필수(운영과 다름)
         return {"error": NO_SOURCE}
     if isinstance(sysv, list):
         hard["source_system"] = sysv = sysv[0]

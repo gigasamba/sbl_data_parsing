@@ -89,7 +89,7 @@ def _setarg_exec():
     """POSIX — `--set`은 덮기 파일을 만든 뒤 os.execve로 자기를 다시 띄운다(atexit가 안 돎) → 새 프로세스가 그 파일을 맡아 끝날 때 지움."""
     d = tempfile.mkdtemp()
     r = subprocess.run(
-        [sys.executable, "-m", "pipeline.engine_stack", "--set", "PIPE_PROCS=1"],
+        [sys.executable, "-m", "pipeline.transform.parse.engine_check", "--set", "PIPE_PROCS=1"],
         env={**child_env(), "TMPDIR": d},
         capture_output=True,
         timeout=60,
@@ -125,7 +125,7 @@ print(p, child.pid, flush=True)
 
 
 def _term_during_atexit():
-    """POSIX — PR #14 리뷰 P2: 정상 종료의 atexit 정리 도중 SIGTERM이 와도 정리가 끊기지 않는다(자식 SIGKILL·회수, 덮기 파일 지움)."""
+    """POSIX — 정상 종료의 atexit 정리 도중 SIGTERM이 와도 정리가 끊기지 않는다(자식 SIGKILL·회수, 덮기 파일 지움)."""
     ready = Path(tempfile.mkdtemp()) / "ready"
     m = subprocess.Popen(
         [sys.executable, "-c", _ATEXIT_TERM, str(ready)], env=child_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
@@ -142,7 +142,7 @@ def _term_during_atexit():
 
 
 def _term_while_locked():
-    """POSIX — PR #14 리뷰 P1: 잠금을 쥔 주 스레드가 SIGTERM을 받아도 교착 없이 끝나고(143) atexit가 덮기 파일을 지운다."""
+    """POSIX — 잠금을 쥔 주 스레드가 SIGTERM을 받아도 교착 없이 끝나고(143) atexit가 덮기 파일을 지운다."""
     m = subprocess.Popen([sys.executable, "-c", _HELD], env=child_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     assert m.stdout is not None
     overlay = m.stdout.readline().strip()

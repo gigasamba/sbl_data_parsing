@@ -1,4 +1,4 @@
-"""common.core.fingerprint 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.core.fingerprint --selftest`."""
+"""common.core.fingerprint 자기 점검."""
 
 from pathlib import Path
 
@@ -35,7 +35,7 @@ def selftest():
         check("_unclassified: 새 .py가 HANDOFF·EXCLUDED 둘 다에 없으면 잡힘", missing == ["new_file.py"])
         (root / "new_file.py").unlink()
         (root / "sub").mkdir()
-        (root / "sub" / "deep.py").write_text("w = 1\n", encoding="utf-8")  # S4 — 하위 폴더의 새 파일도
+        (root / "sub" / "deep.py").write_text("w = 1\n", encoding="utf-8")  # 하위 폴더의 새 파일도
         (root / "sub" / "__pycache__").mkdir()
         (root / "sub" / "__pycache__" / "junk.py").write_text("", encoding="utf-8")
         check(
@@ -51,12 +51,12 @@ def selftest():
         raise SystemExit(1)
 
 
-def test_main():  # 옛 `if __name__ == "__main__":` 의 --selftest 갈래
+def test_main():
     selftest()
 
 
 def test_version_file():
-    """저장소 루트 VERSION(이미지 /app/deploy/VERSION) — 두 이미지 공통 SemVer(D-036). pipeline_version()이 그 값을 낸다."""
+    """저장소 루트 VERSION(이미지 /app/deploy/VERSION) — 두 이미지 공통 SemVer. pipeline_version()이 그 값을 낸다."""
     root = DEPLOY_ROOT
     v = (root / "VERSION").read_text(encoding="utf-8").strip()
     parts = v.split(".")
@@ -66,7 +66,7 @@ def test_version_file():
 
 
 def test_pipeline_version_picks_higher():
-    """VERSION과 PATCH_VERSION 중 높은 버전 — 오버레이 패치(0.1.1)는 이미지(0.1.0)를 이기고, 새 이미지(0.2.0) 뒤 남은 옛 패치는 지지 않는다."""
+    """VERSION과 PATCH_VERSION 중 높은 버전 — 오버레이 패치(0.1.1)는 이미지(0.1.0)를 이기고, 새 이미지(0.2.0) 뒤 남은 낮은 패치는 지지 않는다."""
     import tempfile
 
     with tempfile.TemporaryDirectory() as td:
@@ -78,5 +78,5 @@ def test_pipeline_version_picks_higher():
         assert pipeline_version(common) == "0.1.1"
         (Path(td) / "VERSION").write_text("0.2.0\n", encoding="utf-8")
         assert pipeline_version(common) == "0.2.0"
-        (common / "PATCH_VERSION").write_text("20261016-e305b14+patch-abc1234\n", encoding="utf-8")  # 옛 꼴은 무시
+        (common / "PATCH_VERSION").write_text("20261016-e305b14+patch-abc1234\n", encoding="utf-8")  # SemVer가 아닌 꼴은 무시
         assert pipeline_version(common) == "0.2.0"

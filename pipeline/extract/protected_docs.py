@@ -15,11 +15,11 @@
 그대로 읽고 scan은 '보호 없음'으로 나온다(파이썬이 보는 바이트가 이미 평문). 같은 파일을 DRM 클라이언트 없는 서버로 옮기면 다시 'DRM 의심'.
 → 보안 문서 파싱은 DRM PC에서 하고, 파싱 결과(output/parse)는 평문 사본이므로 폐쇄망 밖으로 옮기지 않는다.
 사용:
-  python cli/secure_docs.py probe [--src …]                        → 실제 라이브러리로 열어 봄(openpyxl·xlrd·python-docx·python-pptx·pdfplumber) → output/secure/probe.csv
-  python cli/secure_docs.py scan [--src output/prepared]               → 콘솔 표 + output/secure/scan.csv
-  python cli/secure_docs.py decrypt [--src …]   (암호 목록: extract.connections.secure_doc.passwords_file)  → output/secure/decrypted/(보호 없는 문서는 그대로 복사 — 이 폴더를 run_all --src로)
+  python -m pipeline.extract.protected_docs probe [--src …]                        → 실제 라이브러리로 열어 봄(openpyxl·xlrd·python-docx·python-pptx·pdfplumber) → output/secure/probe.csv
+  python -m pipeline.extract.protected_docs scan [--src output/prepared]               → 콘솔 표 + output/secure/scan.csv
+  python -m pipeline.extract.protected_docs decrypt [--src …]   (암호 목록: extract.secure_doc.secure_doc_passwords_file)  → output/secure/decrypted/(보호 없는 문서는 그대로 복사 — 이 폴더를 parse_engines --src로)
       여러 암호: SECURE_DOC_PASSWORDS_FILE=<한 줄에 하나> (차례로 시도). **암호는 인자·로그·결과 파일에 남기지 않는다.**
-  python cli/secure_docs.py purge                                   → 복호화 사본 삭제(파싱이 끝나면)
+  python -m pipeline.extract.protected_docs purge                                   → 복호화 사본 삭제(파싱이 끝나면)
 복호화 사본은 output/(git 제외)에만 두고, 외부로 옮기지 않는다.
 """
 
@@ -30,13 +30,13 @@ import shutil
 import zipfile
 from pathlib import Path
 
-from common.config import settings as C  # S7c — 설정 객체(공용 칸 DOC_DIR·비밀 꺼내기)
+from common.config import settings as C  # 공용 칸 DOC_DIR·비밀 꺼내기
 from common.core.console import utf8_stdout
 from common.core.paths import APP_ROOT
-from pipeline import config as pc  # S7c — 설정 객체(pipeline 칸)
+from pipeline import config as pc  # pipeline 칸
 from pipeline.shared.ext_groups import OOXML_EXTS
 
-ROOT = APP_ROOT  # output/ 등 런타임 경로용(옛 dev/)
+ROOT = APP_ROOT  # output/ 등 런타임 경로용
 LEGACY = {".doc", ".xls", ".ppt"}
 CFB = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 LOCK_PARTS = ("xl/workbook.xml", "word/settings.xml", "ppt/presentation.xml")

@@ -9,9 +9,9 @@ from unittest.mock import patch
 import httpx
 
 from common.config.settings import COMMON
+from common.core import parse_limit
 from mcp_server import main
-from mcp_server.routers import dispatch
-from mcp_server.services import parse_proxy
+from mcp_server.services import parse_proxy, tool_runner
 
 MB = 1048576
 
@@ -29,10 +29,10 @@ def _stub(sent):
 
 
 def test_proxy_limit():
-    with COMMON.env(PARSE_MCP_MAX_MB="1"):
-        assert parse_proxy.max_bytes() == MB and parse_proxy.body_cap() == MB * 3 // 2 + MB
+    with COMMON.env(DATA_PARSING_MAX_MB="1"):
+        assert parse_limit.max_bytes() == MB and parse_limit.body_cap() == MB * 3 // 2 + MB
         sent: list = []
-        with patch.object(parse_proxy, "_parse_service", _stub(sent)):  # 완료까지 폴링 1회(1초)
+        with patch.object(parse_proxy, "_run_mcp_parsing", _stub(sent)):  # 완료까지 폴링 1회(1초)
             ok = parse_proxy.do_parse_document(content_b64=_b64(int(0.9 * MB)), filename="a.txt")
             assert ok == {"text": "ok", "status": "done"} and sent[0] == ("POST", "/jobs"), (ok, sent)
             sent.clear()
@@ -47,7 +47,7 @@ def test_proxy_limit():
 def test_http_body_cap():
     """HTTP 길 끝까지 — 본문 상한이 SDK 기본(4MiB)이 아니라 설정에서 오고, 1.1MB 파일은 413이 아니라 도구가 이유를 답한다.
     큰 본문은 동시 2개 자리 하나를 쥐고 처리된다(PR #110 — 기준을 1000바이트로 낮춰 봄)."""
-    assert main.build("127.0.0.1", 8765).settings.max_request_body_size == parse_proxy.body_cap() > 133 * MB  # 기본 100MB의 base64
+    assert main.build("127.0.0.1", 8765).settings.max_request_body_size == parse_limit.body_cap() > 133 * MB  # 기본 100MB의 base64
 
     async def call(client, n):
         args = {"content_b64": _b64(n), "filename": "a.txt", "time_out_threshold": 5}
@@ -78,11 +78,11 @@ def test_http_body_cap():
         free.append(holder[0].value)
         return stub(method, path, payload, timeout)
 
-    with COMMON.env(PARSE_MCP_MAX_MB="1"), patch.object(parse_proxy, "_parse_service", watched), patch.object(main, "_BIG_BODY", 1000):
+    with COMMON.env(DATA_PARSING_MAX_MB="1"), patch.object(parse_proxy, "_run_mcp_parsing", watched), patch.object(main, "_BIG_BODY", 1000):
         try:
             asyncio.run(run())
         finally:
-            dispatch._LIMITER = None
+            tool_runner._LIMITER = None
     assert [m for m, _ in sent].count("POST") == 1, sent  # 1.1MB는 서비스로 안 감
     assert free and set(free) == {main._BIG_SLOTS - 1}, free  # 처리 중엔 자리 하나를 쥠
     assert holder[0].value == main._BIG_SLOTS  # 끝나면 돌려줌

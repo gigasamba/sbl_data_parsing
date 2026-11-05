@@ -1,4 +1,4 @@
-"""마스터 표 읽기·채우기(pl-38, 사용자 11-03) — 용어집·고객 명부의 원본은 git CSV(`resources/vocab/glossary`), 실행 중에는 검색 PG의
+"""마스터 표 읽기·채우기(pl-38) — 용어집·고객 명부의 원본은 git CSV(`resources/vocab/glossary`), 실행 중에는 검색 PG의
 `<PG_SCHEMA>_master` 표만 읽는다. 읽는 곳: common.core.terms(구조화 고객 판별·검색) — 프로세스마다 한 번(get()).
 서버(dev·prd)는 마스터를 못 읽으면 멈춘다(SystemExit). PC·시험(PG 접속 없음)은 같은 CSV로 채운 SQLite 대역(output/pg_standin/<스키마>_master.sqlite).
 해시 = 표 이름·머리글·row_no 순서 행의 sha256(16진) — `gold_version` `<VERSION>+m<앞 8자>`(적재 — 구조화가 읽은 값을 묶음 meta.json으로 넘김)."""
@@ -74,7 +74,7 @@ def load(db, tables=None):
 
 def read(db):
     """마스터 표 → Master. 표가 없거나 비었으면(master load 전) SystemExit.
-    master_meta와 표 6개를 한 트랜잭션(PG는 REPEATABLE READ)으로 읽는다 — 그 사이 `master load`가 커밋돼도 옛·새 내용이 섞이지 않게."""
+    master_meta와 표 6개를 한 트랜잭션(PG는 REPEATABLE READ)으로 읽는다 — 그 사이 `master load`가 커밋돼도 이전·새 내용이 섞이지 않게."""
     s = db.schema
     try:
         with db.cn.transaction():

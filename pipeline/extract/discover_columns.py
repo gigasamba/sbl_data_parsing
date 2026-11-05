@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SI41 ⑤ — 원천 표 열 자동 탐색(읽기 전용, INFORMATION_SCHEMA) → `common/sources.json` 초안 출력.
+"""원천 표 열 자동 탐색(읽기 전용, INFORMATION_SCHEMA) → `common/sources.json` 초안 출력.
 
 서버 LLM·사람이 표·열 **이름만** 보고(값·행 내용은 전혀 읽지 않음) sources.json에 더할 항목을 만든다. 이름 규칙
 (s3_key·object_path·object_key → key · id·file_id → doc_id · original_filename·file_name → filename · file_size·
@@ -7,11 +7,10 @@ size_bytes·size → size · updated_at·mod_seq·id → increment)으로 맞춰
 표시(그 열은 사람이 sources.json에서 직접 채움) — bucket·enabled는 늘 빈 값·false로 출력(사람이 검토 후 채움).
 
 사용:
-  python cli/rdb_discover.py --like "FileStorageMap%"        # RDB_ENGINE(기본 mssql) · 접속은 common.connections.rdb 읽기 계정
-  python cli/rdb_discover.py --from-csv <경로> [--table <이름>]  # 시험용 — RDB 없이 csv 머리글만 열로(행 값은 안 읽음)
+  python -m pipeline.extract.discover_columns --like "FileStorageMap%"        # 접속은 common.connections.rdb 읽기 계정(mssql)
+  python -m pipeline.extract.discover_columns --from-csv <경로> [--table <이름>]  # 시험용 — RDB 없이 csv 머리글만 열로(행 값은 안 읽음)
 
-접속(실제 질의일 때만): RDB_ENGINE(기본 mssql, common/sources.py와 무관 — pipeline/extract/fetch_docs.py와 같은 env) ·
-mssql(pymssql) common.connections.rdb(RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_READ_USER·RDB_READ_PASSWORD·RDB_CONNECT_KWARGS) · pg는 common/pg.py 재사용.
+접속(실제 질의일 때만): mssql(pymssql) common.connections.rdb(RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_READ_USER·RDB_READ_PASSWORD·RDB_CONNECT_KWARGS).
 """
 
 import common  # noqa: F401 — 설정 파일 검사(settings.pin_env)를 첫 줄에서
@@ -23,11 +22,10 @@ import csv
 import json
 from pathlib import Path
 
-from common.core.paths import PKG_ROOT  # 공용 자산 루트(10-14 이미지 단위 분리)
+from common.core.paths import PKG_ROOT  # 공용 자산 루트
 
 ROOT = PKG_ROOT
-from common.store.parsing_meta_db import TABLE_ID_RE  # noqa: E402 — 표 이름 화이트리스트(옛 common.core.sources와 같은 규칙)
-from pipeline import config as pc  # noqa: E402 — S7c: 설정 객체(pipeline 칸)
+from common.store.parsing_meta_db import TABLE_ID_RE  # noqa: E402 — 표 이름 화이트리스트
 
 NAME_RULES = (
     (("s3_key", "object_path", "object_key"), "key"),
@@ -74,9 +72,9 @@ _COLS_SQL = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHE
 
 
 def _mssql_tables(like):
-    """S8b — 연결·질의는 SQLAlchemy(source.rdb_connect·mssql.rows — SQL 글자 그대로)."""
+    """연결·질의는 SQLAlchemy(mssql.rdb_connect·mssql.rows — SQL 글자 그대로)."""
     from common.store import mssql
-    from pipeline.extract.fetch_docs import rdb_connect
+    from common.store.mssql import rdb_connect
 
     with rdb_connect() as cn:
         drafts = []
@@ -90,28 +88,6 @@ def _mssql_tables(like):
         return drafts
 
 
-def _pg_tables(like):
-    from common.store.pg import PG, conf
-
-    db = PG(conf())
-    rows = db.q("SELECT table_schema, table_name FROM information_schema.tables WHERE table_name ILIKE %s", [like])
-    drafts = []
-    for r in rows:
-        schema, tname = r["table_schema"], r["table_name"]
-        table_id = f"{schema}.{tname}"
-        if not TABLE_ID_RE.match(table_id):
-            continue
-        cols = [
-            c["column_name"]
-            for c in db.q(
-                "SELECT column_name FROM information_schema.columns WHERE table_schema=%s AND table_name=%s ORDER BY ordinal_position",
-                [schema, tname],
-            )
-        ]
-        drafts.append(_draft(table_id, cols))
-    return drafts
-
-
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--like", default="FileStorageMap%", help="표 이름 패턴(SQL LIKE, 기본 FileStorageMap%%)")
@@ -122,8 +98,7 @@ def main(argv=None):
         table = a.table or Path(a.from_csv).stem
         drafts = _from_csv(a.from_csv, table)
     else:
-        engine = pc.cfg().connections.rdb.engine  # S7c — 설정 객체(blank keep: 옛 `get(X, "mssql")` — `RDB_ENGINE=`은 '' 유지)
-        drafts = _pg_tables(a.like) if engine == "pg" else _mssql_tables(a.like)
+        drafts = _mssql_tables(a.like)
     print(json.dumps(drafts, ensure_ascii=False, indent=1))
     return drafts
 

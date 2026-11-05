@@ -1,8 +1,8 @@
-"""pipeline.extract.engines._common.fields(엔진 공용 파일 — 엔진 지문 27개 모두) 자기 점검 — S9b(VS9 B-1, D-018)에 모듈 `__main__`에서 옮김(줄 글자 그대로).
-옛 명령 `python -m pipeline.extract.engines._common.fields`(반입 판정 목록 밖 — 일반 시험).
+"""pipeline.transform.parse.engines._common.fields(엔진 공용 파일 — 엔진 지문 27개 모두) 자기 점검 — S9b(VS9 B-1, D-018)에 모듈 `__main__`에서 옮김(줄 글자 그대로).
+옛 명령 `python -m pipeline.transform.parse.engines._common.fields`(반입 판정 목록 밖 — 일반 시험).
 ⚠️ 이 옮기기는 엔진 지문을 바꾼다(사용자 10-28 — 엔진 파일 옮기기 커밋 하나, 되돌리기는 그 커밋 revert · refactor.md C-52)."""
 
-from pipeline.extract.engines._common.fields import normalize_facts
+from pipeline.transform.parse.engines._common.fields import normalize_facts
 
 
 def test_main():  # 옛 `if __name__ == "__main__":   # 자기점검` 몸통

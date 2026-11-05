@@ -1,5 +1,5 @@
-"""common.ai.llm.complete — 모델 호출 한 길(0.2.0 — 옛 common.ai.adk의 ADK·litellm 장치를 지우고 HTTP로, pl-46). 옛 test_adk의 HTTP·가드·
-재시도·리다이렉트·agent= 형식 재요청(AD33)·빈 응답 재요청(RV16)·EXTRA_BODY(RV12) 사례를 그대로 옮김(ADK 전용 사례는 지움). 가짜 로컬 서버만."""
+"""common.ai.llm.complete — 모델 호출 한 길(HTTP). 가드·재시도·리다이렉트·agent= 형식 재요청·빈 응답 재요청·
+EXTRA_BODY 사례. 가짜 로컬 서버만."""
 
 import json
 import threading
@@ -22,11 +22,11 @@ def selftest():
         except RuntimeError as ex:
             assert "외부 주소" in str(ex), ex
 
-    print("[selftest] 외부 주소 거부 통과")  # 옛 NO_PAID_CALLS 차단 사례는 11-03에 스위치와 함께 지움
+    print("[selftest] 외부 주소 거부 통과")
 
-    # BLOCK(보안 독립 검토 2026-10-06) — preguarded 기본값은 항상 가드, 예외는 명시한 호출자만.
-    # ① role="llm"이어도 기본값(preguarded=False)이면 외부 주소는 전송 전에 거부(cli/ping_models.py가 이 경로로 복귀 — 전환
-    #    전엔 require_internal을 직접 불렀는데, llm 역할만 건너뛰게 했던 이전 설계가 ping_models의 LLM ping을 무가드로 만들었음)
+    # preguarded 기본값은 항상 가드, 예외는 명시한 호출자만.
+    # ① role="llm"이어도 기본값(preguarded=False)이면 외부 주소는 전송 전에 거부(cli/ping_models.py도 이 경로 — 역할별로
+    #    가드를 건너뛰면 ping이 무가드가 된다)
     with COMMON.env(LLM_BASE_URL="https://openrouter.ai/api/v1", LLM_MODEL="x"):
         try:
             complete("llm", [{"role": "user", "content": "x"}])
@@ -129,7 +129,7 @@ def selftest():
         srv2.shutdown()
     print("[selftest] 내부 주소의 외부 리다이렉트 차단 통과")
 
-    # agent=(GA2 패키지 경유) — 가짜 서버 1건: 응답 글자·usage가 agent 없는 경로와 같다(parity, I5). 역할 불일치는 바로 거부.
+    # agent=(패키지 경유) — 가짜 서버 1건: 응답 글자·usage가 agent 없는 경로와 같다(parity). 역할 불일치는 바로 거부.
     class Ok2(BaseHTTPRequestHandler):
         def do_POST(self):
             length = int(self.headers["Content-Length"])
@@ -161,7 +161,7 @@ def selftest():
             text_direct, usage_direct = complete("vlm", [{"role": "user", "content": "X는?"}], max_tokens=10)
             text_agent, usage_agent = complete(
                 "vlm", [{"role": "user", "content": "X는?"}], max_tokens=10, agent="page_transcribe"
-            )  # 스키마 없는 에이전트 - 형식 재요청 없이 경로 동일성만(11-01 — doc_summary 지움 → page_transcribe)
+            )  # 스키마 없는 에이전트 - 형식 재요청 없이 경로 동일성만
             assert text_direct == text_agent == "에이전트 응답" and usage_direct == usage_agent == {
                 "prompt_tokens": 2,
                 "completion_tokens": 3,
@@ -175,7 +175,7 @@ def selftest():
         srv5.shutdown()
     print("[selftest] agent= — 응답·usage가 비-agent 경로와 같음(parity) · model_role 불일치 거부 통과")
 
-    # output_schema — 형식 검사·1회 재요청(AD33 ⓑ). nested_figure(output_schema 있음, 필수 "regions" — 11-01 research_judge 지움)로:
+    # output_schema — 형식 검사·1회 재요청. nested_figure(output_schema 있음, 필수 "regions")로:
     # ① 1차 깨진 JSON → 2차 정상 → 정상 반환·요청 2회·invalid+1·retry_ok+1 ② 둘 다 깨짐 → 마지막(2차) 응답 그대로·
     # 요청 2회·invalid+1·retry_failed+1(호출부가 그 뒤 기본값 처리) ③ 1차부터 정상 → 요청 1회·통계 불변(재요청 없음).
     def _schema_server(bodies):
@@ -213,9 +213,7 @@ def selftest():
             before = schema_stats()
             text, _u = complete("vlm", [{"role": "user", "content": "x"}], agent="nested_figure")
             assert text == valid and len(hitsA) == 2, (text, hitsA)
-            assert _u.get("prompt_tokens") == 2 and _u.get("completion_tokens") == 2 and _u.get("calls") == 2, (
-                _u
-            )  # 두 호출 합산(독립 검토 10-06)
+            assert _u.get("prompt_tokens") == 2 and _u.get("completion_tokens") == 2 and _u.get("calls") == 2, _u  # 두 호출 합산
             after = schema_stats()
             assert after["invalid"] == before["invalid"] + 1 and after["retry_ok"] == before["retry_ok"] + 1
     finally:
@@ -245,8 +243,8 @@ def selftest():
         "[selftest] output_schema — 1차 깨짐→2차 정상(재요청 1회·invalid+retry_ok) · 둘 다 깨짐(retry_failed) · 1차부터 정상(재요청 0) 통과"
     )
 
-    # RV16 — 직접 호출자(agent=, call_reserved=False — post/vlm_page.py 등이 쓰는 모양)는 common/llm.chat()의 RV12
-    # 빈 응답 안전망 밖이었다. page_transcribe(output_schema 없음, vlm_page.py가 실제로 쓰는 패키지)로: ① 1차가 빈
+    # 직접 호출자(agent=, call_reserved=False — vlm_page.py 등이 쓰는 모양)는 llm.chat()의
+    # 빈 응답 안전망 밖이라 따로 재요청한다. page_transcribe(output_schema 없음, vlm_page.py가 실제로 쓰는 패키지)로: ① 1차가 빈
     # 응답(토큰 소모)→4배 max_tokens로 딱 한 번 재요청→성공(요청 2회·공유 장부 2건=counted) ② 재요청도 빈 응답이면
     # 그대로 반환(요청 2회에서 끝 — 무한 재시도 없음) ③ call_reserved=True(chat()이 이미 자기 안전망을 가진 모양)는
     # 여기서 또 재요청하지 않는다(두 안전망이 겹치면 최대 4회까지 늘어나는 것을 막음).
@@ -310,7 +308,7 @@ def selftest():
         "재요청도 빈 응답이면 그대로 · call_reserved=True(chat() 자기 안전망)는 안 겹침 통과"
     )
 
-    # ⑦ RV12 — LLM_EXTRA_BODY·VLM_EXTRA_BODY(env) 병합. http 전송으로 실제 요청 본문을 캡처해 확인:
+    # ⑦ LLM_EXTRA_BODY·VLM_EXTRA_BODY 병합. http 전송으로 실제 요청 본문을 캡처해 확인:
     # ① LLM_EXTRA_BODY만 있으면 role=llm 요청에 그대로 섞여 들어감 ② 호출자가 준 extra=가 같은 키를 덮어씀(figure_review.py
     # 패턴과 공존) ③ VLM_EXTRA_BODY는 role=vlm에만 적용, role=llm에는 안 묻음(역할별 분리).
     captured = []
@@ -358,7 +356,7 @@ def selftest():
 
 
 def _selftest_local():
-    """이미지 selftest는 서버 env(RUN_ENV=dev 등)에서도 돈다 — 외부 허용 경로 시험은 PC(local) 가드 규칙으로(S7b)."""
+    """이미지 selftest는 서버 env(RUN_ENV=dev 등)에서도 돈다 — 외부 허용 경로 시험은 PC(local) 가드 규칙으로."""
     from common.config.settings import COMMON
 
     with COMMON.env(RUN_ENV="local"):

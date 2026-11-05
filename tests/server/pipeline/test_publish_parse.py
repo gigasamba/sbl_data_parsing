@@ -1,4 +1,4 @@
-"""pipeline.load.publish_parse_result 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.load.publish_parse_result --selftest`.
+"""pipeline.load.publish_parse_result 시험.
 S9b(C-54 ②, 사용자 10-28 — 기록만): 기대값을 지금 서버 동작에 맞춤 — 업로드 폴더에 `<stem>_<date>_meta.json`·`source.json`이 없음
 (pre-refactor 서버 사본이 일부러 뺌 — `_meta.json`은 EDW에, `source.json`은 내부용). source.json에 기대던 방어선(재실행 업로드 건너뜀
 `skip_exists`·키 충돌 거부 `error_key_collision`)은 서버에서 늘 꺼져 있어 11-02에 코드째 지움(C-54 ② — test_publish_guard도 지움). 산출물 만들기는 `make_fixture()`로."""
@@ -194,25 +194,57 @@ def selftest():
                 r5
             )  # ok(a)만 — failed(b)는 업로드 허용해도 EDW_EXCLUDED라 render_md용 _rep/b.pdf.json이 없어 제외됨
 
-    # SI39⑤ — PM_BUCKET이 원천 원본 버킷과 같으면 거부(dry-run도)
-    a2 = A()
-    a2.out, a2.manifest, a2.source_dir, a2.rep, a2.summary, a2.skipped, a2.keep = str(out), None, None, None, None, None, None
-    a2.source_system, a2.version, a2.parse_date, a2.reparse, a2.apply = "FileStorageMap", "v1", "2026-10-08", None, False
-    with pc.PIPE.env(PM_BUCKET="bkt"):  # manifest의 uri가 s3://bkt/... — 원천과 같은 버킷
-        try:
-            run(a2)
-            raise AssertionError("PM_BUCKET이 원천 버킷과 겹치는데 거부되지 않음(SI39⑤ 위반)")
-        except SystemExit as e:
-            assert "SI39" in str(e) or "버킷" in str(e), e
-
     shutil.rmtree(d, ignore_errors=True)
     print(
         "[selftest] SI39 — dry-run 쓰기 0 · 대표 결과(.md)만 올라감(원본은 전혀 안 올라감) · KEY(출처+원본 전체 "
         "키)가 이미 있으면 EDW는 건너뜀(UPDATE 없음 — source.json 방어선은 11-02에 지움, C-54 ②) · "
         "--reparse만 새 날짜 이름·새 EDW 행(옛 결과 보존) · _meta.json·source.json 안 올림(서버 동작) · "
-        "DRM·실패는 EDW 제외하고 보고서로만 · PM_BUCKET이 원천 버킷과 같으면 거부 통과"
+        "DRM·실패는 EDW 제외하고 보고서로만 통과"
     )
 
 
 def test_main():  # 옛 `if a.selftest:` 갈래(main() 안)
     selftest()
+
+
+def test_stage_dropped_docs():
+    """pl-02 — 받기(stage)가 뺀 문서만 든 문서 폴더(run_pipeline의 건너뜀 — parse/_rep·요약 없음): 중복(keep.txt에 없음)은 EDW에
+    skipped_dup 행, DRM은 행 없이 보고서로만. sha256은 중복 거르기와 같은 함수(contract.file_hash — 소문자 16진 64자)."""
+    import re
+    import shutil
+    import sqlite3
+    import tempfile
+
+    from common.core.contract import file_hash
+
+    cases = [  # (파일, 내용, keep.txt에 있음, skipped.jsonl 이유, 기대 EDW parse_status(None = 행 없음))
+        ("dup.pdf", "same-as-done", False, None, "skipped_dup"),
+        ("drm.pdf", "<## FASOO", True, "drm_fasoo", None),
+    ]
+    for name, body, in_keep, reason, want in cases:
+        d = Path(tempfile.mkdtemp())
+        out = d / "output"
+        for sub in ("_source_files", "parse/_source", "dedup", "prepared/_records"):
+            (out / sub).mkdir(parents=True)
+        (out / "_source_files" / name).write_text(body, encoding="utf-8")
+        man = {"file_name": name, "doc_id": "1", "key": f"docs/{name}", "uri": f"s3://bkt/docs/{name}", "original_filename": name}
+        (out / "parse" / "_source" / "manifest.jsonl").write_text(json.dumps(man) + "\n", encoding="utf-8")
+        (out / "dedup" / "keep.txt").write_text((name if in_keep else "") + "\n", encoding="utf-8")
+        if reason:
+            (out / "prepared" / "_records" / "skipped.jsonl").write_text(
+                json.dumps({"file": name, "reason": reason}) + "\n", encoding="utf-8"
+            )
+        a = A()
+        a.out, a.manifest, a.source_dir, a.rep, a.summary, a.skipped, a.keep = str(out), None, None, None, None, None, None
+        a.source_system, a.version, a.parse_date, a.reparse, a.apply = "FileStorageMap", "v1", "2026-11-05", None, True
+        db_path = d / "edw.sqlite"
+        with pc.PIPE.env(PM_BUCKET=f"file://{d / 'os'}"), COMMON.env(RDB_SQLITE=str(db_path), RUN_ENV="local"):
+            r = run(a)
+        rows = sqlite3.connect(db_path).execute("select parse_status, sha256 from ParsingMeta").fetchall()
+        if want is None:
+            assert rows == [] and r["result"]["edw_excluded_drm_failed"] == 1, (name, rows, r)
+        else:
+            sha = file_hash(out / "_source_files" / name)
+            assert rows == [(want, sha)] and re.fullmatch(r"[0-9a-f]{64}", sha), (name, rows)
+        assert r["result"]["uploaded"] == 0, (name, r)
+        shutil.rmtree(d, ignore_errors=True)

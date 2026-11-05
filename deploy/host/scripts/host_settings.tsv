@@ -1,0 +1,28 @@
+# 자동 생성 — PYTHONPATH=. python deploy/release/gen_host_keys.py(고치지 말 것)
+common.run_env	RUN_ENV	text
+common.host.doc_src	DOC_SRC	text
+common.host.docker	DOCKER	text
+common.host.instance	INSTANCE	text
+common.host.image_stage_dir	IMAGE_STAGE_DIR	text
+common.host.output_root	RAG_OUT	text
+common.host.prune_keep	PRUNE_KEEP	num
+common.runtime.data_parsing_port	DATA_PARSING_PORT	num
+pipeline.host.image	DATA_PIPELINE_IMAGE	text
+pipeline.host.parse_cpus	PARSE_CPUS	num
+pipeline.host.parse_mem_limit	PARSE_MEM_LIMIT	text
+pipeline.host.data_parsing_cpus	DATA_PARSING_CPUS	num
+pipeline.host.data_parsing_mem_limit	DATA_PARSING_MEM_LIMIT	text
+pipeline.host.data_parsing_cpu_shares	DATA_PARSING_CPU_SHARES	num
+pipeline.host.nightly.time	NIGHTLY_TIME	text
+pipeline.host.nightly.max_docs	NIGHTLY_MAX_DOCS	num
+pipeline.host.nightly.deadline	NIGHTLY_DEADLINE	text
+mcp.host.cpus	MCP_CPUS	num
+mcp.host.image	MCP_SERVER_IMAGE	text
+mcp.host.mem_limit	MCP_MEM_LIMIT	text
+mcp.server.host	MCP_HOST	text
+mcp.server.port	MCP_PORT	num
+image.code_root	APP_CODE_ROOT	const	/app/deploy
+image.docs_mount	APP_DOCS_MOUNT	const	/data/docs
+image.output_root	APP_OUTPUT_ROOT	const	/app/output
+default.common.runtime.data_parsing_port	DATA_PARSING_PORT_DEFAULT	const	8766
+default.mcp.server.port	MCP_PORT_DEFAULT	const	8765

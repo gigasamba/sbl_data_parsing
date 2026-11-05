@@ -1,4 +1,4 @@
-"""common.check.check_modules 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.check.check_modules --selftest`."""
+"""common.check.check_modules 자기 점검."""
 
 import ast
 import re
@@ -21,9 +21,8 @@ from common.check.check_modules import (
 
 
 def selftest():
-    """판정 변환 시험(저장소 파일 없이) — 점 이름 import(`import pipeline.eval.stages`)도 상위 패키지 영역으로 읽는지(VS4 R-5:
-    S4의 단계 4 도구 옛 이름 표가 이 꼴을 옛 evaluation 영역으로 읽어 retrieval 도구의 top-level etl import를 놓쳤음 — S5에 그 표를
-    경계 판정에서 뺌) · 옛 이름 data_retrieval·새 이름 mcp_server 둘 다 search · 함수 안 import는 top-level 판정 밖."""
+    """판정 변환 시험(저장소 파일 없이) — 점 이름 import(`import pipeline.eval.stages`)도 상위 패키지 영역으로 읽는지
+    (하위 모듈 이름으로 영역을 정하면 top-level import를 놓친다) · 옛 이름 data_retrieval·새 이름 mcp_server 둘 다 search · 함수 안 import는 top-level 판정 밖."""
 
     def areas(src):
         return {_area_of_import(m) for m in _module_scope_imports(ast.parse(src), None)} - {None}
@@ -52,7 +51,7 @@ def selftest():
         "a = _o.environ.get('A')\nb = E['B']\n"  # 3·4
         "c = getenv('C')   # env 남김 — 라이브러리\nd = x.environ\ne = y.E\n"  # 5 · 6·7 os가 아님
         "_o.putenv('P', '1')\n_o.unsetenv('P')   # env 남김 — 시험\n"
-    )  # 8·9 putenv·unsetenv(VS7e3 R-4)
+    )  # 8·9 putenv·unsetenv
     got = _env_lines(src)
     assert got == [(2, None), (3, None), (4, None), (5, "라이브러리"), (8, None), (9, "시험")], got
     print(
@@ -63,7 +62,7 @@ def selftest():
 
 
 def _child_env_selftest():
-    """⑪(S7e3 — VS7e2 B-1 다섯 갈래 꼴) — 심은 자리는 잡히고, 덮기 파일·설정 밖 이름·설정 칸 사전·연결 사전·분류 주석은 통과."""
+    """⑪(다섯 갈래 꼴) — 심은 자리는 잡히고, 덮기 파일·설정 밖 이름·설정 칸 사전·연결 사전·분류 주석은 통과."""
     names = frozenset({"PG_SCHEMA", "EDW_SUMMARY_LLM", "LLM_BASE_URL", "LLM_BUDGET_USD", "LLM_FAKE", "PARSE_SKIPPED_LOG"})
     src = """import os
 import os as _o
@@ -185,13 +184,13 @@ def use_cached():
 
 
 def _planted_selftest():
-    """S6a(VS5 R-5) — 임시 폴더에 위반을 심은 가짜 트리로 check() 전체를 돌려 잡히는지·허용 사례가 통과하는지(저장소 파일 안 건드림)."""
+    """임시 폴더에 위반을 심은 가짜 트리로 check() 전체를 돌려 잡히는지·허용 사례가 통과하는지(저장소 파일 안 건드림)."""
     import tempfile
 
     bad_cases = {  # 경로 → 내용(모두 위반이어야 함)
         "pipeline/v_e2e_flat.py": "import stack_matrix\n",  # etl → PC 평가 도구 맨 이름
         "pipeline/v_e2e.py": "from validation.e2e import graph_llm\n",  # etl → validation 정적 import
-        "pipeline/v_tests.py": "from tests.server.common import appcheck\n",  # S9 — 앱 → tests/ import
+        "pipeline/v_tests.py": "from tests.server.common import appcheck\n",  # 앱 → tests/ import
         "common/v_tests.py": "import tests.runner\n",
         "mcp_server/v_e2e.py": "import validation.e2e.stack_matrix\n",
         "common/v_e2e.py": "import validation.e2e.model_matrix\n",
@@ -202,10 +201,10 @@ def _planted_selftest():
         "validation/e2e/v_both.py": "import pipeline.eval.stages\nimport mcp_server.main\n",  # ⑨
     }
     ok_cases = {  # 위반이 아니어야 함
-        "mcp_server/cli/ok_ask.py": "import ask\n",  # 맨 이름 도구 판정표(MOVED_TOOLS)는 11-02에 지움 — 맨 이름 import는 경계 위반 아님
+        "mcp_server/cli/ok_ask.py": "import ask\n",  # 맨 이름 import는 경계 위반 아님
         "pipeline/eval/ok_stages.py": "import stages\n",
         "validation/e2e/ok_etl.py": "import pipeline.eval.stages\n\ndef f():\n    import mcp_server.main\n",
-        "pipeline/eval/ok_dyn.py": "import importlib\nimportlib.import_module('validation.e2e.graph_llm')\n",  # 문자열 — 정적 점검 밖(T-02)
+        "pipeline/eval/ok_dyn.py": "import importlib\nimportlib.import_module('validation.e2e.graph_llm')\n",  # 문자열 — 정적 점검 밖
         "validation/e2e/triple_extract/agent.py": "from google.adk.agents import LlmAgent\n",  # ⑦ 지시서 agent.py
         "common/core/ok_fp.py": "OLD = b'common_tools.text'\n",  # 바이트 글자(지문 대응표)는 import 아님
     }
@@ -233,7 +232,7 @@ def _planted_selftest():
     )
 
 
-def test_main():  # 옛 `python -m common.check.check_modules --selftest`: selftest() 뒤 저장소 경계 점검 check()까지(옛 __main__ 그대로)
+def test_main():  # selftest() 뒤 저장소 경계 점검 check()까지
     selftest()
     errs = check()
     print("모듈 경계 통과" if not errs else "모듈 경계 위반:\n- " + "\n- ".join(errs))

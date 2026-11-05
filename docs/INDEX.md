@@ -11,19 +11,17 @@
 | [operations/server-guide.md](operations/server-guide.md) | 서버 가이드 — 이미지 역할, 설치·첫 실행, 일상 실행, 결과 확인, 문제 해결 | 서버를 설치·운영할 때 |
 | [operations/mcp-guide.md](operations/mcp-guide.md) | 검색 MCP 도구 6개의 입력·출력·한도·오류·예(표는 `tests/general/mcp/test_mcp_guide.py`가 코드와 대조) | MCP 클라이언트를 붙이거나 도구 입출력을 바꿀 때 |
 | [operations/env-guide.md](operations/env-guide.md) | 설정 작성 가이드 — 서버·PC `settings.yaml`의 자리·권한·키·기본값 | 설정 값을 채우거나 바꿀 때 |
-| [operations/release-and-patch.md](operations/release-and-patch.md) | 릴리스 — 실행 이미지 + 코드 폴더(개발 서버)·운영 굽기(`bake.sh`)·selftest 반입 판정, 0.2.0 배포 사람 할 일(§8) | 새 판을 만들거나 서버에 넣을 때 |
+| [operations/release-and-patch.md](operations/release-and-patch.md) | 릴리스 — 실행 이미지 + 코드 폴더(개발 서버)·운영 굽기(`bake_prod_image.sh`)·selftest 반입 판정, 0.2.0 배포 사람 할 일(§8) | 새 판을 만들거나 서버에 넣을 때 |
 | [operations/gitea-guide.md](operations/gitea-guide.md) | 내부망 코드 관리(gitea) | 내부망 gitea를 쓰거나 서버 코드 변경을 합칠 때 |
 | [operations/parsing_meta_mssql.sql](operations/parsing_meta_mssql.sql) | 회사 DB `AI.ParsingMeta` DDL — DBA가 실행(코드는 표를 만들지 않음) | 첫 게시 전, DB 담당과 표를 맞출 때 |
 | [architecture/db_schema.md](architecture/db_schema.md) | DB 스키마 명세 — gold(원천별 5벌)·EDW(`AI.FileStorageMap`·`AI.ParsingMeta`)·마스터(`<스키마>_master`)·`applog`. 시험 `tests/server/common/test_db_schema.py`가 판·SQL과 대조 | DB 표·칸을 바꾸거나 DB 담당자와 협의할 때 |
-| [architecture/pipeline_stack.md](architecture/pipeline_stack.md) | 엔진 구성 파일(`resources/config/pipeline_stack.json`) — 모양 검사·바꾸기·되돌리기·엔진 거부 | 엔진 구성을 바꾸거나 되돌릴 때 |
-| [architecture/prompts.md](architecture/prompts.md) | AI 지시서 패키지(`resources/prompts/` + 답변 점검 `rag_qa`) — 찾는 순서·구성·캐시 열쇠·입출력·호출부 | 지시서를 고치거나 LLM·VLM 호출부를 볼 때 |
-| [architecture/parse_flow.md](architecture/parse_flow.md) | 파싱 실행 흐름 — 입구(`run_docs.py`·`pipeline.cli`) → extract → transform → load → 검색 MCP를 단계별 그림(mermaid)과 파일 역할 표로, 단계별 산출물·캐시 열쇠, 설정·로그·출력 폴더 | 코드가 실제로 어떤 순서로 도는지, 결과가 어디에 쌓이는지 볼 때 |
-| [architecture/run_docs_design.md](architecture/run_docs_design.md) | 문서별 flow 러너 안내 — 정본은 [prd/ops.md](prd/ops.md) pl-10·rn-01~04 | flow 러너를 찾을 때 |
+| [architecture/resources.md](architecture/resources.md) | 코드가 읽는 자료 — §1 엔진 구성 파일(`resources/config/pipeline_stack.json` — 모양 검사·바꾸기·되돌리기·엔진 거부) · §2 AI 지시서 패키지(`resources/prompts/` + 답변 점검 `rag_qa` — 찾는 순서·구성·캐시 열쇠·입출력·호출부) | 엔진 구성을 바꾸거나 지시서·LLM·VLM 호출부를 볼 때 |
+| [architecture/parse_flow.md](architecture/parse_flow.md) | 파싱 실행 흐름 — 입구(`run_pipeline.py`·`pipeline.cli`) → extract → transform → load → 검색 MCP를 단계별 그림(mermaid)과 파일 역할 표로, 단계별 산출물·캐시 열쇠, 설정·로그·출력 폴더 | 코드가 실제로 어떤 순서로 도는지, 결과가 어디에 쌓이는지 볼 때 |
 | [history/](history/) | 지난 기록(보관만 — 고치지 않음). [refactoring/refactor_plan.md](refactoring/refactor_plan.md)는 옮긴 곳 안내 | 옛 결정(`D-xxx`·`P-xx`)·이력을 찾을 때 |
 
 ## 예외
 
-- `deploy/host/compose/` compose 파일 이름(파일 이름 글자 수 규칙의 예외 — 사용자 결정): 컨테이너 이름을 그대로 쓴다 — `compose.pipeline.yml`(data-pipeline) · `compose.pipeline-mcp.yml`(data-pipeline-mcp) · `compose.mcp-server.yml`(mcp-server), 개발 서버 코드 폴더 짝은 `compose.code.yml` · `compose.code.pipeline-mcp.yml` · `compose.code.mcp-server.yml`.
+- `deploy/host/compose/` compose 파일 이름(파일 이름 글자 수 규칙의 예외 — 사용자 결정): 컨테이너 이름을 그대로 쓴다 — `compose.pipeline.yml`(data-pipeline) · `compose.data-parsing.yml`(mcp-data-parsing) · `compose.mcp-server.yml`(mcp-server), 개발 서버 코드 폴더 짝은 `compose.code.yml` · `compose.code.data-parsing.yml` · `compose.code.mcp-server.yml`.
 
 ## Glossary
 
@@ -35,7 +33,7 @@
 | C-xx · D-xxx · P-xx | `refactor.md`의 서버·사람 확인 사항 · [history/refactor_plan.md](history/refactor_plan.md) 7절 결정 · 8절 미정 |
 | EDW | 회사 DB(SQL Server) — `AI.FileStorageMap`(원본 목록)·`AI.ParsingMeta`(게시 기록)·원천 표 |
 | OS | Object Storage — 원본과 파싱 결과(silver) 파일 |
-| silver · gold | 게시한 파싱 결과(OS + ParsingMeta) · 검색용 적재 결과(pgvector `doc`·`chunk`…) |
+| staging · silver · gold | Object Storage 원본을 임시 폴더로 받아 둔 것(원본은 OS에 있으니 따로 보관하지 않음) · 엔진별 파싱 결과 `parse/<엔진>/<문서>.json`과 대표 결과(게시하면 OS + ParsingMeta) · 검색용 적재 결과(pgvector `doc`·`chunk`…) |
 | MCP | 검색 서버(Model Context Protocol) — 도구 `search`·`query_edw`·`parse_document`·`edw_meta`·`list_doc_fulltext`·`get_doc_fulltext` |
 | VLM · OCR | 이미지를 읽는 언어 모델 · 글자 인식 엔진 |
 | BM25 · RRF · HNSW | 낱말 점수 검색 · 순위 합치기 · pgvector 근사 최근접 색인 |
@@ -50,7 +48,7 @@
 | 대역 | PC에서 외부 시스템을 흉내 내는 것(EDW sqlite `valid_env/edw/edw.sqlite`, PG 대역 SQLite) |
 | 스택 | 파일 형식마다 도는 엔진 목록(`resources/config/pipeline_stack.json`) |
 | represent | 엔진 결과 중 대표를 고르고 고치는 단계 |
-| flow 러너 | 서버 호스트의 문서별 실행기 `run_docs.py` — 레인 light·medium·vlm, warm(미리 받기) |
+| flow 러너 | 서버 호스트의 문서별 실행기 `run_pipeline.py` — 레인 light·medium·vlm, staging(미리 받기) |
 | selftest | 이미지 안 반입 시험(`tests/server/`) — `[판정]` 줄로 판정 |
 | 사슬 파일 | EDW 조인 사슬 `resources/config/edw_chain.yaml` — 원천별 메타 키·거르기·근거 키 |
 

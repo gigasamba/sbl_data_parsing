@@ -1,5 +1,5 @@
 """임베딩 호출 — 구조화(문서 청크 'passage')와 검색(질문 'query')이 같은 모델·접두·정규화를 써야 함.
-API(OpenAI 호환 /embeddings, 내부망 주소만)만 쓴다 — 로컬 모델 길(sentence-transformers·bge-m3·e5)은 0.2.0에 지움(pl-46)."""
+API(OpenAI 호환 /embeddings, 내부망 주소만)만 쓴다."""
 
 import json
 import time
@@ -15,11 +15,11 @@ from common.config.settings import by_env, cfg, reveal
 from common.core import span as _span
 from common.core.paths import APP_ROOT
 
-ROOT = APP_ROOT  # output/query_cache.sqlite 기준(옛 dev/)
+ROOT = APP_ROOT  # output/query_cache.sqlite 기준
 
 
 def _embed_api(texts, kind="passage"):
-    """OpenAI 호환 /embeddings — 주소·모델 이름은 common/models.py profile("embed")에서(GA6, 호출 방식은 urllib 그대로).
+    """OpenAI 호환 /embeddings — 주소·모델 이름은 common/models.py profile("embed")에서(호출은 urllib).
     모델은 주소·이름만 바꿔 끼움. 내부망만(DONT 13). 질의에는 EMBED_QUERY_PREFIX를 앞에 붙임(Qwen3 임베딩 계열 권장:
     'Instruct: <과업>\\nQuery: ' — \\n은 줄바꿈으로). 결과는 L2 정규화."""
     import urllib.request
@@ -38,7 +38,7 @@ def _embed_api(texts, kind="passage"):
         data=json.dumps({"model": prof.model.removeprefix("openai/"), "input": texts}).encode("utf-8"),
         headers={"Content-Type": "application/json"},
     )
-    key = reveal(by_env(prof.key_env)) if prof.key_env else None  # key_env는 env 이름 — 값은 설정 객체에서(S7b)
+    key = reveal(by_env(prof.key_env)) if prof.key_env else None  # key_env는 env 이름 — 값은 설정 객체에서
     if key:
         req.add_header("Authorization", f"Bearer {key}")
     r, reserved = _g_urlopen_metered(req, cfg().models.embed.timeout, "EMBED")
@@ -46,15 +46,15 @@ def _embed_api(texts, kind="passage"):
         data = json.load(r)
     finally:
         r.close()
-    _span.add_current(embed_tokens=(data.get("usage") or {}).get("total_tokens") or 0)  # op-01 — 열린 span이 없으면(MCP 검색) no-op
-    _g_settle_tokens(reserved, prof.model, data.get("usage"))  # BR45 — 응답에 토큰 수 있으면 실제 비용으로(없으면 flat 유지)
+    _span.add_current(embed_tokens=(data.get("usage") or {}).get("total_tokens") or 0)  # 열린 span이 없으면(MCP 검색) no-op
+    _g_settle_tokens(reserved, prof.model, data.get("usage"))  # 응답에 토큰 수 있으면 실제 비용으로(없으면 flat 유지)
     v = np.asarray([d["embedding"] for d in sorted(data["data"], key=lambda d: d.get("index", 0))], dtype=np.float32)
     return v / np.maximum(np.linalg.norm(v, axis=1, keepdims=True), 1e-12)
 
 
 def _query_cache():
-    """질문 임베딩 재사용 — 같은 질문을 조합·k마다 API로 다시 보내지 않게(10-04 실험이 대부분 이 대기).
-    RV1(OP11 교정) — 기본 켬: EMBED_QUERY_CACHE 미설정·빈 값이면 ROOT/output/query_cache.sqlite(EMBED_CACHE의
+    """질문 임베딩 재사용 — 같은 질문을 조합·k마다 API로 다시 보내지 않게.
+    기본 켬: EMBED_QUERY_CACHE 미설정·빈 값이면 ROOT/output/query_cache.sqlite(EMBED_CACHE의
     output/edw/embed_cache.sqlite 관례와 같은 자리) · EMBED_QUERY_CACHE=0이면 끔.
     (S7b — 빈 값은 옛 코드에서 sqlite3.connect('')=호출마다 임시 DB였음 → 기본 경로로 고침, D-028 ⑩·refactor.md C-27)
     열쇠 = sha256(모델·접두·질문) — 질문 원문은 저장하지 않음(해시만). WAL(동시 읽기·쓰기가 서로 안 막음) +
@@ -78,7 +78,7 @@ def _query_cache():
 
 
 def _evict_query_cache(db):
-    """RV1 — 용량 상한(EMBED_QUERY_CACHE_MAX, 기본 20000행). 넘으면 가장 오래된 것부터 지움(INSERT OR REPLACE는
+    """용량 상한(EMBED_QUERY_CACHE_MAX, 기본 20000행). 넘으면 가장 오래된 것부터 지움(INSERT OR REPLACE는
     rowid를 새로 받으므로 rowid 오름차순 = 오래된 순). =0이면 상한 없음(장기 운영 무한 증가 방지가 목적이라
     기본은 켬)."""
     cap = cfg().models.embed.query_cache_max
@@ -96,7 +96,7 @@ def model_key(name):
 
 
 def query_model_mismatch(meta):
-    """AD41 — 색인(묶음 meta)이 api 임베딩이면 이 프로세스의 EMBED_MODEL과 같은지. 다르면 사람이 읽을 이유(문자열), 같거나 api가 아니면 None."""
+    """색인(묶음 meta)이 api 임베딩이면 이 프로세스의 EMBED_MODEL과 같은지. 다르면 사람이 읽을 이유(문자열), 같거나 api가 아니면 None."""
     if meta.get("embed") != "api" or not meta.get("embed_model"):
         return None
     cur = cfg().models.embed.model or ""
@@ -109,7 +109,7 @@ def query_model_mismatch(meta):
 
 
 def embed_texts(embed, texts, kind):
-    """embed: api(0.2.0 — 로컬 모델 이름은 지움). kind = query·passage."""
+    """embed: api만. kind = query·passage."""
     if not texts:
         return np.zeros((0, 1), dtype=np.float32)
     if kind == "query":
@@ -117,7 +117,7 @@ def embed_texts(embed, texts, kind):
 
         try:
             return _embed_query_cached(embed, texts, kind)
-        except sqlite3.Error:  # 캐시 잠금·손상 — 질의는 캐시 없이(RV1 기본 켬 뒤 be-qa 지적)
+        except sqlite3.Error:  # 캐시 잠금·손상 — 질의는 캐시 없이
             pass
     return _embed_uncached(embed, texts, kind)
 
@@ -148,7 +148,7 @@ def _embed_query_cached(embed, texts, kind):
 def _embed_uncached(embed, texts, kind):
     if embed != "api":
         raise ValueError(f"임베딩 방식 {embed!r}는 지원하지 않음 — api만(로컬 모델 길은 0.2.0에 지움, pl-46)")
-    sp = _span.current()  # op-01 — 열린 span(구조화 임베딩)이 있을 때만 호출 수·지연을 쌓음. 없으면 이 한 줄만 비용
+    sp = _span.current()  # 열린 span(구조화 임베딩)이 있을 때만 호출 수·지연을 쌓음. 없으면 이 한 줄만 비용
     t0 = time.monotonic() if sp is not None else 0.0
     out = _embed_api(texts, kind)
     if sp is not None:

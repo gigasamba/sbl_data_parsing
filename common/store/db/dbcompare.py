@@ -1,6 +1,6 @@
-"""표 정의 ↔ 실제 DB 비교(S8a, 5-4 — 사용자 10-28 Q3 a): Alembic compare_metadata(표·칸·형식·NULL·FK·기본값) + 기본 키 칸 +
+"""표 정의 ↔ 실제 DB 비교: Alembic compare_metadata(표·칸·형식·NULL·FK·기본값) + 기본 키 칸 +
 색인은 PostgreSQL 정의 글자(pg_get_indexdef — 스키마 이름은 `{S}`로, vector 확장 이름 앞의 스키마는 뗌) · 뷰는 칸 이름·순서(정의 글자는
-PostgreSQL 판마다 꼴이 달라 알림만 — 리뷰 S8a). 칸 순서는 판정 밖(다르면 알림만).
+PostgreSQL 판마다 꼴이 달라 알림만). 칸 순서는 판정 밖(다르면 알림만).
 판정: 차이 0 → stamp 가능 · up이 고치는 것(표·색인·뷰 없음, 뷰 칸 다름 — 기준판이 IF NOT EXISTS·뷰는 DROP 뒤 다시 만듦)뿐 → up이 고치고 판
 기록 · 그 밖(칸 이름·형식·NULL·기본값·키·남는 표·칸·색인·다른 색인 정의) → 거부. 값은 읽지 않는다(카탈로그만)."""
 
@@ -59,7 +59,7 @@ def _norm(schema, s, ext=()):
 
 
 def _text(v):
-    """비교 문구용 — 표 정의의 기본값(DefaultClause(TextClause))은 글자로(VS8a R-2), 그 밖은 str."""
+    """비교 문구용 — 표 정의의 기본값(DefaultClause(TextClause))은 글자로, 그 밖은 str."""
     arg = getattr(v, "arg", v)
     return getattr(arg, "text", None) or str(arg)
 
@@ -73,8 +73,8 @@ def _register_types(ext):
 
 
 def compare(conn, target, schema, dim=None):
-    """기준 스키마 `schema`(PG_SCHEMA)와 원천 스키마 5벌(pl-28)을 표 정의와 비교해 보고 하나로 합친다. 기준 스키마에는 판 표와 공용 시퀀스만
-    있어야 한다(남는 표 = 옛 한 벌 표 — 0002가 지움). 원천 스키마 보고의 항목에는 스키마 이름을 앞에 붙인다. applog는 스키마 하나라 바로 비교한다."""
+    """기준 스키마 `schema`(PG_SCHEMA)와 원천 스키마 5벌을 표 정의와 비교해 보고 하나로 합친다. 기준 스키마에는 판 표와 공용 시퀀스만
+    있어야 한다(남는 한 벌 표는 마이그레이션 0002가 지움). 원천 스키마 보고의 항목에는 스키마 이름을 앞에 붙인다. applog는 스키마 하나라 바로 비교한다."""
     if target in ("applog", "master"):
         return compare_one(conn, target, schema, dim)
     rep = Report()
@@ -105,7 +105,7 @@ def compare_one(conn, target, schema, dim=None):
     )
     conn.exec_driver_sql("SELECT set_config('search_path', 'pg_catalog', true)")
     # 방언의 기본 스키마(첫 연결 때 current_schema())가 우리 스키마이면 Alembic이 그 스키마를 None으로 바꿔 include_name이 걸러 비교가 빈다
-    # (역할 search_path = 스키마·역할 이름 = 스키마·PG_SCHEMA=public — VS8a B-1). 비교 동안만 지금 search_path와 같은 pg_catalog로 둔다.
+    # (역할 search_path = 스키마·역할 이름 = 스키마·PG_SCHEMA=public). 비교 동안만 지금 search_path와 같은 pg_catalog로 둔다.
     dialect, dflt = conn.dialect, conn.dialect.default_schema_name
     dialect.default_schema_name = "pg_catalog"
     try:

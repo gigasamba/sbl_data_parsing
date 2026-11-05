@@ -1,11 +1,9 @@
-"""SI43④ — 문서에서 새 회사(고객·CDMO) 이름 후보를 찾아 용어집 draft로 넘길 목록을 만든다(구조화 쪽, 프레임워크
-의존 없음 — 추출 로직은 여기, 쓰기·검색 쪽 소비는 common/terms.py write_draft_terms·expand_query가 맡는다, 설계
-노트: docs/backlog/server.md SI43④ "'문서에서 새 이름을 찾는' 단계는 구조화·파싱 쪽이라 terms.py 안에서
-끝나는 작업이 아님").
+"""문서에서 새 회사(고객·CDMO) 이름 후보를 찾아 용어집 draft로 넘길 목록을 만든다(구조화 쪽 추출 로직 —
+쓰기·검색 쪽 소비는 common.core.terms의 write_draft_terms·expand_query가 맡는다).
 
 ponytail: 정규식 휴리스틱(법인 접미사 뒤 한글·영문 이름만) — 실제 NER이 아님, 접미사 목록 밖의 이름(순수 고유명사만,
 접미사 없음)은 못 찾음. 업그레이드 경로: 접미사 목록을 글로서리 category=org_suffix 같은 데이터로 옮기거나 LLM 음역
-후보(서버 쪼개서, 선택 — 백로그 ④ 노트)로."""
+후보로."""
 
 import json
 import re
@@ -38,7 +36,7 @@ def extract_candidate_orgs(text):
 
 
 def collect_candidate_org_names(docs, known_norm, norm):
-    """docs(build_bundle.py main()의 doc dict 목록, full_text 키) 전체에서 candidate 회사 이름 → known_norm(이미 아는
+    """docs(gold_bundle.py main()의 doc dict 목록, full_text 키) 전체에서 candidate 회사 이름 → known_norm(이미 아는
     이름의 norm() 집합, 명부·용어집 전 카테고리) 밖인 것만, 등장 횟수 많은 순 · 동률은 이름순(결정적)."""
     counts = {}
     for d in docs:
@@ -63,8 +61,8 @@ def known_names():
 
 
 def main(argv=None):
-    """pl-38 D3(사용자 11-03) — 묶음 밖 도구: 묶음 docs.jsonl 본문에서 새 회사 이름 후보 → output/ 자동 draft CSV(terms.write_draft_terms,
-    사람 승인 전 · 검색은 BM25 약한 가중으로만 읽음). 옛 build_bundle collect_draft_terms를 옮김 — 이미 아는 이름은 PG 마스터에서."""
+    """묶음 밖 도구: 묶음 docs.jsonl 본문에서 새 회사 이름 후보 → output/ 자동 draft CSV(terms.write_draft_terms,
+    사람 승인 전 · 검색은 BM25 약한 가중으로만 읽음). 이미 아는 이름은 PG 마스터에서."""
     import argparse
 
     from common.core import terms as T

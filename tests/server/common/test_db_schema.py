@@ -9,7 +9,7 @@ from common.core.paths import DEPLOY_ROOT
 from common.store import parsing_meta_db as PM
 from common.store.db import dbcompare
 
-ROOT = DEPLOY_ROOT  # 저장소 루트(PC) · 이미지 /app/deploy — op-09 paths 상수
+ROOT = DEPLOY_ROOT  # 저장소 루트(PC) · 이미지 /app/deploy — paths 상수
 DOC = ROOT / "docs" / "architecture" / "db_schema.md"
 PM_SQL = ROOT / "docs" / "operations" / "parsing_meta_mssql.sql"
 DECISIONS = ("유지", "삭제", "새로")
@@ -44,7 +44,7 @@ def _actual():
     from common.store.db.models import search_tables as ST
 
     cols = {}
-    for src in ST.SOURCES:  # pl-28 — 원천 스키마 5벌의 같은 표 이름은 칸을 합쳐서(원천 전용 칸은 문서의 "원천" 칸에 적음)
+    for src in ST.SOURCES:  # 원천 스키마 5벌의 같은 표 이름은 칸을 합쳐서(원천 전용 칸은 문서의 "원천" 칸에 적음)
         for t in dbcompare.expected("search", ST.src_schema("ai", src), 1024)[0].tables.values():
             cols.setdefault(f"gold.{t.name}", set()).update(c.name for c in t.columns)
     cols["edw.ParsingMeta"] = _pm_columns()
@@ -68,7 +68,7 @@ def test_schema_doc_matches():
     for name, real in sorted(actual.items()):
         now = {c for c, d in doc[name].items() if d != "새로"}
         assert now == real, f"{name} — 문서의 지금 칸과 실제가 다름: 문서에만 {sorted(now - real)} · 실제에만 {sorted(real - now)}"
-    from common.store.db.models.master_tables import master_metadata  # pl-38 — 마스터 표(§4, 결정 모두 새로)는 칸 전부를 모델과 대조
+    from common.store.db.models.master_tables import master_metadata  # 마스터 표(§4, 결정 모두 새로)는 칸 전부를 모델과 대조
 
     for tbl in master_metadata("m").tables.values():
         name = f"master.{tbl.name}"

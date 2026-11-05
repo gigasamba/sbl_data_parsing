@@ -1,6 +1,6 @@
 """PC 답변 점검(answer_gen)만 쓰는 도구 왕복 — 지시문 패키지(rag_qa: agent.json·instructions.md, 바이트 그대로) + 모델이 도구를 골라 부르는
-OpenAI 호환 /chat/completions 다중 턴(0.2.0 — 옛 common.ai.adk.run_agent의 ADK 장치를 지우고 이리로, pl-46).
-모델 호출은 common.ai.llm.complete(tools=)로(가드·재시도·회로 차단기 그대로). 턴마다 공유 장부를 거친다(옛 per_turn_admit):
+OpenAI 호환 /chat/completions 다중 턴.
+모델 호출은 common.ai.llm.complete(tools=)로(가드·재시도·회로 차단기 그대로). 턴마다 공유 장부를 거친다:
 common.ai.llm.admit_turn() — 호출 수 세기 + 외부 LLM이면 LLM_BUDGET_USD 턴 선차감 → 응답 usage로 정산(못 받으면 반환).
 멈춤 글자(answer_gen STOPS와 같음): "공유 호출 상한"(장부 거부) · "예산 초과"(매니페스트 턴·도구 호출 수) · "시간 상한"(budget.seconds·timeout).
 LLM_FAKE=1이면 네트워크 없이: fake_policy가 있으면 결정적 정책으로 도구까지 돌리고, 없으면 모의 글자 한 줄(도구 0)."""
@@ -18,7 +18,7 @@ _JSON_TYPES = {str: "string", int: "integer", float: "number", bool: "boolean", 
 
 
 def _system(pkg_dir, manifest):
-    """패키지 지시문 — instructions.md + 출력 JSON 스키마(옛 rag_qa/agent.py _instruction()과 같은 글자)."""
+    """패키지 지시문 — instructions.md + 출력 JSON 스키마."""
     return (
         (pkg_dir / "instructions.md").read_text(encoding="utf-8")
         + "\n## Output JSON schema — the response must be exactly one object matching this\n\n```json\n"
@@ -103,7 +103,7 @@ def run(agent_id, question, tools, *, timeout=None, fake_policy=None):
                     "llm", messages, max_tokens=None, timeout=left, tools=specs, retries=1, agent=agent_id, call_reserved=True
                 )  # 이 턴 자리는 admit_turn이 예약
             except Exception:
-                turn.release()  # 응답을 못 받은 턴의 선차감 반환(옛 GA9)
+                turn.release()  # 응답을 못 받은 턴의 선차감 반환
                 raise
             turn.settle(u)
             usage["prompt_tokens"] += u.get("prompt_tokens", 0)

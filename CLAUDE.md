@@ -13,15 +13,15 @@
 | 폴더 | 두는 것 | 두지 않는 것 | 서버 이미지 |
 |---|---|---|---|
 | `common/` | 두 앱이 **함께** 쓰는 것만 — `core/`(경로, 핑거프린트, 계약, 문자열 처리, 실행 기록), `ai/`(모델 호출, 예산, 외부 전송 가드), `store/`(PG, 회사 DB, Object Storage — `db/`는 SQLAlchemy·pydantic·Alembic), `config/`(설정 모델과 도구), `check/`(점검) | 한 앱만 쓰는 코드, 앱 import | 둘 다 |
-| `pipeline/` | 파이프라인 앱 — `extract/`(원천 읽기·파싱, `engines/`는 엔진) → `transform/`(represent, figures, structure) → `load/`(적재·퍼블리시), `shared/`, `tools/`, `eval/`, 실행기 `cli.py`, 설정 `config.py` | `mcp_server` import, 검색 서빙 코드 | data-pipeline |
+| `pipeline/` | 파이프라인 앱 — `extract/`(원본 고르기·받기·준비) → `transform/`(`parse/` 엔진 파싱 — `engines/`는 엔진, represent, figures, structure) → `load/`(적재·퍼블리시), `shared/`, `tools/`, `eval/`, 실행기 `cli.py`, 설정 `config.py` | `mcp_server` import, 검색 서빙 코드 | data-pipeline |
 | `mcp_server/` | 검색 MCP 앱 — `main.py`(앱 조립), `routers/`(도구 등록 — 이름·시그니처 고정), `schemas/`(출력 구조), `services/`(업무 로직, `search/`), `cli/`(MCP 도구 명령), 설정 `config.py` | `pipeline` import, 파싱 코드 | mcp-server |
 | `resources/` | 코드가 **읽는 데이터** — 프롬프트 `prompts/{common,pipeline,mcp}`, `config/`, `mappings/`, `vocab/` | 코드(.py 로직), 비밀값, 서버마다 다른 값 | 둘 다 |
 | `deploy/docker/` | Dockerfile, requirements, entrypoint, `wheels/` | 앱 로직 | (빌드 원본) |
 | `deploy/release/` | 빌드·전송·굽기·배포 판정 스크립트, `known_fail.txt`, `lint_changed.sh` | 앱 로직 | 일부(배포 판정 파일) |
-| `deploy/host/` | **서버 호스트**에서 실행하는 compose, systemd, 셸 스크립트, `run_docs.py` | 컨테이너 안에서 실행되는 코드 | 아니요 |
+| `deploy/host/` | **서버 호스트**에서 실행하는 compose, systemd, 셸 스크립트, `run_pipeline.py` | 컨테이너 안에서 실행되는 코드 | 아니요 |
 | `tests/` | 테스트 — `server/`(이미지 안에서 배포 판정에 쓰는 테스트, 외부 접속 없이 실행됨), `general/`(PC 전용 — PG·Docker가 필요하거나 느린 테스트), `runner.py` | 앱 코드 | `server/`만 |
 | `validation/` | PC 전용 **검증 도구 코드** — `search_ui/`(검증 페이지), `e2e/`(평가·비교·answer_gen) | 서버에서 실행되는 코드, 데이터 번들 | 아니요 |
-| `valid_env/` | PC 전용 **데이터** — 외부 시스템 대역: 테스트 문서(`object_storage/` — 버킷 모양), 정답·질문·목록(`eval_sets/`), 합성 EDW·회사 DB 표(`edw/`), 답변 점검 agent(`answer_test/`), PC 테스트 Docker(`docker/`) | 코드 로직, 비밀값, 운영 데이터 | 아니요 |
+| `valid_env/` | PC 전용 **데이터** — 외부 시스템 대역: 테스트 문서(`object_storage/` — 버킷 모양, `CRMS`·`SFDC`·`LAS`·`FAQ`), 합성 EDW·회사 DB 표(`edw/`), 답변 점검 agent(`answer_test/`), PC 테스트 Docker(`docker/`) | 코드 로직, 비밀값, 운영 데이터 | 아니요 |
 | `docs/` | 사람이 읽는 문서 — `PRD.md`·`prd/`(요건), `operations/`, `architecture/`, `refactoring/`(`refactor.md` — 서버·사람 확인 사항), `history/`(지난 기록) | 코드 | 아니요 |
 
 **모듈 경계(자동 점검 — `python -m common.check.check_modules`):**
@@ -60,7 +60,7 @@
 - **새 설정 항목을 추가할 때:** 해당 섹션의 모델(`common/config/settings.py`, `pipeline/config.py`, `mcp_server/config.py`)에 항목·설명·기본값·옛 env 이름(alias)을 넣는다 → `python -m common.config.sample`로 sample을 다시 만든다 → `python -m common.config.keyscan --check`를 실행한다 → 운영에 영향이 있으면 [docs/operations/env-guide.md](docs/operations/env-guide.md)와 `refactor.md`에 적는다.
 - 기본값은 코드에, 환경마다 다른 값은 settings.yaml에 둔다. 비워 둔 항목은 코드 기본값을 쓴다.
 - 자식 프로세스에 값을 넘길 때는 env dict가 아니라 `settings.child_env(base, X=…)`(그 자식에게만) 또는 `settings.put(X=…)`(현재 프로세스와 이후 자식 모두)를 쓴다. 한 번만 다른 값으로 실행할 때는 명령 인자 `--set 이름=값`을 쓴다(진입 모듈에서 `setarg.apply()`). PC에서는 덮어쓰기 설정 파일 `python -m common.config.overrides`도 쓸 수 있다.
-- `RUN_ENV`(`required.env.run_env`)는 `local`, `dev`, `prd` 중 하나다(그 밖의 값이면 시작 거부). 서버(dev, prd)는 외부 모델 호출을 거부하고, `dev.llm_fake`(가짜 LLM 응답)가 켜져 있으면 시작하지 않으며, 설정 파일을 읽지 못하면 시작하지 않는다. 외부 모델·가짜 LLM은 `local`에서만 쓴다. PC 전용 분기는 `paths.LOCAL_RUN` 하나로만 가른다.
+- `RUN_ENV`(`required.env.run_env`)는 `local`, `dev`, `prd` 중 하나다(그 밖의 값이면 시작 거부). 서버(dev, prd)는 외부 모델 호출을 거부하고, `dev.fake_llm`(가짜 LLM 응답)가 켜져 있으면 시작하지 않으며, 설정 파일을 읽지 못하면 시작하지 않는다. 외부 모델·가짜 LLM은 `local`에서만 쓴다. PC 전용 분기는 `paths.LOCAL_RUN` 하나로만 가른다.
 - 비밀값은 문서, 로그, 커밋, 채팅, 오류 메시지에 쓰지 않는다. 화면에 키를 출력하지 않는다.
 
 ---
@@ -69,7 +69,7 @@
 
 | 대상 | 이유 | 지킬 것 |
 |---|---|---|
-| **엔진 파일** `pipeline/extract/engines/`의 바이트 | 결과 재사용 키(엔진 핑거프린트) — 바뀌면 서버의 모든 문서를 그 엔진으로 다시 파싱한다 | 포매터·린트 자동 수정 대상에서 뺀다(pyproject 제외 목록). 고치려면 사람 검토를 받는다 |
+| **엔진 파일** `pipeline/transform/parse/engines/`의 바이트 | 결과 재사용 키(엔진 핑거프린트) — 바뀌면 서버의 모든 문서를 그 엔진으로 다시 파싱한다 | 포매터·린트 자동 수정 대상에서 뺀다(pyproject 제외 목록). 고치려면 사람 검토를 받는다 |
 | **핸드오프 파일** `common/core/{contract,repfmt,terms,text}.py` | 핸드오프 핑거프린트 `FINGERPRINT` — 값이 다르면 structure·load가 이전 결과를 거부한다 | 위와 같다 |
 | **레이어 코드 핑거프린트(code_fp)** — 레이어 파일과 그 파일이 import하는 `common` 모듈(`settings.py`, `paths.py` 등 모든 레이어의 공용 의존 포함) | 레이어 캐시 키 — 공용 의존 파일을 한 줄만 바꿔도 서버 문서 전체가 다시 처리된다 | 공용 의존 파일을 고칠 때는 사람에게 먼저 알리고, 커밋 메시지에 변경 전후 값을 적는다 |
 | **프롬프트** `resources/prompts/**`(+ `valid_env/answer_test/rag_qa`) | 프롬프트 핑거프린트와 LLM 캐시 키 | 바이트 그대로 두고 줄바꿈은 LF |
@@ -83,7 +83,7 @@ PYTHONPATH=. .venv/bin/python -c "import common as c; from common.core import ar
 지금 기준값은 PRD [e2-02](docs/prd/test.md#e2-02)에 있다.
 
 **운영 접속 가드(필수):**
-- `deploy/host/scripts/run_docs.py`는 **PC에서 실행하지 않는다**(운영 EDW와 Object Storage에 접속한다). PC에서는 문법 확인, `--help`, `configure()`까지만 확인한다.
+- `deploy/host/scripts/run_pipeline.py`는 **PC에서 실행하지 않는다**(운영 EDW와 Object Storage에 접속한다). PC에서는 문법 확인, `--help`, `configure()`까지만 확인한다.
 - PC에서 운영 DB나 운영 EDW에 접속하지 않는다.
 
 ---
@@ -129,7 +129,8 @@ uv pip install --python .venv/bin/python -r deploy/docker/requirements-core.txt 
 export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자식 프로세스가 다른 폴더에서 실행될 때도 찾도록 절대 경로)
 .venv/bin/python -m pipeline.config   # 어느 settings.yaml을 읽는지와 요약(비밀값은 가림)
 ```
-- 루트 `settings.yaml`에는 `required.env.run_env: local`·`required.env.run_mode: prod`, 전용 PG 접속 정보(`required.pg`), 임베딩·LLM·VLM 주소·모델·키(`required.embed`, `required.models`), (부하가 높은 PC라면) `tuning.ops.runtime.cpu_max_load`를 둔다. 예시는 README §4-2에 있다.
+- 루트 `settings.yaml`에는 `required.env.run_env: local`, 전용 PG 접속 정보(`required.pg`), 임베딩·LLM·VLM 주소·모델·키(`required.models`), (부하가 높은 PC라면) `tuning.ops.runtime.max_cpu_load`를 둔다. 예시는 README §4-2에 있다.
+- 작업 폴더(worktree)에는 `settings.yaml`이 없다 — 거기서 점검·시험은 `export RUN_ENV=local`을 먼저(없으면 `output/`이 저장소 한 단계 위에 생긴다 — `paths.PROJ_ROOT`). 하위 에이전트 지시에도 넣는다.
 - 전용 pgvector 컨테이너(PG 16 + pgvector, 예: `127.0.0.1:55433`)를 쓴다. PG 접속 항목(`required.pg`)은 모두 채우거나 모두 비운다 — 일부만 채우면 시작을 거부한다(자동 탐색 없음). 다른 작업의 DB와 포트를 쓰지 않는다.
 - 백그라운드 프로세스는 PID를 파일에 남기고 **PID로만** 종료한다(`pkill -f` 패턴 금지).
 - 검색 스키마 테이블은 마이그레이션이 만든다(`dbtool up --target all --schema <이름> --bundle <묶음>` — README §4-4).
@@ -160,17 +161,17 @@ export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자�
 README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. 실행마다 다른 값은 `--set`(파이프라인 진입점)이나 덮어쓰기 설정 파일(`python -m common.config.overrides` — `mcp_server.main`, `ask`처럼 `--set`을 받지 않는 명령)로 준다. 테스트 문서는 `valid_env/object_storage/{SFDC,CRMS}/`에 있고(문서 목록은 README §4-4), 임베딩 캐시는 `output/edw/embed_cache.sqlite`다(같은 청크는 다시 호출하지 않는다 — 실제 호출을 확인하려면 `EMBED_CACHE=<빈 sqlite>`).
 
 ### 6-6. 검증 페이지와 이미지 빌드
-- 검증 페이지: `validation/search_ui/start_mcp.sh`와 `start_ui.sh`로 띄운다(설정은 루트 `settings.yaml` 하나 — `search.server`, `dev.mcp`, PG 접속 `required.pg`, 외부 임베딩 `common.models.embed.allow_external` — README §4-2 예시). 주소는 http://127.0.0.1:8791 이다. 자세한 내용은 README §4-6.
+- 검증 페이지: `validation/search_ui/start_mcp.sh`와 `start_ui.sh`로 띄운다(설정은 루트 `settings.yaml` 하나 — `search.server`, `dev.search_ui`, PG 접속 `required.pg`, 외부 임베딩 `dev.models.embed.embed_allow_external` — README §4-2 예시). 주소는 http://127.0.0.1:8791 이다. 자세한 내용은 README §4-6.
 - 서버에 올릴 이미지를 빌드하기 전에 `assets/`를 채운다(`PYTHONPATH=. python deploy/release/assets.py pack` — [release-and-patch §5-6](docs/operations/release-and-patch.md#5-6-반입-자산assets-준비--이미지-빌드-전)).
 - 이미지: `ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh` → `bash deploy/release/selftest_gate.sh docker run --rm data-pipeline:<태그> selftest`(판정은 종료 코드가 아니라 `[판정]` 줄로 한다). PC 시험 빌드는 태그를 작업마다 새로 붙인다(TAG를 빼면 `data-pipeline:<VERSION>` — 배포용 버전 태그이고, 이미 있으면 `build_ship.sh`가 멈춘다). push와 서버 배포는 사람이 한다.
-- **배포 단계마다 이미지와 코드의 구성이 다르다**(README §5-0). ① PC(local) → 개발 서버(dev): 코드가 없는 실행 이미지(`IMAGE_TARGET=pipeline-runtime|mcp-runtime`) + PC 커밋의 코드 묶음을 개발 서버 코드 폴더(`CODE_DIR`/`live`)로 마운트한다. ② 개발 서버 → 운영 서버(prd): 개발 서버에서 `deploy/release/bake.sh`로 같은 실행 이미지 + 시험한 코드 폴더를 묶어 코드가 든 이미지를 만든다(코드 폴더 없이 실행). Dockerfile의 코드 포함 타깃(`pipeline`·`mcp`)은 PC 시험과 비상용이다.
+- **배포 단계마다 이미지와 코드의 구성이 다르다**(README §5-0). ① PC(local) → 개발 서버(dev): 코드가 없는 실행 이미지(`IMAGE_TARGET=pipeline-runtime|mcp-runtime`) + PC 커밋의 코드 묶음을 개발 서버 코드 폴더(`CODE_DIR`/`live`)로 마운트한다. ② 개발 서버 → 운영 서버(prd): 개발 서버에서 `deploy/release/bake_prod_image.sh`로 같은 실행 이미지 + 시험한 코드 폴더를 묶어 코드가 든 이미지를 만든다(코드 폴더 없이 실행). Dockerfile의 코드 포함 타깃(`pipeline`·`mcp`)은 PC 시험과 비상용이다.
 
 ---
 
 ## 7. 외부 모델(OpenRouter 등 유료) — 비용 규칙
 
-- 외부 호출은 역할마다 `common.models.<embed|llm|vlm>.allow_external`(기본 false)이 켜지고 `RUN_ENV=local`일 때만 된다. 개발 중에는 **기능 확인만** 한다(문서 2~3건, 질문 몇 개).
-- 하루 지출 상한 `common.models.guard.budget_usd`(기본 0.1달러 — 장부 `spend_file`, 여러 프로세스가 합계 하나를 나눠 씀). 단가(`PRICES`)를 모르는 외부 LLM은 거부한다.
+- 외부 호출은 역할마다 `dev.models.<embed|llm|vlm>.<embed|llm|vlm>_allow_external`(기본 false)이 켜지고 `RUN_ENV=local`일 때만 된다. 개발 중에는 **기능 확인만** 한다(문서 2~3건, 질문 몇 개).
+- 하루 지출 상한 `dev.models.guard.daily_budget_usd`(기본 0.1달러 — 장부 `spend_ledger_file`, 여러 프로세스가 합계 하나를 나눠 씀). 단가(`PRICES`)를 모르는 외부 LLM은 거부한다.
 - 외부 허용은 루트 settings.yaml에 둔다. 한 번만 풀 때는 `--set`을 쓴다. 내부망 서버(dev·prd)의 settings.yaml은 셋 다 false.
 - 모델 호출은 `llm.chat`·`llm.complete`만 쓴다(예산 장부·가드를 거침). PC 답변 점검의 여러 턴 도구 반복은 `validation/e2e/tool_loop.py`가 맡는다(턴마다 예산 확인 — `llm.admit_turn()`).
 - 기술 스택 비교처럼 호출이 많은 작업은 예상 비용(호출 수 × 평균 토큰 × 단가)을 먼저 보고하고 승인을 받는다. 서버는 내부망 모델만 쓴다(외부 모델은 거부).

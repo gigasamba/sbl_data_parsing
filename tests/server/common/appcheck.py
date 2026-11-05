@@ -1,4 +1,4 @@
-"""common.config.show의 app_selftest — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 시험 도우미(test_ 함수 없음 — pipeline.config·mcp_server.config 시험이 `from tests.server.common.appcheck import app_selftest`로 부름). 옛 부르는 곳: 두 config 모듈의 자기 점검."""
+"""앱 설정 모델 공용 점검 app_selftest — 시험 도우미(test_ 함수 없음 — pipeline.config·mcp_server.config 시험이 `from tests.server.common.appcheck import app_selftest`로 부름)."""
 
 from common.config import export as E
 from common.config import layout as L
@@ -36,7 +36,7 @@ def app_selftest(app_cls, top):
     with tempfile.TemporaryDirectory() as td:
         f = Path(td) / "s.yaml"
         host_leaf = next(p for p, fi, _ in rows if p.startswith(top + ".host.") and S.type_label(fi.annotation) == "str")
-        sec_leaf = next(p for p, fi, _ in rows if p.startswith(top + ".") and S.is_secret(fi))
+        sec_leaf = next(p for p, fi, _ in rows if S.is_secret(fi))  # 앱 절에 비밀 칸이 없으면 common 것
         doc = {}
         L.set_path(doc, host_leaf, "v1")
         L.set_path(doc, sec_leaf, secret)
@@ -70,14 +70,18 @@ def app_selftest(app_cls, top):
             f"{top}: 확인 명령 인자 — 값 없는 --file·--section 없는 export·다른 앱 절은 안내 + rc 2(IndexError 아님), --file은 export 앞뒤 모두",
             codes == [2, 2, 0, 2],
         )
-        # S7e2 — 다리 없음: 앱 설정 모듈을 common보다 먼저 import해도 설정 파일 값을 읽고, 앱 칸은 env로 나가지 않음(영구 다리는 엔진·인계 칸만) — 새 프로세스로
+        # 다리 없음: 앱 설정 모듈을 common보다 먼저 import해도 설정 파일 값을 읽고, 앱 칸은 env로 나가지 않음(영구 다리는 엔진·인계 칸만) — 새 프로세스로
         import subprocess
         import sys
 
         app_leaf = next(
             p
             for p, fi, _ in rows
-            if p.startswith(top + ".") and not S.is_host(p) and S.type_label(fi.annotation) == "str" and not S.is_secret(fi)
+            if p.startswith(top + ".")
+            and not S.is_host(p)
+            and S.type_label(fi.annotation) == "str"
+            and not S.is_secret(fi)
+            and p not in S.LOCAL_IGNORED  # local이 비우는 서버 전용 칸은 빼고(op-14)
         )
         env_app = S.env_name(dict((p, fi) for p, fi, _ in rows)[app_leaf])
         g = Path(td) / "app.yaml"

@@ -1,10 +1,10 @@
-"""pipeline.transform.represent.parse_scoring 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.parse_scoring --selftest`."""
+"""pipeline.transform.represent.parse_scoring 시험."""
 
 import json
 import tempfile
 from pathlib import Path
 
-from pipeline.transform.represent.parse_scoring import clean_commas, flags, norm_nows, run, value_recall
+from pipeline.transform.represent.parse_scoring import clean_commas, norm_nows, run, value_recall
 
 
 def selftest():
@@ -62,7 +62,6 @@ def selftest():
         assert d3["table_row_recall"] == 1.0, d3  # C3: 본문 줄엔 없지만 tables[].grid로 행 재현 인정
         assert d1["halluc"]["num_halluc"] > 0, d1["halluc"]
         assert d1["empty"]["ok"] is False
-        assert "F1" in {f for _, e, f in flags(qa["docs"]) if e == "empty" and _ == "doc1.txt"}
         assert qa["docs"]["doc2.txt"]["ref"] == "consensus", qa["docs"]["doc2.txt"]["ref"]
         assert route[".txt"][0] == "good" and route[".txt"][-1] == "empty", route
         print(

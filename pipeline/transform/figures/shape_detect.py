@@ -1,4 +1,4 @@
-"""AD14 — Word·Excel 도형 도식(텍스트 상자·연결선·SmartArt, 삽입 이미지 없음) soffice 호출 전 cheap 문턱.
+"""Word·Excel 도형 도식(텍스트 상자·연결선·SmartArt, 삽입 이미지 없음) soffice 호출 전 cheap 문턱.
 XML 신호만 보고 "이 문서를 렌더할 가치가 있나"(문서/drawing 단위 bool)만 답한다 — 어느 쪽(페이지)이 실제
 도식인지는 soffice 변환 뒤 pptx_render.shape_render_pages()가 벡터 신호(그려진 선·채움, 래스터 이미지 없음)로
 가린다. pptx_edges.py의 PPTX_SHAPES_MIN·_is_smartart와 같은 관례 — 원본 XML에서 네임스페이스 문자열만 찾아
@@ -7,7 +7,7 @@ XML 신호만 보고 "이 문서를 렌더할 가치가 있나"(문서/drawing �
 import re
 import zipfile
 
-SHAPE_MIN = 2  # 백로그 AD14 — "≥2 shapes or any connector/SmartArt"(ponytail: 실측 전 단순 문턱, 과·오탐 보이면 재조정)
+SHAPE_MIN = 2  # 도형 2개 이상 또는 연결선·SmartArt(ponytail: 단순 문턱, 과·오탐이 보이면 재조정)
 
 _SMARTART = re.compile(rb'uri="[^"]*drawingml/2006/diagram"')
 

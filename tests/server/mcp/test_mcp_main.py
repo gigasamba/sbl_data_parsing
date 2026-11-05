@@ -1,11 +1,11 @@
-"""mcp_server.main 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.main --selftest`.
+"""mcp_server.main 시험.
 10-29 정리 — 다른 시험 파일의 _selftest_* 28개를 다시 부르던 줄을 뺐다(각 파일 test_main이 이미 돎 — 중복). 여기는 main 자신의 점검만."""
 
 import json
 
 from mcp_server import config as mc
 from mcp_server.main import _DEFAULT_MCP_INSTRUCTIONS, _mcp_instructions, build, check_bind
-from mcp_server.services.search.shaping import cap
+from mcp_server.services.search.evidence_shape import cap
 
 
 def _selftest_transport_security():

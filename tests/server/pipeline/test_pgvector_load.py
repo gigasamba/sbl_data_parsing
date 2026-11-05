@@ -1,7 +1,6 @@
-"""pipeline.load.pgvector_load 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.load.pgvector_load --selftest`."""
+"""pipeline.load.pgvector_load 시험."""
 
 import pipeline.load.pgvector_load as M
-from pipeline import config as pc
 from pipeline.load.pgvector_load import _OUR_TABLES, _tbl, deploy, load
 
 
@@ -57,7 +56,7 @@ def _n_create_ext(db):
 
 
 def _selftest():
-    """실제 PG 없이 가짜 커서/연결로(XS3): 확장 없음 → deploy 멈춤(기본, CREATE EXTENSION 미호출) · PG_CREATE_EXTENSION=1 옵트인(성공·실패) ·
+    """실제 PG 없이 가짜 커서/연결로(XS3): 확장 없음 → deploy 멈춤(기본, CREATE EXTENSION 미호출) · --create-extension 옵트인(성공·실패) ·
     표식 없는 스키마에 --replace 거부 · 우리 스키마면 허용 · deploy 자체의 남의 스키마 거부(표 있음·표식 없음) · 표 화이트리스트.
     S8a — 판 올리기(_upgrade — migrate up)는 가짜로 바꿔 부른 것만 본다(실 PG 비교·pg_dump 대조는 output/orca/S8a-impl.md 하네스)."""
     # S9 — 옛 `global _upgrade` → `M.<이름>`(모듈 전역 대입)
@@ -70,87 +69,87 @@ def _selftest():
 
 
 def _selftest_deploy(ups):
-    with pc.PIPE.env(PG_CREATE_EXTENSION=None):  # S7c — 시험하는 deploy가 pipeline 설정 객체를 읽음(os.environ 안 건드림)
-        db1 = _FakeDB("ai", has_vector=False, has_marker=False)
-        try:
-            deploy(db1, 768)
-            raise AssertionError("확장 없이 deploy가 멈추지 않음")
-        except SystemExit as e:
-            assert "관리자 설치" in str(e), str(e)
-        assert not ups and _n_create_ext(db1) == 0, "확장 없을 때 판 올리기·CREATE EXTENSION 실행 흔적"
+    db1 = _FakeDB("ai", has_vector=False, has_marker=False)
+    try:
+        deploy(db1, 768)
+        raise AssertionError("확장 없이 deploy가 멈추지 않음")
+    except SystemExit as e:
+        assert "관리자 설치" in str(e), str(e)
+    assert not ups and _n_create_ext(db1) == 0, "확장 없을 때 판 올리기·CREATE EXTENSION 실행 흔적"
 
-        db2 = _FakeDB("ai", has_vector=True, has_marker=False)
-        idx = deploy(db2, 768)
-        assert ups == [("ai", 768)] and _n_create_ext(db2) == 0  # 확장 있음 — 판 올리기만(S8a — 옛 schema.sql 실행 자리)
-        assert idx == "HNSW 코사인", idx
+    db2 = _FakeDB("ai", has_vector=True, has_marker=False)
+    idx = deploy(db2, 768)
+    assert ups == [("ai", 768)] and _n_create_ext(db2) == 0  # 확장 있음 — 판 올리기만(S8a — 옛 schema.sql 실행 자리)
+    assert idx == "HNSW 코사인", idx
 
-        db3 = _FakeDB("ai", has_vector=True, has_marker=False)  # 확장은 있지만 표식(판 표 alembic_version) 없는 기존 스키마
-        try:
-            load(db3, "no-such-bundle", replace=True)
-            raise AssertionError("표식 없는 스키마에서 --replace가 거부되지 않음")
-        except SystemExit as e:
-            assert "표식" in str(e), str(e)
+    db3 = _FakeDB("ai", has_vector=True, has_marker=False)  # 확장은 있지만 표식(판 표 alembic_version) 없는 기존 스키마
+    try:
+        load(db3, "no-such-bundle", replace=True)
+        raise AssertionError("표식 없는 스키마에서 --replace가 거부되지 않음")
+    except SystemExit as e:
+        assert "표식" in str(e), str(e)
 
-        db4 = _FakeDB("ai", has_vector=True, has_marker=True)  # 우리가 만든 스키마(판 표 있음)
-        try:
-            load(db4, "no-such-bundle", replace=True)
-            raise AssertionError("번들이 없는데 통과함")
-        except SystemExit as err:
-            raise AssertionError("표식 있는 우리 스키마인데 --replace가 거부됨") from err
-        except FileNotFoundError:
-            pass  # 표식 검사는 통과 — 그다음 번들 파일이 없어 실패(가드가 아니라 입력 문제)
+    db4 = _FakeDB("ai", has_vector=True, has_marker=True)  # 우리가 만든 스키마(판 표 있음)
+    try:
+        load(db4, "no-such-bundle", replace=True)
+        raise AssertionError("번들이 없는데 통과함")
+    except SystemExit as err:
+        raise AssertionError("표식 있는 우리 스키마인데 --replace가 거부됨") from err
+    except FileNotFoundError:
+        pass  # 표식 검사는 통과 — 그다음 번들 파일이 없어 실패(가드가 아니라 입력 문제)
 
-        try:
-            _tbl("ai", "pg_user")
-            raise AssertionError("화이트리스트 밖 표가 통과함")
-        except SystemExit:
-            pass
+    try:
+        _tbl("ai", "pg_user")
+        raise AssertionError("화이트리스트 밖 표가 통과함")
+    except SystemExit:
+        pass
 
-        # PG_CREATE_EXTENSION 옵트인(보강 1) — 꺼져 있으면(위 db1) 미호출, 켜면 성공·실패 각각
-        db5 = _FakeDB("ai", has_vector=False, has_marker=False)
-        try:
-            deploy(db5, 768)
-            raise AssertionError("옵트인 꺼짐인데 확장 없이 deploy가 멈추지 않음")
-        except SystemExit:
-            pass
-        assert _n_create_ext(db5) == 0, "옵트인 꺼짐인데 CREATE EXTENSION 호출됨"
-        assert len(ups) == 1, "확장 없음 거부인데 판 올리기가 돎(확인이 판 올리기보다 먼저 — S8a)"
+    # 옵트인 없음 — 확장 없으면 CREATE EXTENSION 없이 멈춤
+    db5 = _FakeDB("ai", has_vector=False, has_marker=False)
+    try:
+        deploy(db5, 768)
+        raise AssertionError("옵트인 꺼짐인데 확장 없이 deploy가 멈추지 않음")
+    except SystemExit:
+        pass
+    assert _n_create_ext(db5) == 0, "옵트인 꺼짐인데 CREATE EXTENSION 호출됨"
+    assert len(ups) == 1, "확장 없음 거부인데 판 올리기가 돎(확인이 판 올리기보다 먼저 — S8a)"
 
-        with pc.PIPE.env(PG_CREATE_EXTENSION="1"):
-            db6 = _FakeDB("ai", has_vector=False, has_marker=False, create_ext_outcome="install")
-            idx6 = deploy(db6, 768)
-            assert _n_create_ext(db6) == 1, "옵트인 켜짐인데 CREATE EXTENSION 호출 안 됨"
-            assert idx6 == "HNSW 코사인", idx6
+    # 직접 생성 옵트인(dbtool up --create-extension) — 켜면 성공·실패 각각
+    from common.store.db import dbtool
 
-            db7 = _FakeDB("ai", has_vector=False, has_marker=False, create_ext_outcome="fail")
-            try:
-                deploy(db7, 768)
-                raise AssertionError("확장 설치 실패인데 deploy가 멈추지 않음")
-            except SystemExit as e:
-                assert "설치 실패" in str(e) or "관리자 설치" in str(e), str(e)
-            assert _n_create_ext(db7) == 1 and len(ups) == 2, "확장 설치 실패인데 판 올리기가 돎(db6만 올림)"
+    db6 = _FakeDB("ai", has_vector=False, has_marker=False, create_ext_outcome="install")
+    dbtool.precheck_search(db6.q, "ai", 768, True)
+    assert _n_create_ext(db6) == 1, "옵트인 켜짐인데 CREATE EXTENSION 호출 안 됨"
 
-        # deploy 자체의 남의 스키마 거부(보강 3) — 표가 있고 표식 없으면 거부, 빈 스키마·표식 있는 스키마는 통과
-        db8 = _FakeDB("ai", has_vector=True, has_marker=False, schema_exists=True, has_other_tables=True)
-        try:
-            deploy(db8, 768)
-            raise AssertionError("표 있고 표식 없는 남의 스키마인데 deploy가 거부되지 않음")
-        except SystemExit as e:
-            assert "남의 기존 스키마" in str(e), str(e)
-        assert len(ups) == 2, "남의 스키마 거부인데 판 올리기가 돎"
+    db7 = _FakeDB("ai", has_vector=False, has_marker=False, create_ext_outcome="fail")
+    try:
+        dbtool.precheck_search(db7.q, "ai", 768, True)
+        raise AssertionError("확장 설치 실패인데 멈추지 않음")
+    except SystemExit as e:
+        assert "설치 실패" in str(e) or "관리자 설치" in str(e), str(e)
+    assert _n_create_ext(db7) == 1 and len(ups) == 1
 
-        db9 = _FakeDB("ai", has_vector=True, has_marker=False, schema_exists=True, has_other_tables=False)  # 있지만 빈 스키마
-        idx9 = deploy(db9, 768)
-        assert idx9 == "HNSW 코사인"
+    # deploy 자체의 남의 스키마 거부(보강 3) — 표가 있고 표식 없으면 거부, 빈 스키마·표식 있는 스키마는 통과
+    db8 = _FakeDB("ai", has_vector=True, has_marker=False, schema_exists=True, has_other_tables=True)
+    try:
+        deploy(db8, 768)
+        raise AssertionError("표 있고 표식 없는 남의 스키마인데 deploy가 거부되지 않음")
+    except SystemExit as e:
+        assert "남의 기존 스키마" in str(e), str(e)
+    assert len(ups) == 1, "남의 스키마 거부인데 판 올리기가 돎"
 
-        db10 = _FakeDB("ai", has_vector=True, has_marker=True, schema_exists=True, has_other_tables=True)  # 우리가 만든 스키마(재배포)
-        n = len(ups)
-        idx10 = deploy(db10, 768)
-        assert idx10.startswith("HNSW 코사인(확인 안 함"), idx10
-        assert len(ups) == n, "판 기록 없는 기존 스키마인데 deploy가 판 올리기를 돎(경고 뒤 계속이어야 — S8a Q5·코디네이터 10-28 a)"
+    db9 = _FakeDB("ai", has_vector=True, has_marker=False, schema_exists=True, has_other_tables=False)  # 있지만 빈 스키마
+    idx9 = deploy(db9, 768)
+    assert idx9 == "HNSW 코사인"
+
+    db10 = _FakeDB("ai", has_vector=True, has_marker=True, schema_exists=True, has_other_tables=True)  # 우리가 만든 스키마(재배포)
+    n = len(ups)
+    idx10 = deploy(db10, 768)
+    assert idx10.startswith("HNSW 코사인(확인 안 함"), idx10
+    assert len(ups) == n, "판 기록 없는 기존 스키마인데 deploy가 판 올리기를 돎(경고 뒤 계속이어야 — S8a Q5·코디네이터 10-28 a)"
 
     print(
-        "[selftest] pgstore — 확장 없음 멈춤(기본)·PG_CREATE_EXTENSION 옵트인(성공·실패)·표식 없는 스키마 --replace 거부·"
+        "[selftest] pgstore — 확장 없음 멈춤(기본)·--create-extension 옵트인(성공·실패)·표식 없는 스키마 --replace 거부·"
         "deploy 자체 남의 스키마 거부·우리 스키마 허용·표 화이트리스트 통과"
     )
 
@@ -169,7 +168,7 @@ def test_require_vectors():
         ({"dim": 0, "embed": "none"}, True),
         ({"dim": 1024, "embed": "none"}, True),
         ({"embed": "api", "chunks": 3}, True),  # 청크는 있는데 dim 없음
-        ({"embed": "api", "dim": 0, "chunks": 0}, False),  # 청크 0건 문서(빈·스캔만) — 문서 행만 적재(run_docs 문서별 흐름)
+        ({"embed": "api", "dim": 0, "chunks": 0}, False),  # 청크 0건 문서(빈·스캔만) — 문서 행만 적재(run_pipeline 문서별 흐름)
         ({"dim": 1024, "embed": "api"}, False),
         ({"dim": 4, "embed_model": "test"}, False),  # 옛 묶음(embed 칸 없음)
     ]

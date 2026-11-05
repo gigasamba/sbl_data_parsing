@@ -1,6 +1,6 @@
 -- EDW(SQL Server) 파싱 결과 메타 표 AI.ParsingMeta — 사람·DBA가 실행(코드는 표를 만들지 않음). 다시 실행해도 안전(이미 있으면 건너뜀).
 -- 쓰는 곳: pipeline/load/publish_parse_result.py(INSERT만 — 쓰기 계정 settings.yaml required.edw.write_*) ·
---   pipeline/load/pgvector_load.py(적재 때 loaded_at·gold_version UPDATE) · mcp_server/services/fulltext.py(list_doc_fulltext — 읽기 계정)
+--   pipeline/load/pgvector_load.py(적재 때 loaded_at·gold_version UPDATE) · mcp_server/services/fulltext_svc.py(list_doc_fulltext — 읽기 계정)
 -- 열 이름·순서 = common/store/parsing_meta_db.py COLUMNS(tests/server/common/test_db_schema.py가 같은지 고정).
 -- ⚠ 0.2.0 칸 바꾸기(칸 이름·loaded_at·gold_version 등 — refactor.md C-76)는 이 파일에 없다 — DB 담당·EDW 담당과 정한다.
 -- rep_key = 문서 폴더 `.../Parsing-Result/<출처>/<UUID>/<원본파일명>/`(끝 '/'),
@@ -48,7 +48,7 @@ CREATE TABLE [AI].[ParsingMeta] (
     -- PM2 요건(b) — 이 문서에 실제로 쓰인 엔진 전부(대표·후보·OCR·VLM 쪽 옮기기·그림·재판독·AG11 에이전트).
     -- engines_used = JSON 배열 [{"engine","role":"rep|candidate|ocr|vlm_page|vlm_figure|reread|agent","status","version_or_model","calls"}],
     -- engines_summary = 사람이 읽는 한 줄(예 "rep=rapidocr_ko; text=kreuzberg,markitdown,pymupdf; vlm=<모델> page×3 fig×3").
-    -- 만드는 곳: pipeline/load/silver_publish.py의 engines_used() — _rep/<문서>.json만 읽는 순수 함수.
+    -- 만드는 곳: pipeline/load/publish_parse_result.py의 engines_used() — _rep/<문서>.json만 읽는 순수 함수.
     engines_used      NVARCHAR(MAX)  NULL,
     engines_summary   NVARCHAR(512)  NULL,
     parsed_at         DATETIME2(0)   NOT NULL CONSTRAINT DF_ParsingMeta_parsed_at DEFAULT SYSUTCDATETIME(),

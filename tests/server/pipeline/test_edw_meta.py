@@ -226,7 +226,7 @@ def test_chains():
 
 
 def test_chain_file_setting():
-    """common.paths.edw_chain(= ops.paths.edw_chain — 적재·검색 MCP 같은 칸, 사용자 11-03) — 고친 사본을 쓰고, 없거나 틀린 파일은 기본 파일로 돌아가지 않고 거부 · --check는 파일만 봄."""
+    """common.paths.edw_chain(= ops.paths.edw_chain_file — 적재·검색 MCP 같은 칸, 사용자 11-03) — 고친 사본을 쓰고, 없거나 틀린 파일은 기본 파일로 돌아가지 않고 거부 · --check는 파일만 봄."""
     import yaml
 
     from common.config.settings import COMMON

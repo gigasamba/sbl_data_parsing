@@ -14,7 +14,7 @@ from common.config import settings
 from common.core import jsonlog, span
 from pipeline.load import edw_doc_meta as edw_meta
 from pipeline.load import pgvector_load
-from pipeline.transform.structure import build_bundle
+from pipeline.transform.structure import gold_bundle
 
 
 def _capture():
@@ -22,8 +22,8 @@ def _capture():
     return rows, mock.patch.object(span, "_emit", lambda row, level=None: rows.append(row))
 
 
-def test_warm_span_counts():
-    from pipeline.extract import fetch_docs as source
+def test_staging_span_counts():
+    from pipeline.extract import candidate_ready as source
 
     class Client:
         def head_object(self, **kw):
@@ -36,29 +36,25 @@ def test_warm_span_counts():
 
     rows, patched = _capture()
     with tempfile.TemporaryDirectory() as tmp, patched, jsonlog.context(run_id=str(uuid.uuid4())):
-        batch = Path(tmp) / "batch.csv"
-        cols = {"size": "size", "filename": "name"}
-        batch.write_text("size,name,key\n1,a,ok\n1,b,bad\n", encoding="utf-8")
+        targets = [{"doc_id": n, "bucket": "b", "key": k, "size": 1, "filename": n} for n, k in (("a", "ok"), ("b", "bad"))]
         with (
-            mock.patch.object(source, "_warm_dir", lambda: Path(tmp)),
-            mock.patch.object(source, "_rdb_cols", lambda: cols),
-            mock.patch.object(source, "_rdb_bucket_and_key", lambda c, r: ("b", r["key"])),
-            mock.patch.object(source, "_s3", Client),
+            mock.patch.object(source, "_staging_dir", lambda: Path(tmp)),
+            mock.patch.object(source.objectstore, "client", Client),
         ):
-            assert source._warm_cmd(["--csv", str(batch), "--workers", "2"]) == 0
-    row = next(r for r in rows if r["stage"] == "extract.warm")
+            assert source.download(targets, Path(tmp), workers=2) == 1  # 받지 못한 1건
+    row = next(r for r in rows if r["stage"] == "extract.staging")
     assert row["layer"] == "extract" and row["total"] == 2 and row["metrics"] == {"done": 1, "failed": 1}
     # 이슈 #117 — 파일(=문서)마다 extract.download 1행: 순수 전송 시간·속도, 실패는 external
     dl = {r["doc_id"]: r for r in rows if r["stage"] == "extract.download"}
     assert set(dl) == {"a", "b"}
     assert dl["a"]["status"] == "ok" and dl["a"]["file_bytes"] == 1
-    assert {"head_ms", "download_ms", "lock_wait_ms"} <= set(dl["a"]["metrics"])
+    assert {"head_ms", "download_ms"} <= set(dl["a"]["metrics"])
     assert dl["b"]["status"] == "fail" and dl["b"]["err_kind"] == "external" and "mbps" not in (dl["b"]["metrics"] or {})
     assert all(r["parent_id"] == row["span_id"] for r in dl.values())  # 풀 스레드(workers>1)에서도 부모 이어짐
 
 
 def test_parse_attempt_column():
-    from pipeline.extract import run_engines as run_all
+    from pipeline.transform.parse import parse_engines as run_all
 
     def run(side_effect):
         rows, patched = _capture()
@@ -88,10 +84,10 @@ def test_embed_span_cache_batches_retries():
         with settings.isolated(EMBED_BASE_URL="http://127.0.0.1:9/v1", EMBED_MODEL="m"):
             with mock.patch.object(embed, "_embed_api", fake_api), mock.patch.object(time, "sleep", lambda s: None):
                 with span.span("embed.bundle", "embed", model="api") as sp:
-                    first = build_bundle.embed_all("api", texts, batch=2, cache=cache)
+                    first = gold_bundle.embed_all("api", texts, batch=2, cache=cache)
                     sp.add(chunks=len(texts))
                 with span.span("embed.bundle", "embed", model="api"):
-                    second = build_bundle.embed_all("api", texts, batch=2, cache=cache)
+                    second = gold_bundle.embed_all("api", texts, batch=2, cache=cache)
     assert first.shape == second.shape == (5, 4) and np.allclose(first, second)
     embeds = [r for r in rows if r["stage"] == "embed.bundle"]
     cold, warm = (r["metrics"] for r in embeds)

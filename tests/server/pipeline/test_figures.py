@@ -1,4 +1,4 @@
-"""pipeline.transform.figures.figure_extract 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.figures.figure_extract`."""
+"""pipeline.transform.figures.figure_extract 시험."""
 
 import contextlib
 import io
@@ -11,8 +11,7 @@ import pipeline.transform.figures.figure_extract as M
 from common.ai import llm as A  # 모델 호출(0.2.0 — 옛 common.ai.adk, pl-46)
 from common.config.settings import COMMON
 from pipeline import config as pc
-from pipeline.shared.parse_run import raw_vlm_path
-from pipeline.shared.post_features import raw_root
+from pipeline.shared.raw_cache import raw_root, raw_vlm_path
 from pipeline.transform.figures.figure_extract import (
     FIG_OCR_FALLBACK_MIN_CHARS_DEFAULT,
     FULL_VERSION,

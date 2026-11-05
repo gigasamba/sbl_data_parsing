@@ -1,6 +1,5 @@
 """표준 출력 글자 — CLI 진입점이 한 줄로 UTF-8 출력을 켠다(Windows cp949 콘솔·파이프 출력에서 한글이 깨지지 않게).
 
-S12 /simplify(10-29) — 진입점 60곳에 같은 줄 `sys.stdout.reconfigure(...)  # type: ignore[union-attr]`이 흩어져 있던 것을 모음.
 이 파일은 모든 층의 공용 의존이 되므로(code_fp) 작고 바뀌지 않게 둔다.
 """
 

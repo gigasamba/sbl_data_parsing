@@ -1,4 +1,4 @@
-"""pipeline.transform.figures.diagram_edges 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.figures.diagram_edges`."""
+"""pipeline.transform.figures.diagram_edges 시험."""
 
 from pipeline.transform.figures.diagram_edges import _box_name, _chevron_apex, glyph_edges, merge_edges, vector_edges_from_page
 

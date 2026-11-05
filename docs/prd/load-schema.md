@@ -56,7 +56,7 @@ SFDC·CRMS·LAS·FAQ·Other는 메타가 다르고 BM25 통계도 원천마다 �
 ### 규칙
 1. 기준 스키마 `<PG_SCHEMA>`에는 Alembic 판 표와 공용 `doc_id_seq`만, 원천 스키마 5벌 `<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`에 같은 표 `doc`·`chunk`·`chunk_term`·`term_stat`·`corpus_stat` + 뷰 `v_chunk_source`.
 2. 5벌이 시퀀스 하나를 함께 써서 `doc_id`가 겹치지 않는다. 근거 키 `chunk_key` = `<doc_id>:<seq>`.
-3. 원천 = 원본 경로(`s3_key`) 첫 마디 — `SFDC`·`CRMS`·`LAS`·`FAQ`(대소문자 무관)이거나 `SFDC-`·`SFDC_`·`CRMS-`·`CRMS_`·`las_`·`LAS_`로 시작하면 그 원천, 아니면 `other`(`build_bundle`). `AI.FileStorageMap.source_system` 칸은 읽지 않는다.
+3. 원천 = 원본 경로(`s3_key`) 첫 마디 — `SFDC`·`CRMS`·`LAS`·`FAQ`(대소문자 무관)이거나 `SFDC-`·`SFDC_`·`CRMS-`·`CRMS_`·`las_`·`LAS_`로 시작하면 그 원천, 아니면 `other`(`gold_bundle`). `AI.FileStorageMap.source_system` 칸은 읽지 않는다.
 4. 파일 메타는 `doc`에만 둔다. `chunk`는 `doc_id`만 갖고 메타를 복사하지 않는다 — 예외 `faq.chunk.faq_group`. 거르기는 `doc`에서 문서 범위를 고른 뒤 그 안의 `chunk`만 찾는다.
 5. MCP `search`는 `source_system`을 필수·값 하나로 받아 그 스키마만 찾는다(`Other`·`-test` 별칭 포함 — [mcp.md#mc-16](mcp.md#mc-16)). 여러 원천은 클라이언트가 여러 번 부른다.
 6. 검색 MCP는 원천마다 다시 읽기 신호 (MAX(doc_id), COUNT(*))로 새 적재를 알아챈다. 우리 스키마 표식은 판 표다.

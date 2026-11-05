@@ -9,8 +9,8 @@
   POST /api/call          {"tool": "search", "args": {...}} → MCP 응답 JSON 그대로 + 걸린 시간
   GET  /api/chunk/<id>    pgvector에서 그 청크의 벡터(차원·L2 크기·값 분포)와 코사인으로 가까운 청크 — SQL만, 외부 호출 없음
 
-설정은 저장소 루트 settings.yaml 하나(사용자 10-29 — 옛 validation/search_ui/settings.yaml 덮기 파일·validation.env 없앰): mcp.dev.mcp_url·ui_port ·
-common.connections.pg · common.models.guard.spend_file·budget_usd · mcp.server.token.
+설정은 저장소 루트 settings.yaml 하나: mcp.dev.mcp_url·ui_port ·
+common.connections.pg · common.models.guard.spend_file·budget_usd · common.tokens.mcp.
 """
 
 import asyncio
@@ -25,13 +25,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))  # 저장소 루트 — 설정 객체(common·mcp_server)를 읽으려고
-from common.config.settings import cfg  # noqa: E402 — S7e2: 설정 객체(옛 env)
+from common.config.settings import cfg  # noqa: E402 — 설정 객체
 from mcp_server import config as mc  # noqa: E402
 
 _PG = cfg().connections.pg
-MCP_URL = mc.cfg().dev.mcp_url  # op-09 — 값은 설정에만(기본값은 설정 모델)
+MCP_URL = mc.cfg().dev.mcp_url  # 값은 설정에만(기본값은 설정 모델)
 UI_PORT = int(mc.cfg().dev.ui_port)
-SCHEMA = _PG.db_schema or sys.exit("PG_SCHEMA 없음 — settings.yaml required.pg.db_schema를 채움")
+SCHEMA = _PG.db_schema or ""  # 비우면 코드 기본값(data_parsing) — 빈 글자를 적었을 때만 아래에서 멈춤
 if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", SCHEMA):
     sys.exit(f"PG_SCHEMA 이름이 이상함: {SCHEMA!r}")
 
@@ -45,7 +45,7 @@ async def _mcp(fn):
     from mcp.client.streamable_http import streamablehttp_client
 
     hdr = {"X-MCP-Client": "test", "X-MCP-User": "test"}
-    token = mc.token_text(mc.cfg().server.token)
+    token = mc.token_text(mc.common_cfg().tokens.mcp)
     if token:
         hdr["Authorization"] = "Bearer " + token
     async with streamablehttp_client(MCP_URL, headers=hdr) as (r, w, _):
@@ -81,7 +81,7 @@ def mcp_call(tool, args):
 def spend():
     from common.ai import guard as G
 
-    used = G.spend_total()  # 오늘(현지 날짜) 장부 합계 — 상한은 하루 단위(11-03)
+    used = G.spend_total()  # 오늘(현지 날짜) 장부 합계 — 상한은 하루 단위
     budget = cfg().models.guard.budget_usd
     return {"used_usd": used, "budget_usd": float(budget) if budget is not None else None}
 
@@ -114,7 +114,7 @@ def _pg():
     from common.store.pg import conf
 
     try:
-        c = conf()  # op-09 — 본 코드와 같은 접속 값(빈 칸이면 채울 자리를 적고 거부)
+        c = conf()  # 본 코드와 같은 접속 값(빈 칸이면 채울 자리를 적고 거부)
     except SystemExit as e:  # 요청 처리기는 Exception만 받아 502로 — 스레드가 조용히 죽지 않게
         raise RuntimeError(str(e)) from None
     return psycopg.connect(
@@ -143,7 +143,7 @@ def chunk_detail(chunk_id, n_neighbors=5, buckets=128):
         ).fetchone()
         if not row:
             return {"error": f"chunk_id {chunk_id} 없음"}
-        # 2026-10-20 축소 스키마 — doc에 s3_key·file_name이 없어 file_path에서 유도
+        # 축소 스키마 — doc에 s3_key·file_name이 없어 file_path에서 유도
         (cid, model, dims, vtext, text, n_chars, page, l0, l1, file_path) = row
         s3_key, file_name = file_path, Path(file_path).name
         near = cn.execute(

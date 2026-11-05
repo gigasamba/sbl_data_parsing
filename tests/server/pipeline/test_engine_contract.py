@@ -1,9 +1,16 @@
-"""pipeline.extract.engines._common.contract(엔진 공용 도우미 — 엔진 지문 파일) 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로,
-`global TABLE_GRID_MAX_ROWS` 두 줄만 모듈 속성으로). 옛 사례 `python -m pipeline.extract.engines._common.contract`.
+"""pipeline.transform.parse.engines._common.contract(엔진 공용 도우미 — 엔진 지문 파일) 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로,
+`global TABLE_GRID_MAX_ROWS` 두 줄만 모듈 속성으로). 옛 사례 `python -m pipeline.transform.parse.engines._common.contract`.
 ⚠️ 이 옮기기는 엔진 지문 27개를 바꾼다(사용자 10-28 — 따로 한 커밋, 되돌리기는 그 커밋 revert · refactor.md C-52)."""
 
-from pipeline.extract.engines._common import contract as M
-from pipeline.extract.engines._common.contract import _fill_merged, _html_rows, _mk_table, _table_facts, fill_merged_on, split_tables
+from pipeline.transform.parse.engines._common import contract as M
+from pipeline.transform.parse.engines._common.contract import (
+    _fill_merged,
+    _html_rows,
+    _mk_table,
+    _table_facts,
+    fill_merged_on,
+    split_tables,
+)
 
 
 def selftest():

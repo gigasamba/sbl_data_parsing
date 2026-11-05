@@ -1,11 +1,9 @@
-"""공용 패키지 — 모듈(파싱·구조화·적재·검색) 사이 계약 코드 — 모든 이미지에 같은 내용이 들어가야 하는 것만(docs/architecture.md §2).
+"""공용 패키지 — 모듈(파싱·구조화·적재·검색) 사이 계약 코드 — 모든 이미지에 같은 내용이 들어가야 하는 것만.
 config(설정 읽기) · core(인계 지문·문서 ID·토큰 규칙·경로·실행 기록) · ai(LLM·VLM·임베딩 호출·내부망 확인) ·
 store(pgvector·S3·회사 DB 연결·문서 대장) · check(경계·모델 연결 점검). 모듈 코드끼리는 서로 import하지 않고 이 패키지만
-함께 쓴다(refactor_plan 4-3).
-S3(10-26, D-001) — 옛 common_tools/__init__.py를 쪼갬: 인계 지문·옛 이름 대응표·판 표기는 core/fingerprint.py. 여기는 그것을 부르고
-쓰던 이름만 다시 내보낸다.
-S7e2(D-028 ④⑤) — 옵션 카탈로그(options.conf)·전환 다리(env_files)를 지웠다. import 때 settings.pin_env(설정 파일 점검·옛 env 이름 경고)만
-한 번 부른다 — op-09에 영구 다리(엔진·인계 칸을 env로 내주기)는 없앰(그 파일들도 설정 객체로 읽음).
+함께 쓴다.
+인계 지문·판 표기는 core/fingerprint.py에 있고, 여기는 그 이름만 다시 내보낸다.
+import 때 settings.pin_env(설정 파일 점검)를 한 번 부른다.
 """
 
 import os as _os
@@ -22,7 +20,7 @@ def _pin():
         _os.environ.get("SETTINGS_FILE") or root.name == "deploy" or (run in (None, "local") and local.is_file())
     ):  # env 남김 — 설정 파일 자리 신호
         return
-    import warnings  # python -m common.config.show·pipeline.config·mcp_server.config — 영구 다리가 먼저 import해 runpy가 내는 경고(동작 무관)
+    import warnings  # python -m common.config.show·pipeline.config·mcp_server.config — 이 import가 먼저 불러 runpy가 내는 경고(동작 무관)
 
     warnings.filterwarnings(
         "ignore", r"'(common\.config\.settings|pipeline\.config|mcp_server\.config)' found in sys\.modules", RuntimeWarning

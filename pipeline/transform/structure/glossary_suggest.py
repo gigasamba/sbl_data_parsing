@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""T6(search.md) — 청크(chunks.jsonl)에서 괄호 약어 정의 패턴("정식명(약어)"·"약어(정식명)")을 찾아 용어 사전
+"""청크(chunks.jsonl)에서 괄호 약어 정의 패턴("정식명(약어)"·"약어(정식명)")을 찾아 용어 사전
 후보를 draft CSV로 적는다. **검색에 쓰이지 않는다** — 사람이 검토해 domain_terms.csv로 옮겨야 반영됨(status=draft만).
 
 사용: python -m pipeline.transform.structure.glossary_suggest --chunks <chunks.jsonl> [--out output/glossary/domain_terms_draft.csv]

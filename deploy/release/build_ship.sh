@@ -1,29 +1,27 @@
 #!/bin/bash
-# PC에서: 이미지 빌드 → 점검 → 압축 저장(sha256) → ssh로 수집 서버에 전송·적재 → 원격 점검(운영 이미지는 개발 서버 bake.sh가 기본 — release-and-patch §1-2).
-#   [IMAGE_TARGET=pipeline|mcp|pipeline-runtime|mcp-runtime — S6b(D-020) 이미지 2개, *-runtime = 코드 없는 실행 이미지(op-06 — 코드 폴더 묶음도 만듦), 기본 pipeline]
+# PC에서: 이미지 빌드 → 점검 → 압축 저장(sha256) → ssh로 수집 서버에 전송·적재 → 원격 점검(운영 이미지는 개발 서버 bake_prod_image.sh가 기본 — release-and-patch §1-2).
+#   [IMAGE_TARGET=pipeline|mcp|pipeline-runtime|mcp-runtime — 이미지 2개, *-runtime = 코드 없는 실행 이미지(코드 폴더 묶음도 만듦), 기본 pipeline]
 #   TARGET=user@수집서버 [TAG=data-pipeline:0.1.0] [REMOTE_DIR=/var/tmp] [DOCKER=docker|podman] [REMOTE_DOCKER=docker] \
 #   [BUILD_ARGS="--build-arg BASE=<사내 기반 이미지> --build-arg APT=0"] bash deploy/release/build_ship.sh
-#   BUILD_ONLY=1 — 빌드·로컬 점검(selftest 판정·resources·비밀값 흔적)까지만(TARGET·ssh 없음, 저장·전송 안 함 — PC 로컬 빌드, I3)
+#   BUILD_ONLY=1 — 빌드·로컬 점검(selftest 판정·resources·비밀값 흔적)까지만(TARGET·ssh 없음, 저장·전송 안 함 — PC 로컬 빌드)
 # 빌드 컨텍스트 = 이 저장소 루트(.dockerignore 허용 목록). Docker 23 미만은 BuildKit + BUILDKIT_SYNTAX를 자동으로 붙인다
 #   (Dockerfile heredoc — 직접 주려면 BUILDKIT_SYNTAX=docker/dockerfile:1.7, podman은 서버에서 확인).
-# selftest 판정은 selftest_gate.sh — 알려진 FAIL(known_fail.txt) 밖의 FAIL 0이면 통과(V2-R5, I3).
-# S6b(D-020, 사용자 10-27) — IMAGE_TARGET→이미지 이름: pipeline→data-pipeline(옛 parse·structure 합침)·mcp→mcp-server(옛 retrieval→data-retrieval)
-#   (옛 타깃 parse·structure·retrieval은 S6b, core·all은 10-14에 없어짐).
-# 태그(D-036, 사용자 10-29): 기본 <이미지 이름>:<저장소 루트 VERSION> — 두 이미지가 같은 버전 태그. 빌드한 커밋·버전은 이미지 라벨
-#   (org.opencontainers.image.revision·version)에 넣는다. 같은 태그가 이미 있으면 멈춘다(한 번 붙인 버전 태그는 옮기지 않음 — D-009):
+# selftest 판정은 selftest_gate.sh — 알려진 FAIL(known_fail.txt) 밖의 FAIL 0이면 통과.
+# IMAGE_TARGET→이미지 이름: pipeline→data-pipeline·mcp→mcp-server(image_names.sh).
+# 태그: 기본 <이미지 이름>:<저장소 루트 VERSION> — 두 이미지가 같은 버전 태그. 빌드한 커밋·버전은 이미지 라벨
+#   (org.opencontainers.image.revision·version)에 넣는다. 같은 태그가 이미 있으면 멈춘다(한 번 붙인 버전 태그는 옮기지 않음):
 #   VERSION을 올리거나, 시험 빌드는 TAG=<다른 태그>, 정말 다시 만들 때만 FORCE_TAG=1.
-# 비밀값은 이미지에 넣지 않는다 — settings.yaml은 따로(주인 UID 10001·640 — refactor.md C-09) 수집 서버에 둔다(아래 안내, S7e1 — 옛 pipeline.env).
+# 비밀값은 이미지에 넣지 않는다 — settings.yaml은 따로(주인 UID 10001·640 — refactor.md C-09) 수집 서버에 둔다(아래 안내).
 set -euo pipefail
-cd "$(dirname "$0")/../.."                                # deploy/release/ → 저장소 루트 = 빌드 컨텍스트(S6b)
+cd "$(dirname "$0")/../.."                                # deploy/release/ → 저장소 루트 = 빌드 컨텍스트
 BUILD_ONLY=${BUILD_ONLY:-0}
 [ "$BUILD_ONLY" = 1 ] || TARGET=${TARGET:?TARGET=user@수집서버 를 지정(빌드만 하려면 BUILD_ONLY=1)}
 IMAGE_TARGET=${IMAGE_TARGET:-pipeline}
 case "$IMAGE_TARGET" in
-  pipeline|mcp|pipeline-runtime|mcp-runtime) ;;   # *-runtime = 코드 없는 실행 이미지(op-06 — 개발 서버, 코드 폴더를 /app/deploy에 마운트)
-  parse|structure|retrieval) echo "[오류] IMAGE_TARGET=$IMAGE_TARGET 는 S6b에 없어졌다(D-020) — 파이프라인은 IMAGE_TARGET=pipeline, 검색 MCP는 IMAGE_TARGET=mcp" >&2; exit 2 ;;
+  pipeline|mcp|pipeline-runtime|mcp-runtime) ;;   # *-runtime = 코드 없는 실행 이미지(개발 서버, 코드 폴더를 /app/deploy에 마운트)
   *) echo "[오류] 모르는 IMAGE_TARGET: $IMAGE_TARGET (pipeline·mcp·pipeline-runtime·mcp-runtime)" >&2; exit 2 ;;
 esac
-. deploy/release/image_names.sh   # image_name_of — 타깃 → 이미지 이름(S6c, ship_stage.sh와 같은 파일)
+. deploy/release/image_names.sh   # image_name_of — 타깃 → 이미지 이름(stage_images.sh와 같은 파일)
 APP_VERSION=$(app_version) || exit 2
 VCS_REF=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
 if [ "$VCS_REF" != unknown ] && ! git diff --quiet HEAD -- 2>/dev/null; then VCS_REF="$VCS_REF-dirty"; fi   # 커밋 안 한 변경이 섞인 빌드 표시
@@ -34,7 +32,7 @@ DOCKER=${DOCKER:-docker}
 REMOTE_DOCKER=${REMOTE_DOCKER:-docker}
 OUT=${OUT:-/var/tmp/$(echo "$TAG" | tr ':/' '__').tar.gz}
 RUNTIME=0; case "$IMAGE_TARGET" in *-runtime) RUNTIME=1 ;; esac
-# op-06 — 실행 이미지면 코드 폴더 묶음(이 커밋의 git 추적 파일 + CODE_COMMIT, valid_env/·validation/ 뺌)도 이미지 옆에 만든다.
+# 실행 이미지면 코드 폴더 묶음(이 커밋의 git 추적 파일 + CODE_COMMIT, valid_env/·validation/ 뺌)도 이미지 옆에 만든다.
 CODE_OUT=${CODE_OUT:-output/ship/code-$APP_VERSION-$VCS_REF.tar.gz}   # 저장소 안(OUT의 /var/tmp는 Windows Git Bash에 없음)
 
 echo "== 0. 사전 점검"
@@ -45,7 +43,7 @@ if [ "$BUILD_ONLY" != 1 ]; then
 fi
 [ -f .dockerignore ] || { echo "[오류] .dockerignore 없음 — 허용 목록 없이 빌드하면 .venv·output·valid_env가 컨텍스트에 들어감"; exit 2; }
 ls deploy/docker/wheels/*.whl >/dev/null 2>&1 && echo "[안내] deploy/docker/wheels 휠로 오프라인 설치" || echo "[안내] deploy/docker/wheels 비어 있음 — PyPI 접속 필요(폐쇄망이면 실패)"
-# Dockerfile pipeline 단계 heredoc — Docker 23 미만 기본 프런트엔드는 파일을 못 읽음(V2-R1). podman·23 이상은 손대지 않음.
+# Dockerfile pipeline 단계 heredoc — Docker 23 미만 기본 프런트엔드는 파일을 못 읽음. podman·23 이상은 손대지 않음.
 SYNTAX_ARG=""
 if [ -n "${BUILDKIT_SYNTAX:-}" ]; then SYNTAX_ARG="--build-arg BUILDKIT_SYNTAX=$BUILDKIT_SYNTAX"
 elif [ "$(basename "$DOCKER")" = docker ]; then
@@ -69,7 +67,7 @@ echo "== 1. 빌드 $TAG (버전 $APP_VERSION · 커밋 $VCS_REF)"
 $DOCKER build ${BUILD_ARGS:-} $SYNTAX_ARG --build-arg APP_VERSION="$APP_VERSION" --build-arg VCS_REF="$VCS_REF" -f deploy/docker/Dockerfile --target "$IMAGE_TARGET" -t "$TAG" .
 RUN_ARGS=""
 if [ "$RUNTIME" = 1 ]; then
-  # op-06 — 코드 없이 띄우면 바로 멈춰야 함(runtime_entry.sh)
+  # 코드 없이 띄우면 바로 멈춰야 함(runtime_entry.sh)
   if MSYS_NO_PATHCONV=1 $DOCKER run --rm "$TAG" help >/dev/null 2>&1; then echo "[오류] 코드 마운트 없이 실행 이미지가 떴음"; exit 1; fi
   # 판정·묶음은 이 커밋의 코드 트리(git archive — 커밋 안 한 변경은 안 들어감) + CODE_COMMIT
   CODE_DIR=$(mktemp -d); trap 'rm -rf "$CODE_DIR"' EXIT
@@ -108,7 +106,7 @@ ssh "$TARGET" "cd $REMOTE_DIR && echo '$SUM  $(basename "$OUT")' | sha256sum -c 
 
 echo "== 4. 원격 점검"
 R_ARGS=""
-if [ "$RUNTIME" = 1 ]; then   # op-06 — 판정용 코드 폴더를 같이 보내 붙임
+if [ "$RUNTIME" = 1 ]; then   # 판정용 코드 폴더를 같이 보내 붙임
   rsync --partial "$CODE_OUT" "$TARGET:$REMOTE_DIR/" 2>/dev/null || scp "$CODE_OUT" "$TARGET:$REMOTE_DIR/"
   RCODE="$REMOTE_DIR/code-$APP_VERSION-$VCS_REF"
   ssh "$TARGET" "rm -rf $RCODE && mkdir -p $RCODE && tar -xzf $REMOTE_DIR/$(basename "$CODE_OUT") --no-same-owner -C $RCODE"
@@ -119,8 +117,8 @@ bash deploy/release/selftest_gate.sh ssh "$TARGET" "$REMOTE_DOCKER run --rm $R_A
 cat <<EOF
 완료: $TAG
 다음(수집 서버):
-  1) 루트 폴더(아무 자리 — 예 /home/dev/)에 코드 zip을 풀고 코드 폴더에서 sudo bash deploy/host/scripts/dc.sh init --group <운영 그룹>(op-13)
+  1) 루트 폴더(아무 자리 — 예 /home/dev/)에 코드 zip을 풀고 코드 폴더에서 sudo bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>(op-13)
   2) <루트>/settings.yaml의 맨 위 required 빈 값을 채움(새 판이면 앞 루트의 settings.yaml·edw_chain.yaml을 복사해 옴)
-  3) 띄우기·점검: README §5(dc.sh up -d … → dc.sh check)
+  3) 띄우기·점검: README §5(host_ctl.sh up -d … → host_ctl.sh check)
   압축본 $REMOTE_DIR/$(basename "$OUT") 은 적재 확인 뒤 지워도 됨
 EOF

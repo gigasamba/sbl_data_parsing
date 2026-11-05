@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""중복 문서 감지 — 한 번에 받은 원본 폴더 안에서 파일 내용 해시(SHA-256)가 같은 문서(완전 중복)를 찾는다. 삭제·이동은 하지 않는다(PRD pl-02).
+"""중복 문서 감지 — 한 번에 받은 원본 폴더 안에서 파일 내용 해시(SHA-256)가 같은 문서(완전 중복)를 찾는다. 삭제·이동은 하지 않는다.
 
-- 폴더: run_folder() → <out>/keep.txt(대표만) · groups.csv · report.md · fingerprints.jsonl(다시 돌릴 때 캐시)
+- 폴더: run_folder() → (대표 {이름: sha256}, groups.csv 행, 그룹 수) · <out>/keep.txt(대표만 — write_keep=False면 안 씀: 받기
+  candidate_ready._dedup은 자기 keep.txt를 씀) · groups.csv · report.md · fingerprints.jsonl(다시 돌릴 때 캐시)
 
 사용: python -m pipeline.extract.deduplication [--src <원본 문서 폴더>] [--out <폴더>]   (--src 생략 시 DOC_DIR)
 """
@@ -15,6 +16,7 @@ from pathlib import Path
 from common.core.console import utf8_stdout
 from common.core.contract import file_hash
 from common.core.paths import APP_ROOT, doc_dir
+from pipeline.extract.candidate_pick import _hidden
 
 # 대표 고르기 — 이름에 사본 표시("(1)"·"사본"·날짜 등)가 없는 것 → 최신 수정 → 큰 파일
 _NOISE = re.compile(
@@ -22,10 +24,13 @@ _NOISE = re.compile(
 )
 
 
-def run_folder(src, out):
-    """폴더의 파일을 해시로 묶어 대표만 keep — (keep 이름 목록, groups.csv 행, 중복 그룹 수).
+def run_folder(src, out, names=None, write_keep=True):
+    """폴더의 파일(names를 주면 그 이름만 — 이번 묶음)을 해시로 묶어 대표만 keep — (keep {대표 이름: sha256}, groups.csv 행, 중복 그룹 수).
+    write_keep=False면 <out>/keep.txt를 쓰지 않는다(부른 쪽이 씀).
     지문은 (경로·크기·수정 시각)이 같으면 fingerprints.jsonl 캐시를 다시 쓴다(새·바뀐 파일만 읽음)."""
-    files = sorted(p for p in Path(src).iterdir() if p.is_file() and p.name != ".gitkeep")
+    files = sorted(
+        p for p in Path(src).iterdir() if p.is_file() and not _hidden(p) and p.name != ".gitkeep" and (names is None or p.name in names)
+    )
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     cache_path = out / "fingerprints.jsonl"
@@ -47,10 +52,10 @@ def run_folder(src, out):
     groups: dict[str, list[int]] = {}
     for i, r in enumerate(info):
         groups.setdefault(r["sha"], []).append(i)
-    keep, rows, gid = [], [], 0
+    keep, rows, gid = {}, [], 0
     for members in groups.values():
         rep = max(members, key=lambda i: (not _NOISE.search(Path(info[i]["path"]).stem), info[i]["mtime"], info[i]["size"]))
-        keep.append(Path(info[rep]["path"]).name)
+        keep[Path(info[rep]["path"]).name] = info[rep]["sha"]
         if len(members) == 1:
             continue
         gid += 1
@@ -71,7 +76,8 @@ def run_folder(src, out):
         w = csv.DictWriter(f, fieldnames=["group", "file", "representative", "reasons", "sha256", "size", "decision"])
         w.writeheader()
         w.writerows(rows)
-    (out / "keep.txt").write_text("\n".join(sorted(keep)) + "\n", encoding="utf-8")
+    if write_keep:
+        (out / "keep.txt").write_text("\n".join(sorted(keep)) + "\n", encoding="utf-8")
     report = [f"# 중복 확인 — 파일 {len(files)}개 → 대표 {len(keep)}개", "", f"- 완전 중복 그룹 {gid}개", "- 삭제·이동은 하지 않았다.", ""]
     for g in sorted({r["group"] for r in rows}):
         report.append(f"## 그룹 {g}")

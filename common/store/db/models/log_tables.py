@@ -1,5 +1,6 @@
 """applog 정본(op-01). MCP/pipe_event PK는 PG 제약에 따라 월 키를 포함한다.
 pipe_run은 실행당 한 행으로 작아 일반 테이블(run_id PK)로 두고 보존 DELETE한다.
+skip_doc_info(영구 건너뜀 문서, 원본 키 PK)는 일반 테이블 — 보존 DELETE 없음(지우면 그 문서를 다시 고름).
 실행 중 DDL 금지: 생성/보존 관리는 Alembic과 dbtool maintain만 사용한다.
 """
 
@@ -146,6 +147,20 @@ def log_metadata(schema="applog"):
             Index("ix_pipe_event_stage_ts", table.c.stage, table.c.ts_start)
         else:
             Index("ix_pipe_run_started", table.c.started_at)
+    # 영구 건너뜀 문서(pl-58 — 판 0002): 원본 키당 한 행, pipeline/extract/skip_docs가 upsert·대상 목록이 뺌. 작은 일반 표(보존 DELETE 없음).
+    now = text("now()")
+    Table(
+        "skip_doc_info",
+        md,
+        Column("source_key", Text, primary_key=True),
+        Column("source_system", Text),
+        Column("file_name", Text),
+        Column("reason", Text, nullable=False),
+        Column("level", Text, nullable=False, server_default=text("'error'")),
+        Column("first_seen", DateTime(timezone=True), nullable=False, server_default=now),
+        Column("last_seen", DateTime(timezone=True), nullable=False, server_default=now),
+        Column("count", Integer, nullable=False, server_default=text("1")),
+    )
     return md
 
 
