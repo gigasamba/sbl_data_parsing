@@ -88,7 +88,7 @@
 
 <a id="e2-07"></a>
 ## e2-07 · 검색 점검 페이지
-- 규칙: MCP 서버와 pgvector에 이어 근거를 보는 로컬 페이지 — `validation/search_ui/start_mcp.sh`·`start_ui.sh`, 포트 `dev.search_ui.port`(기본 8790), MCP 주소 `dev.search_ui.mcp_url`(기본 `http://127.0.0.1:8765/mcp`).
+- 규칙: MCP 서버와 pgvector에 이어 근거를 보는 로컬 페이지 — `validation/search_ui/start_mcp.sh`·`start_ui.sh`, 포트 `dev.search_ui.search_ui_port`(기본 8790), MCP 주소 `dev.search_ui.search_ui_mcp_url`(기본 `http://127.0.0.1:8765/mcp`).
 - 파일: `validation/search_ui/serve.py`.
 - QA: 수동 — 페이지를 열어 질문 하나에 근거가 나옴.
 - Status: done

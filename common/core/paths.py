@@ -71,7 +71,7 @@ def child_env(extra=None):
 
 
 def doc_dir(required=True):
-    """원본 문서 폴더 — 설정 ops.paths.docs_dir, 코드 기본값 없음. required=True(기본)면
+    """원본 문서 폴더 — 설정 ops.paths.source_docs_dir, 코드 기본값 없음. required=True(기본)면
     비었을 때 SystemExit(사람이 보는 안내 한 줄) · required=False면 조용히 None(호출부가 '미설정'을 크래시가
     아니라 점검 결과 한 줄로만 보고할 때 — 예: common.check.checker env)."""
     from common.config.settings import cfg  # 늦게 import — 이 파일은 거의 모든 프로세스가 import
@@ -81,7 +81,7 @@ def doc_dir(required=True):
         return Path(v)
     if not required:
         return None
-    raise SystemExit("원본 문서 폴더가 없음 — settings.yaml ops.paths.docs_dir에 경로를 넣거나 --src로 지정")
+    raise SystemExit("원본 문서 폴더가 없음 — settings.yaml ops.paths.source_docs_dir에 경로를 넣거나 --src로 지정")
 
 
 def resolve_agent_dir(agent_id):

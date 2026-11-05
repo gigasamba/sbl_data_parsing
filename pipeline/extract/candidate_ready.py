@@ -47,7 +47,7 @@ def _staging_dir():
     """SOURCE_STAGING — 미리 받기 폴더. 비었으면 rdb:csv 원본을 받을 수 없어 멈춤."""
     v = pc.cfg().extract.source.staging  # S7c — 설정 객체
     if not v:
-        raise RuntimeError("[source] extract.source.staging_dir(SOURCE_STAGING) 미설정 — rdb:csv 원본을 받을 자리가 없음")
+        raise RuntimeError("[source] extract.source.source_staging_dir(SOURCE_STAGING) 미설정 — rdb:csv 원본을 받을 자리가 없음")
     return Path(v)
 
 

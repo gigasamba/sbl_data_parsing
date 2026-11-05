@@ -10,12 +10,12 @@
 - 규칙:
   1. `question`과 `source_system`(값 하나)은 필수다. 그 원천의 gold 스키마(`<PG_SCHEMA>_<원천>`)만 찾는다.
   2. 거르기가 있으면 먼저 범위(맞는 문서)를 구하고, 후보 `min(50, max(3k, 30))`개를 찾은 뒤 순위를 다시 매긴다(재순위 모델 없음).
-  3. 방법 `vector`·`bm25`·`id`(기본 셋 다 — `tuning.search.default_methods`)를 가중 RRF로 합친다. 가중치 `tuning.search.weights` — vector 1.0 · bm25 1.0 · id 2.0 · 집계 단서 질문의 bm25 0.2.
+  3. 방법 `vector`·`bm25`·`id`(기본 셋 다 — `tuning.search.search_default_methods`)를 가중 RRF로 합친다. 가중치 `tuning.search.weights` — vector 1.0 · bm25 1.0 · id 2.0 · 집계 단서 질문의 bm25 0.2.
   4. vector = pgvector 코사인, HNSW(거르기 범위가 `search.pg.filter_exact_max` 문서 이하면 정확 검색). 차원이 HNSW 한도를 넘으면 `binary_quantize`로 후보를 고른 뒤 상위 200을 원 벡터로 다시 점수.
   5. BM25 = `chunk_term`·`term_stat`·`corpus_stat`(전체 청크 수·평균 길이). id = 드문 ID 정규식.
   6. 맞는 문서가 없으면 오류가 아니라 빈 결과(`scope_docs` 0, `evidence_status` none).
   7. `evidence_status`: 근거 없음 → `none`, 질문 핵심어가 근거에 없으면 `weak`, 그 밖 `found`. 근거 목록은 줄이지 않는다(표시만).
-  8. 응답 JSON이 `tuning.search.output.max_response_bytes`(기본 20000바이트, UTF-8)를 넘으면 가장 낮은 순위 근거부터 본문을 반으로(300자를 넘는 것만, 질문 낱말 주변을 남김), 더 줄일 게 없으면 가장 낮은 순위 근거를 통째로 뺀다. 1위 근거는 그것만 남을 때까지 지킨다. 줄였다는 표시 칸은 붙이지 않는다.
+  8. 응답 JSON이 `tuning.search.output.tool_max_response_bytes`(기본 20000바이트, UTF-8)를 넘으면 가장 낮은 순위 근거부터 본문을 반으로(300자를 넘는 것만, 질문 낱말 주변을 남김), 더 줄일 게 없으면 가장 낮은 순위 근거를 통째로 뺀다. 1위 근거는 그것만 남을 때까지 지킨다. 줄였다는 표시 칸은 붙이지 않는다.
 - 데이터: 입력·출력 칸은 [mc-16](#mc-16). 질문 없이 문서 고르기는 `list_doc_fulltext`([mc-17](#mc-17)).
 - 파일: `mcp_server/routers/`, `mcp_server/services/search/{search_svc,retriever,pgsearch,shaping}.py`, `mcp_server/schemas/evidence.py`.
 - QA: `tests/server/mcp/test_search_svc.py` · 통과.
@@ -128,7 +128,7 @@
 <a id="mc-06"></a>
 ## mc-06 · `query_edw` 도구 — 읽기 전용 EDW SQL
 - 이유: 정형 질문은 회사 EDW에서 답한다.
-- 규칙: SELECT/WITH 문 하나만. 낮은 권한의 읽기 계정(`required.edw.read_*`)으로 연다. 상한 — 행 `search.edw_query.max_rows` 1000(도구 인자 `max_rows` 기본 1000과 작은 쪽) · 시간 20초 · 응답 2,000,000바이트. 표는 시스템 카탈로그를 뺀 모든 스키마를 허용한다(설정 허용 목록 없음 — 좁히기는 읽기 계정 권한). PC는 sqlite 대역(`valid_env/edw/edw.sqlite` — 대역 표 아홉 허용).
+- 규칙: SELECT/WITH 문 하나만. 낮은 권한의 읽기 계정(`required.edw.read_*`)으로 연다. 상한 — 행 `search.edw_query.edw_query_max_rows` 1000(도구 인자 `edw_query_max_rows` 기본 1000과 작은 쪽) · 시간 20초 · 응답 2,000,000바이트. 표는 시스템 카탈로그를 뺀 모든 스키마를 허용한다(설정 허용 목록 없음 — 좁히기는 읽기 계정 권한). PC는 sqlite 대역(`valid_env/edw/edw.sqlite` — 대역 표 아홉 허용).
 - 파일: `mcp_server/services/edw_query.py`, `mcp_server/services/edw_calls.py`, `mcp_server/config.py`.
 - QA: `tests/server/mcp/test_call_log.py`(tools/list 바이트·SHA-256) · 통과.
 - Status: done
@@ -136,19 +136,19 @@
 <a id="mc-07"></a>
 ## mc-07 · `edw_meta` 도구 — EDW 카탈로그 찾기
 - 이유: 클라이언트는 SQL을 쓰기 전에 표·칸 이름이 필요하다.
-- 규칙: 개인정보를 뺀 정적 자료(`search.edw_meta.catalog_dir`의 `catalog.json` + `columns.jsonl`)에서 3단계(스키마 → 표 → 칸)로 찾는다. 모르는 이름은 difflib 제안. 응답 200,000바이트를 넘으면 목록 꼬리를 자른다. 인자 없이 부르면 원천마다 `search_attrs`(`filter` — `search` 인자 이름 → attrs 키, `attrs` — 거를 수 있는 키 전부, `evidence` — 근거 키)를 사슬 파일에서 만들어 붙인다(요약이 오류면 붙이지 않음). LLM·벡터 없음.
+- 규칙: 개인정보를 뺀 정적 자료(`search.edw_meta.edw_meta_catalog_dir`의 `catalog.json` + `columns.jsonl`)에서 3단계(스키마 → 표 → 칸)로 찾는다. 모르는 이름은 difflib 제안. 응답 200,000바이트를 넘으면 목록 꼬리를 자른다. 인자 없이 부르면 원천마다 `search_attrs`(`filter` — `search` 인자 이름 → attrs 키, `attrs` — 거를 수 있는 키 전부, `evidence` — 근거 키)를 사슬 파일에서 만들어 붙인다(요약이 오류면 붙이지 않음). LLM·벡터 없음.
 - 자료 꼴(`mcp_server/services/edw_meta.py`가 읽는 칸): `catalog.json` = JSON 하나 — `tables[]`(표마다 `schema`·`table`·`qualified_name`·`table_desc_ko`·`row_count`·`data_period`·`column_count` 등) + `meta`(`as_of`·`schemas`). `columns.jsonl` = 한 줄에 열 하나 — `schema`·`table`·`column_name`·`data_type`·`nullable`·`description_ko`·`primary_key`·`foreign_key`·`fk_reference` 등. 개인정보가 없는 자료만 둔다(표본 값은 응답에 내지 않는다).
-- 서버 자리: 저장소에 자료와 만드는 스크립트가 없다. 운영자가 폴더를 `<루트>/output/edw_meta/`에 복사하고 `search.edw_meta.catalog_dir: /app/output/edw_meta`를 적는다(결과 폴더가 검색 MCP에 읽기 전용으로 붙음). 비우면 `/app/config/edw_meta`(서버 compose는 이 자리를 붙이지 않음). 두 파일이 없으면 `edw_meta`가 `not_configured`로 답해 에이전트가 EDW 표·열 설명을 못 찾는다 — `query_edw`는 그대로 동작. 자료 받기는 refactor.md C-91.
+- 서버 자리: 저장소에 자료와 만드는 스크립트가 없다. 운영자가 폴더를 `<루트>/output/edw_meta/`에 복사하고 `search.edw_meta.edw_meta_catalog_dir: /app/output/edw_meta`를 적는다(결과 폴더가 검색 MCP에 읽기 전용으로 붙음). 비우면 `/app/config/edw_meta`(서버 compose는 이 자리를 붙이지 않음). 두 파일이 없으면 `edw_meta`가 `not_configured`로 답해 에이전트가 EDW 표·열 설명을 못 찾는다 — `query_edw`는 그대로 동작. 자료 받기는 refactor.md C-91.
 - 운영과 다른 점: 인자 없는 호출에 `search_attrs`를 더 붙인다.
-- 파일: `mcp_server/services/edw_meta.py`, `mcp_server/config.py`(`search.edw_meta.catalog_dir` 설명).
+- 파일: `mcp_server/services/edw_meta.py`, `mcp_server/config.py`(`search.edw_meta.edw_meta_catalog_dir` 설명).
 - Status: done — 서버 자료 폴더는 사람이 채움(C-91)
 
 <a id="mc-08"></a>
 ## mc-08 · `parse_document` 도구 — 파일 하나를 바로 파싱
 - 이유: 클라이언트가 아직 적재되지 않은 파일을 묻는다.
 - 규칙:
-  1. 경로(inbox 루트 아래) 또는 base64 내용을 파싱 서비스(`http://127.0.0.1:<ops.services.data_parsing.port>` — 기본 8766)에 Bearer 토큰(`required.tokens.mcp` — 검색 MCP와 같은 값)으로 넘긴다. 글·표·사실·엔진·시간을 돌려주고, 시간 초과면 `job_id`.
-  2. 파일 크기 상한 `ops.services.data_parsing.max_file_mb`(기본 100, MB = 1024×1024바이트)를 검색 MCP와 파싱 서비스가 같이 읽는다. base64 크기는 줄바꿈·공백을 빼고 센다. 넘는 `content_b64`는 서비스로 보내지 않고 `{"error": "파일이 크기 상한(100MB)보다 큼(…MB) — ops.services.data_parsing.max_file_mb"}`. 경로로 준 파일도 같은 상한.
+  1. 경로(inbox 루트 아래) 또는 base64 내용을 파싱 서비스(`http://127.0.0.1:<ops.services.data_parsing.data_parsing_port>` — 기본 8766)에 Bearer 토큰(`required.tokens.mcp_token` — 검색 MCP와 같은 값)으로 넘긴다. 글·표·사실·엔진·시간을 돌려주고, 시간 초과면 `job_id`.
+  2. 파일 크기 상한 `ops.services.data_parsing.mcp_parse_max_file_mb`(기본 100, MB = 1024×1024바이트)를 검색 MCP와 파싱 서비스가 같이 읽는다. base64 크기는 줄바꿈·공백을 빼고 센다. 넘는 `content_b64`는 서비스로 보내지 않고 `{"error": "파일이 크기 상한(100MB)보다 큼(…MB) — ops.services.data_parsing.mcp_parse_max_file_mb"}`. 경로로 준 파일도 같은 상한.
   3. HTTP 요청 본문 상한 = 파일 상한 × 1.5 + 1 MiB(검색 MCP·파싱 서비스 같음). 4 MiB보다 크거나 길이를 밝히지 않은 요청은 동시에 2개까지만 처리하고 나머지는 본문을 읽기 전에 기다린다(`mcp_server/main.py` `_BIG_SLOTS`).
   4. 서비스 등록 요청 대기 60초.
   5. 받는 확장자 = 엔진 구성의 parse 키(`pipeline/transform/parse/engine_check.py` `allowed_exts()`).
@@ -162,8 +162,8 @@
 - 규칙:
   1. 스캔 판정 = `pipeline.shared.pdf_kind.pdf_kind()`(전체 쪽 글자층이 쪽당 평균 20자 미만) — 일괄 파싱과 같은 함수.
   2. 스캔 PDF는 stack `.pdf_image`의 `qwen_vlm`으로 파싱한다(내부망 주소만 — `require_internal`).
-  3. 시간 상한은 작업 제한 시간 `tuning.ops.services.data_parsing.job_timeout_sec`(기본 600초) 하나, 단계마다 남은 시간을 나눠 준다. 쪽 수 상한 없음. 큐는 하나.
-  4. VLM 설정(`required.vlm.base_url`·`model`)이 비면 파이프라인 없이 빈 결과 + note "스캔 PDF — VLM 미설정".
+  3. 시간 상한은 작업 제한 시간 `tuning.ops.services.data_parsing.mcp_parse_job_timeout_sec`(기본 600초) 하나, 단계마다 남은 시간을 나눠 준다. 쪽 수 상한 없음. 큐는 하나.
+  4. VLM 설정(`required.models.vlm_base_url`·`vlm_model`)이 비면 파이프라인 없이 빈 결과 + note "스캔 PDF — VLM 미설정".
   5. VLM이 돌았는데 대표 결과가 없으면 note "스캔 PDF — VLM 파싱 실패".
   6. 글자층과 스캔 쪽이 섞인 PDF는 범위 밖.
 - 파일: `pipeline/run_mcp_parsing.py`.
@@ -173,7 +173,7 @@
 <a id="mc-09"></a>
 ## mc-09 · 서버 실행과 안전
 - 이유: 공용 내부 서비스라 계속 떠 있어야 하고 위험한 노출은 거부해야 한다.
-- 규칙: FastMCP streamable HTTP(`/mcp`, 기본 `search.server.bind_host` 127.0.0.1 · `port` 8765) 또는 `--stdio`. loopback이 아닌 주소는 `required.tokens.mcp` 필요(상수 시간 비교), 0.0.0.0 거부, DNS 리바인딩 가드(`search.server.allowed_hosts`). `/health`(준비 중이면 503). 도구 동시 8(`search.server.max_concurrent_tools`) + 대기열, 도구 한 번 30초. 새 적재 판이면 다시 읽는다. 호출 감사 기록은 [ops.md#op-01](ops.md#op-01).
+- 규칙: FastMCP streamable HTTP(`/mcp`, 기본 `search.server.mcp_bind_host` 127.0.0.1 · `mcp_port` 8765) 또는 `--stdio`. loopback이 아닌 주소는 `required.tokens.mcp_token` 필요(상수 시간 비교), 0.0.0.0 거부, DNS 리바인딩 가드(`search.server.mcp_allowed_hosts`). `/health`(준비 중이면 503). 도구 동시 8(`search.server.mcp_max_concurrent_tools`) + 대기열, 도구 한 번 30초. 새 적재 판이면 다시 읽는다. 호출 감사 기록은 [ops.md#op-01](ops.md#op-01).
 - 파일: `mcp_server/main.py`, `mcp_server/services/tool_runner.py`, `mcp_server/config.py`.
 - Status: done
 
@@ -187,7 +187,7 @@
   4. 도구를 쓸 수 있는지에 더해 **결과에 나오는 문서**를 거른다 — `search`·원문 도구·`query_edw`가 권한 밖 문서·행을 돌려주지 않는다. 검색 DB 청크에 거르기 칸(원천 시스템, 고객, 부서 등)이 있어야 한다.
   5. 도구 계약(이름·입력·출력)은 바꾸지 않는다 — 신원은 머리글로만 받는다.
   6. 호출 감사 기록([ops.md#op-01](ops.md#op-01))에 확인된 신원(agent id·사용자 id)을 남긴다. 토큰·증표 원문은 남기지 않는다.
-- 비고(현재와 다른 점): 코드에 없다. 지금은 공용 토큰 하나(`required.tokens.mcp`)로 "허용된 클라이언트인지"만 확인하고, 신원·권한 표·결과 거르기는 없다. 정할 것: agent별 토큰만 할지 사내 로그인 증표까지 할지, 권한 범위의 단위(원천·고객·부서), 검색 DB 거르기 칸(DB 담당자 협의·사람 검토).
+- 비고(현재와 다른 점): 코드에 없다. 지금은 공용 토큰 하나(`required.tokens.mcp_token`)로 "허용된 클라이언트인지"만 확인하고, 신원·권한 표·결과 거르기는 없다. 정할 것: agent별 토큰만 할지 사내 로그인 증표까지 할지, 권한 범위의 단위(원천·고객·부서), 검색 DB 거르기 칸(DB 담당자 협의·사람 검토).
 - Status: todo
 
 ## 코드와 다른 점 · 지울 코드
@@ -200,6 +200,6 @@
 | 기능 | 필요한 것 |
 |---|---|
 | `query_edw` | `required.edw` 읽기 계정, 또는 PC sqlite 대역 |
-| `edw_meta` | `search.edw_meta.catalog_dir`의 자료 |
-| `parse_document` | `mcp-data-parsing`(파싱 서비스) + `required.tokens.mcp` |
+| `edw_meta` | `search.edw_meta.edw_meta_catalog_dir`의 자료 |
+| `parse_document` | `mcp-data-parsing`(파싱 서비스) + `required.tokens.mcp_token` |
 | 원문 도구 | `required.tokens.fulltext_sign_key` · Object Storage 읽기 · EDW 읽기 계정 |

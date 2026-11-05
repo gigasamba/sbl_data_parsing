@@ -333,10 +333,10 @@ ID 모양 정규식(계약 번호·제품 코드 등). 읽는 곳: `common.core.
 
 gold·EDW와 별개인 로그 표다. 서버 적용 절차는 refactor.md C-79.
 
-판: `common/store/db/migrations/versions/0001_applog_base.py`(브랜치 `applog`) · 파티션 관리: `common/store/db/migrations/applog_parts.py` · 모델: `common/store/db/models/log_tables.py` · 쓰기: `common/store/logsink.py`(큐 → 배치 INSERT, 실패하면 `output/logs/*.jsonl`, 앱이 DDL을 실행하지 않음). 켜는 설정: 파일 자리 `ops.log.db_enabled`(모델 `ops.log.db_enabled`, 서버 이미지 기본 켬·PC 기본 꺼짐 — op-13). `tests/server/common/test_db_schema.py`는 이 절을 대조하지 않는다 — 판과 실제 DB 대조는 `dbtool check --target applog`.
+판: `common/store/db/migrations/versions/0001_applog_base.py`(브랜치 `applog`) · 파티션 관리: `common/store/db/migrations/applog_parts.py` · 모델: `common/store/db/models/log_tables.py` · 쓰기: `common/store/logsink.py`(큐 → 배치 INSERT, 실패하면 `output/logs/*.jsonl`, 앱이 DDL을 실행하지 않음). 켜는 설정: 파일 자리 `ops.log.log_db_enabled`(모델 `ops.log.log_db_enabled`, 서버 이미지 기본 켬·PC 기본 꺼짐 — op-13). `tests/server/common/test_db_schema.py`는 이 절을 대조하지 않는다 — 판과 실제 DB 대조는 `dbtool check --target applog`.
 
 - **파티션:** `mcp_log`(`requested_at`)·`pipe_event`(`ts_start`)는 월 단위(UTC). 이름은 `<표>_YYYYMM`. `dbtool up`과 `dbtool maintain`이 현재 달부터 3개월 치를 만든다.
-- **보존:** `dbtool maintain --target applog`를 매일 실행한다. `ops.log.retention_days`(기본 90)가 지난 달의 파티션을 DROP하고 `pipe_run`은 DELETE한다. 달이 통째로 지나야 DROP되므로 파티션 표의 행은 약 90~120일 남는다.
+- **보존:** `dbtool maintain --target applog`를 매일 실행한다. `ops.log.log_retention_days`(기본 90)가 지난 달의 파티션을 DROP하고 `pipe_run`은 DELETE한다. 달이 통째로 지나야 DROP되므로 파티션 표의 행은 약 90~120일 남는다.
 - **되돌리기:** `downgrade`는 막혀 있다. 지우려면 DB 담당자가 직접 한다.
 - **연결:** `pipe_event.run_id` → `pipe_run.run_id`는 외래 키가 없다(지우는 시점이 달라 짝 없는 행이 생길 수 있음). 파티션 표의 `id`는 기본 키가 시각과 묶여 있어 그것만으로는 고유하지 않다.
 - **기록하지 않는 값:** MCP `clientInfo`(`args`에서도 뺌). 접속 IP는 `mcp_log.client_ip`에 남긴다.
@@ -363,10 +363,10 @@ MCP 요청 1건당 1행. 인증 실패와 `initialize`도 행으로 남는다. �
 | status | VARCHAR(16) CHECK | ok·error·denied·unauthorized·busy·timeout. `denied`는 권한 설계 전이라 아직 안 씀 | 〃 | 없음 | 새로 |
 | error_code | VARCHAR(64) | `tool_timeout`·`busy`·`invalid_key`·`tool_error`·`audit_queue_full` | 〃 | 없음 | 새로 |
 | error_message | TEXT | 오류 내용(비밀값 가림) | 〃 | 없음 | 새로 |
-| args | TEXT | 입력 JSON 앞부분(`tuning.search.audit.max_input_bytes`, 기본 16KB). 비밀값 가림. `content_b64`는 해시와 크기로 바꿈 | 〃 | 없음 | 새로 |
+| args | TEXT | 입력 JSON 앞부분(`tuning.search.audit.audit_max_input_bytes`, 기본 16KB). 비밀값 가림. `content_b64`는 해시와 크기로 바꿈 | 〃 | 없음 | 새로 |
 | args_bytes | INTEGER | 입력 원본 크기 | 〃 | 없음 | 새로 |
 | args_truncated | BOOLEAN | 입력이 잘렸는지. 잘리면 JSON으로 안 읽힐 수 있음 | 〃 | 없음 | 새로 |
-| result | TEXT | 출력 JSON 앞부분(`tuning.search.audit.max_output_bytes`, 기본 64KB). 문서 본문·EDW 결과 포함 가능 | 〃 | 없음 | 새로 |
+| result | TEXT | 출력 JSON 앞부분(`tuning.search.audit.audit_max_output_bytes`, 기본 64KB). 문서 본문·EDW 결과 포함 가능 | 〃 | 없음 | 새로 |
 | result_bytes | INTEGER | 출력 원본 크기 | 〃 | 없음 | 새로 |
 | result_truncated | BOOLEAN | 출력이 잘렸는지 | 〃 | 없음 | 새로 |
 | result_sha256 | CHAR(64) | 출력 원본 전체의 해시 | 〃 | 없음 | 새로 |

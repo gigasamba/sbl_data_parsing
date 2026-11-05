@@ -60,6 +60,6 @@ step "③-0 판(migrate up --target all — 묶음 차원·vector 확장)" $DC r
 step "③ 적재(data-pipeline → pg — pgvector_load load)" $DC run --rm --entrypoint python load -m pipeline.load.pgvector_load load --bundle /app/output/edw/bundle
 step "④ 검색 MCP 띄우기" $DC up -d mcp
 for i in $(seq 1 30); do $DC logs mcp 2>/dev/null | grep -q "검색 MCP http" && break; sleep 1; done
-TOKEN=$(setting required.tokens.mcp)   # 설정 파일에서
+TOKEN=$(setting required.tokens.mcp_token)   # 설정 파일에서
 step "⑤ 밖에서 MCP 호출" $PY -m mcp_server.cli.mcp_smoke --url "http://127.0.0.1:${MCP_PUBLISH_PORT:-18765}/mcp" --token "$TOKEN" --source "$SMOKE_SYSTEM" --q "$Q"
 echo "모듈 컨테이너 연결 시험 통과"

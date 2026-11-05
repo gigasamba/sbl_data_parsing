@@ -6,14 +6,14 @@
 - 서버에서 손대는 것은 **설정 파일 하나**(`settings.yaml`)뿐이다. 값은 문서·채팅·로그에 쓰지 않는다 — 이 문서는 **이름만** 적는다.
 - settings.yaml = `settings.sample.yaml`을 복사해 맨 위 `required`를 채운 것이다. 배치: `required`(꼭 채울 값, 묶음마다 `[PC·서버]`·`[서버만]`) → 역할 절 `common`·`extract`·`transform`·`load`·`search`·`ops`·`dev` → `tuning`(보통 비워 둠). 적힌 값은 코드 기본값보다 이긴다 — 코드 기본값이 나중에 바뀌어도 settings.yaml에 적힌 값은 그대로다.
 - 옛 배치(최상위 `common`·`pipeline`·`mcp`) 파일·지운 칸·모르는 칸은 시작 거부다(칸 이름만 알림 — 값은 안 찍음). 자리가 바뀐 칸을 옛 자리에 쓰면 "자리가 다른 칸 … → 새 자리"로 거부한다. 옮기는 도구는 없다 — `settings.sample.yaml`과 대조해 고친다.
-- 이 문서의 표는 **옛 env 이름**으로 적는다. 파일 자리는 `python -m common.config.sample --where <이름>…`(예 `PG_HOST` → `required.pg.host`).
+- 이 문서의 표는 **옛 env 이름**으로 적는다. 파일 자리는 `python -m common.config.sample --where <이름>…`(예 `PG_HOST` → `required.pg.pg_host`).
 
 **서버 값으로 적는 칸** — 코드 기본값과 서버에서 쓰는 값이 다른 칸. 서버 settings.yaml에 적는다:
 
 | 옛 이름 | 파일 자리 | 서버 값 |
 |---|---|---|
 | `PARSE_POST` | `transform.represent.post_steps` | `all` |
-| `EMBED_QUERY_CACHE` | `common.models.embed.query_cache_file` | `''`(빈 글자 — 비운 칸과 결과가 다름) |
+| `EMBED_QUERY_CACHE` | `common.models.embed.embed_query_cache_file` | `''`(빈 글자 — 비운 칸과 결과가 다름) |
 
 ## 0. 파일 위치 · 적용 방법
 
@@ -26,16 +26,16 @@
 
 | 칸 | 기본 | 뜻 |
 |---|---|---|
-| `ops.log.level` | `INFO` | DEBUG·INFO·WARNING·ERROR·CRITICAL |
-| `ops.log.json_dir` | 비움 | 비우면 PC `output/logs/<앱>.jsonl`, 서버 stdout(컨테이너 로그) |
-| `ops.log.db_enabled` | 서버(두 이미지) 켬 · PC 끔 | DB(`applog` 스키마) 기록 — 서버 로그는 이것뿐. 먼저 `migrate up --target all`(applog 포함) |
-| `ops.log.retention_days` | 90 | 월 파티션 보존 일수 |
-| `ops.log.fallback_dir` | `output/logs` | DB 장애·시간 초과 때 대체 JSON Lines(자동 재적재 없음) — 파일은 이 한 곳 |
-| `tuning.ops.log.shutdown_sec` | 5 | 종료 때 남은 기록을 쓰는 상한(초) |
-| `tuning.search.audit.max_input_bytes` · `max_output_bytes` | 16384 · 65536 | MCP 감사 원문 저장 상한(바이트) |
+| `ops.log.log_level` | `INFO` | DEBUG·INFO·WARNING·ERROR·CRITICAL |
+| `ops.log.log_json_dir` | 비움 | 비우면 PC `output/logs/<앱>.jsonl`, 서버 stdout(컨테이너 로그) |
+| `ops.log.log_db_enabled` | 서버(두 이미지) 켬 · PC 끔 | DB(`applog` 스키마) 기록 — 서버 로그는 이것뿐. 먼저 `migrate up --target all`(applog 포함) |
+| `ops.log.log_retention_days` | 90 | 월 파티션 보존 일수 |
+| `ops.log.log_fallback_dir` | `output/logs` | DB 장애·시간 초과 때 대체 JSON Lines(자동 재적재 없음) — 파일은 이 한 곳 |
+| `tuning.ops.log.log_shutdown_sec` | 5 | 종료 때 남은 기록을 쓰는 상한(초) |
+| `tuning.search.audit.audit_max_input_bytes` · `audit_max_output_bytes` | 16384 · 65536 | MCP 감사 원문 저장 상한(바이트) |
 
 - 서버는 매일 `bash deploy/host/scripts/pipe_exec.sh migrate maintain --target applog`(PC: `python -m common.store.db.dbtool maintain --target applog`)를 예약한다 — 앞으로 2개월 파티션 준비, 보존 기한이 지난 파티션 삭제.
-- ⚠️ MCP 감사 행(`applog.mcp_log`)과 대체 파일에는 문서 원문이 들어간다(`get_doc_fulltext` 결과는 파일당 `max_output_bytes`까지). `applog` DB·표와 `ops.log.fallback_dir`은 원본 문서와 같은 수준으로 접근을 제한한다(C-79). 대체 파일은 지우지 않으므로 디스크 회수도 운영에서 정한다.
+- ⚠️ MCP 감사 행(`applog.mcp_log`)과 대체 파일에는 문서 원문이 들어간다(`get_doc_fulltext` 결과는 파일당 `audit_max_output_bytes`까지). `applog` DB·표와 `ops.log.log_fallback_dir`은 원본 문서와 같은 수준으로 접근을 제한한다(C-79). 대체 파일은 지우지 않으므로 디스크 회수도 운영에서 정한다.
 - 서버(dev·prd)는 값이 있는 비밀 칸이 8자 미만이면 시작을 거부한다(종료 2, 칸 경로만 찍음).
 - 파이프라인 성능 분석: `python -m pipeline.tools.perf_report [<run_id>]`(`--runs` 목록, `--compare` 비교, DB가 꺼져 있으면 `--file output/logs/*.jsonl`).
 
@@ -61,7 +61,7 @@
 - 비운 칸·빈 글자 `''`은 코드 기본값이다. 예외: 기본값이 없는 글자 칸과 `--where`가 `[빈 글자 유지]`로 보여 주는 칸만 `''`이 빈 글자.
 - 글자 칸에 쓴 `yes`·`no`·`1`·`0`은 쓴 글자 그대로다.
 - 켜기 칸은 YAML `true`·`false`. `--where`가 `[켬: …]`·`[끔: …]`로 보여 주는 칸은 `0`·`1`도 되고 `yes`·`on`·`off` 등은 검증 오류.
-- `ops.runtime.engine_processes`·`tuning.ops.runtime.threads_per_process`는 숫자(소수 가능) 또는 `auto`(= 비움, 계산).
+- `ops.runtime.engine_processes`·`tuning.ops.runtime.engine_threads_per_process`는 숫자(소수 가능) 또는 `auto`(= 비움, 계산).
 - 검증 오류 메시지는 칸 경로·오류 종류만 찍는다(값은 안 찍음).
 - ⚠ `transform.represent.post_steps`(`PARSE_POST`)에 `''`·`[]`를 쓰면 **끔**.
 
@@ -91,12 +91,12 @@
 ### 검색 MCP
 | 이름 | 기본 | 메모 |
 |---|---|---|
-| `MCP_HOST`(`search.server.bind_host`) | `127.0.0.1` | 사내 IP로 열면 `MCP_TOKEN` 필수, `0.0.0.0`은 거부 |
-| `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 토큰은 `required.tokens.mcp` 하나 — 검색 MCP·`parse_document` 작업 서비스가 함께 쓴다(호출 쪽은 같은 값을 `Authorization: Bearer`로) · 공백만인 토큰은 없음과 같음 |
+| `MCP_HOST`(`search.server.mcp_bind_host`) | `127.0.0.1` | 사내 IP로 열면 `MCP_TOKEN` 필수, `0.0.0.0`은 거부 |
+| `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 토큰은 `required.tokens.mcp_token` 하나 — 검색 MCP·`parse_document` 작업 서비스가 함께 쓴다(호출 쪽은 같은 값을 `Authorization: Bearer`로) · 공백만인 토큰은 없음과 같음 |
 | `FULLTEXT_SIGN_SECRET`(`required.tokens.fulltext_sign_key`) | 비움 | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키(비밀). 비면 두 도구가 `not_configured`. 바꾸면 이미 발급된 `sfid`가 모두 무효 |
-| `DATA_PARSING_PORT`(`ops.services.data_parsing.port`) | `8766` | `parse_document` 작업 서비스 포트(127.0.0.1) — 작업 서비스가 듣고 검색 MCP가 이 값으로 부름(칸 하나). 여러 벌이면 벌마다 다르게(기본값이면 시작 거부) |
+| `DATA_PARSING_PORT`(`ops.services.data_parsing.data_parsing_port`) | `8766` | `parse_document` 작업 서비스 포트(127.0.0.1) — 작업 서비스가 듣고 검색 MCP가 이 값으로 부름(칸 하나). 여러 벌이면 벌마다 다르게(기본값이면 시작 거부) |
 | `INSTANCE`(`ops.host.instance_name`) | 비움(한 벌) | 개발 서버 여러 벌 — 컨테이너 이름 끝 `-<벌>`, PG 스키마·EDW 기록 표 끝 `_<벌>`(`-`는 `_`로 — `dbtool --schema`로 직접 준 이름에도), dev 게시 경로 `<prefix>/<벌>`. prd면 시작 거부. settings.yaml에서만(셸 env로 덮지 않음) — server-guide §1-3 |
-| `DATA_PARSING_MAX_MB`(`ops.services.data_parsing.max_file_mb`) | `100` | `parse_document` 파일 1건 크기 상한(MB) — 검색 MCP와 파싱 서비스가 같은 칸을 읽음 |
+| `DATA_PARSING_MAX_MB`(`ops.services.data_parsing.mcp_parse_max_file_mb`) | `100` | `parse_document` 파일 1건 크기 상한(MB) — 검색 MCP와 파싱 서비스가 같은 칸을 읽음 |
 | `MCP_METHODS` | `vector,bm25,id` | 이 셋만 있음 |
 | `MCP_ALLOWED_HOSTS` | 비움 | 루프백이 아닐 때, 리버스 프록시 등 다른 Host로도 부르면 쉼표로 추가 |
 
@@ -105,18 +105,18 @@
 
 | 이름 | 기본 | 메모 |
 |---|---|---|
-| `RDB_HOST`·`RDB_PORT`·`RDB_DATABASE`·`RDB_READ_USER`·`RDB_READ_PASSWORD` | 비움·`1433`·비움 | `required.edw`(`host`·`port`·`database`·`read_user`·`read_password`) — 서버만, PC는 비움 |
-| `RDB_SQLITE`(`required.edw.local_sqlite_file`) | 비움 | PC(local) 전용 가짜 EDW 파일 — `valid_env/edw/edw.sqlite`의 사본 경로(다시 만들기 `python -m validation.e2e.edw_standin`). 적으면 EDW 접속 칸은 안 봄 · 서버 설정에 있으면 EDW를 쓸 때 실패 |
+| `RDB_HOST`·`RDB_PORT`·`RDB_DATABASE`·`RDB_READ_USER`·`RDB_READ_PASSWORD` | 비움·`1433`·비움 | `required.edw`(`edw_host`·`edw_port`·`edw_database`·`edw_read_user`·`edw_read_password`) — 서버만, PC는 비움 |
+| `RDB_SQLITE`(`required.edw.edw_local_sqlite_file`) | 비움 | PC(local) 전용 가짜 EDW 파일 — `valid_env/edw/edw.sqlite`의 사본 경로(다시 만들기 `python -m validation.e2e.edw_standin`). 적으면 EDW 접속 칸은 안 봄 · 서버 설정에 있으면 EDW를 쓸 때 실패 |
 | `EDW_QUERY_MAX_ROWS` | `1000` | 도구 `max_rows`의 상한 |
 | `EDW_QUERY_TIMEOUT_SEC` | `20` | 넘으면 `timeout` |
 | `EDW_QUERY_MAX_BYTES` | `2000000` | 응답 JSON 크기 상한 — 넘으면 끝 행부터 버리고 `truncated: true` |
-| `EDW_META_DIR`(`search.edw_meta.catalog_dir`) | 비움(`/app/config/edw_meta` — 서버 compose는 안 붙임) | `edw_meta` 자료(`catalog.json`·`columns.jsonl`, 개인정보 없는 자료) 폴더. 서버는 `<루트>/output/edw_meta/`에 복사하고 `/app/output/edw_meta`로 적는다. 없으면 `edw_meta`만 `not_configured` |
+| `EDW_META_DIR`(`search.edw_meta.edw_meta_catalog_dir`) | 비움(`/app/config/edw_meta` — 서버 compose는 안 붙임) | `edw_meta` 자료(`catalog.json`·`columns.jsonl`, 개인정보 없는 자료) 폴더. 서버는 `<루트>/output/edw_meta/`에 복사하고 `/app/output/edw_meta`로 적는다. 없으면 `edw_meta`만 `not_configured` |
 
 ### 이미지 태그·호스트 경로 (compose 치환용)
 | 이름 | 메모 |
 |---|---|
 | `DATA_PIPELINE_IMAGE`·`MCP_SERVER_IMAGE`(`required.deploy.pipeline_image`·`mcp_image`) | dev `*-runtime:<판>` · prd `*:<판>` |
-| `RAG_OUT`(`ops.host.output_dir`) | 결과 폴더(컨테이너 `/app/output`) |
+| `RAG_OUT`(`ops.host.host_output_dir`) | 결과 폴더(컨테이너 `/app/output`) |
 | `DOC_SRC`(`required.deploy.host_docs_dir`) | 원본 문서 폴더(컨테이너 `/data/docs:ro`) |
 
 ### 원천·경로 묶음
@@ -124,17 +124,17 @@
 
 | 이름 | 무엇 | 형식 |
 |---|---|---|
-| `PARSE_SOURCE`(`extract.source.input_location`) | 이번에 읽을 원천 | 폴더 · `rdb:csv:<경로>` |
+| `PARSE_SOURCE`(`extract.source.source_input_location`) | 이번에 읽을 원천 | 폴더 · `rdb:csv:<경로>` |
 | `PG_FILTER_EXACT_MAX` | 고객 필터 정확 검색 문턱 | 고객으로 좁힌 청크가 이 수(기본 20000) 이하면 정확 검색 |
 | 변경 뒤 확인 | — | `python -m common.check.checker env`(서버는 `pipe_exec.sh check_env`) |
 
 ### 원천 Object Storage·EDW·게시
 | 이름 | 메모 |
 |---|---|
-| `OS_ENDPOINT`·`OS_REGION`·`OS_ACCESS_KEY`·`OS_SECRET_KEY`·`OS_VERIFY_TLS` | `required.object_storage`(`endpoint`·`region`·`access_key`·`secret_key`·`verify_tls`) — 서버만, PC는 비움(게시는 `file://` 폴더). `region` 비우면 `us-east-1` · `verify_tls` 비우면 `1`, 사내 CA면 CA 파일 경로(`0`이면 검증 끔 — 경고) |
+| `OS_ENDPOINT`·`OS_REGION`·`OS_ACCESS_KEY`·`OS_SECRET_KEY`·`OS_VERIFY_TLS` | `required.object_storage`(`object_storage_endpoint`·`object_storage_region`·`object_storage_access_key`·`object_storage_secret_key`·`object_storage_verify_tls`) — 서버만, PC는 비움(게시는 `file://` 폴더). `object_storage_region` 비우면 `us-east-1` · `object_storage_verify_tls` 비우면 `1`, 사내 CA면 CA 파일 경로(`0`이면 검증 끔 — 경고) |
 | `RDB_CONNECT_KWARGS` | EDW 연결 추가 인자(JSON — 비밀) |
-| `RDB_WRITE_USER`·`RDB_WRITE_PASSWORD`(`required.edw.write_user`·`write_password`) | 쓰기 계정 — ParsingMeta 게시(INSERT·UPDATE)만, 파이프라인 이미지에만. 서버는 `run_pipeline` 시작 때 빠지면 멈춤 · PC는 비움 |
-| `PM_BUCKET`·`PM_PREFIX`(`required.publish.bucket`·`prefix`) | silver 게시 위치 — 서버: 버킷 이름(원천 원본 버킷과 달라야 함) · PC(local): `file://<가짜 Object Storage 폴더 절대 경로>`(그 폴더에 씀 — S3 접속 칸 불필요). `prefix`는 버킷(폴더) 안 경로 접두(비우면 맨 위). ⚠ **첫 게시 전 EDW 표를 DBA가 한 번 만든다**: [`parsing_meta_mssql.sql`](parsing_meta_mssql.sql)(코드는 표를 만들지 않음 — 없으면 첫 INSERT에서 실패) |
+| `RDB_WRITE_USER`·`RDB_WRITE_PASSWORD`(`required.edw.edw_write_user`·`edw_write_password`) | 쓰기 계정 — ParsingMeta 게시(INSERT·UPDATE)만, 파이프라인 이미지에만. 서버는 `run_pipeline` 시작 때 빠지면 멈춤 · PC는 비움 |
+| `PM_BUCKET`·`PM_PREFIX`(`required.publish.publish_bucket`·`publish_prefix`) | silver 게시 위치 — 서버: 버킷 이름(원천 원본 버킷과 달라야 함) · PC(local): `file://<가짜 Object Storage 폴더 절대 경로>`(그 폴더에 씀 — S3 접속 칸 불필요). `publish_prefix`는 버킷(폴더) 안 경로 접두(비우면 맨 위). ⚠ **첫 게시 전 EDW 표를 DBA가 한 번 만든다**: [`parsing_meta_mssql.sql`](parsing_meta_mssql.sql)(코드는 표를 만들지 않음 — 없으면 첫 INSERT에서 실패) |
 | `PM_TABLE`(`required.edw.parsing_meta_table`) | 게시할 EDW 표(비우면 `AI.ParsingMeta`) — PC 가짜 EDW는 표 이름 `ParsingMeta` 고정(이 칸 안 봄) |
 | `EDW_CHAIN_FILE`(`ops.paths.edw_chain_file`) | EDW 조인 사슬 파일 — 적재와 검색 MCP가 같은 칸을 읽는다. 비우면 코드의 `resources/config/edw_chain.yaml`, 서버 사본을 쓰려면 `/etc/rag/edw_chain.yaml`. 쓰는 법: [release-and-patch §8-6](release-and-patch.md#8-6-edw-조인-사슬-파일-고쳐-쓰기서버--pl-29) |
 
@@ -143,9 +143,9 @@
 
 | 이름 | 뜻 |
 |---|---|
-| `NIGHTLY_TIME`(`ops.nightly.start_time`) | 시작 시각 HH:MM(서버 시간) — 타이머는 5분마다 깨우고 그 시각부터 5분 안에 `run_pipeline.py --start-offset 0 --skip-done` |
-| `NIGHTLY_MAX_DOCS`(`ops.nightly.max_docs`) | 한 번에 처리할 새 문서 수 상한(1 이상) |
-| `NIGHTLY_DEADLINE`(`ops.nightly.stop_time`) | 마감 HH:MM(시작보다 이르면 다음 날, 시작보다 5분 넘게 뒤) — 지나면 새 문서를 받지 않고 받은 문서는 끝까지 |
+| `NIGHTLY_TIME`(`ops.nightly.nightly_start_time`) | 시작 시각 HH:MM(서버 시간) — 타이머는 5분마다 깨우고 그 시각부터 5분 안에 `run_pipeline.py --start-offset 0 --skip-done` |
+| `NIGHTLY_MAX_DOCS`(`ops.nightly.nightly_max_docs`) | 한 번에 처리할 새 문서 수 상한(1 이상) |
+| `NIGHTLY_DEADLINE`(`ops.nightly.nightly_stop_time`) | 마감 HH:MM(시작보다 이르면 다음 날, 시작보다 5분 넘게 뒤) — 지나면 새 문서를 받지 않고 받은 문서는 끝까지 |
 
 ## 2. 자원·병렬 (보통 안 건드림)
 
@@ -155,13 +155,13 @@
 
 | 칸 | 뜻 |
 |---|---|
-| `common.models.vlm.requests_per_doc`(`VLM_CONCURRENCY`, 4) | 문서 하나 안의 동시 요청 수 |
-| `common.models.vlm.max_total_requests`(`VLM_MAX_CONCURRENCY`, 8) | 한 프로세스 안 모든 VLM 호출의 합 상한 · 일괄 파싱은 동시 문서 수로 나눠 문서당 수를 줄임 |
-| `common.models.vlm.timeout_sec`(`VLM_TIMEOUT`, 180초) | 호출 1건 제한 · VLM 엔진의 문서 제한 = 쪽 수 × 이 값 |
-| `tuning.common.models.vlm.retries`(`VLM_RETRY`, 1) | 실패한 호출 재시도 횟수 |
-| `common.models.vlm.extra_request_body`(`VLM_EXTRA_BODY`) | 요청 본문에 합칠 JSON — 생각 모델이면 생각 끄기 권장(예 `{"chat_template_kwargs": {"enable_thinking": false}}` · OpenRouter `{"reasoning": {"enabled": false}}`). 비우면 아무것도 안 더함 |
+| `common.models.vlm.vlm_requests_per_doc`(`VLM_CONCURRENCY`, 4) | 문서 하나 안의 동시 요청 수 |
+| `common.models.vlm.vlm_max_total_requests`(`VLM_MAX_CONCURRENCY`, 8) | 한 프로세스 안 모든 VLM 호출의 합 상한 · 일괄 파싱은 동시 문서 수로 나눠 문서당 수를 줄임 |
+| `common.models.vlm.vlm_timeout_sec`(`VLM_TIMEOUT`, 180초) | 호출 1건 제한 · VLM 엔진의 문서 제한 = 쪽 수 × 이 값 |
+| `tuning.common.models.vlm.vlm_retries`(`VLM_RETRY`, 1) | 실패한 호출 재시도 횟수 |
+| `common.models.vlm.vlm_extra_request_body`(`VLM_EXTRA_BODY`) | 요청 본문에 합칠 JSON — 생각 모델이면 생각 끄기 권장(예 `{"chat_template_kwargs": {"enable_thinking": false}}` · OpenRouter `{"reasoning": {"enabled": false}}`). 비우면 아무것도 안 더함 |
 | `extract.page_render_dpi`(`OCR_DPI`, 150) | 쪽·그림 렌더 해상도(OCR 엔진도 같은 값) |
-| `transform.vlm.max_pages_per_doc`(`VLM_PAGE_MAX`) | 문서당 VLM으로 옮길 쪽 수(비움 = 전부, 0 = 끔) · `extract.ocr.max_pages_per_doc`는 OCR 엔진에만 |
+| `transform.vlm.vlm_max_pages_per_doc`(`VLM_PAGE_MAX`) | 문서당 VLM으로 옮길 쪽 수(비움 = 전부, 0 = 끔) · `extract.ocr.ocr_max_pages_per_doc`는 OCR 엔진에만 |
 
 지운 칸(남아 있으면 시작 거부): `extract.vlm_page_sec`·`tuning.ops.services.data_parsing.vlm_page_sec`·`tuning.transform.vlm.deadline`·`transform.vlm.global_concurrency`·`transform.vlm.page_slow`·`tuning.transform.vlm.page_concurrency`·`tuning.transform.vlm.page_min_concurrency`·`tuning.transform.figures.vlm_parallel`·`tuning.ops.nightly_run.vlm_concurrency`. 이 이름(`VLM_DEADLINE`·`VLM_GLOBAL_CONCURRENCY`·`FIGURES_VLM_PARALLEL`·`VLM_PAGE_SLOW` 등)을 `--set`으로 주면 거부된다.
 
@@ -185,15 +185,15 @@ ls -l ../settings.yaml                # 서버(코드 폴더에서): 주인 1000
 | 바뀐 것 | 할 일 |
 |---|---|
 | 칸 배치 — 맨 위 `required` → 역할 절 → `tuning`. 옛 배치·옛 자리·지운 칸·모르는 칸은 시작 거부(칸 이름만 알림) | `init`이 놓은 새 settings.yaml에 옛 값을 칸마다 옮겨 적는다(§8-3 4) |
-| `required.pg` 여섯 칸 필수(자동 탐지 없음) | 모두 채운다. `db_schema`는 **새 이름**(판 0002가 옛 표를 지움) |
+| `required.pg` 여섯 칸 필수(자동 탐지 없음) | 모두 채운다. `pg_schema`는 **새 이름**(판 0002가 옛 표를 지움) |
 | env로 준 값은 효과 없음(엔진·핸드오프 칸 포함) | 컨테이너에 `-e VLM_BASE_URL=…`·`OCR_DPI=…`처럼 주던 값은 settings.yaml 칸으로(`--where <이름>`으로 자리 확인) |
 | 이미지 칸 `required.deploy.pipeline_image`·`mcp_image` | dev `data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0` · prd `data-pipeline:0.2.0`·`mcp-server:0.2.0` |
-| 새 칸 `required.deploy.pg_container_name`·`required.tokens.fulltext_sign_key` · 토큰은 `required.tokens.mcp` 하나(작업 서비스도 같은 값) | 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)) |
-| 새벽 배치 `ops.nightly.start_time`·`max_docs`·`stop_time` — 셋 다 있어야 돎 | 배포 때는 비워 두고 배포 뒤 켠다(§8-4 3) |
+| 새 칸 `required.deploy.pg_container_name`·`required.tokens.fulltext_sign_key` · 토큰은 `required.tokens.mcp_token` 하나(작업 서비스도 같은 값) | 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)) |
+| 새벽 배치 `ops.nightly.nightly_start_time`·`nightly_max_docs`·`nightly_stop_time` — 셋 다 있어야 돎 | 배포 때는 비워 두고 배포 뒤 켠다(§8-4 3) |
 | 거의 안 바꾸는 칸 53개가 `tuning` 절로(청크·순위 가중치·그림 고르기·로그 대기열·EDW 원천 열 이름 등) | 값을 적어 둔 칸만 `tuning.<옛 자리>`로 옮긴다(옛 자리는 시작 거부 — C-95) |
-| 합친 칸 `extract.prefetch_workers` → `extract.source.fetch_threads` · `tuning.ops.nightly_run.workers` → `ops.runtime.vlm_parallel_docs` | 옛 칸 값을 새 칸에 적고 옛 칸은 지운다(남으면 시작 거부) |
-| `parse_document` 크기 상한 칸이 `ops.services.data_parsing.max_file_mb`(기본 100) | 옛 `ops.services.data_parsing.max_mb`가 있으면 지우고, 100이 아닌 값은 새 칸에. 리버스 프록시 본문 상한도 늘린다(C-85) |
-| `query_edw` 행 상한 기본 1000(`search.edw_query.max_rows`) | 다른 값을 쓰려면 적는다 |
+| 합친 칸 `extract.prefetch_workers` → `extract.source.source_fetch_threads` · `tuning.ops.nightly_run.workers` → `ops.runtime.vlm_parallel_docs` | 옛 칸 값을 새 칸에 적고 옛 칸은 지운다(남으면 시작 거부) |
+| `parse_document` 크기 상한 칸이 `ops.services.data_parsing.mcp_parse_max_file_mb`(기본 100) | 옛 `ops.services.data_parsing.max_mb`가 있으면 지우고, 100이 아닌 값은 새 칸에. 리버스 프록시 본문 상한도 늘린다(C-85) |
+| `query_edw` 행 상한 기본 1000(`search.edw_query.edw_query_max_rows`) | 다른 값을 쓰려면 적는다 |
 | 용어집·고객 명부는 PG 마스터 표 | `migrate master load`(§8-3 5) · CSV를 고치면 다시 하고 검색 MCP 재시작 |
 | 사슬 파일 칸 `ops.paths.edw_chain_file`(새 — 비우면 기본 파일) | 서버 EDW 이름이 다를 때만 §8-6 |
 | 지운 칸(예 `ops.paths.glossary_dir`·`client_roster`·`mcp_bundle`, `common.models.transport.transport`, `required.env.run_mode`, `search.server.warmup`, `required.tokens.data_parsing`·`parse_proxy`, `ops.mcp_host.jobs_dir` — C-95) | 지운다 — 남으면 시작 거부(칸 이름만 알림) |

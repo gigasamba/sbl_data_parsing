@@ -22,7 +22,7 @@ x-settings: &settings "${SETTINGS_FILE:?SETTINGS_FILE=<settings.yaml 절대 경�
 services:
   # 일괄 상주 컨테이너(일 없이 떠 있음, entrypoint `idle`): run_pipeline.py가 docker exec로 대상 목록·문서별 미리 받기·파싱·게시·구조화·적재를 돌린다.
   # MCP parse_document 작업 서비스는 compose.data-parsing.yml의 mcp-data-parsing.
-  # 자원 상한: PARSE_CPUS·PARSE_MEM_LIMIT(settings.yaml ops.containers.pipeline.cpus·mem_limit) — 기본 CPU 5 · 메모리 24g
+  # 자원 상한: PARSE_CPUS·PARSE_MEM_LIMIT(settings.yaml ops.containers.pipeline.pipeline_cpus·pipeline_mem_limit) — 기본 CPU 5 · 메모리 24g
   #   (설정 모델 기본값과 같음).
   data-pipeline:
     image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
@@ -43,7 +43,7 @@ services:
       - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:${APP_OUTPUT_ROOT:?APP_OUTPUT_ROOT 필요 — load_settings.sh load_settings가 냄}:z
     mem_limit: ${PARSE_MEM_LIMIT:-24g}
     memswap_limit: ${PARSE_MEM_LIMIT:-24g}
-    cpus: ${PARSE_CPUS:-5}                  # docker는 호스트 CPU 수보다 큰 값을 거부 — CPU 4개 개발 서버는 settings.yaml ops.containers.pipeline.cpus를 3 이하로
+    cpus: ${PARSE_CPUS:-5}                  # docker는 호스트 CPU 수보다 큰 값을 거부 — CPU 4개 개발 서버는 settings.yaml ops.containers.pipeline.pipeline_cpus를 3 이하로
     cpu_shares: 1024                        # CPU가 모자랄 때 나눔 비율 — mcp-data-parsing(4096)가 먼저
     pids_limit: 4096
     logging:

@@ -1,4 +1,4 @@
-"""nightly_batch.sh scheduled 시각 게이트(pl-32) — settings.yaml ops.nightly.start_time·max_docs·stop_time(NIGHTLY_TIME·
+"""nightly_batch.sh scheduled 시각 게이트(pl-32) — settings.yaml ops.nightly.nightly_start_time·nightly_max_docs·nightly_stop_time(NIGHTLY_TIME·
 NIGHTLY_MAX_DOCS·NIGHTLY_DEADLINE) 중 하나라도 비면 조용히 끝, 시작 시각부터 5분 안이면 run_pipeline.py(새벽 배치 = run_pipeline)에
 상한·마감을 넘김, 꼴이 틀리면 종료 2. nightly_batch.sh에서 게이트 블록만 떼어 bash로 돌린다(date·python3은 셸 함수로 바꿔 끼움 — run_pipeline은 돌지 않음, 설정·docker 없음, PC 전용)."""
 

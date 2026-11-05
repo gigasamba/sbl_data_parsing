@@ -10,7 +10,7 @@ from common.core import parse_limit
 from mcp_server import config as mc
 from mcp_server.config import CFG
 
-_NO_TOKEN = "parse 서비스 토큰 없음 — settings.yaml required.tokens.mcp를 설정(두 컨테이너가 같은 칸을 읽음)"
+_NO_TOKEN = "parse 서비스 토큰 없음 — settings.yaml required.tokens.mcp_token를 설정(두 컨테이너가 같은 칸을 읽음)"
 
 
 class NoToken(RuntimeError):
@@ -18,7 +18,7 @@ class NoToken(RuntimeError):
 
 
 def _token():
-    """required.tokens.mcp(작업 서비스도 같은 칸). 없거나 공백만이면 NoToken. 요청마다 읽음."""
+    """required.tokens.mcp_token(작업 서비스도 같은 칸). 없거나 공백만이면 NoToken. 요청마다 읽음."""
     tok = mc.token_text(mc.common_cfg().tokens.mcp)
     if not tok:
         raise NoToken(_NO_TOKEN)
@@ -26,7 +26,7 @@ def _token():
 
 
 # ── 텍스트 파싱 프록시(2026-10-21 사용자 요청) — mcp-data-parsing 컨테이너(11-03 — 옛 data-pipeline-parse)의 작업 서비스(run_mcp_parsing,
-#    그 컨테이너의 주 프로세스 — 토큰은 두 컨테이너가 같은 칸 required.tokens.mcp)
+#    그 컨테이너의 주 프로세스 — 토큰은 두 컨테이너가 같은 칸 required.tokens.mcp_token)
 #    를 localhost HTTP로 호출 — 구조화·임베딩·EDW/OS 적재·그림[VLM] 파싱 없이 text 파싱 대표 결과만. ──
 def _run_mcp_parsing(method, path, payload=None, timeout=10):
     """parse 서비스 HTTP — 토큰은 _token()."""

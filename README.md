@@ -6,7 +6,7 @@
 
 > **⚠️ 0.2.0은 아직 출시 전이다.** `VERSION`은 `0.1.0`이고 git 태그 `v0.2.0`도 없다. 태그가 붙기 전에는 운영 서버에서 [release-and-patch §8-3](docs/operations/release-and-patch.md#8-3-실행-순서--복사해-붙이는-명령dev-먼저-그다음-prd)을 실행하지 않는다.
 >
-> **⚠️ 0.1.0 DB에 `migrate up`을 그냥 하지 않는다.** 마이그레이션 `0002_search`는 0.1.0이 만든 옛 검색 표를 **지운다**. 운영 DB는 새 `required.pg.db_schema`를 정하고 `pg_dump`로 백업한 뒤 올린다(release-and-patch §8-3).
+> **⚠️ 0.1.0 DB에 `migrate up`을 그냥 하지 않는다.** 마이그레이션 `0002_search`는 0.1.0이 만든 옛 검색 표를 **지운다**. 운영 DB는 새 `required.pg.pg_schema`를 정하고 `pg_dump`로 백업한 뒤 올린다(release-and-patch §8-3).
 >
 > **⚠️ `docker compose`·`podman compose`를 직접 부르지 않는다.** 서버 컨테이너는 늘 `bash deploy/host/scripts/host_ctl.sh …`로 다룬다(§5-3 ①).
 >
@@ -76,7 +76,7 @@ pgvector의 표는 코드가 실행 중에 만들지 않는다. 모두 Alembic �
 
 | 갈래(`--target`) | 스키마 | 끝 판 |
 |---|---|---|
-| `search` | 기준 스키마(`required.pg.db_schema`) + 원천 스키마 5벌 `<기준>_{sfdc,crms,las,faq,other}` | `0005_search`(0001→0005 차례로) |
+| `search` | 기준 스키마(`required.pg.pg_schema`) + 원천 스키마 5벌 `<기준>_{sfdc,crms,las,faq,other}` | `0005_search`(0001→0005 차례로) |
 | `applog` | `applog`(고정 이름) | `0001_applog` |
 | `master` | `<기준>_master` | `0001_master` — 채우기는 `master load` |
 
@@ -151,37 +151,46 @@ docker run -d --name sbl-mcp-pg -p 127.0.0.1:55433:5432 -v sbl_mcp_pgdata:/var/l
 ```yaml
 required:
   env: {run_env: local}
-  pg: {host: 127.0.0.1, port: 55433, db: rag, user: rag, password: <비밀번호>, db_schema: demo}   # 적재·검색할 스키마
-  embed: {base_url: <OpenAI 호환 주소>, model: <임베딩 모델>, api_key: <키>}
+  pg: {pg_host: 127.0.0.1, pg_port: 55433, pg_database: rag, pg_user: rag, pg_password: <비밀번호>, pg_schema: demo}   # 적재·검색할 스키마
+  models:
+    # ---- 임베딩 모델 ----
+    embed_base_url: <OpenAI 호환 주소>
+    embed_api_key: <키>
+    embed_model: <임베딩 모델>
+    # ---- LLM·VLM(쓸 때만) ----
+    llm_base_url: <주소>
+    llm_model: <모델>
+    vlm_base_url: <주소>
+    vlm_model: <모델>
 ops:
-  pipeline_paths: {out_root: output/demo}        # 파이프라인 결과 폴더
+  paths: {container_output_dir: output/demo}     # 파이프라인 결과 폴더
 search:
-  server: {host: 127.0.0.1, port: 18769}
+  server: {mcp_bind_host: 127.0.0.1, mcp_port: 18769}
 dev:                                             # PC 전용 칸(RUN_ENV=local) — 서버 settings.yaml에는 두지 않는다
   models:
-    embed: {allow_external: false}               # 평소 false — 임베딩이 필요한 실행 동안만 true
+    embed: {embed_allow_external: false}         # 평소 false — 임베딩이 필요한 실행 동안만 true
     guard:
-      budget_usd: 0.1                            # 외부 모델 하루 지출 상한($) — 비우면 0.1. 장부 output/_llm_spend/<날짜>.txt
-  mcp: {mcp_url: "http://127.0.0.1:18769/mcp", ui_port: 8791}   # 검증 페이지(§4-6)·점검 도구가 붙을 주소
+      daily_budget_usd: 0.1                      # 외부 모델 하루 지출 상한($) — 비우면 0.1. 장부 output/_llm_spend/<날짜>.txt
+  search_ui: {search_ui_mcp_url: "http://127.0.0.1:18769/mcp", search_ui_port: 8791}   # 검증 페이지(§4-6)·점검 도구가 붙을 주소
 tuning:
   ops:
-    runtime: {cpu_max_load: 5}                   # 부하가 높은 PC라면(기본 0.9에서는 계속 대기함)
+    runtime: {max_cpu_load: 5}                   # 부하가 높은 PC라면(기본 0.9에서는 계속 대기함)
 ```
 
 - 옛 배치(최상위 `common`·`pipeline`·`mcp`)·옛 자리·지운 칸·모르는 칸이 있으면 시작하지 않고 그 칸 이름만 알린다 — `settings.sample.yaml`과 대조해 고친다(자리 찾기 `python -m common.config.sample --where <이름>`).
 - PC 전용 칸(외부 모델 허용·지출 상한·단가, 로컬 대체 DB, 시험 하네스)은 `dev` 절에 모여 있다(sample 맨 아래).
 - **외부 임베딩은 `allow_external: true`이고 `run_env: local`일 때만** 호출된다(서버 dev·prd는 늘 거부).
-- **LLM·VLM도 같다:** `required.models`의 `llm_*`·`vlm_*`(주소·모델·키)를 채우고 `dev.models.llm.allow_external`·`dev.models.vlm.allow_external`을 `true`로 두면 PC에서 분류(SFDC·LAS)와 그림·스캔 쪽 VLM이 외부 모델을 부른다(`run_env: local`일 때만). 비우면 분류가 실패해 SFDC·LAS 문서는 적재되지 않는다. OpenRouter 하나로 임베딩·LLM·VLM을 모두 쓸 수 있다(같은 주소·키, 모델만 다름 — 단가표 `common/ai/llm.py` `PRICES`에 있는 모델이어야 예산 상한이 걸림).
-- **VLM 설정은 한 벌:** 스캔·이미지 문서의 VLM 엔진(`qwen_vlm`)·쪽 VLM·그림 VLM이 같은 호출과 같은 칸(`common.models.vlm.*` — 동시 수·제한 시간·재시도·`extra_request_body`, 해상도 `extract.page_render_dpi` 150, 쪽 상한 `transform.vlm.max_pages_per_doc`)을 쓴다. 생각(추론) 모델이면 `common.models.vlm.extra_request_body`에 생각 끄기를 넣는다(OpenRouter는 `{"reasoning": {"enabled": false}}`) — 칸 설명은 [env-guide §2](docs/operations/env-guide.md), 규칙은 PRD [pl-43](docs/prd/transform.md#pl-43).
-- **내부망 서버(dev·prd)에서 시험·운영할 때는 세 `allow_external`을 모두 `false`(0)로 둔다.** 서버는 `run_env`가 dev·prd라 켜 두어도 외부 호출을 거부하지만, 서버 settings.yaml에는 외부 허용을 남기지 않는다.
+- **LLM·VLM도 같다:** `required.models`의 `llm_*`·`vlm_*`(주소·모델·키)를 채우고 `dev.models.llm.llm_allow_external`·`dev.models.vlm.vlm_allow_external`을 `true`로 두면 PC에서 분류(SFDC·LAS)와 그림·스캔 쪽 VLM이 외부 모델을 부른다(`run_env: local`일 때만). 비우면 분류가 실패해 SFDC·LAS 문서는 적재되지 않는다. OpenRouter 하나로 임베딩·LLM·VLM을 모두 쓸 수 있다(같은 주소·키, 모델만 다름 — 단가표 `common/ai/llm.py` `PRICES`에 있는 모델이어야 예산 상한이 걸림).
+- **VLM 설정은 한 벌:** 스캔·이미지 문서의 VLM 엔진(`qwen_vlm`)·쪽 VLM·그림 VLM이 같은 호출과 같은 칸(`common.models.vlm.*` — 동시 수·제한 시간·재시도·`vlm_extra_request_body`, 해상도 `extract.page_render_dpi` 150, 쪽 상한 `transform.vlm.vlm_max_pages_per_doc`)을 쓴다. 생각(추론) 모델이면 `common.models.vlm.vlm_extra_request_body`에 생각 끄기를 넣는다(OpenRouter는 `{"reasoning": {"enabled": false}}`) — 칸 설명은 [env-guide §2](docs/operations/env-guide.md), 규칙은 PRD [pl-43](docs/prd/transform.md#pl-43).
+- **내부망 서버(dev·prd)에서 시험·운영할 때는 세 칸 `embed_allow_external`·`llm_allow_external`·`vlm_allow_external`을 모두 `false`(0)로 둔다.** 서버는 `run_env`가 dev·prd라 켜 두어도 외부 호출을 거부하지만, 서버 settings.yaml에는 외부 허용을 남기지 않는다.
 - **게시(silver)·EDW·원본 — PC는 가짜 대상만 적는다.** 경로는 저장소 루트 기준 상대 경로로 써도 된다(절대 경로도 됨):
   ```yaml
   required:
     publish: {bucket: "file://output/object_storage/silver", prefix: parse}   # 가짜 Object Storage 폴더
     edw: {sqlite: output/edw.sqlite}   # 가짜 EDW(ParsingMeta 포함) — valid_env/edw/edw.sqlite 사본(파싱·게시가 씀)
   ```
-  `file://` 뒤 폴더에 `<prefix>/<출처>/<원본 경로>/<파일명>_<날짜>.md`로 쓴다. 원본 폴더(`ops.paths.docs_dir`)·파싱 원본(`extract.source.input_location` — 폴더 또는 `rdb:csv:<경로>`)·PG 대체 폴더(`dev.pg_standin.dir`)도 상대 경로를 받는다(예 `valid_env/object_storage`).
-  `run_env: local`에서 실제 대상(`required.edw.host`, `required.object_storage.endpoint`, 원천 버킷, `file://`가 아닌 게시 버킷)이 적혀 있으면 앱이 시작하지 않는다. 서버(dev·prd)는 실제 접속 칸을 쓴다.
+  `file://` 뒤 폴더에 `<prefix>/<출처>/<원본 경로>/<파일명>_<날짜>.md`로 쓴다. 원본 폴더(`ops.paths.source_docs_dir`)·파싱 원본(`extract.source.source_input_location` — 폴더 또는 `rdb:csv:<경로>`)·PG 대체 폴더(`dev.pg_standin.pg_standin_dir`)도 상대 경로를 받는다(예 `valid_env/object_storage`).
+  `run_env: local`에서 실제 대상(`required.edw.edw_host`, `required.object_storage.object_storage_endpoint`, 원천 버킷, `file://`가 아닌 게시 버킷)이 적혀 있으면 앱이 시작하지 않는다. 서버(dev·prd)는 실제 접속 칸을 쓴다.
 - PG 접속 칸(`required.pg`의 여섯 칸)은 **모두 채우거나 모두 비운다.** 일부만 채우면 채울 자리를 알려 주고 멈춘다. PC에서 host·password가 둘 다 비면 SQLite 대역(`output/pg_standin/`)으로 돌고 첫 줄에 `WARNING: PG 접속 정보 없음`을 찍는다(서버는 멈춤).
 
 ### 4-3. 점검
@@ -199,7 +208,7 @@ export PYTHONPATH=$PWD                                   # 명령은 저장소 �
 
 ### 4-4. 파이프라인 실행 — 문서 몇 건(①~⑥)
 
-먼저 `settings.yaml`의 `dev.models.embed.allow_external`을 `true`로 바꾼다. 끝나면 ⑥에서 되돌린다.
+먼저 `settings.yaml`의 `dev.models.embed.embed_allow_external`을 `true`로 바꾼다. 끝나면 ⑥에서 되돌린다.
 
 **① 테스트 문서 고르기**
 
@@ -208,7 +217,7 @@ for s in SFDC CRMS; do mkdir -p output/demo/src/$s; for d in $(ls -d valid_env/o
 SRC=output/demo/src     # <원천>/<uuid>/<파일> 그대로 — 파싱이 상대 키로 원천을 알아본다
 ```
 
-- 문서는 `valid_env/object_storage/<원천>/<uuid>/<파일>`에 있다(목록·목적: [valid_env/object_storage/test_doc_purpose.md](valid_env/object_storage/test_doc_purpose.md)). `valid_env`에는 쓰지 않는다(결과는 모두 `ops.paths.output_dir` 아래).
+- 문서는 `valid_env/object_storage/<원천>/<uuid>/<파일>`에 있다(목록·목적: [valid_env/object_storage/test_doc_purpose.md](valid_env/object_storage/test_doc_purpose.md)). `valid_env`에는 쓰지 않는다(결과는 모두 `ops.paths.container_output_dir` 아래).
 
 **② 파싱 — 문서 → 대표 결과**
 
@@ -260,7 +269,7 @@ cp valid_env/edw/edw.sqlite output/demo/edw.sqlite   # EDW 대역 사본 — 파
 .venv/bin/python -m mcp_server.cli.search_ask ask --source CRMS --k 3 --q "<질문>"   # 원천 하나 필수(SFDC·CRMS·LAS·FAQ·Other)
 ```
 
-**⑥ 정리** — 4-5에서 MCP까지 확인한 뒤 `allow_external`을 `false`로 되돌린다.
+**⑥ 정리** — 4-5에서 MCP까지 확인한 뒤 `*_allow_external`을 `false`로 되돌린다.
 
 <details>
 <summary><b>방법 B — settings.yaml을 바꾸지 않고 <code>--set</code>으로 넘기기</b></summary>
@@ -298,7 +307,7 @@ kill $(cat output/demo/mcp.pid)              # 끄기 — PID로만(pkill -f 금
 
 - 엔드포인트 `http://127.0.0.1:18769/mcp`(streamable HTTP) — 도구 입출력: [mcp-guide](docs/operations/mcp-guide.md).
 - 밖에서 붙어 보기: `.venv/bin/python -m mcp_server.cli.mcp_smoke --url http://127.0.0.1:18769/mcp --source CRMS --q "<질문>"` — 도구 목록과 search 근거 칸 확인.
-- 루프백(`127.0.0.1`)이면 토큰 없이 접속된다. 다른 주소로 열면 `required.tokens.mcp`가 필요하고, `0.0.0.0`은 거부된다.
+- 루프백(`127.0.0.1`)이면 토큰 없이 접속된다. 다른 주소로 열면 `required.tokens.mcp_token`가 필요하고, `0.0.0.0`은 거부된다.
 
 ### 4-6. 검증 페이지(브라우저로 검색 확인)
 
@@ -314,7 +323,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 - 왼쪽 "검색 설정"에서 **원천**을 하나 고른다.
 - `allow_external: false`면 질의 임베딩도 막혀 키워드·ID 검색만 된다. 벡터 검색까지 보려면 `true`로 바꾸고 MCP를 다시 띄우고, 끝나면 되돌린다.
-- 다른 적재 결과를 보려면 `required.pg.db_schema`를 바꾸고 다시 띄운다.
+- 다른 적재 결과를 보려면 `required.pg.pg_schema`를 바꾸고 다시 띄운다.
 
 ### 4-7. 그 밖
 
@@ -378,7 +387,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 2. 이미지를 불러온다(공용 폴더에서 — 서버에 한 번, 이미 불러온 판이면 건너뜀): `cd /home/sbl && DOCKER=podman bash sbl_images-main/load.sh <이미지 판>` — 조각 sha256 확인 → 합치기 → load, 끝에 `<판>/BUILD.txt`(빌드 커밋·DEPS_HASH). **코드의 `deploy/docker/DEPS_HASH`가 `BUILD.txt`의 DEPS_HASH와 같은 판**을 고른다 — 0.2.0 코드는 0.1.0 실행 이미지(`f0fcc30bd067bc2f`)를 쓴다: `load.sh 0.1.0`.
 3. 루트 채우기: `cd <루트>/<코드> && bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>` — `output/`·`output/_mcp_parse/jobs`(UID 10001, 2775)·`backup/`(700), 코드 폴더 a+rX, `settings.sample.yaml` → `<루트>/settings.yaml`, `resources/config/edw_chain.yaml` → `<루트>/edw_chain.yaml`(둘 다 없을 때만, 10001:<운영 그룹> 640). 끝에 빈 필수 칸 **이름**을 찍는다. 여러 번 불러도 안전하다.
 4. 설정을 채운다 — `<루트>/settings.yaml` 맨 위 `required`의 빈 값(§5-3 ② "꼭 채울 값"). 이미지 칸에는 2에서 불러온 실행 이미지 태그(`data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0`). 자원 상한도 본다(아래).
-   - EDW 표 설명 자료(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료, 받는 곳은 refactor.md C-91)를 루트 아래 결과 폴더에 복사하고(`<루트>/output/edw_meta/`, UID 10001이 읽을 수 있게) `search.edw_meta.catalog_dir: /app/output/edw_meta`를 적는다. 없으면 `edw_meta` 도구만 `not_configured`로 답한다(나머지 도구는 그대로).
+   - EDW 표 설명 자료(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료, 받는 곳은 refactor.md C-91)를 루트 아래 결과 폴더에 복사하고(`<루트>/output/edw_meta/`, UID 10001이 읽을 수 있게) `search.edw_meta.edw_meta_catalog_dir: /app/output/edw_meta`를 적는다. 없으면 `edw_meta` 도구만 `not_configured`로 답한다(나머지 도구는 그대로).
 5. `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline`(코드 폴더에서 — DB 도구가 그 안에서 돈다).
 6. DB(§5-3 ③): `bash deploy/host/scripts/pipe_exec.sh migrate check --target all` → `… migrate up --target all --dim <임베딩 차원>`(차원 = 임베딩 모델 출력 크기, 모델 담당 확인) → `… migrate master load` → `… migrate check --target all`(기대: 차이 없음).
 7. `bash deploy/host/scripts/host_ctl.sh up -d mcp-data-parsing mcp`(검색 MCP는 시작할 때 마스터 표를 읽으므로 6 뒤).
@@ -390,16 +399,16 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 | 컨테이너 | CPU · 메모리 기본 | settings.yaml 칸 |
 |---|---|---|
-| `data-pipeline` | 5 · 24g | `ops.containers.pipeline.cpus` · `mem_limit` |
-| `mcp-data-parsing` | 3 · 8g(CPU 나눔 비율 4096 — 일괄 1024보다 먼저) | `ops.containers.data_parsing.cpus` · `mem_limit` · `cpu_shares` |
-| `mcp-server` | 1 · 4g | `ops.containers.mcp.cpus` · `mem_limit` |
+| `data-pipeline` | 5 · 24g | `ops.containers.pipeline.pipeline_cpus` · `pipeline_mem_limit` |
+| `mcp-data-parsing` | 3 · 8g(CPU 나눔 비율 4096 — 일괄 1024보다 먼저) | `ops.containers.data_parsing.data_parsing_cpus` · `data_parsing_mem_limit` · `data_parsing_cpu_shares` |
+| `mcp-server` | 1 · 4g | `ops.containers.mcp.mcp_cpus` · `mcp_mem_limit` |
 
-서버 CPU 수보다 큰 값은 컨테이너 도구가 거부한다. CPU 4개 서버라면 예: `parse_cpus: 2`, `data_parsing_cpus: 1`(그러면 `tuning.ops.services.data_parsing.engine_processes`도 1 이하), `ops.containers.mcp.cpus: 1`. 바꾼 뒤 `host_ctl.sh up -d --force-recreate …`.
+서버 CPU 수보다 큰 값은 컨테이너 도구가 거부한다. CPU 4개 서버라면 예: `parse_cpus: 2`, `data_parsing_cpus: 1`(그러면 `tuning.ops.services.data_parsing.mcp_parse_engine_processes`도 1 이하), `ops.containers.mcp.mcp_cpus: 1`. 바꾼 뒤 `host_ctl.sh up -d --force-recreate …`.
 
 **밖에서 붙기(다른 서버의 AI 클라이언트)**
-- 기본 바인드는 `127.0.0.1`. 밖에서 붙게 하려면 `search.server.bind_host`에 서버 IP를 적는다(`0.0.0.0`은 거부).
-- 이때 `required.tokens.mcp`가 꼭 있어야 한다(없으면 시작 거부). 만들기: `openssl rand -hex 24`.
-- 방화벽에서 `search.server.port`(기본 8765)를 연다 — 예: `firewall-cmd --add-port=8765/tcp --permanent && firewall-cmd --reload`.
+- 기본 바인드는 `127.0.0.1`. 밖에서 붙게 하려면 `search.server.mcp_bind_host`에 서버 IP를 적는다(`0.0.0.0`은 거부).
+- 이때 `required.tokens.mcp_token`가 꼭 있어야 한다(없으면 시작 거부). 만들기: `openssl rand -hex 24`.
+- 방화벽에서 `search.server.mcp_port`(기본 8765)를 연다 — 예: `firewall-cmd --add-port=8765/tcp --permanent && firewall-cmd --reload`.
 
 **한 서버에 여러 벌 띄우기(개발자별 — 벌 이름 하나로 나뉨, 개발 서버만)**
 - 루트 하나가 한 벌이다. 개발자마다 공용 폴더 아래 루트를 새로 만들어(예 `/home/sbl/dev-hong/`) 위 설치 순서를 따로 한다. 이미지는 공용 폴더에서 이미 불러왔으므로 2번은 건너뛴다.
@@ -409,7 +418,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 | 무엇 | 한 벌(이름 비움) | 벌 `hong` |
 |---|---|---|
 | 컨테이너·compose 묶음·타이머 | `data-pipeline` · `mcp-data-parsing` · `mcp-server` | 끝에 `-hong` |
-| PG 스키마 | `required.pg.db_schema`(예 `sbl`) | `sbl_hong`(원천 스키마 `sbl_hong_sfdc` …) |
+| PG 스키마 | `required.pg.pg_schema`(예 `sbl`) | `sbl_hong`(원천 스키마 `sbl_hong_sfdc` …) |
 | EDW 기록 표 | `required.edw.parsing_meta_table`(기본 `AI.ParsingMeta`) | `AI.ParsingMeta_hong` |
 | 게시 경로(Object Storage) | `<prefix>/…` | 개발 서버(dev)에서만 `<prefix>/hong/…` |
 
@@ -445,7 +454,7 @@ bash deploy/host/scripts/host_ctl.sh ps                                         
 |---|---|---|
 | `<코드 zip>` | 코드 저장소의 그 판 zip(예 태그 `v0.2.0` → 풀면 `sbl_data_parsing-0.2.0/`) | GitHub `gigasamba/sbl_data_parsing` 태그 — 같은 서버에 이미 한 벌이 있으면 zip 대신 그 코드 폴더를 `cp -a`로 복사해도 된다 |
 | `<운영 그룹>` | 컨테이너(UID 10001)와 사람 계정이 함께 쓰는 리눅스 그룹 | `id -gn <운영 계정>` — 모르면 서버 관리자. 첫 벌과 같은 그룹 |
-| `<차원>` | 임베딩 모델이 내는 벡터 길이(숫자, 예 1024) | `required.embed` 모델 담당 — 첫 벌과 같은 모델이면 같은 값. 표를 처음 만들 때만 씀(벡터 칸 길이가 그때 정해짐) |
+| `<차원>` | 임베딩 모델이 내는 벡터 길이(숫자, 예 1024) | `required.models.embed_model` 담당 — 첫 벌과 같은 모델이면 같은 값. 표를 처음 만들 때만 씀(벡터 칸 길이가 그때 정해짐) |
 
 - `migrate up`이 필요한 때:
 
@@ -484,11 +493,11 @@ bash deploy/release/stage_images.sh pipeline-runtime mcp-runtime                
 
 | 무엇 | settings.yaml 칸 | 기본 | 누가 붙나 |
 |---|---|---|---|
-| PostgreSQL(pgvector) | `required.pg.port` | 없음(필수) | 파이프라인·검색 MCP |
-| 검색 MCP 서버 | `search.server.port`(바인드 `search.server.bind_host`) | 8765(127.0.0.1) | AI 클라이언트 |
-| MCP 파싱 작업 서비스 | `ops.services.data_parsing.port` — 검색 MCP도 이 값으로 `http://127.0.0.1:<포트>`를 부름 | 8766 | 검색 MCP의 `parse_document` |
-| EDW(SQL Server) | `required.edw.port`(주소·계정도 `required.edw`) | 1433 | 파이프라인·`query_edw` |
-| 검증 페이지(PC만) | `dev.search_ui.port` | 8790 | 사람(브라우저) |
+| PostgreSQL(pgvector) | `required.pg.pg_port` | 없음(필수) | 파이프라인·검색 MCP |
+| 검색 MCP 서버 | `search.server.mcp_port`(바인드 `search.server.mcp_bind_host`) | 8765(127.0.0.1) | AI 클라이언트 |
+| MCP 파싱 작업 서비스 | `ops.services.data_parsing.data_parsing_port` — 검색 MCP도 이 값으로 `http://127.0.0.1:<포트>`를 부름 | 8766 | 검색 MCP의 `parse_document` |
+| EDW(SQL Server) | `required.edw.edw_port`(주소·계정도 `required.edw`) | 1433 | 파이프라인·`query_edw` |
+| 검증 페이지(PC만) | `dev.search_ui.search_ui_port` | 8790 | 사람(브라우저) |
 
 컨테이너는 host 네트워크라 포트가 서버에서 겹치지 않아야 한다.
 
@@ -506,7 +515,7 @@ bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp   
 - `${PARSE_CPUS:-5}` 같은 값은 `host_ctl.sh`가 settings.yaml에서 넘긴다(`load_settings.sh`). 비면 `:-` 뒤 기본값, `${…:?…}`는 꼭 있어야 하는 칸.
 - 그래서 compose를 직접 부르면 값을 못 받아 `:?`에서 멈추거나 기본값으로 뜬다. 바꿀 값은 settings.yaml에 적고 `host_ctl.sh`로 다시 띄운다. `host_ctl.sh`는 부를 때마다 settings.yaml을 다시 읽는다.
 
-**② 설정 파일과 결과 폴더** — `host_ctl.sh init`(§5-0 3번). 결과 폴더는 `<루트>/output`이다(다른 곳에 둘 때만 `ops.host.output_dir`를 먼저 적는다). 서버에서 직접 만드는 파일(자리·예시·권한)은 [release-and-patch §8-7](docs/operations/release-and-patch.md#8-7-서버에서-직접-만드는-파일).
+**② 설정 파일과 결과 폴더** — `host_ctl.sh init`(§5-0 3번). 결과 폴더는 `<루트>/output`이다(다른 곳에 둘 때만 `ops.host.host_output_dir`를 먼저 적는다). 서버에서 직접 만드는 파일(자리·예시·권한)은 [release-and-patch §8-7](docs/operations/release-and-patch.md#8-7-서버에서-직접-만드는-파일).
 
 <a id="꼭-채울-값"></a>
 **꼭 채울 값 — 서버 settings.yaml.** "형식 예"는 모두 가짜 값이다. dev = 개발 서버, prd = 운영 서버.
@@ -514,20 +523,20 @@ bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp   
 | 칸 | 무엇 | 어디서 받나 | 형식 예(가짜) | 환경 | 틀리면 어디서 잡나 |
 |---|---|---|---|---|---|
 | `required.env.run_env` | 실행 환경 | 정해진 값 | `dev` · `prd` | PC·dev·prd | 모든 명령이 시작 거부 |
-| `required.pg.host`·`port`·`database`·`user`·`password`·`db_schema` | 검색 DB(pgvector) | DB 담당 | `pg.example.local` · `5432` · `rag` · `rag_app` · `<비밀>` · `ai` | PC·dev·prd | `host_ctl.sh check` ① check_env · ③ migrate check |
-| `required.embed.base_url`·`model`·`api_key` | 임베딩 모델(`model`은 적재·검색 때 같아야 함) | 모델 담당(내부망 주소) | `http://llm.example.local:8000/v1` · `<모델>` · `<비밀>` | PC·dev·prd | `host_ctl.sh check` ② ping_models |
-| `required.llm.*`·`required.vlm.*` | LLM·VLM 모델 | 모델 담당 | `http://llm.example.local:8001/v1` · `<모델>` | dev·prd | `host_ctl.sh check` ② ping_models |
-| `required.edw.host`·`port`·`database`·`read_*`·`write_*` | 회사 DB(EDW) 접속 — 읽기 계정(원천 목록·ParsingMeta 조회·`query_edw`), 쓰기 계정(ParsingMeta 게시) · `port`는 비우면 1433 | DB 담당 | `edw.example.local` · (비움) · `EDW` · `<계정>` · `<비밀>` | dev·prd | `run_pipeline` 시작(빠지면 칸 이름을 찍고 멈춤) · `pipe_exec.sh publish --dry-run`(④) |
+| `required.pg.pg_host`·`pg_port`·`pg_database`·`pg_user`·`pg_password`·`pg_schema` | 검색 DB(pgvector) | DB 담당 | `pg.example.local` · `5432` · `rag` · `rag_app` · `<비밀>` · `ai` | PC·dev·prd | `host_ctl.sh check` ① check_env · ③ migrate check |
+| `required.models.embed_base_url`·`embed_model`·`embed_api_key` | 임베딩 모델(`embed_model`은 적재·검색 때 같아야 함) | 모델 담당(내부망 주소) | `http://llm.example.local:8000/v1` · `<모델>` · `<비밀>` | PC·dev·prd | `host_ctl.sh check` ② ping_models |
+| `required.models.llm_*`·`vlm_*` | LLM·VLM 모델 | 모델 담당 | `http://llm.example.local:8001/v1` · `<모델>` | dev·prd | `host_ctl.sh check` ② ping_models |
+| `required.edw.edw_host`·`edw_port`·`edw_database`·`read_*`·`write_*` | 회사 DB(EDW) 접속 — 읽기 계정(원천 목록·ParsingMeta 조회·`query_edw`), 쓰기 계정(ParsingMeta 게시) · `edw_port`는 비우면 1433 | DB 담당 | `edw.example.local` · (비움) · `EDW` · `<계정>` · `<비밀>` | dev·prd | `run_pipeline` 시작(빠지면 칸 이름을 찍고 멈춤) · `pipe_exec.sh publish --dry-run`(④) |
 | `required.edw.parsing_meta_table` | 게시 행을 쓸 EDW 표 — 비우면 `AI.ParsingMeta` | DB 담당 | (비움) | dev·prd | publish `--apply` |
-| `required.edw.local_sqlite_file` | PC 가짜 EDW 파일 — **서버는 비움**(적혀 있으면 EDW를 쓸 때 거부) | — | (비움) | PC만 | — |
-| `required.publish.bucket`·`prefix` | silver 게시 위치 — 버킷(원천 원본 버킷과 달라야 함)과 그 안 경로 접두 | 운영 담당 | `rag-silver` · `parse` | PC·dev·prd | `run_pipeline` 시작 · publish 미리보기 |
-| `required.object_storage.endpoint`·`region`·`access_key`·`secret_key`·`verify_tls` | Object Storage(S3 호환) 접속 — `region`은 비우면 `us-east-1`, `verify_tls`는 비우면 `1`(사내 CA면 CA 파일 경로) | 스토리지 담당 | `https://os.example.local:9000` · (비움) · `<비밀>` · `<비밀>` · (비움) | dev·prd | `run_pipeline` 시작 · publish `--apply` |
-| `extract.source.input_location`·`default_bucket`·`uri_prefix` | 원본 위치 | 운영 담당 | `rdb:csv:<루트>/list.csv` · `<버킷>` · `s3://<버킷>/<접두>` | dev·prd | 첫 `run_pipeline` |
-| `required.tokens.mcp` | MCP 토큰 하나 — 검색 MCP와 `parse_document` 작업 서비스가 함께 씀 | `openssl rand -hex 24` | 48자 16진수 | dev·prd(밖에서 붙을 때 필수) | `host_ctl.sh check` ⑥ `/health` · `parse_document` 호출이 토큰 오류 |
+| `required.edw.edw_local_sqlite_file` | PC 가짜 EDW 파일 — **서버는 비움**(적혀 있으면 EDW를 쓸 때 거부) | — | (비움) | PC만 | — |
+| `required.publish.publish_bucket`·`publish_prefix` | silver 게시 위치 — 버킷(원천 원본 버킷과 달라야 함)과 그 안 경로 접두 | 운영 담당 | `rag-silver` · `parse` | PC·dev·prd | `run_pipeline` 시작 · publish 미리보기 |
+| `required.object_storage.object_storage_endpoint`·`object_storage_region`·`object_storage_access_key`·`object_storage_secret_key`·`object_storage_verify_tls` | Object Storage(S3 호환) 접속 — `object_storage_region`은 비우면 `us-east-1`, `object_storage_verify_tls`는 비우면 `1`(사내 CA면 CA 파일 경로) | 스토리지 담당 | `https://os.example.local:9000` · (비움) · `<비밀>` · `<비밀>` · (비움) | dev·prd | `run_pipeline` 시작 · publish `--apply` |
+| `extract.source.source_input_location`·`source_default_bucket`·`source_uri_prefix` | 원본 위치 | 운영 담당 | `rdb:csv:<루트>/list.csv` · `<버킷>` · `s3://<버킷>/<접두>` | dev·prd | 첫 `run_pipeline` |
+| `required.tokens.mcp_token` | MCP 토큰 하나 — 검색 MCP와 `parse_document` 작업 서비스가 함께 씀 | `openssl rand -hex 24` | 48자 16진수 | dev·prd(밖에서 붙을 때 필수) | `host_ctl.sh check` ⑥ `/health` · `parse_document` 호출이 토큰 오류 |
 | `required.tokens.fulltext_sign_key` | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키 — 비우면 두 도구가 `not_configured`, 바꾸면 이미 발급한 sfid가 모두 무효 | 같은 명령 | 48자 16진수 | dev·prd | 원문 도구 호출이 `not_configured` |
 | `required.deploy.pipeline_image` · `mcp_image` | 띄울 이미지 태그(같은 배포 묶음) | §5-0 2번 `load.sh` | dev: `data-pipeline-runtime:0.1.0` · prd: `data-pipeline:0.2.0` | dev·prd | `host_ctl.sh up`이 이미지 없음으로 멈춤 |
 | `required.deploy.host_docs_dir` | 원본 문서 폴더 | 서버 관리자 | `/data/docs` | dev·prd | `host_ctl.sh up`이 `:?` 안내로 멈춤 |
-| `ops.host.output_dir` | 결과 폴더 — 비우면 `<루트>/output` | 서버 관리자 | (비움) | dev·prd | — |
+| `ops.host.host_output_dir` | 결과 폴더 — 비우면 `<루트>/output` | 서버 관리자 | (비움) | dev·prd | — |
 | `required.deploy.pg_container_name` | `pg_dump`·`psql`을 exec할 PG 컨테이너 이름 | DB 담당 | `<컨테이너>` | dev·prd | 백업 명령(release-and-patch §8-3 2) |
 | `ops.host.container_cli` | 컨테이너 도구 | 정해진 값 | `podman` | dev·prd | 호스트 스크립트가 다른 도구를 부름 |
 
@@ -577,7 +586,7 @@ selftest는 종료 코드가 아니라 `[판정]` 줄로 판정한다. 운영 �
 | 방법 | 명령 | 순서 | 언제 |
 |---|---|---|---|
 | 문서별 흐름 | `python3 deploy/host/scripts/run_pipeline.py …`(코드 폴더에서, nohup) | 문서마다 파싱 → publish → 원본 삭제(게시 성공 뒤) → 구조화·적재 | 대량 처리 |
-| 새벽 배치 | systemd `data-pipeline-nightly.timer` → `nightly_batch.sh scheduled` | `ops.nightly.start_time`에 `run_pipeline.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>` | 정기 운영 |
+| 새벽 배치 | systemd `data-pipeline-nightly.timer` → `nightly_batch.sh scheduled` | `ops.nightly.nightly_start_time`에 `run_pipeline.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>` | 정기 운영 |
 | 파싱·게시만 | `bash deploy/host/scripts/pipe_exec.sh parse` · `pipe_exec.sh publish [--dry-run]` | 상주 컨테이너 안에서 한 번 | 단계 확인 |
 
 `run_pipeline.py` 자리·설정·종료 코드: [release-and-patch §5-4](docs/operations/release-and-patch.md#5-4-run_pipelinepy-자리와-설정) · [server-guide §2](docs/operations/server-guide.md#2-일상-실행--run_pipeline문서별-흐름). **PC에서는 실행하지 않는다.**
@@ -590,7 +599,7 @@ tail -f <run_pipeline 작업 폴더>/batch_progress/progress.log              # 
 tail -n 50 <결과 폴더>/_docflow/<seq>/structure.log                    # 그 문서의 구조화·적재 출력 — 문서가 끝나면 지워짐(남기려면 run_pipeline --no-cleanup)
 ```
 
-**로그는 Postgres(`applog` 스키마)에 남는다.** 서버(두 이미지)는 `ops.log.db_enabled` 기본 켬이라 `migrate up --target all`(applog 포함)이 먼저다. DB에 못 쓰면 그 행만 `<결과 폴더>/logs/`에 JSON Lines로 남는다. 사람이 보는 실행 출력은 컨테이너 로그(`podman logs <컨테이너>`·`host_ctl.sh logs`), MCP 호출(질문·SQL 포함)은 `applog.mcp_log`이다.
+**로그는 Postgres(`applog` 스키마)에 남는다.** 서버(두 이미지)는 `ops.log.log_db_enabled` 기본 켬이라 `migrate up --target all`(applog 포함)이 먼저다. DB에 못 쓰면 그 행만 `<결과 폴더>/logs/`에 JSON Lines로 남는다. 사람이 보는 실행 출력은 컨테이너 로그(`podman logs <컨테이너>`·`host_ctl.sh logs`), MCP 호출(질문·SQL 포함)은 `applog.mcp_log`이다.
 
 **적재 거부 — 임베딩 모델이 다른 묶음.** 묶음의 임베딩 모델이 검색 스키마에 이미 적재된 문서의 모델과 다르면 적재는 아무것도 쓰지 않고 종료 2(`[load] 임베딩 모델이 다름 — 적재 거부 …`). `applog.pipe_event`에 남는다:
 
@@ -599,14 +608,14 @@ SELECT ts_start, run_id, model, err FROM applog.pipe_event
 WHERE stage = 'load.embed_guard' AND ts_start > now() - interval '7 days' ORDER BY ts_start DESC;
 ```
 
-해결: 기존 문서와 같은 모델(`required.embed.model`)로 묶음을 다시 만들거나, 모델을 바꾸려면 새 검색 스키마에 적재한다.
+해결: 기존 문서와 같은 모델(`required.models.embed_model`)로 묶음을 다시 만들거나, 모델을 바꾸려면 새 검색 스키마에 적재한다.
 
 ### 5-5. 서버 — 상주 서비스와 자동 실행
 
 | 무엇 | 방법 |
 |---|---|
 | 검색 MCP·`mcp-data-parsing` 상주 확인 | systemd `mcp-server-keepalive.timer` — 부팅 1분 뒤 + 2분마다 `mcp_keepalive.sh` |
-| 새벽 배치 | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `ops.nightly.start_time: "HH:MM"`(그 시각부터 5분 안에 시작) · `max_docs`(새 문서 수 상한, 1 이상) · `deadline: "HH:MM"`(마감 — 시작보다 5분 넘게 뒤). **셋 중 하나라도 비면 돌지 않는다**(기본 비움) |
+| 새벽 배치 | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `ops.nightly.nightly_start_time: "HH:MM"`(그 시각부터 5분 안에 시작) · `max_docs`(새 문서 수 상한, 1 이상) · `deadline: "HH:MM"`(마감 — 시작보다 5분 넘게 뒤). **셋 중 하나라도 비면 돌지 않는다**(기본 비움) |
 | 재부팅 뒤 되살리기(podman) | `systemctl enable --now podman-restart` — `restart: unless-stopped` 컨테이너를 부팅 때 다시 띄운다. 일괄 `data-pipeline`은 keepalive가 보지 않으니 재부팅 뒤 `host_ctl.sh ps`로 보고 없으면 `host_ctl.sh up -d data-pipeline` |
 
 systemd 설치(DB 판과 컨테이너를 확인한 뒤 — 새 루트로 옮길 때마다 그 루트의 코드 폴더에서 다시):
@@ -625,7 +634,7 @@ sudo systemctl enable --now podman-restart
 | 서버의 모든 컨테이너 | `podman ps` 또는 `docker ps`(root로 띄웠으면 `sudo podman ps`) |
 | 우리 컨테이너만 | `bash deploy/host/scripts/host_ctl.sh ps` |
 | 컨테이너 로그 | `bash deploy/host/scripts/host_ctl.sh logs --tail 100 mcp`(서비스 이름 `data-pipeline` · `mcp-data-parsing` · `mcp`) |
-| 검색 MCP가 응답하나 | `curl -s http://127.0.0.1:<search.server.port>/health` |
+| 검색 MCP가 응답하나 | `curl -s http://127.0.0.1:<search.server.mcp_port>/health` |
 | 타이머 상태 | `systemctl list-timers 'mcp-server-keepalive*' 'data-pipeline-nightly*'` · `journalctl -u mcp-server-keepalive.service -n 50` |
 | 끄기 | **타이머부터** — `systemctl stop mcp-server-keepalive.timer data-pipeline-nightly.timer` → `bash deploy/host/scripts/host_ctl.sh stop` |
 | 켜기 | `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp` → `systemctl start mcp-server-keepalive.timer data-pipeline-nightly.timer` |
@@ -636,7 +645,7 @@ sudo systemctl enable --now podman-restart
 | 경로 | 왜 생기나 | 지워도 되나 |
 |---|---|---|
 | `<결과 폴더>/edw/embed_cache.sqlite` | 임베딩 캐시 | 지우면 다음 적재 때 임베딩을 모두 다시 부른다 — 지우지 않는다 |
-| `<결과 폴더>/logs/*.jsonl` | DB 로그를 못 쓸 때의 예비 기록(`ops.log.fallback_dir`) | 문서 본문·질문이 들어갈 수 있다 — 밖으로 내보내지 않는다. DB가 돌아온 뒤 확인하고 지운다 |
+| `<결과 폴더>/logs/*.jsonl` | DB 로그를 못 쓸 때의 예비 기록(`ops.log.log_fallback_dir`) | 문서 본문·질문이 들어갈 수 있다 — 밖으로 내보내지 않는다. DB가 돌아온 뒤 확인하고 지운다 |
 | `<결과 폴더>/_docflow/` · `_staging/` | 문서 하나의 파싱 → 구조화·적재 작업 · 미리 받은 원본 | 문서가 끝나면 지워진다 |
 | `<결과 폴더>/_mcp_parse/jobs/` | `parse_document` 작업 | 최근 30개만 남는다 |
 | `<결과 폴더>/_llm_spend/` | 외부 모델 하루 지출 장부(PC만 — 서버에는 생기지 않음) | 지난 날짜는 지워도 된다 |

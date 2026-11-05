@@ -20,8 +20,15 @@ CASES = [  # (DATA_PIPELINE_IMAGE, CODE_DIR, 코드 덧씌우기?, ops.host.inst
     ("data-pipeline:0.2.0", "/srv/x/code", True, "", {}, "compose"),  # CODE_DIR를 주면 그 값
     ("data-pipeline:0.2.0", "", False, "hong", PORTS, "compose-hong"),  # 여러 벌 — 묶음 이름 끝 -<instance>
     ("data-pipeline:0.2.0", "", False, "Hong_1", PORTS, "!ops.host.instance_name"),  # 영소문자·숫자·-만 — 시작 거부
-    ("data-pipeline:0.2.0", "", False, "hong", {"MCP_PORT": "8775"}, "!ops.services.data_parsing.port"),  # 여러 벌인데 기본 포트 — 거부
-    ("data-pipeline:0.2.0", "", False, "hong", {"DATA_PARSING_PORT": "8776"}, "!search.server.port"),
+    (
+        "data-pipeline:0.2.0",
+        "",
+        False,
+        "hong",
+        {"MCP_PORT": "8775"},
+        "!ops.services.data_parsing.data_parsing_port",
+    ),  # 여러 벌인데 기본 포트 — 거부
+    ("data-pipeline:0.2.0", "", False, "hong", {"DATA_PARSING_PORT": "8776"}, "!search.server.mcp_port"),
     ("data-pipeline:0.2.0", "", False, "hong", {**PORTS, "RUN_ENV": "prd"}, "!운영(prd)"),  # prd는 한 벌
 ]
 

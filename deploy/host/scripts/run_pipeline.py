@@ -43,8 +43,8 @@ ROOT = Path(__file__).resolve().parent
 #   파일: --settings 또는 SETTINGS_FILE, 없으면 <루트>/settings.yaml(루트 = 코드 폴더의 부모). 호스트 python에 PyYAML이 있어야 한다(pymssql처럼 —
 #   refactor.md C-09). 필요한 칸이 없으면 칸 경로만 찍고 종료 코드 2(값은 찍지 않음). required.env.run_env가 dev·prd가 아니면 거부(로컬 실행 금지 — CLAUDE.md 3절).
 #   docker exec로 부르는 상주 컨테이너(data-pipeline)는 같은 파일을 붙여 읽으므로(compose x-settings) 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
-#   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.run_pipeline.work_dir(비우면 이 스크립트 옆 test_space/), 결과 공유 폴더는
-#   ops.host.output_dir(RAG_OUT — 컨테이너 /app/output의 원본 그대로), 비우면 <루트>/output(load_settings.sh와 같음).
+#   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.run_pipeline.run_pipeline_work_dir(비우면 이 스크립트 옆 test_space/), 결과 공유 폴더는
+#   ops.host.host_output_dir(RAG_OUT — 컨테이너 /app/output의 원본 그대로), 비우면 <루트>/output(load_settings.sh와 같음).
 TEST = PROG = DOCSPACE = DOCFLOW = STAGING = None  # configure()가 채움
 PIPE_C = "data-pipeline"  # docker exec 대상 상주 컨테이너(목록·받기·파싱·게시·구조화·정리) — configure()가 ops.host.instance_name을 붙임
 DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.container_cli(없으면 podman, 그것도 없으면 docker)로 채움
@@ -139,7 +139,7 @@ def read_settings(settings_file=None):
 
 
 def work_dir(doc):
-    """작업 폴더(진행 기록 batch_progress/·batches/) — settings.yaml ops.run_pipeline.work_dir(모델 pipeline.host.run_pipeline_dir), 비우면 이 스크립트 옆 test_space/."""
+    """작업 폴더(진행 기록 batch_progress/·batches/) — settings.yaml ops.run_pipeline.run_pipeline_work_dir(모델 pipeline.host.run_pipeline_dir), 비우면 이 스크립트 옆 test_space/."""
     work = _host().get(doc, "pipeline.host.run_pipeline_dir")
     return Path(work) if work else ROOT / "test_space"
 
@@ -877,10 +877,13 @@ def main():
         "--staging",
         type=int,
         default=None,
-        help="진입 대기열(미리 받을 문서 수) — 기본 settings.yaml ops.run_pipeline.staging.max_docs(20)",
+        help="진입 대기열(미리 받을 문서 수) — 기본 settings.yaml ops.run_pipeline.staging.staging_max_docs(20)",
     )
     ap.add_argument(
-        "--struct-workers", type=int, default=None, help="구조화 스레드 수 — 기본 settings.yaml ops.run_pipeline.structure.workers(2)"
+        "--struct-workers",
+        type=int,
+        default=None,
+        help="구조화 스레드 수 — 기본 settings.yaml ops.run_pipeline.structure.structure_workers(2)",
     )
     ap.add_argument("--filter", default="RFP,proposal")
     ap.add_argument("--limit", type=int, default=0, help="시험 — 이 개수만 처리")
@@ -891,7 +894,7 @@ def main():
         "--cpu-gate",
         type=float,
         default=None,
-        help="파이프라인 CPU 게이트(CPU_MAX_LOAD) — 기본 settings.yaml ops.run_pipeline.parse.max_cpu_load",
+        help="파이프라인 CPU 게이트(CPU_MAX_LOAD) — 기본 settings.yaml ops.run_pipeline.parse.batch_max_cpu_load",
     )
     ap.add_argument(
         "--skip-done",

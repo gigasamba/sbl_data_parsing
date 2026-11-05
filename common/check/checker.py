@@ -240,7 +240,7 @@ def env_main():
     dump = doc_dir(required=False)
     print(f"\n== 문서 폴더 {dump or ''} ==")
     if dump is None:
-        line(False, "DOC_DIR 미설정", "settings.yaml ops.paths.docs_dir에 경로를 넣거나 --src로 지정")
+        line(False, "DOC_DIR 미설정", "settings.yaml ops.paths.source_docs_dir에 경로를 넣거나 --src로 지정")
     else:
         c = Counter(p.suffix.lower() or "(없음)" for p in (dump.iterdir() if dump.exists() else []) if p.is_file() and p.name != ".gitkeep")
         print("  " + (", ".join(f"{k} {v}" for k, v in c.most_common()) or "비어 있음"))

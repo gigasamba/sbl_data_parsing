@@ -31,7 +31,7 @@ from mcp_server import config as mc  # noqa: E402
 _PG = cfg().connections.pg
 MCP_URL = mc.cfg().dev.mcp_url  # 값은 설정에만(기본값은 설정 모델)
 UI_PORT = int(mc.cfg().dev.ui_port)
-SCHEMA = _PG.db_schema or sys.exit("PG_SCHEMA 없음 — settings.yaml required.pg.db_schema를 채움")
+SCHEMA = _PG.db_schema or sys.exit("PG_SCHEMA 없음 — settings.yaml required.pg.pg_schema를 채움")
 if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", SCHEMA):
     sys.exit(f"PG_SCHEMA 이름이 이상함: {SCHEMA!r}")
 

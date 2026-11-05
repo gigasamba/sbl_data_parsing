@@ -6,7 +6,9 @@
       python -m common.config.sample --where PG_HOST [이름…]   # 옛 env 이름 → 파일 자리·모델 경로·내부 표시(판정 꼴 등 — sample에서 뺀 것)
 """
 
+import re
 import sys
+from typing import Literal, get_args, get_origin
 
 import yaml
 
@@ -35,7 +37,7 @@ CATEGORIES = {
     "extract": (
         (
             "원천 받기·처리 상한",
-            ("extract.source", "extract.max_new_docs_per_run", "extract.max_file_mb", "extract.skipped_docs_log"),
+            ("extract.source", "extract.max_new_docs_per_run", "extract.max_source_file_mb", "extract.skipped_docs_log"),
         ),
         ("보안 문서", ("extract.secure_doc",)),
         ("회전 준비(prepare)", ("extract.prepare",)),
@@ -91,7 +93,7 @@ NOTES = {
     "common.connections.pg.db": "PG 데이터베이스 이름 · 예 rag",
     "common.connections.pg.user": "PG 계정 · 예 rag_app",
     "common.connections.pg.password": "PG 비밀번호 · 서버는 8자 이상",
-    "common.connections.pg.db_schema": "검색 스키마 · 예 sbl_test — ops.host.instance_name을 적으면 <스키마>_<벌>(예 sbl_test_jehun)",
+    "common.connections.pg.db_schema": "검색 스키마 · 예 sbl_test — 벌 이름을 적으면 <스키마>_<벌>",
     "common.models.embed.base_url": "임베딩 주소(OpenAI 호환) · 예 http://10.0.0.5:8000/v1",
     "common.models.embed.model": "임베딩 모델 이름(색인과 같게) · 예 bge-m3",
     "common.models.embed.api_key": "임베딩 API 키 (null = 키 안 보냄)",
@@ -100,25 +102,25 @@ NOTES = {
     "common.connections.rdb.port": "EDW 포트 · 1~65535",
     "common.connections.rdb.database": "EDW 데이터베이스 이름 · 예 EDW",
     "common.connections.rdb.read.user": "EDW 읽기 계정(원천 목록·ParsingMeta 조회·query_edw)",
-    "common.connections.rdb.read.password": "EDW 읽기 비밀번호",
-    "common.connections.rdb.write.user": "EDW 쓰기 계정(ParsingMeta INSERT만)",
-    "common.connections.rdb.write.password": "EDW 쓰기 비밀번호",
-    "common.connections.rdb.sqlite": "가짜 EDW sqlite 파일(저장소 기준 상대 가능) · 예 output/edw.sqlite(valid_env/edw/edw.sqlite 사본)",
-    "pipeline.load.publish.bucket": "게시 버킷 · dev·prd 예 rag-silver(원본 버킷과 다르게) · local 예 file://output/object_storage/silver",
+    "common.connections.rdb.read.password": "EDW 읽기 비밀번호 · DB 담당이 줌",
+    "common.connections.rdb.write.user": "EDW 쓰기 계정(ParsingMeta INSERT만) · 예 svc_parse_w",
+    "common.connections.rdb.write.password": "EDW 쓰기 비밀번호 · DB 담당이 줌",
+    "common.connections.rdb.sqlite": "가짜 EDW sqlite 파일(저장소 기준 상대 가능) · 예 output/edw.sqlite",
+    "pipeline.load.publish.bucket": "게시 버킷(원본 버킷과 다르게) · 예 rag-silver · local 예 file://output/silver",
     "pipeline.load.publish.prefix": "버킷 안 경로 접두 · 예 parse (null = 버킷 맨 위)",
     "common.connections.object_storage.endpoint": "S3 호환 주소 · 예 https://os.corp.local:9000",
     "common.connections.object_storage.access_key": "S3 액세스 키",
     "common.connections.object_storage.secret_key": "S3 시크릿 키",
     "common.models.llm.base_url": "LLM 주소(OpenAI 호환) · 예 http://10.0.0.6:8000/v1 — 적재 분류(doc_classify)가 씀",
-    "common.models.llm.model": "LLM 모델 이름",
+    "common.models.llm.model": "LLM 모델 이름 · 예 qwen3-32b",
     "common.models.llm.api_key": "LLM API 키 (null = 키 안 보냄)",
     "common.models.vlm.base_url": "VLM 주소(OpenAI 호환) · 예 http://10.0.0.7:8000/v1 — 그림·쪽 VLM·스캔 PDF가 씀",
-    "common.models.vlm.model": "VLM 모델 이름",
+    "common.models.vlm.model": "VLM 모델 이름 · 예 qwen2.5-vl-7b",
     "common.models.vlm.api_key": "VLM API 키 (null = 키 안 보냄)",
-    "common.tokens.mcp": "MCP 서비스 토큰 — 클라이언트가 Authorization: Bearer <토큰>으로 보냄, 검색 MCP가 parse MCP 서비스를 부를 때도 씀 · 8자 이상(예 openssl rand -hex 32)",
-    "mcp.server.fulltext_secret": "원문 도구 서명 키 — list/get_doc_fulltext가 내주는 파일 손잡이(sfid)를 서명·검증(보내는 토큰 아님, 바꾸면 이미 준 sfid 무효) · 8자 이상",
-    "pipeline.host.image": "data-pipeline 이미지:태그 · 예 dev data-pipeline-runtime:0.2.0 · prd data-pipeline:0.2.0",
-    "mcp.host.image": "mcp-server 이미지:태그 · 예 dev mcp-server-runtime:0.2.0 · prd mcp-server:0.2.0",
+    "common.tokens.mcp": "MCP 토큰(Authorization: Bearer — 검색·parse MCP 공용) · 예 openssl rand -hex 32",
+    "mcp.server.fulltext_secret": "원문 도구 sfid 서명 키(바꾸면 준 sfid 무효) · 8자 이상 · 예 openssl rand -hex 32",
+    "pipeline.host.image": "data-pipeline 이미지:태그 · 예 data-pipeline-runtime:0.2.0(dev)",
+    "mcp.host.image": "mcp-server 이미지:태그 · 예 mcp-server-runtime:0.2.0(dev)",
     "common.host.doc_src": "호스트 원본 문서 폴더(절대 경로 — 컨테이너 /data/docs로 붙음) · 예 /data/docs",
     "common.host.pg_container": "호스트 PG(pgvector) 컨테이너 이름(run_pipeline 문서 수·백업) · 예 pgvector",
     # common
@@ -137,7 +139,7 @@ NOTES = {
     "common.models.guard.internal_host_suffixes": "내부망으로 볼 사내 도메인 접미사(이름이 사설 IP로 풀릴 때만) · 예 [.mycorp.co.kr] — 모델 주소가 '외부 주소'로 막힐 때만",
     "common.models.guard.internal_ip_ranges": "내부망으로 볼 사설 대역 밖 사내 IP 대역(CIDR) · 예 [100.64.0.0/10] — 모델 주소가 '외부 주소'로 막힐 때만",
     # extract
-    "pipeline.extract.input_source": "한 번 파싱할 원본 위치 · 폴더(예 /data/docs) 또는 rdb:csv:<문서 목록 csv>(EDW 목록의 key로 Object Storage에서 받음) (null = 준비 폴더 그대로)",
+    "pipeline.extract.input_source": "파싱할 원본 · 폴더(예 /data/docs) 또는 rdb:csv:<목록 csv> (null = 준비 폴더)",
     "pipeline.connections.rdb.bucket": "원본 버킷 — 목록 key가 s3://버킷/… 꼴이 아닐 때 · 예 sfdc-files",
     "common.text.source_uri_prefix": "원본 주소 접두 · 예 s3://sfdc-files/docs (null = file://<docs_dir>)",
     "pipeline.extract.source.fetch_workers": "원본 받기 스레드 수",
@@ -153,7 +155,7 @@ NOTES = {
     "pipeline.extract.rapidocr_page_workers": "rapidocr 쪽 병렬 스레드",
     # transform
     "pipeline.extract.doc_parallel": "represent 문서 병렬 스레드",
-    "pipeline.transform.represent.post": "후처리 단계 · all·none·쉼표 목록(vlm_page·supsub·charts·figures·context·attachments) (null = 파이프라인 all · parse 서비스 supsub)",
+    "pipeline.transform.represent.post": "후처리 · all·none·쉼표 목록(vlm_page·supsub·charts·figures·context·attachments)",
     "pipeline.transform.represent.qa_light": "전체 문서 CER·순서 비교 생략",
     "pipeline.transform.represent.rep_select": "대표 엔진 고르기 · first·acc·best (null = best)",
     "pipeline.transform.vlm.figures_max": "문서당 그림 VLM 상한 · 0 = 그림 VLM 안 부름",
@@ -252,11 +254,11 @@ NOTES = {
     "common.text.search_en_stem": "검색 글자 영어 복수 → 단수",
     "common.text.token_num_norm": "검색 글자 숫자·단위 정규화",
     "pipeline.connections.rdb.increment_col": "원천 목록 증분 판정 열 (null = 문서 ID 열)",
-    "pipeline.connections.rdb.columns.content_version": "원천 목록 열 이름 — 판 ID",
-    "pipeline.connections.rdb.columns.doc_id": "원천 목록 열 이름 — 문서 ID",
-    "pipeline.connections.rdb.columns.filename": "원천 목록 열 이름 — 원래 파일 이름",
-    "pipeline.connections.rdb.columns.key": "원천 목록 열 이름 — Object Storage key",
-    "pipeline.connections.rdb.columns.size": "원천 목록 열 이름 — 파일 크기",
+    "pipeline.connections.rdb.columns.content_version": "원천 목록 열 이름 — 판 ID · 예 content_version_id",
+    "pipeline.connections.rdb.columns.doc_id": "원천 목록 열 이름 — 문서 ID · 예 id",
+    "pipeline.connections.rdb.columns.filename": "원천 목록 열 이름 — 원래 파일 이름 · 예 original_filename",
+    "pipeline.connections.rdb.columns.key": "원천 목록 열 이름 — Object Storage key · 예 s3_key",
+    "pipeline.connections.rdb.columns.size": "원천 목록 열 이름 — 파일 크기 · 예 file_size",
     "pipeline.extract.engine_retry": "엔진 비정상 종료 재시도 횟수",
     "pipeline.extract.fill_merged": "병합 셀 채우기",
     "pipeline.extract.hidden_overlap_max": "숨은 겹침 쪽 VLM 후보 상한 · 0 = 끔",
@@ -341,14 +343,14 @@ NOTES = {
     "common.models.guard.budget_usd": "하루 외부 모델 지출 상한($)",
     "common.models.guard.spend_file": "지출 장부 (null = output/_llm_spend/<날짜>.txt)",
     "common.connections.pg.standin_dir": "PG 없을 때 쓰는 sqlite 폴더 (null = output/pg_standin)",
-    "common.connections.pg.standin_schema": "대역 스키마 이름",
+    "common.connections.pg.standin_schema": "대역 스키마 이름 · 예 sbl_local",
     "common.dev.llm_fake": "가짜 LLM 응답(서버면 시작 거부)",
-    "mcp.dev.mcp_url": "검증 페이지가 붙을 검색 MCP 주소",
+    "mcp.dev.mcp_url": "검증 페이지가 붙을 검색 MCP 주소 · 예 http://127.0.0.1:8765/mcp",
     "mcp.dev.ui_port": "검증 페이지 포트",
-    "common.dev.docker.pg_image": "시험 PG 이미지",
+    "common.dev.docker.pg_image": "시험 PG 이미지 · 예 pgvector/pgvector:pg16",
     "common.dev.docker.mcp_publish_port": "시험 검색 MCP를 호스트에 게시할 포트",
     "common.dev.docker.smoke_settings": "스모크 시험용 settings.yaml — 스모크 시험 때 필수 (null = 스모크 시작 안 함)",
-    "common.dev.docker.smoke_pg_password": "스모크 시험 PG 비밀번호 — 스모크 시험 때 필수",
+    "common.dev.docker.smoke_pg_password": "스모크 시험 PG 비밀번호(스모크 시험 때 필수) · 예 아무 글자",
     "common.dev.docker.smoke_keep": "스모크 시험이 끝나도 PG를 남김",
     "common.dev.docker.smoke_limit": "스모크 시험 문서 수 · 0 = 제한 없음",
 }
@@ -391,9 +393,17 @@ def build(classes=None):
 def _cat(y):
     """파일 자리 → (카테고리 번호, 제목). required는 REQUIRED_GROUPS 순서, 그 밖은 CATEGORIES."""
     sec = y.split(".", 1)[0]
-    if sec == "required":
-        g = y.split(".")[1]
-        return next((i, title) for i, (k, title, _r) in enumerate(L.REQUIRED_GROUPS) if k == g)
+    if sec == "required":  # (묶음 번호, 작은 묶음 번호) — 작은 묶음이 없으면 0·묶음 제목
+        parts = y.split(".")
+        g, leaf = parts[1], parts[2] if len(parts) > 2 else ""
+        gi, (_k, title, rows) = next((i, r) for i, r in enumerate(L.REQUIRED_GROUPS) if r[0] == g)
+        si = 0
+        for r in rows:
+            if isinstance(r, str):
+                si, title = si + 1, r
+            elif r[0] == leaf:
+                return (gi, si), title
+        return (gi, 0), L.REQUIRED_GROUPS[gi][1]
     for i, (title, pre) in enumerate(CATEGORIES[sec]):
         if any(y == x or y.startswith(x + ".") for x in pre):
             return i, title
@@ -414,9 +424,12 @@ def _emit(node, depth, path, lines, last):
     )
     for i, name, v in kids:
         y = f"{path}.{name}"
+        group = path == "required" and not isinstance(v, tuple)  # required 묶음 줄은 묶음 제목 — 작은 묶음 제목은 그 안 칸 앞에
+        if group:
+            i = _cat(y)[0]
         if last[0] != (path.split(".")[0], i):
             last[0] = (path.split(".")[0], i)
-            lines.append(f"{pad}# ─── {_cat(y if isinstance(v, tuple) else _first_leaf(y, v))[1]} ───")
+            lines.append(f"{pad}# ---- {_cat(y if isinstance(v, tuple) or group else _first_leaf(y, v))[1]} ----")
         if not isinstance(v, tuple):
             lines.append(f"{pad}{name}:")
             _emit(v, depth + 1, y, lines, last)
@@ -449,7 +462,28 @@ def _value(p, f):
 def _note(p, f):
     """칸 주석 한 줄 — [필수·선택](required) + NOTES + [비밀]. 옛 env 이름·판정 꼴은 --where·docs/operations/env-guide.md에."""
     need = f"[{L.NEED[p]}] " if p in L.NEED else ""
-    return f"{need}{NOTES[p]}" + (" [비밀]" if S.is_secret(f) else "")
+    note = NOTES[p]
+    if not _HINT.search(note):  # 허용값·예가 없는 설명이면 칸 꼴을 붙임
+        note += _allowed(f.annotation)
+    return f"{need}{note}" + (" [비밀]" if S.is_secret(f) else "")
+
+
+_HINT = re.compile(r"예 |·|~|\d|=|true|false")
+
+
+def _allowed(annotation):
+    """칸 꼴 → " · 허용값"(켜기·고른 글자·정수·숫자). 그 밖(글자)은 NOTES에 예를 적는다."""
+    args = S._args(annotation)
+    if bool in args:
+        return " · true·false"
+    lits = [x for a in args if get_origin(a) is Literal for x in get_args(a)]
+    if lits:
+        return " · " + "·".join(str(x) for x in lits)
+    if any(a is float for a in args):
+        return " · 숫자"
+    if any(a is int or get_args(a)[:1] == (int,) for a in args):  # Port = Annotated[int, …]
+        return " · 정수"
+    return ""
 
 
 def marks(f):
