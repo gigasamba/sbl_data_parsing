@@ -60,6 +60,24 @@ def test_done_keys():
     assert PM._done_keys_rows(cn.cursor(), "T", gold=False) == {"a", "b", "c", "d"}  # DB 담당자 DDL 전
 
 
+def test_done_by_sha():
+    """같은 내용의 원본 = 실제로 파싱된 ok·partial 행만(gold_version 칸이 있으면 그 값도) — skipped_dup 행은 원본이 아니다(pl-02)."""
+    cases = [  # (행 (sha256, 원본 키, parse_status, gold_version), gold 칸 있음, 기대)
+        ([("h1", "a", "ok", "0.2.0")], True, {"h1": ("a", "ok")}),
+        ([("h1", "d", "skipped_dup", None)], True, {}),  # 중복 행만 — 원본 없음
+        ([("h1", "d", "skipped_dup", "0.2.0")], False, {}),
+        ([("h1", "d", "skipped_dup", None), ("h1", "p", "partial", "0.2.0")], True, {"h1": ("p", "partial")}),
+        ([("h1", "b", "ok", None)], True, {}),  # gold 결과 없음 — 원본으로 안 씀
+        ([("h1", "b", "ok", None)], False, {"h1": ("b", "ok")}),  # DB 담당자 DDL 전 — parse_status만
+        ([("h1", "e", "not_parsed", "0.2.0"), ("h2", "f", "failed", None)], False, {}),
+    ]
+    for rows, gold, want in cases:
+        cn = sqlite3.connect(":memory:")
+        cn.execute("CREATE TABLE T (sha256, source_key, parse_status, gold_version)")
+        cn.executemany("INSERT INTO T VALUES (?, ?, ?, ?)", rows)
+        assert PM._done_by_sha(cn.cursor(), "T", "?", ["h1", "h2"], gold=gold) == want, rows
+
+
 def test_loaded_cols_alone():
     """DB 담당자가 두 칸 중 하나만 먼저 더해도 있는 칸은 쓴다(gold_version만 있을 때 UPDATE가 통째로 실패하지 않게)."""
     cases = [  # (표의 칸, 기대 (loaded_at 채움?, gold_version))

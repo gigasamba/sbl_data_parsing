@@ -323,3 +323,71 @@ def test_pg_count_sums_source_schemas():
         with mock.patch.object(RD, "PG_SCHEMA", "rag"):
             assert RD.pg_count() == (3, 7)
     assert all(f"rag_{s}.doc" in seen[0] and f"rag_{s}.chunk" in seen[0] for s in SOURCES) and "rag.doc" not in seen[0], seen
+
+
+def test_stage_reuse_same_doc_only(tmp_path):
+    """앞 실행의 _docflow/<seq>는 그 폴더 manifest의 원본 키가 이 행일 때만 다시 쓴다 — seq는 실행마다 바뀜(다른 문서면 지우고 새로 받음)."""
+    import json
+
+    row = {"id": "1", "s3_key": "SFDC/a/new.pdf", "original_filename": "new.pdf", "file_size": 3}
+    cases = [  # (폴더의 manifest 원본 키(None = 폴더 없음), .staged, staging 원본 있음, 기대 다시 씀)
+        ("SFDC/a/new.pdf", True, True, True),
+        ("SFDC/b/old.pdf", True, True, False),  # seq가 밀려 다른 문서의 폴더 — 지우고 받기
+        ("SFDC/a/new.pdf", False, True, False),  # 받기가 끝나지 않음
+        ("SFDC/a/new.pdf", True, False, False),  # staging 원본이 지워짐
+        (None, False, False, False),
+    ]
+    for key, staged, has_bin, want in cases:
+        flow, staging = tmp_path / "flow", tmp_path / "staging"
+        for p in (flow, staging):
+            __import__("shutil").rmtree(p, ignore_errors=True)
+            p.mkdir()
+        d = flow / "4"
+        if key:
+            (d / "parse" / "_source").mkdir(parents=True)
+            (d / "parse" / "_source" / "manifest.jsonl").write_text(json.dumps({"file_name": "x", "key": key}) + "\n", encoding="utf-8")
+            (d / "stale.txt").write_text("앞 문서", encoding="utf-8")
+            if staged:
+                (d / ".staged").touch()
+        if has_bin:
+            (staging / RD._staging_bin(row)).write_bytes(b"x")
+        calls = []
+        RD._stage_reused.clear()
+        with (
+            mock.patch.object(RD, "DOCFLOW", flow),
+            mock.patch.object(RD, "STAGING", staging),
+            mock.patch.object(RD, "PROG", tmp_path),
+            mock.patch.object(RD, "sh", lambda cmd, timeout=0, log=None, calls=calls: calls.append(cmd) or (0, "", "")),
+        ):
+            assert RD.stage_one(4, row) is True, key
+        assert (4 in RD._stage_reused) == want, (key, staged, has_bin)
+        assert (d / "stale.txt").exists() == want, key  # 다시 쓰지 않으면 앞 문서 흔적을 지움
+        assert any("candidate_ready" in c for c in calls) != want, (key, calls)
+
+
+def test_parse_one_skips_stage_dropped(tmp_path):
+    """pl-02·pl-24 — 받기가 뺀 문서(받기 끝 표지 .staged가 있고 only.txt가 빔 — 중복·DRM·암호)는 파싱 명령 없이 SKIP(실패 아님).
+    only.txt에 이름이 있거나 받기가 끝나지 않았으면 파싱한다(대표 결과 0건이면 실패)."""
+    row = {"s3_key": "SFDC/a/x.pdf", "original_filename": "x.pdf", "file_size": 1}
+    cases = [  # (.staged, only.txt 내용(None = 없음), 기대)
+        (True, "\n", RD.SKIP),
+        (True, "x.pdf\n", False),  # 파싱할 문서 있음 — 가짜 파싱이 대표 결과를 안 만듦 → 실패
+        (False, "\n", False),  # 받기 실패(표지 없음) — 그대로 파싱 실패
+        (True, None, False),
+    ]
+    for staged, only, want in cases:
+        d = tmp_path / "flow" / "3"
+        __import__("shutil").rmtree(tmp_path / "flow", ignore_errors=True)
+        (d / "parse" / "_source").mkdir(parents=True)
+        if staged:
+            (d / ".staged").touch()
+        if only is not None:
+            (d / "parse" / "_source" / "only.txt").write_text(only, encoding="utf-8")
+        calls = []
+        with (
+            mock.patch.object(RD, "DOCFLOW", tmp_path / "flow"),
+            mock.patch.object(RD, "PROG", tmp_path),
+            mock.patch.object(RD, "sh", lambda cmd, timeout=0, log=None, calls=calls: calls.append(cmd) or (0, "", "")),
+        ):
+            assert RD.parse_one(3, row) == want, (staged, only)
+        assert any("pipeline.cli" in c for c in calls) == (want != RD.SKIP), (staged, only, calls)

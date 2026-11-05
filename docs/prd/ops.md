@@ -53,10 +53,12 @@
   1. 파싱 성공 → 게시 대기열(게시 스레드 1개 — Object Storage 업로드 + ParsingMeta INSERT).
   2. 게시 성공 → 원본(staging `.bin`·`_docflow/<seq>/_source_files`) 삭제(`drop_original()` — 원본을 지우는 곳은 여기 하나, 파싱 끝 `candidate_ready.finish()`는 처리 기록·sha256만 남김) → 구조화 대기열(`ops.run_pipeline.structure.workers` 스레드 — gold_bundle·pgvector_load) → `_docflow/<seq>` 삭제(`--no-cleanup`이면 남김).
   3. 파싱 실패·게시 실패 → 원본을 남기고 로그에만(gold로 안 감, EDW에 안 씀). 파싱 실패면 그 문서 표지(`RUN_PIPELINE_DOC`)가 붙은 컨테이너 안 프로세스를 끈다.
-  4. gold 실패 → 게시한 silver·ParsingMeta 행은 그대로, 로그에만. `gold_version`이 비어 다음 `--skip-done`이 다시 고른다(파싱·게시부터 다시).
-- 파일: `deploy/host/scripts/run_pipeline.py`(`doc_flow`, `cleanup_doc`, `drop_original`) · `pipeline/extract/candidate_ready.py`(`finish`).
-- 비고: PC에서 `pipeline.cli parse --source rdb:csv:…`로 돌리면 `drop_original`이 없어 받은 원본(`_source_files`·`prepared`·staging `.bin`)이 남는다 — 지금은 손으로 지운다.
-- QA: `tests/general/deploy/test_docs_flow.py`(`test_doc_order_and_exit_code` 표) · 통과.
+  4. 받기가 뺀 문서(`_docflow/<seq>/parse/_source/only.txt`가 빔 — 중복·DRM·암호, pl-02) → 파싱 없이 건너뜀(`parse_one`이 `SKIP`) → 게시(중복은 ParsingMeta `skipped_dup`, DRM·암호는 보고서로만) → 원본 삭제 → `_docflow/<seq>` 삭제. gold로 안 간다. 실패가 아니다 — 끝 요약에 `건너뜀`으로 따로 세고 종료 코드를 1로 만들지 않는다(pl-18).
+  5. 미리 받기(`stage_one`)는 앞 실행의 `_docflow/<seq>`를 그 폴더 `parse/_source/manifest.jsonl`의 원본 키가 이 문서일 때만 다시 쓴다(seq는 실행마다 바뀜) — 다른 문서 것이면 지우고 새로 받는다.
+  6. gold 실패 → 게시한 silver·ParsingMeta 행은 그대로, 로그에만. `gold_version`이 비어 다음 `--skip-done`이 다시 고른다(파싱·게시부터 다시).
+- 파일: `deploy/host/scripts/run_pipeline.py`(`stage_one`, `parse_one`, `drop_original`, `drop_temp`, `main`) · `pipeline/extract/candidate_ready.py`(`finish`).
+- 비고: PC에서 `pipeline.cli parse --source rdb:csv:…`로 돌리면 `drop_original`이 없어 받은 원본(`_source_files`·`prepared`·staging `.bin`)이 남는다 — 지금은 손으로 지운다. DRM·암호로 건너뛴 문서는 게시가 EDW 행을 쓰지 않아(보고서로만) 다음 실행이 다시 고른다(다시 받고 다시 건너뜀).
+- QA: `tests/general/deploy/test_docs_flow.py`(`test_doc_order_and_exit_code` 표 — 건너뜀 → 게시·원본 삭제·gold 없음·종료 0) · `tests/general/deploy/test_run_pipeline.py`(`test_parse_one_skips_stage_dropped`·`test_stage_reuse_same_doc_only` 표) · 통과.
 - Status: done
 
 <a id="pl-55"></a>
@@ -70,7 +72,7 @@
 ## pl-18 · `run_pipeline` 종료 코드와 겹침 잠금
 - 이유: 스케줄러가 실패를 봐야 한다.
 - 규칙:
-  1. 종료 코드: 0 = 대상 0건·모두 끝 · 1 = 실패 문서(파싱·게시·gold) 하나라도 · 75 = 마감 도달(실패 없음) 또는 다른 run_pipeline이 도는 중 · 2 = 설정 문제. 실패와 마감이 함께면 1.
+  1. 종료 코드: 0 = 대상 0건·모두 끝 · 1 = 실패 문서(파싱·게시·gold) 하나라도(받기가 뺀 건너뜀 문서는 실패 아님 — pl-24) · 75 = 마감 도달(실패 없음) 또는 다른 run_pipeline이 도는 중 · 2 = 설정 문제. 실패와 마감이 함께면 1.
   2. 겹침 잠금: `flock batch_progress/run_pipeline.lock`(프로세스가 죽으면 커널이 풂). 사람이 직접 돌려도 같은 잠금.
   3. `--deadline HH:MM`: 그 시각(지금보다 이르거나 같으면 다음 날)이 지나면 새 문서를 받지 않는다.
 - 파일: `deploy/host/scripts/run_pipeline.py`, `deploy/host/scripts/nightly_batch.sh`.
@@ -122,8 +124,8 @@
 - 이유(사용자 11-04): 같은 판단이 서버 러너와 파이프라인 두 곳에 있으면 어긋난다. PC E2E가 서버와 다른 길을 타면 PC 결과가 서버를 증명하지 못한다.
 - 요건(되어야 할 모습):
   1. 서버 러너 `run_pipeline.py`는 지휘만 한다 — 레인·워커·임시 폴더 관리와 컨테이너 안 파이프라인 명령 호출(`docker exec`). 원천 목록 읽기, 끝난 문서 빼기, 중복, 레인 판정, FAQ 교체 판단, 게시 판단은 파이프라인(extract·transform·load) 함수가 한다.
-  2. 대상 목록은 컨테이너 명령 하나 `python -m pipeline.extract.candidate_pick list`가 만든다 — EDW `FileStorageMap`에서 이름 키워드(`--filter`)·파일 크기 오름차순(크기 없는 행 뺌), `--start-offset`·`--limit`·`--seqs`, `--skip-done`이면 끝난 문서(`ok`·`partial`은 `gold_version`도, `skipped_dup` — `done_keys()` 한 곳)를 빼고, FAQ를 앞에(교체를 마친 키 `<결과 폴더>/_faq_seen.txt`), 앞 `--max-docs`개. 결과는 목록 파일 `--out`(JSON `total`·`start`·`docs`[`seq`·`id`·`s3_key`·`original_filename`·`file_size`])이고 러너는 그 파일만 읽는다. EDW 접속은 `parsing_meta_db`·`mssql`을 다시 쓴다.
-  3. 원본 받기는 한 길이다 — `python -m pipeline.extract.candidate_ready stage`가 문서를 `_staging/`(`extract.source.staging_dir`)에 한 번 받고, 같은 실행에서 바로 중복 제외(받은 파일 SHA-256 — 같은 묶음·ParsingMeta에 끝난 다른 원본, pl-02)와 형식·DRM·암호·미지원 거르기(`filter_and_rotate`)를 이 순서로 한다. 살아남은 문서만 파싱하고, 파싱(`parse --staged`)은 받아 둔 파일만 읽는다 — 받지 못한 문서는 파싱 실패다. DRM 문서는 표시만 하고 건너뛴다(처리 단계 없음). 회전은 기본 꺼짐 그대로다. 원본은 게시가 성공한 뒤 `drop_original()`만 지운다(pl-24).
+  2. 대상 목록은 컨테이너 명령 하나 `python -m pipeline.extract.candidate_pick list`가 만든다 — EDW `FileStorageMap`에서 이름 키워드(`--filter`)·파일 크기 오름차순(크기 없는 행 뺌), `--start-offset`·`--limit`·`--seqs`, `--skip-done`이면 끝난 문서(`ok`·`partial`은 `gold_version`도, `skipped_dup` — `done_keys()` 한 곳)를 빼고, FAQ를 앞에(교체를 마친 키 `<결과 폴더>/_faq_seen.txt`), 앞 `--max-docs`개. 결과는 목록 파일 `--out`(JSON `total`·`start`·`docs`[`seq`·`id`·`s3_key`·`original_filename`·`file_size`])이고 러너는 그 파일만 읽는다. 러너의 이 호출 시간 제한(2400초)은 안쪽 FAQ 맞추기 시간 제한(`candidate_pick` — 1800초)보다 길다(안쪽이 먼저 끊겨 원인이 로그에 남음). EDW 접속은 `parsing_meta_db`·`mssql`을 다시 쓴다.
+  3. 원본 받기는 한 길이다 — `python -m pipeline.extract.candidate_ready stage`가 문서를 `_staging/`(`extract.source.staging_dir`)에 한 번 받고, 같은 실행에서 바로 중복 제외(받은 파일 SHA-256 — 같은 묶음·ParsingMeta에 끝난 다른 원본, pl-02)와 형식·DRM·암호·미지원 거르기(`filter_and_rotate`)를 이 순서로 한다. 살아남은 문서만 파싱하고, 파싱(`parse --staged`)은 받아 둔 파일만 읽는다 — 받지 못한 문서는 파싱 실패, 받기가 뺀 문서(중복·DRM·암호)는 건너뜀이고 게시가 상태를 쓴다(pl-24). DRM 문서는 표시만 하고 건너뛴다(처리 단계 없음). 회전은 기본 꺼짐 그대로다. 원본은 게시가 성공한 뒤 `drop_original()`만 지운다(pl-24).
   4. PC(`RUN_ENV=local`)도 같은 `run_pipeline`로 E2E를 돈다 — 가짜 대상만(EDW sqlite·`file://` 게시 폴더·상대 경로, op-14). PC만의 분기는 접속 대상을 고르는 한 곳이다.
   5. 커밋 전 점검 스크립트는 점검 도구 자리 `common/check/`에 있다(`.githooks/pre-commit`·CLAUDE.md §5-2·README가 그 경로를 부른다).
 - 비고(현재와 다른 점, 11-05 확인):

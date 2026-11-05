@@ -164,19 +164,20 @@ def _done_cond(gold):
 
 
 def _done_by_sha(cur, table, ph, shas, kc="source_key", gold=False):
-    """끝난 행(_done_cond) 중 sha256이 shas에 있는 것 → {sha256: (원본 키, parse_status)} — 같은 내용 거르기(candidate_ready)가 쓴다.
-    한 sha256에 여러 행이면 ok·partial 행을 skipped_dup 행보다 앞에 둔다(중복의 대표 = 실제로 파싱된 문서). 읽기만, IN_CHUNK개씩."""
+    """원본이 될 수 있는 행 — 실제로 파싱된 ok·partial(gold=True면 gold_version도) — 중 sha256이 shas에 있는 것 →
+    {sha256: (원본 키, parse_status)}. 같은 내용 거르기(candidate_ready)가 쓴다. skipped_dup 행은 원본이 아니다(그 행도 다른 문서의 중복).
+    읽기만, IN_CHUNK개씩. 상수 글자만 SQL에 끼움(GOLD_STATUSES는 코드 상수)."""
+    sts = ", ".join(f"'{v}'" for v in GOLD_STATUSES)
+    cond = f"parse_status IN ({sts})" + (" AND gold_version IS NOT NULL" if gold else "")
     out: dict = {}
     shas = sorted(set(shas))
     for k in range(0, len(shas), IN_CHUNK):
         part = shas[k : k + IN_CHUNK]
         cur.execute(
-            f"SELECT sha256, {kc}, parse_status FROM {table} WHERE sha256 IN ({', '.join([ph] * len(part))}) AND {_done_cond(gold)}",
-            tuple(part),
+            f"SELECT sha256, {kc}, parse_status FROM {table} WHERE sha256 IN ({', '.join([ph] * len(part))}) AND {cond}", tuple(part)
         )
         for sha, key, st in cur.fetchall():
-            if sha not in out or out[sha][1] == "skipped_dup":
-                out[sha] = (key, st)
+            out.setdefault(sha, (key, st))
     return out
 
 

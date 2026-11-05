@@ -226,7 +226,8 @@ def done_keys():
 
 
 def done_by_sha(shas):
-    """EDW ParsingMeta에 끝난 행(done_keys와 같은 상태) 중 원본 sha256이 shas에 있는 것 → {sha256: (원본 키, parse_status)}.
+    """EDW ParsingMeta에서 원본이 될 수 있는 행(ok·partial — gold_version 칸이 있으면 그 값도, skipped_dup 행은 아님) 중 원본 sha256이
+    shas에 있는 것 → {sha256: (원본 키, parse_status)}.
     못 읽을 때는 done_keys와 같다(서버 종료 4, PC는 빈 사전)."""
     return _read_done(lambda db: db.done_by_sha(shas), {}) if shas else {}
 

@@ -185,6 +185,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 | 8 | `server-changes.md`를 읽고 새 코드에 들어 있는지 대조(§2) | 서버 운영·개발자 | — |
 | 9 | EDW 표 설명 자료 폴더(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료)를 루트 아래 결과 폴더 `<루트>/output/edw_meta/`에 복사(UID 10001이 읽게)하고 settings.yaml에 `search.edw_meta.catalog_dir: /app/output/edw_meta`. 없으면 `edw_meta` 도구만 `not_configured`(README §5-0 4) | 서버 운영 | C-91 |
 | 10 | settings.yaml 칸 정리 — 지운 칸은 지우고, `search.server.fulltext_secret` 값은 `required.tokens.fulltext_sign_key`로, 토큰은 `required.tokens.mcp` 하나로 옮기고, 칸 이름을 새 이름으로 바꾼다(대응표 refactor.md C-95 — 옛 이름·지운 칸이 남으면 시작 거부) | 서버 운영 | C-92·C-95 |
+| 11 | FAQ 교체 기록 옮기기 — 첫 `run_pipeline.py` 실행 전에 옛 `<작업 폴더>/batch_progress/faq_seen.txt`가 있으면 `<결과 폴더>/_faq_seen.txt`로 복사하고 UID 10001이 읽고 쓰게 한다(`cp -p <옛 파일> <결과 폴더>/_faq_seen.txt && chown 10001 <결과 폴더>/_faq_seen.txt`). 안 옮기면 첫 실행이 gold `faq`를 한 번 통째로 교체한다 | 서버 운영 | C-95 ⑨ |
 
 ### 8-3. 실행 순서 — 복사해 붙이는 명령(dev 먼저, 그다음 prd)
 

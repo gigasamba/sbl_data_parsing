@@ -106,7 +106,7 @@ def test_main_runs_lanes_to_end():
         assert sorted(calls["struct"]) == [0, 1], calls  # 파싱 OK → 게시 → 구조화 대기열 → gold_one
         assert M._lane_inflight == {"light": 0, "medium": 0, "vlm": 0}
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
-        assert "문서별 flow 끝: 2건(완료 2 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 0)" in log, log
+        assert "문서별 flow 끝: 2건(완료 2 · 건너뜀 0 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 0)" in log, log
         assert M.rc == 0
 
 
@@ -131,7 +131,7 @@ def test_main_survives_errors_in_failure_path():
         M = _run_main(work, rows, parse_one, gold_one, setup=setup)
         assert M._lane_inflight == {"light": 0, "medium": 0, "vlm": 0}
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
-        assert "문서별 flow 끝: 2건(완료 0 · 파싱실패 1 · 게시실패 0 · gold실패 1 · 스레드 예외 0)" in log, log
+        assert "문서별 flow 끝: 2건(완료 0 · 건너뜀 0 · 파싱실패 1 · 게시실패 0 · gold실패 1 · 스레드 예외 0)" in log, log
         assert "doc#1 구조화 예외 — RuntimeError" in log, log
         assert M.rc == 1
 
@@ -154,7 +154,7 @@ def test_thread_error_fails_the_run():
 
         M = _run_main(work, rows, lambda seq, row: True, setup=setup)
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
-        assert "완료 1 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 1" in log, log
+        assert "완료 1 · 건너뜀 0 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 1" in log, log
         assert M.rc == 1
 
 
@@ -174,7 +174,7 @@ def test_stage_error_does_not_hang():
 
         M = _run_main(work, rows, lambda seq, row: True, setup=setup)
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
-        assert "완료 1 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 1" in log, log
+        assert "완료 1 · 건너뜀 0 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 1" in log, log
         assert M.rc == 1 and not M._fetching
 
 
@@ -189,7 +189,7 @@ def test_depth_write_error_does_not_hang():
 
         M = _run_main(work, rows, lambda seq, row: True, setup=setup)
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
-        assert "완료 2 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 0" in log, log
+        assert "완료 2 · 건너뜀 0 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 0" in log, log
         assert M.rc == 0
 
 
@@ -317,6 +317,12 @@ ORDER_CASES = [
     ((True, True, False), ["parse", "publish", "orig", "gold", "temp"], 1),  # gold 실패 — silver는 이미 게시됨, 원본은 게시 뒤 지움
     ((True, False, True), ["parse", "publish", "temp"], 1),  # 게시 실패 — 원본 남김, gold 안 감
     ((False, True, True), ["parse", "temp"], 1),  # 파싱 실패 — 원본 남김, 게시·gold 안 감
+    (
+        ("skip", True, True),
+        ["parse", "publish", "orig", "temp"],
+        0,
+    ),  # 받기가 뺀 문서(중복·DRM) — 게시가 상태를 쓰고 원본 삭제, gold 없음, 실패 아님
+    (("skip", False, True), ["parse", "publish", "temp"], 1),  # 그 게시가 실패 — 원본 남김
 ]
 
 
