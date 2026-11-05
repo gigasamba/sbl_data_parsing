@@ -132,6 +132,17 @@ def _walk(hay, cells, anchor):
 _TABLE_PUNCT = set(" \t\r\n|-–—·•:")  # 공백 + 표 장식 구분자 — 찾은 두 칸 사이 글이 실제 내용(각주)인지 볼 때 무시
 
 
+def _made_of_cells(residue, known):
+    """간격 글이 표 칸(known — 정규화한 칸 글자)을 공백 경계로 이어 놓은 것뿐인지 — 낱말 묶음마다 칸 하나:
+    "ABX-101 아르젠 바이오파마" = "ABX-101" + "아르젠 바이오파마", "1 8" = "1" + "8". 낱말 안은 자르지 않아
+    "2020"·"11" 같은 각주는 그 글 자체가 칸일 때만 칸이다. 간격 글은 GAP_MAX_CHARS 안팎이라 O(n²)도 짧다."""
+    toks = residue.split()
+    ok = [True] + [False] * len(toks)
+    for i in range(1, len(toks) + 1):
+        ok[i] = any(ok[j] and normalize_value(" ".join(toks[j:i])) in known for j in range(i))
+    return ok[-1]
+
+
 def _gap_residues(hay, bounds):
     """바꿀 구간 안 칸 사이 간격(최대 GAP_MAX_CHARS)의 글 — 대개 공백이지만 짧은 캡션·각주면 지우면 안 된다.
     _TABLE_PUNCT만으로 된 것이 아닌 간격 글을 원래 순서로 돌려준다(호출 쪽이 보존)."""
@@ -210,9 +221,11 @@ def inline_tables(rep, best_engine, other_docs):
         if inline_ok:
             start, end, residues = span
             known = {normalize_value(c) for row in ([entry["header"]] + entry["rows"]) for c in row}
-            # 병합 중복 제거가 실제로 반복된 칸(예: 두 번 나오는 배치 번호)을 빠뜨려 간격 글로 남길 수 있다 —
-            # 표에 이미 있는 칸이라 버리고, 표 칸과 안 맞는 글(실제 캡션·각주)만 남긴다.
-            residues = [r for r in residues if normalize_value(r) not in known]
+            known |= match_cand["tokens"]  # 본문을 낸 엔진의 칸 표기(예: 날짜 일련번호 46355) — 고른 grid와 다를 수 있다
+            known.discard("")
+            # 병합 중복 제거가 실제로 반복된 칸(예: 모든 행의 같은 고객사)을 빠뜨려 간격 글로 남길 수 있다 —
+            # 표 칸(하나 또는 이어진 여럿)으로만 된 글은 버리고, 표 칸과 안 맞는 글(실제 캡션·각주)만 남긴다.
+            residues = [r for r in residues if not _made_of_cells(r, known)]
             md = table_std.to_markdown(entry)
             if residues:
                 md = md + "\n\n" + "\n".join(residues)  # 빈 줄 필수 — GFM은 빈 줄 전까지를 표 행으로 읽는다

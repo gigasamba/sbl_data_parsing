@@ -60,6 +60,7 @@
 | 결과를 바꾸는 파일은 층 지문 목록에 들고, 기록·DB 표 정의는 지문 계산에서 빠진다. extract → transform → load 방향은 자동 점검(`check_modules` ⑫, 예외 없음) | 빠지면 고쳐도 옛 결과를 다시 쓰고, 넘치면 상관없는 수정에도 재처리 경보가 남. 등급 A | done | [pl-50](prd/transform-cleanup.md#pl-50) |  |
 | `dbtool`에 첫 이관 도구(`dbcompare`·`stamp`)가 없고(0.2.0 배포 뒤), 이미지 의존성에는 앱 코드가 쓰는 패키지만 | 첫 이관 도구와 안 쓰는 패키지는 이미지와 점검 범위만 키운다. 패키지를 빼면 새 이미지 버전 | done | [pl-53](prd/transform-cleanup.md#pl-53) |  |
 | 쪽 수 세기는 함수 하나 — `pdf_kind.doc_pages`와 `vlmcall.page_count`가 같은 규칙 | 쪽 수가 자리마다 다르면 제한 시간·쪽 VLM 상한이 어긋난다. `vlmcall.py`는 엔진 지문에 들어가 사람 검토(등급 A) | todo | [pl-60](prd/transform.md#pl-60) | 두 함수가 따로 있음 |
+| 대표 결과가 엔진이 읽은 글을 흐리거나 버리지 않는다 — 표 칸을 다른 칸 글자 안에서 찾지 않음 · 쪽 VLM 글이 없는 쪽의 그림은 빈 블록으로 넣지 않음 · docx에서 anydoc만 읽은 글을 합침 · VLM 엔진 쪽 글도 되풀이 고장을 거름 | 검색 조각에 쓰레기 줄이 섞이거나 글상자·병합 칸 글이 빠진다(0.3.0 엔진 비교 11-06) | todo | [pl-62](prd/transform.md#pl-62) | 표 조각 30줄(stability_trend_ko) · 빈 그림 블록 5개(tt_workflow_en) · anydoc 글 합침 0 · VLM 엔진 되풀이 거름 없음(vlmcall — 사람 검토) |
 
 ## 적재 (load) — 검색 DB(pgvector)·게시·저장 구조·DB 스키마
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
