@@ -23,7 +23,7 @@ _NOISE = re.compile(
 
 
 def run_folder(src, out):
-    """폴더의 파일을 해시로 묶어 대표만 keep — (keep 이름 목록, groups.csv 행, 중복 그룹 수).
+    """폴더의 파일을 해시로 묶어 대표만 keep — (keep {대표 이름: sha256}, groups.csv 행, 중복 그룹 수).
     지문은 (경로·크기·수정 시각)이 같으면 fingerprints.jsonl 캐시를 다시 쓴다(새·바뀐 파일만 읽음)."""
     files = sorted(p for p in Path(src).iterdir() if p.is_file() and p.name != ".gitkeep")
     out = Path(out)
@@ -47,10 +47,10 @@ def run_folder(src, out):
     groups: dict[str, list[int]] = {}
     for i, r in enumerate(info):
         groups.setdefault(r["sha"], []).append(i)
-    keep, rows, gid = [], [], 0
+    keep, rows, gid = {}, [], 0
     for members in groups.values():
         rep = max(members, key=lambda i: (not _NOISE.search(Path(info[i]["path"]).stem), info[i]["mtime"], info[i]["size"]))
-        keep.append(Path(info[rep]["path"]).name)
+        keep[Path(info[rep]["path"]).name] = info[rep]["sha"]
         if len(members) == 1:
             continue
         gid += 1

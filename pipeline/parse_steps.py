@@ -46,14 +46,6 @@ def run_step(args, env, timeout=None, launch=subprocess.Popen, track=False, log=
     return p
 
 
-def place_inputs(run, src, out, names, only, scan_rotate=True):
-    """준비 단계 — 파일 이름 목록을 only 파일에 적고 filter_and_rotate(src → out, 그 이름만)를 돌린다. scan_rotate=False면
-    이미지 PDF는 돌리지 않음. 반환: run의 종료 코드."""
-    Path(only).write_text("\n".join(names) + "\n", encoding="utf-8")
-    extra = [] if scan_rotate else ["--no-scan-rotate"]
-    return run(["pipeline.extract.filter_and_rotate", "--src", src, "--out", out, "--only", only, *extra])
-
-
 def run_group(cmd, env, timeout=None, launch=subprocess.Popen, track=False, **kw):
     """명령 cmd를 새 프로세스 묶음으로 띄워 끝날 때까지 기다린다. timeout(초)을 넘으면 묶음째 끝내고(run_all이 띄운 엔진 손자까지)
     subprocess.TimeoutExpired를 올린다. cwd = APP_ROOT(런타임 루트 — 코드 루트로 하면 --src 상대경로가 거기 기준으로 풀려 못 찾음, FS v4 회귀).

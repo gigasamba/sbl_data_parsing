@@ -150,13 +150,34 @@ def _done_keys_rows(cur, table, kc="source_key", gold=False):
     gold=True(gold_version 칸이 있음)면 ok·partial은 gold_version도 있어야(silver나 gold 결과가 없으면 다시 대상).
     파싱 입구(pipeline.extract.candidate_pick `done_keys`)가 "FileStorageMap ∖ ParsingMeta"로 새 문서를 고를 때 쓴다(읽기만, SELECT).
     상수 글자만 SQL에 끼우고(DONE_STATUSES는 코드 상수) 값 바인딩은 없음."""
-    q = lambda xs: ", ".join(f"'{v}'" for v in xs)
-    cond = f"parse_status IN ({q(DONE_STATUSES)})"
-    if gold:
-        rest = [s for s in DONE_STATUSES if s not in GOLD_STATUSES]
-        cond = f"(parse_status IN ({q(rest)}) OR (parse_status IN ({q(GOLD_STATUSES)}) AND gold_version IS NOT NULL))"
-    cur.execute(f"SELECT DISTINCT {kc} FROM {table} WHERE {kc} IS NOT NULL AND {cond}")
+    cur.execute(f"SELECT DISTINCT {kc} FROM {table} WHERE {kc} IS NOT NULL AND {_done_cond(gold)}")
     return {r[0] for r in cur.fetchall()}
+
+
+def _done_cond(gold):
+    """끝난 행 조건 글자(DONE_STATUSES — gold=True면 ok·partial은 gold_version도). 코드 상수만 끼움."""
+    q = lambda xs: ", ".join(f"'{v}'" for v in xs)
+    if not gold:
+        return f"parse_status IN ({q(DONE_STATUSES)})"
+    rest = [s for s in DONE_STATUSES if s not in GOLD_STATUSES]
+    return f"(parse_status IN ({q(rest)}) OR (parse_status IN ({q(GOLD_STATUSES)}) AND gold_version IS NOT NULL))"
+
+
+def _done_by_sha(cur, table, ph, shas, kc="source_key", gold=False):
+    """끝난 행(_done_cond) 중 sha256이 shas에 있는 것 → {sha256: (원본 키, parse_status)} — 같은 내용 거르기(candidate_ready)가 쓴다.
+    한 sha256에 여러 행이면 ok·partial 행을 skipped_dup 행보다 앞에 둔다(중복의 대표 = 실제로 파싱된 문서). 읽기만, IN_CHUNK개씩."""
+    out: dict = {}
+    shas = sorted(set(shas))
+    for k in range(0, len(shas), IN_CHUNK):
+        part = shas[k : k + IN_CHUNK]
+        cur.execute(
+            f"SELECT sha256, {kc}, parse_status FROM {table} WHERE sha256 IN ({', '.join([ph] * len(part))}) AND {_done_cond(gold)}",
+            tuple(part),
+        )
+        for sha, key, st in cur.fetchall():
+            if sha not in out or out[sha][1] == "skipped_dup":
+                out[sha] = (key, st)
+    return out
 
 
 def _status_like(cur, table, ph, prefix, kc="source_key"):
@@ -302,6 +323,11 @@ class MssqlStore:
             self._available_columns(self.cn.cursor())
         return _done_keys_rows(self.cn.cursor(), self.ident, self.key_col(), "gold_version" in self._found)
 
+    def done_by_sha(self, shas):
+        if self._cols is None:
+            self._available_columns(self.cn.cursor())
+        return _done_by_sha(self.cn.cursor(), self.ident, "%s", shas, self.key_col(), "gold_version" in self._found)
+
     def status_like(self, prefix):
         return _status_like(self.cn.cursor(), self.ident, "%s", prefix, self.key_col())
 
@@ -371,6 +397,10 @@ class SqliteStore:
     def done_source_keys(self):
         cols = self._colset()
         return _done_keys_rows(self.cn.cursor(), self.table, renames(cols).get("source_key", "source_key"), "gold_version" in cols)
+
+    def done_by_sha(self, shas):
+        cols = self._colset()
+        return _done_by_sha(self.cn.cursor(), self.table, "?", shas, renames(cols).get("source_key", "source_key"), "gold_version" in cols)
 
     def status_like(self, prefix):
         return _status_like(self.cn.cursor(), self.table, "?", prefix, self.key_col())

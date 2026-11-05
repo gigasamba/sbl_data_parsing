@@ -247,7 +247,8 @@ def _run_job(job_id, j, ws, fname, t0):
                 raise RuntimeError(f"단계 실패({args[0]}): {(p.stdout + p.stderr).strip().splitlines()[-1:] or ['?']}")
             return 0
 
-        parse_steps.place_inputs(step, ws / "in", ws / "prep", [fname], ws / "only.txt")
+        (ws / "only.txt").write_text(fname + "\n", encoding="utf-8")
+        step(["pipeline.extract.filter_and_rotate", "--src", ws / "in", "--out", ws / "prep", "--only", ws / "only.txt"])
         empty = parse_steps.parse_chain(step, ws / "prep", ws / "parse", ws / "truth.json", ["--limit", "1", "--procs", PROCS])
     ms = round((time.time() - t0) * 1000, 1)
     rep_path = ws / "parse" / "_rep" / (fname + ".json")

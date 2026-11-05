@@ -266,8 +266,7 @@ def test_stage_batch():
     """파싱 전 extract 한 번 — ParsingMeta에 끝난 문서(done)는 고를 때(받기 전) 빠지고, 같은 내용은 하나만, 거르기(filter_and_rotate)를 지난 것만
     only.txt에 남음 · pick_new는 상한·목록 안에서만."""
     import tempfile
-
-    from pipeline.extract import deduplication as dedup
+    from unittest import mock
 
     root = Path(tempfile.mkdtemp())
     src = root / "src"
@@ -277,20 +276,18 @@ def test_stage_batch():
     prepared = root / "prepared"
     steps = []
 
-    def run_step(args):  # 자식 대신 — 중복 확인은 같은 함수, 거르기는 그 결과를 흉내(압축은 건너뜀)
+    def run_step(args):  # 자식 대신 — 거르기 결과를 흉내(압축은 건너뜀). 중복 제외는 같은 프로세스
         steps.append(args[0])
-        if args[0] == "pipeline.extract.deduplication":
-            dedup.run_folder(src, root / "out" / "dedup")
-        else:
-            prepared.mkdir(exist_ok=True)
-            names = Path(args[args.index("--only") + 1]).read_text(encoding="utf-8").split()
-            for n in names:
-                if not n.endswith(".zip"):
-                    (prepared / n).write_text("x", encoding="utf-8")
+        prepared.mkdir(exist_ok=True)
+        names = Path(args[args.index("--only") + 1]).read_text(encoding="utf-8").split()
+        for n in names:
+            if not n.endswith(".zip"):
+                (prepared / n).write_text("x", encoding="utf-8")
         return 0
 
-    local, left, state, only = M.stage_batch(str(src), root / "out", prepared, 0, run_step, done={"c.txt"})
-    assert steps == ["pipeline.extract.deduplication", "pipeline.extract.filter_and_rotate"] and Path(local) == src
+    with mock.patch.object(CP, "done_by_sha", lambda shas: {}):  # ParsingMeta 읽기 없음
+        local, left, state, only = M.stage_batch(str(src), root / "out", prepared, 0, run_step, done={"c.txt"})
+    assert steps == ["pipeline.extract.filter_and_rotate"] and Path(local) == src
     assert (state / "selected.txt").read_text(encoding="utf-8").split() == ["a.txt", "b.txt", "d.zip"]  # 끝난 c.txt는 고를 때 빠짐
     assert len(left) == 1 and left[0] in ("a.txt", "b.txt") and only.read_text(encoding="utf-8").split() == left, (
         left

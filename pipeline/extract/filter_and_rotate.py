@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """파싱 전 준비 → output/prepared/ (모든 엔진이 같은 입력을 쓰게)
 
-1. 중복 제외: --only output/dedup/keep.txt 에 있는 파일만 (pipeline/extract/deduplication.py 먼저)
+1. --only 목록(candidate_ready stage_batch의 only.txt — 중복 제외를 지난 이름)에 있는 파일만. DRM·암호·지원 안 함은 건너뜀
+   기록(_records/skipped.jsonl·skipped.csv + 문서마다 extract.skip span 1행)만 남기고 처리하지 않는다.
 2. 방향 보정(설정 `extract.prepare.rotate` — 기본 꺼짐): 켜면 이미지·이미지 PDF의 쪽마다 0·90·180·270도로 돌려
    RapidOCR 점수(가로 글상자의 신뢰도 × 글자 수)를 **동시에**(스레드 4개, 스레드마다 RapidOCR 하나) 재고 가장 높은 방향으로 돌린다
    (같으면 0도, 모두 0이면 그대로). 끄면 회전을 위한 OCR을 전혀 하지 않고 그대로 놓는다.
@@ -13,7 +14,7 @@
 
 작은 기울기(1~5도) 보정은 하지 않는다 — 필요하면 튜닝 항목.
 
-사용: python -m pipeline.extract.filter_and_rotate [--only output/dedup/keep.txt] → python -m pipeline.transform.parse.parse_engines --src output/prepared
+사용: python -m pipeline.extract.filter_and_rotate [--only <이름 목록>] → python -m pipeline.transform.parse.parse_engines --src output/prepared
 """
 
 import argparse
@@ -281,8 +282,11 @@ _sha256 = file_hash
 
 def _record_skip(p, reason, skipped, skipped_log):
     """건너뛴 문서 기록 — skipped.csv(이번 실행 전체, 호환)용 리스트에 더하고, skipped.jsonl(누적, 이어쓰기)에
-    파일 sha256·시각과 함께 바로 씀."""
+    파일 sha256·시각과 함께 바로 씀 + extract.skip span 1행(candidate_ready.skip_event)."""
+    from pipeline.extract.candidate_ready import skip_event
+
     skipped.append({"file": p.name, "reason": reason})
+    skip_event(p.name, reason)
     print(f"{p.name}: {reason} — 기록하고 건너뜀", flush=True)
     try:
         sha = _sha256(p)
@@ -332,7 +336,7 @@ def main():
         "--src", default=None, help="원본 문서 폴더(기본 DOC_DIR env — --help·import 때는 안 풀어야 하므로 여기서는 default=None)"
     )
     ap.add_argument("--out", default=str(APP_ROOT / "output" / "prepared"))
-    ap.add_argument("--only", default="", help="이 목록(파일명 한 줄씩)에 있는 파일만 — 보통 output/dedup/keep.txt")
+    ap.add_argument("--only", default="", help="이 목록(파일명 한 줄씩)에 있는 파일만 — 보통 stage_batch의 only.txt")
     ap.add_argument(
         "--dpi", type=int, default=pc.cfg().extract.ocr.dpi, help="PDF 쪽 렌더 해상도 — 기본 extract.ocr.dpi(쪽·그림 VLM과 같은 값)"
     )
