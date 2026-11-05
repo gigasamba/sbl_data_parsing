@@ -13,7 +13,6 @@ def selftest():
         "parse": {".txt": ["plaintext"]},
         "embed": "api",
         "chunk": "structure",
-        "graph": "table+entity",
         "retrieve": "hybrid",
         "k": 10,
     }

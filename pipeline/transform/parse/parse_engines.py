@@ -497,12 +497,12 @@ def main():
         tmo = page_timeout(eng, pages, first)
         sp.add(pages=pages, limit_s=tmo, first_of_engine=first)
         if eng in VLM_ENGINES:
-            err, tmo = _run_with_retry(eng, doc, dst, a.profile, tmo, unset, None, prov)
+            err, tmo, chars = _run_with_retry(eng, doc, dst, a.profile, tmo, unset, None, prov)
         else:
             t_slot = time.monotonic()
             with text_sem:
                 sp.add(wait_slot_ms=int((time.monotonic() - t_slot) * 1000))  # 글자 엔진 동시 수 상한(text_sem) 대기 — 작업 시간과 분리
-                err, tmo = _run_with_retry(eng, doc, dst, a.profile, tmo, unset, None, prov)
+                err, tmo, chars = _run_with_retry(eng, doc, dst, a.profile, tmo, unset, None, prov)
         if err:
             sp.result(
                 "timeout" if "Timeout" in err else "fail", "timeout" if "Timeout" in err else "env" if is_env_error(err) else "doc", err
@@ -524,7 +524,7 @@ def main():
                 "limit": tmo,
                 "sha": sha,
                 "at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "chars": _chars(dst) if not err else 0,
+                "chars": chars if not err else 0,
                 "engine_version": ever,
                 "p0_key": pkey,
                 "p0_code": engine_code_fp(eng),
@@ -608,16 +608,17 @@ def _run_pipeline(jobs, run_job, workers):
 
 
 def _run_with_retry(eng, doc, dst, profile, tmo, unset, env, prov=None):
-    """문서×엔진 1건 — 시간 초과면 같은 실행에서 제한 두 배로 한 번 더, 그래도 넘으면 실패. 반환: (오류 글자 또는 None, 마지막 제한)."""
+    """문서×엔진 1건 — 시간 초과면 같은 실행에서 제한 두 배로 한 번 더, 그래도 넘으면 실패.
+    반환: (오류 글자 또는 None, 마지막 제한, 결과 본문 글자 수 — 자식이 알려 줌, 모르면 0)."""
     for attempt in range(2):
-        err = None
+        err, chars = None, 0
         sp = SP.current()
         if sp is not None:  # 몇 번째 시도인지(시간 초과로 다시 돌면 2)
             sp.set(attempt=attempt + 1)
         try:
             if unset:
                 raise LookupError("환경변수 미설정: " + ", ".join(unset))
-            _isolated(eng, doc, dst, profile, tmo, env=env, **({"prov": prov} if prov else {}))
+            chars = _isolated(eng, doc, dst, profile, tmo, env=env, **({"prov": prov} if prov else {})) or 0
         except Exception as ex:
             err = redact(f"{type(ex).__name__}: {str(ex)[:300]}")
             if isinstance(ex, ImportError):
@@ -629,20 +630,16 @@ def _run_with_retry(eng, doc, dst, profile, tmo, unset, env, prov=None):
         tmo = round(tmo * 2, 2)
         SP.add_current(timeout_retries=1)
         print(f"RETRY {eng:18s} {doc.name}  시간 초과 — 제한 {tmo}초로 한 번 더", flush=True)
-    return err, tmo
+    return err, tmo, chars
+
+
+CHARS_PREFIX = "@@chars "  # 자식(--one)이 stdout에 남기는 결과 본문 글자 수 한 줄(부모 _isolated_once가 읽음)
 
 
 def _with_run_id(rec, run_id):
     """runs.jsonl 줄에 이번 실행 run_id(env PARSE_RUN_ID)를 달아 run_board가 이번 실행만 거를 수 있게.
     env 없으면 그대로(run_id 칸 없음 — run_board는 그때 지금처럼 마지막 기록 기준으로 폴백)."""
     return {**rec, "run_id": run_id} if run_id else rec
-
-
-def _chars(dst):
-    try:
-        return len((json.loads(Path(dst).read_text(encoding="utf-8")).get("text") or "").strip())
-    except (OSError, ValueError):
-        return 0
 
 
 def _sha(p):
@@ -738,6 +735,7 @@ def _isolated_once(eng, doc, dst, profile, tmo, py, env=None, prov=None):
             + (" (세그폴트 등 비정상 종료)" if pr.returncode < 0 or pr.returncode > 1 else "")
             + f": {last[:200]}"
         )
+    return next((int(x[len(CHARS_PREFIX) :]) for x in reversed(out.splitlines()) if x.startswith(CHARS_PREFIX)), 0)
 
 
 def one_main(argv):
@@ -766,6 +764,7 @@ def one_main(argv):
     if a.provenance:
         stamp(out, json.loads(a.provenance))
     atomic_write_text(Path(a.output), json.dumps(out, ensure_ascii=False))  # 끊겨도 반쪽 파일 없음
+    print(CHARS_PREFIX + str(len((out.get("text") or "").strip())), flush=True)  # 부모가 runs.jsonl chars로(결과 파일을 다시 안 읽게)
     print(SP.usage_line(), flush=True)  # 이 프로세스의 cpu·최대 메모리 한 줄(부모의 extract.parse span이 읽음)
 
 

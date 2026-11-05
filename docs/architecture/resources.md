@@ -17,7 +17,7 @@
 
 ### 1-2. 파일 모양
 
-- `name`(예 `dev-v1`) · `parse`(형식 키 → 엔진 목록 — 문서마다 그 엔진들이 동시에 돎) · `source` · `embed` · `chunk` · `graph` · `retrieve` · `k`, 선택 `updated` · `client_aliases`(`common/core/terms.py`가 읽음 — 지금 파일에 없음).
+- `name`(예 `dev-v1`) · `parse`(형식 키 → 엔진 목록 — 문서마다 그 엔진들이 동시에 돎) · `source` · `embed` · `chunk` · `retrieve` · `k`, 선택 `updated` · `client_aliases`(`common/core/terms.py`가 읽음 — 지금 파일에 없음).
 - 형식 키는 확장자, PDF는 `.pdf_text`·`.pdf_image`.
 
 ### 1-3. 바꾸기·되돌리기·보기

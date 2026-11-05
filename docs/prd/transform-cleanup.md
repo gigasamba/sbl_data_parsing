@@ -57,7 +57,12 @@
 <a id="pl-49"></a>
 ## pl-49 · 같은 결과로 덜 읽고 덜 띄우기
 - 이유: 같은 파일을 여러 번 읽고 자식 프로세스를 자주 띄우면 문서 수천 건에서 시간이 커진다.
-- 요건(되어야 할 모습): 명부·사전·원본 해시·매니페스트·엔진 지문은 프로세스마다 한 번만 읽는다. 엔진 결과는 자식이 한 번에 쓴다. 1건 중복 확인은 자식 없이 한다. 결과(대표 결과·묶음)는 바이트 그대로다.
+- 요건(되어야 할 모습): 명부·사전·원본 해시·매니페스트·엔진 지문·층 코드 지문(`artifacts.code_fp`)은 프로세스마다 한 번만 읽는다. 엔진 결과는 자식이 한 번에 쓰고, 본문 글자 수(`runs.jsonl` `chars`)도 자식이 알려 준다(결과 파일을 다시 안 읽음). 1건 중복 확인은 자식 없이 한다. 대표 결과 단계는 단계별 시간과 digest를 문서를 쓸 때 메모리에서 모아 digest를 `_rep/index.json` `digest`에 넣고, 끝 표시는 그 값을 읽는다(`_rep/<문서>.json`을 다시 안 읽음). 고객 이름 찾기는 이름 조각이 본문에 글자 그대로(대소문자 무시) 있는 고객만 정규식을 돌린다. 안 쓰는 정규식과 엔진 구성 `graph` 칸은 없다. 결과(대표 결과·묶음)는 바이트 그대로다.
+- QA:
+  - `tests/server/pipeline/test_gold_bundle.py` `test_infer_clients_prefilter_same` — 명부 3벌 × 본문 9개(겹치는 이름·별칭·대소문자·이름 안 공백·조사·`re.I` 특수 글자 İ ı ſ K) × 머리 길이 2가지에서 거르기 전 몸통과 결과가 같다.
+  - `tests/server/pipeline/test_runtrace.py`(자식 줄 `@@chars`) · `test_engine_run.py`(재시도 뒤 글자 수).
+  - 문서 4건(`valid_env/object_storage/SFDC`의 pdf·docx·xlsx·eml)을 `pipeline.cli parse` → `gold_bundle --embed none`(외부 모델 끔)으로 ae9113ea와 견줌(11-05): 본문·facts·청크(`chunks.jsonl` 바이트 같음)·`_DONE.json` digest·`runs.jsonl` `chars`가 같다. 다른 것은 시각·소요 시간·출력 폴더 경로·`post.code_fp`(층 지문)와 의도한 두 가지 — `index.json`에 `digest` 칸이 생김, 묶음 `meta.json` `stack_conf`에서 `graph`가 빠져 `body_sha`가 바뀜(재사용 열쇠가 아니라 기록만).
+- 반영: 0.3.0(11-05) — 층 지문이 바뀜(커밋 메시지).
 - Status: done
 
 <a id="pl-50"></a>
