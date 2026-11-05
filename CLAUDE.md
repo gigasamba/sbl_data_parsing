@@ -142,7 +142,7 @@ export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자�
 .venv/bin/python -m common.config.sample --check            # sample이 설정 모델과 같은지
 .venv/bin/python -m pipeline.cli selftest                   # 서버 배포 테스트(tests/server) — 일부만: --only <이름 일부>
 .venv/bin/python -m pytest -q tests/                         # 서버 배포 테스트 + 일반 테스트(tests/general만도 가능)
-.venv/bin/python -m common.store.db.dbtool check --target all   # 테이블 정의 ↔ 실제 DB(차이가 있거나 최신 버전이 아니면 종료 코드 1)
+.venv/bin/python -m common.store.db.dbtool check --target all   # DB 판 상태(최신 버전이 아니면 종료 코드 1)
 ```
 
 ### 6-3. 테스트 기준선과 알려진 실패

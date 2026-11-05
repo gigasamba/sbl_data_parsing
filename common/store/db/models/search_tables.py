@@ -2,8 +2,8 @@
 (원천 = sfdc·crms·las·faq·other) — 스키마마다 같은 표 doc·chunk·chunk_term·term_stat·corpus_stat + 뷰 v_chunk_source, 그 원천 전용 칸만 다름.
 기준 스키마 `<PG_SCHEMA>`에는 Alembic 판 표와 5벌이 함께 쓰는 doc_id 시퀀스(`doc_id_seq`)만 있다(실행 정보는 실행 기록에).
 임베딩 차원은 실행 값이라 함수로 만든다. 색인 정의 글자(index_defs)·뷰(views_expected — 칸 이름 순서 + 정의 글자)는 PostgreSQL이 돌려주는 꼴
-(pg_get_indexdef·pg_get_viewdef — `{S}` = 원천 스키마) — 비교용(dbcompare). Alembic 판(migrations/versions/0002~0005)이 같은 DDL을 글자로 갖고,
-PC PG 시험이 둘이 같은지 본다."""
+(pg_get_indexdef·pg_get_viewdef — `{S}` = 원천 스키마). Alembic 판(migrations/versions/0002~0005)이 같은 DDL을 글자로 갖고,
+selftest(test_dbtool)가 판 파일의 칸·뷰를 이 정의와 대조한다."""
 
 from sqlalchemy import Column, ForeignKey, Index, Integer, MetaData, PrimaryKeyConstraint, SmallInteger, String, Table, Text, text
 from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, JSONB, TIMESTAMP

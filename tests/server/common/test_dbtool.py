@@ -96,12 +96,7 @@ def selftest():
             lambda h: lambda sql, p=None: ([{"x": 1}] if h is not None else []) if "to_regclass" in sql else [{"version_num": v} for v in h]
         )(have)
         assert status(fq, "search", "ai")[0] == want, (have, status(fq, "search", "ai"))
-    from sqlalchemy import DefaultClause, text
-
-    from common.store.db.dbcompare import _text
-
-    assert _text(DefaultClause(text("now()"))) == "now()" and _text("1") == "1" and _text(None) == "None"  # 기본값 다름 문구
-    print("[selftest] dbtool — 색인 종류(차원 2,000 경계)·판 상태 판정(없음·끝·모름·끝+모름 섞임)·기본값 문구 통과")
+    print("[selftest] dbtool — 색인 종류(차원 2,000 경계)·판 상태 판정(없음·끝·모름·끝+모름 섞임) 통과")
     return 0
 
 

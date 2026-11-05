@@ -58,7 +58,7 @@
 | 엔진 지문(p0) 범위 = 엔진 폴더의 모든 `.py` + 엔진 실행 파일 + 엔진이 import하는 pipeline 파일 | 이름과 폴더가 다른 엔진(html_stdlib·msg_extract·rapidocr_ko·office)을 고쳐도 지문이 바뀌게. 등급 A | done | [pl-47](prd/transform-cleanup.md#pl-47) |  |
 | 명부·사전·원본 해시·매니페스트·엔진 지문은 프로세스마다 한 번만 읽고, 엔진 결과는 자식이 한 번에 쓰고, 1건 중복 확인은 자식 없이 | 결과는 바이트 그대로. 등급 A | done | [pl-49](prd/transform-cleanup.md#pl-49) |  |
 | 결과를 바꾸는 파일은 층 지문 목록에 들고, 기록·DB 표 정의는 지문 계산에서 빠진다. extract → transform → load 방향은 자동 점검(`check_modules` ⑫, 예외 없음) | 빠지면 고쳐도 옛 결과를 다시 쓰고, 넘치면 상관없는 수정에도 재처리 경보가 남. 등급 A | done | [pl-50](prd/transform-cleanup.md#pl-50) |  |
-| `dbtool`에 첫 이관 도구(`dbcompare`·`stamp`)가 없고(0.2.0 배포 뒤), 이미지 의존성에는 앱 코드가 쓰는 패키지만 | 첫 이관 도구와 안 쓰는 패키지는 이미지와 점검 범위만 키운다. 패키지를 빼면 새 이미지 버전 | todo | [pl-53](prd/transform-cleanup.md#pl-53) | `dbcompare`·`stamp`가 있음(0.2.0 배포 대기), `requirements*`에 `google-adk`·`litellm` — 지시서 `agent.py`만 import, 뺄지 미정 |
+| `dbtool`에 첫 이관 도구(`dbcompare`·`stamp`)가 없고(0.2.0 배포 뒤), 이미지 의존성에는 앱 코드가 쓰는 패키지만 | 첫 이관 도구와 안 쓰는 패키지는 이미지와 점검 범위만 키운다. 패키지를 빼면 새 이미지 버전 | todo | [pl-53](prd/transform-cleanup.md#pl-53) | `requirements*`에 `google-adk`·`litellm` — 지시서 `agent.py`만 import, 뺄지 미정 |
 | 쪽 수 세기는 함수 하나 — `pdf_kind.doc_pages`와 `vlmcall.page_count`가 같은 규칙 | 쪽 수가 자리마다 다르면 제한 시간·쪽 VLM 상한이 어긋난다. `vlmcall.py`는 엔진 지문에 들어가 사람 검토(등급 A) | todo | [pl-60](prd/transform.md#pl-60) | 두 함수가 따로 있음 |
 
 ## 적재 (load) — 검색 DB(pgvector)·게시·저장 구조·DB 스키마

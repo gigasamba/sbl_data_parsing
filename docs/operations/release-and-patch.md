@@ -113,20 +113,20 @@ pgvector의 우리 스키마(검색 `required.pg.pg_schema`와 원천 스키마 
 # ⓪ (DB마다 처음 한 번 — DB 관리자) vector 확장 — 없으면 "vector 확장 없음"으로 멈춤
 #    $DOCKER exec <pg 컨테이너> psql -U <관리자 계정> -d <DB> -c 'CREATE EXTENSION IF NOT EXISTS vector'
 bash deploy/host/scripts/pipe_exec.sh migrate current                    # 지금 판과 코드의 끝 판
-bash deploy/host/scripts/pipe_exec.sh migrate check --target all         # 읽기만 — 표·컬럼·형식·NULL·기본값·키·색인·뷰 칸 비교(차이·끝 판 아님이면 종료 1). 컬럼 순서·뷰 정의 글자는 "(알림)"만
+bash deploy/host/scripts/pipe_exec.sh migrate check --target all         # 읽기만 — 갈래마다 판 상태(끝 판이 아니면 종료 1)
 bash deploy/host/scripts/pipe_exec.sh migrate up --target all --dim <임베딩 차원>   # 끝 판까지. 표가 없는 새 스키마는 --dim 필수(임베딩 모델 출력 크기 — 모델 담당자 확인)
 bash deploy/host/scripts/pipe_exec.sh migrate master load                # 마스터 표를 CSV로 통째로 바꿈(기본 resources/vocab/glossary, 서버 폴더면 --dir <컨테이너 안 경로>)
-bash deploy/host/scripts/pipe_exec.sh migrate check --target all         # 기대: 갈래마다 "비교: 차이 없음"
+bash deploy/host/scripts/pipe_exec.sh migrate check --target all         # 기대: 갈래마다 "판 끝", 종료 코드 0
 bash deploy/host/scripts/pipe_exec.sh show-stack                         # 엔진 구성 파일(이름·sha·경로) — 못 읽으면 종료 2
 ```
 - `--target`: `search`·`applog`·`master`·`all`(셋 모두). 끝 판: search `0005_search` · applog `0002_applog` · master `0001_master`.
-- 기존 스키마인데 버전 기록이 없을 때: 차이 0이면 `migrate stamp --target search`(실행 없이 기록), 차이가 "표·색인·뷰 없음·뷰 칸 다름"뿐이면 `up`(없는 것만 만듦). 컬럼 이름·형식·NULL·기본값·키가 다르거나 남는 표·컬럼·색인이 있으면 `stamp`·`up` 모두 종료 2 — 멈추고 출력(이름만)을 DB 담당과 협의한다.
+- 표는 있는데 버전 기록이 없는 스키마(판 관리 전에 만든 것)에는 `up`이 종료 2로 멈춘다 — 새 `db_schema`로 올리고 전체를 다시 적재한다.
 - ⚠ **0.1.0이 만든 스키마에 `up`하면 `0002_search`가 옛 표를 지운다** — 0.2.0은 새 `db_schema`로 올린다(§8-3).
-- 적재(`pgvector_load`)는 새 스키마면 만들고 기록, 기록이 있으면 `up`, 기록 없는 기존 스키마면 경고만 하고 계속한다. DB 판이 코드보다 낮으면 종료 2(`migrate up` 안내), 코드가 모르는 리비전이 있으면(옛 이미지로 되돌린 뒤 등) 적재·`up`·`stamp` 모두 종료 2. 검색 MCP는 버전을 보지 않는다.
+- 적재(`pgvector_load`)는 새 스키마면 만들고 기록, 기록이 있으면 `up`, 기록 없는 기존 스키마면 경고만 하고 계속한다. DB 판이 코드보다 낮으면 종료 2(`migrate up` 안내), 코드가 모르는 리비전이 있으면(옛 이미지로 되돌린 뒤 등) 적재·`up` 모두 종료 2. 검색 MCP는 버전을 보지 않는다.
 - 판을 바꾸는 리비전(표·컬럼)은 데이터 계약 변경이다 — DB 담당 협의가 먼저.
 - applog를 켰으면(`ops.log.log_db_enabled: true`) 매일 `bash deploy/host/scripts/pipe_exec.sh migrate maintain --target applog`(월 파티션 준비·보존 기한 지난 파티션 삭제)를 예약한다.
 - 엔진 구성 바꾸기: 코드 폴더의 `resources/config/pipeline_stack.json`을 고쳐 코드 폴더째 바꾼다(§1-1). 이미지에 없는 엔진이 있으면 파이프라인 진입점이 종료 2. 검색 MCP는 시작 때 읽으므로 바꾼 뒤 `mcp_keepalive.sh`로 다시 띄운다.
-- PC: `python -m common.store.db.dbtool <up|stamp|current|check|master load> --target … [--schema S] [--dim N | --bundle B] [--create-extension]`(README §4-4).
+- PC: `python -m common.store.db.dbtool <up|current|check|master load> --target … [--schema S] [--dim N | --bundle B] [--create-extension]`(README §4-4).
 
 ### 5-6. 반입 자산(`assets/`) 준비 — 이미지 빌드 전
 
@@ -252,14 +252,13 @@ bash deploy/host/scripts/load_settings.sh common.host >/dev/null && echo 설정-
 ```bash
 $DOCKER rm data-pipeline-parse data-pipeline-structure mcp-server            # 기대: 이름 세 줄(1에서 멈춘 것)
 bash deploy/host/scripts/host_ctl.sh up -d data-pipeline                           # 기대: data-pipeline Started(또는 Running)
-bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 새 스키마는 "표 없음(새 스키마 — up으로 만듦)", 종료 코드 1이 정상
+bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 새 스키마는 "판 기록 없음(새 스키마면 up으로 만듦)", 종료 코드 1이 정상
 bash deploy/host/scripts/pipe_exec.sh migrate up --target all --dim <임베딩 차원>   # 종료 코드 0 — 기대:
 #   [migrate] search <NEW_SCHEMA>: 판 ['0005_search'] (끝 0005_search)
 #   [migrate] applog applog: 판 ['0002_applog'] (끝 0002_applog)
 #   [migrate] master <NEW_SCHEMA>_master: 판 ['0001_master'] (끝 0001_master)
-#   "올린 뒤에도 차이:"가 나오면 멈추고 DB 담당과
 bash deploy/host/scripts/pipe_exec.sh migrate master load                     # 기대: "[migrate] master <NEW_SCHEMA>_master: CSV로 채움 · 해시 <8자>"
-bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 종료 코드 0 — 기대: 갈래마다 "  비교: 차이 없음"
+bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 종료 코드 0 — 기대: 갈래마다 "판 끝"
 ```
 - vector 확장이 없다고 멈추면 §5-5 ⓪.
 - 마스터 표 행 수(git 샘플 CSV 기준, 서버 폴더 `--dir`로 넣었으면 다름): `client_master` 6 · `client_roster` 10 · `contract_master` 4 · `domain_terms` 124 · `id_patterns` 9 · `units` 23 · `master_meta` 1. 확인: `$DOCKER exec "$PG_C" psql -U "$PG_U" -d "$PG_D" -c "SELECT count(*) FROM ${NEW_SCHEMA}_master.client_roster"`.
