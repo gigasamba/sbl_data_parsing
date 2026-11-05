@@ -11,13 +11,14 @@
 | [operations/server-guide.md](operations/server-guide.md) | 서버 가이드 — 이미지 역할, 설치·첫 실행, 일상 실행, 결과 확인, 문제 해결 | 서버를 설치·운영할 때 |
 | [operations/mcp-guide.md](operations/mcp-guide.md) | 검색 MCP 도구 6개의 입력·출력·한도·오류·예(표는 `tests/general/mcp/test_mcp_guide.py`가 코드와 대조) | MCP 클라이언트를 붙이거나 도구 입출력을 바꿀 때 |
 | [operations/env-guide.md](operations/env-guide.md) | 설정 작성 가이드 — 서버·PC `settings.yaml`의 자리·권한·키·기본값 | 설정 값을 채우거나 바꿀 때 |
-| [operations/release-and-patch.md](operations/release-and-patch.md) | 릴리스 — 실행 이미지 + 코드 폴더(개발 서버)·운영 굽기(`bake_prod_image.sh`)·selftest 반입 판정, 0.2.0 배포 사람 할 일(§8) | 새 판을 만들거나 서버에 넣을 때 |
-| [operations/gitea-guide.md](operations/gitea-guide.md) | 내부망 코드 관리(gitea) | 내부망 gitea를 쓰거나 서버 코드 변경을 합칠 때 |
+| [operations/release-and-patch.md](operations/release-and-patch.md) | 릴리스 — 실행 이미지 + 코드 폴더(개발 서버)·운영 굽기(`bake_prod_image.sh`)·selftest 반입 판정, EDW 사슬 파일 고치기(§8)·서버에서 만드는 파일(§9) | 새 판을 만들거나 서버에 넣을 때 |
+| [operations/upgrade-guide.md](operations/upgrade-guide.md) | 운영 중인 서버를 새 판으로 올리기 — 판 확인·백업·새 이미지·새 루트·`migrate up`·다시 처리·점검·되돌리기 | 돌고 있는 서버의 판을 바꿀 때 |
+| [operations/gitea-guide.md](operations/gitea-guide.md) | 내부망 코드 관리(gitea) — 개발자별 clone·벌 | 내부망 gitea를 쓰거나 서버 코드 변경을 합칠 때 |
 | [operations/parsing_meta_mssql.sql](operations/parsing_meta_mssql.sql) | 회사 DB `AI.ParsingMeta` DDL — DBA가 실행(코드는 표를 만들지 않음) | 첫 게시 전, DB 담당과 표를 맞출 때 |
 | [architecture/db_schema.md](architecture/db_schema.md) | DB 스키마 명세 — gold(원천별 5벌)·EDW(`AI.FileStorageMap`·`AI.ParsingMeta`)·마스터(`<스키마>_master`)·`applog`. 시험 `tests/server/common/test_db_schema.py`가 판·SQL과 대조 | DB 표·칸을 바꾸거나 DB 담당자와 협의할 때 |
 | [architecture/resources.md](architecture/resources.md) | 코드가 읽는 자료 — §1 엔진 구성 파일(`resources/config/pipeline_stack.json` — 모양 검사·바꾸기·되돌리기·엔진 거부) · §2 AI 지시서 패키지(`resources/prompts/` + 답변 점검 `rag_qa` — 찾는 순서·구성·캐시 열쇠·입출력·호출부) | 엔진 구성을 바꾸거나 지시서·LLM·VLM 호출부를 볼 때 |
 | [architecture/parse_flow.md](architecture/parse_flow.md) | 파싱 실행 흐름 — 입구(`run_pipeline.py`·`pipeline.cli`) → extract → transform → load → 검색 MCP를 단계별 그림(mermaid)과 파일 역할 표로, 단계별 산출물·캐시 열쇠, 설정·로그·출력 폴더 | 코드가 실제로 어떤 순서로 도는지, 결과가 어디에 쌓이는지 볼 때 |
-| [history/](history/) | 지난 기록(보관만 — 고치지 않음). [refactoring/refactor_plan.md](refactoring/refactor_plan.md)는 옮긴 곳 안내 | 옛 결정(`D-xxx`·`P-xx`)·이력을 찾을 때 |
+| [history/](history/) | 지난 기록(보관만 — 고치지 않음) — 예 0.2.0 배포 절차 [history/deploy_0_2_0.md](history/deploy_0_2_0.md). [refactoring/refactor_plan.md](refactoring/refactor_plan.md)는 옮긴 곳 안내 | 옛 결정(`D-xxx`·`P-xx`)·이력을 찾을 때 |
 
 ## 예외
 
@@ -40,6 +41,7 @@
 | code_fp · FINGERPRINT | 레이어 코드 핑거프린트(p0·p1·r·s) · 핸드오프 핑거프린트 — 바뀌면 서버 재처리(CLAUDE.md §4) |
 | RUN_ENV | 실행 환경 `local`(PC)·`dev`·`prd` |
 | 등급 A | 사람 검토가 필요한 변경(핑거프린트·계약·DB·운영 접속·비밀값) |
+| 사용자 | 이 프로젝트의 결정을 내린 사람(지금 담당자). 문서·주석의 "사용자 MM-DD"는 그 사람이 그날 정한 것이라는 뜻 — 바꾸려면 지금 담당자와 정한다 |
 
 **프로젝트 용어**
 | 말 | 뜻 |

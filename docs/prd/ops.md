@@ -43,7 +43,7 @@
 ## pl-54 · 전체 e2e — local·dev·prd, prd 전체 문서 실행은 새 `PG_SCHEMA`로
 - 이유: 판 0002가 기준 스키마의 옛 표를 지우고 0.2.0은 전체 다시 적재다.
 - 할 일: 전체 e2e를 local·dev·prd에서 돌린다. 전체 문서 실행은 prd에서만, 새 기준 스키마 이름(`required.pg.pg_schema`)으로. 옛 gold·`struct` 스키마는 2주 뒤 DB 담당자가 백업하고 지운다.
-- 절차: [release-and-patch.md §8](../operations/release-and-patch.md#8-020-배포--사람이-할-일) · 서버 확인 refactor.md C-74.
+- 절차: [upgrade-guide.md](../operations/upgrade-guide.md) §7 (나)(새 스키마에 전부 다시) · 0.2.0 때 절차 [history/deploy_0_2_0.md](../history/deploy_0_2_0.md) · 서버 확인 refactor.md C-74.
 - Status: todo
 
 <a id="pl-24"></a>
