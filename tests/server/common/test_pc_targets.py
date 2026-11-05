@@ -45,3 +45,26 @@ def test_pc_targets():
             assert (ignored in errors.getvalue()) if ignored else ("무시" not in errors.getvalue()), (run, errors.getvalue())
             assert "edw.corp.local" not in errors.getvalue() and "rag-silver" not in errors.getvalue()
             settings._warned.clear()
+
+
+def test_local_refuses_object_storage():
+    """local은 S3 클라이언트를 만들지 않는다(칸을 비워도 boto3 기본값으로 실제 S3에 닿으므로) — dev는 설정 칸으로 만든다."""
+    import boto3
+
+    from common.store import objectstore
+
+    made = []
+    # (run_env, 거부?)
+    for run, refused in (("local", True), ("dev", False)):
+        with (
+            settings.COMMON.env(RUN_ENV=run, OS_ENDPOINT="https://os.example.local:9000"),
+            mock.patch.object(boto3, "client", lambda *a, **kw: made.append(kw) or "cli"),
+        ):
+            try:
+                objectstore.client()
+                got = False
+            except RuntimeError as e:
+                got = True
+                assert "os.example.local" not in str(e), str(e)  # 값은 안 찍음
+        assert got == refused, run
+    assert [kw["endpoint_url"] for kw in made] == ["https://os.example.local:9000"], made

@@ -12,7 +12,9 @@ import tempfile
 from pathlib import Path
 from unittest import mock
 
-from common.config import sample
+import yaml
+
+from common.config import layout, sample
 from common.config import settings as S
 from common.core import paths
 from common.core.paths import PROJ_ROOT
@@ -48,9 +50,14 @@ DEV = {**MODELS, **PG, **SERVER_ONLY} | {
     "host_docs_dir": "/data/docs",
     "pg_container_name": "pgvector",
 }
+# 덮기 파일(overrides — env 이름)로 준 서버 전용 칸 전부(LOCAL_IGNORED) — 값은 칸마다 다르게(경고에 값이 새면 잡히게)
+_CLS = S.section_class(("common", "pipeline"))[0]
+_ENV = {p: e for e, p in S.env_map(_CLS).items()}
+ALL_SERVER = {_ENV[p]: f"srv-value-{i}-{_HEX}" for i, p in enumerate(S.LOCAL_IGNORED)}
 _LOCAL_BUCKET = f"file://{PROJ_ROOT.as_posix()}/valid_env/object_storage/Parsing_Result"
 # (사례, 채울 칸, 기대 RUN_ENV, 기대 값) — 기대 값: schema = PG 스키마(None = PG 접속 없음 — sqlite 대역), write = login("write")의 계정,
-# bucket = 게시 버킷, source = 파싱 원본, max_new = 새 문서 상한, ignored = 경고에 나와야 하는 칸 이름(local이 비운 서버 칸)
+# bucket = 게시 버킷, source = 파싱 원본, max_new = 새 문서 상한, ignored = 경고에 나와야 하는 칸 이름(local이 비운 서버 칸),
+# overlay = 덮기 파일 overrides로 줄 값(env 이름), blank = sample이 기본값을 적어 낸 칸 중 비울 칸, warn = 나와야 하는 경고 글자(없으면 그 경고가 없어야 함 — pg_schema 기본값 알림)
 CASES = (
     (
         "(a) PC — run_env·모델만 채움(PG 없음 → sqlite 대역)",
@@ -72,10 +79,23 @@ CASES = (
         {"schema": None, "bucket": _LOCAL_BUCKET, "ignored": tuple(SERVER_ONLY)},
     ),
     (
+        "PC — 덮기 파일로 서버 전용 칸(LOCAL_IGNORED) 전부를 줌 → 모두 비우고 경고 한 줄(칸 자리만)",
+        LOCAL_MIN,
+        "local",
+        {"schema": None, "bucket": _LOCAL_BUCKET, "overlay": ALL_SERVER, "ignored": tuple(map(layout.to_yaml, S.LOCAL_IGNORED))},
+    ),
+    (
         "(c)(d) 개발 서버 — pg_schema·EDW 쓰기 계정을 비워 둠",
         DEV,
         "dev",
-        {"schema": "data_parsing", "write": "svc_r", "bucket": "rag-silver", "ignored": ()},
+        {
+            "schema": "data_parsing",
+            "write": "svc_r",
+            "bucket": "rag-silver",
+            "ignored": (),
+            "warn": "required.pg.pg_schema",
+            "blank": "pg_schema",
+        },
     ),
 )
 _HOST = PROJ_ROOT / "deploy" / "host" / "scripts" / "settings_to_env.py"  # 호스트 스크립트 — 이미지에는 없음(PC에서만 봄)
@@ -101,35 +121,58 @@ def test_copied_sample_runs_after_filling_blanks():
     for what, fills, want, exp in CASES:
         with tempfile.TemporaryDirectory() as d, mock.patch.object(S, "_warned", set()):
             y = Path(d) / "settings.yaml"
-            y.write_text(_fill(text, fills), encoding="utf-8")
-            env = {"SETTINGS_FILE": str(y)}
+            filled = _fill(text, fills)
+            if "blank" in exp:
+                filled, n = re.subn(rf"(?m)^( +{exp['blank']}):[^#\n]*#", r"\1:  #", filled)
+                assert n == 1, (what, exp["blank"])
+            y.write_text(filled, encoding="utf-8")
+            f = y
+            if "overlay" in exp:  # 덮기 파일 — base(복사한 sample) 위에 overrides
+                f = Path(d) / "overlay.yaml"
+                f.write_text(yaml.safe_dump({"base": str(y), "overrides": exp["overlay"]}), encoding="utf-8")
+            env = {"SETTINGS_FILE": str(f)}
             err = io.StringIO()
             with contextlib.redirect_stderr(err):
                 for cls in (S.CommonAppSettings, *S.app_classes().values()):
-                    S.load(cls, file=y, environ={})  # STRICT — 모르는 칸·틀린 값이면 SettingsError
+                    S.load(cls, file=f, environ={})  # STRICT — 모르는 칸·틀린 값이면 SettingsError
                 for app in ("pipeline", "mcp"):
                     assert S.require_run_env(app, environ=env, sections=(app,)) == want, what
-            st = S.load(S.section_class(("common", "pipeline"))[0], file=y, environ={})
+            st = S.load(_CLS, file=f, environ={})
             c, p = st.common.connections, getattr(st, "pipeline", None)  # mcp 이미지에는 pipeline 절이 없음
             for k in exp["ignored"]:
                 assert k in err.getvalue(), (what, k, err.getvalue())
-            assert all(v not in err.getvalue() for v in SERVER_ONLY.values()), what  # 칸 이름만, 값은 안 찍음
+            if "overlay" in exp:  # 한 줄에 전부
+                assert any(all(k in line for k in exp["ignored"]) for line in err.getvalue().splitlines()), what
+                left = [q for q in S.LOCAL_IGNORED if _peek(st, q) not in (None, "")]
+                assert left == ["pipeline.load.publish.bucket"], (what, left)  # 게시 버킷만 다시 채움(local 게시 폴더 — 아래 bucket)
+            secrets = (*SERVER_ONLY.values(), *ALL_SERVER.values())
+            assert all(v not in err.getvalue() for v in secrets), what  # 칸 이름만, 값은 안 찍음
             if want == "local":
                 assert not c.rdb.host and not c.object_storage.endpoint, what
             if p is not None:
                 assert p.load.publish.bucket == exp["bucket"], (what, p.load.publish.bucket)
             if p is not None and "source" in exp:
                 assert (p.extract.input_source, p.extract.max_new) == (exp["source"], exp["max_new"]), what
-            with S.COMMON.override(file=y, environ={}):
+            err = io.StringIO()
+            with S.COMMON.override(file=f, environ={}), contextlib.redirect_stderr(err):
                 assert (pg.conf()["PG_SCHEMA"] if pg.has_conn() else None) == exp["schema"], what
                 if "write" in exp:
                     assert mssql.login("write")[0]["user"] == exp["write"], what
+            warn = [line for line in err.getvalue().splitlines() if "required.pg.pg_schema" in line]
+            assert len(warn) == ("warn" in exp) and all(exp["schema"] in line for line in warn), (what, warn)  # 쓰는 기본값도 알림
             if _HOST.is_file():
                 host = _host()
                 doc, herr = host.load_or_error(y)
                 out = host.lines(doc, None)
                 image = any(x.startswith("export DATA_PIPELINE_IMAGE=") for x in out)  # local은 빈 칸 그대로 = 안 냄
                 assert herr is None and f"export RUN_ENV='{want}'" in out and image == (want == "dev"), (what, herr)
+
+
+def _peek(st, path):
+    v = st
+    for part in path.split("."):
+        v = getattr(v, part, None)
+    return S.reveal(v)
 
 
 def test_local_edw_copy_made_from_valid_env():
@@ -147,5 +190,8 @@ def test_local_edw_copy_made_from_valid_env():
             assert Path(got).read_bytes() == b"seed-bytes" and seed.read_bytes() == b"seed-bytes"
             Path(got).write_bytes(b"used")
             assert Path(mssql.standin_path()).read_bytes() == b"used"  # 있으면 다시 복사하지 않음
+            with mock.patch.object(Path, "exists", lambda self: False):  # 경합 — 확인 뒤 다른 프로세스가 먼저 만든 경우
+                assert Path(mssql.standin_path()).read_bytes() == b"used"  # 먼저 생긴 사본을 덮지 않음
+            assert not list(Path(d).glob("*.tmp")), list(Path(d).iterdir())  # 임시 파일은 지움
         with mock.patch.object(paths, "LOCAL_EDW_COPY", copy), S.COMMON.env(RUN_ENV="dev", RDB_SQLITE=None):
             assert mssql.standin_path() is None  # 서버는 대역 없음

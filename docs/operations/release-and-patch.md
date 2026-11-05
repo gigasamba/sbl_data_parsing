@@ -170,6 +170,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 - 0.2.0은 **새 루트**에 놓는다 — 0.1.0 자리(코드 폴더·설정 폴더)는 그대로 두고 되돌리기에 쓴다. 검색 DB는 같은 PG다.
 - prd 이미지에는 settings.yaml을 굽지 않는다 — dev처럼 `<루트>/settings.yaml`을 붙인다.
 - 모델: dev·prd는 내부망 모델만(외부 모델 호출 거부).
+- 원천별 하위 폴더 모양(`<원천>/<id>/<파일>`)의 폴더 원천(`required.source.input_source`가 폴더)은 맨 위에 둔 `*.md`를 원본으로 읽지 않는다(설명 파일로 보고 모양 판정에서도 뺌 — 예전에는 맨 위 파일 하나로 평평한 폴더로 읽었다). 그 자리에 파싱할 `.md` 문서가 있으면 원천 하위 폴더로 옮긴다.
 
 ### 8-2. 배포 전
 
@@ -184,7 +185,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 | 7 | 폐쇄망 휠·`assets/` 채우고 빌드(§5-6 — `ALLOW_NO_ASSETS=1` 금지) | devops | — |
 | 8 | `server-changes.md`를 읽고 새 코드에 들어 있는지 대조(§2) | 서버 운영·개발자 | — |
 | 9 | EDW 표 설명 자료 폴더(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료)를 루트 아래 결과 폴더 `<루트>/output/edw_meta/`에 복사(UID 10001이 읽게)하고 settings.yaml에 `search.edw_meta.edw_meta_catalog_dir: /app/output/edw_meta`. 없으면 `edw_meta` 도구만 `not_configured`(README §5-0 4) | 서버 운영 | C-91 |
-| 10 | settings.yaml 칸 정리 — 지운 칸은 지우고, `search.server.fulltext_secret` 값은 `required.tokens.fulltext_sign_key`로, 토큰은 `required.tokens.mcp_token` 하나로 옮기고, 칸 이름을 새 이름으로 바꾼다(대응표 refactor.md C-95 — 옛 이름·지운 칸이 남으면 시작 거부) | 서버 운영 | C-92·C-95 |
+| 10 | settings.yaml 칸 정리 — 지운 칸은 지우고, `search.server.fulltext_secret` 값은 `required.tokens.fulltext_sign_key`로, 토큰은 `required.tokens.mcp_token` 하나로 옮기고, `required.edw.edw_local_sqlite_file` 줄을 지우고(가짜 EDW는 PC 전용 — 남으면 시작 거부), 칸 이름을 새 이름으로 바꾼다(대응표 refactor.md C-95 — 옛 이름·지운 칸이 남으면 시작 거부) | 서버 운영 | C-92·C-95 |
 | 11 | FAQ 교체 기록 옮기기 — 첫 `run_pipeline.py` 실행 전에 옛 `<작업 폴더>/batch_progress/faq_seen.txt`가 있으면 `<결과 폴더>/_faq_seen.txt`로 복사하고 UID 10001이 읽고 쓰게 한다(`cp -p <옛 파일> <결과 폴더>/_faq_seen.txt && chown 10001 <결과 폴더>/_faq_seen.txt`). 안 옮기면 첫 실행이 gold `faq`를 한 번 통째로 교체한다 | 서버 운영 | C-95 ⑨ |
 
 ### 8-3. 실행 순서 — 복사해 붙이는 명령(dev 먼저, 그다음 prd)

@@ -1,7 +1,10 @@
 """EDW 접속 하나·계정 둘(규칙: docs/prd/ops.md#op-03) — 역할별 계정 선택과 "검색 MCP는 읽기 계정만"을 고정. 실제 접속 없음."""
 
+import contextlib
+import io
 from unittest import mock
 
+from common.config import settings as S
 from common.config.settings import COMMON
 from common.core.paths import PROJ_ROOT
 from common.store import mssql
@@ -101,3 +104,16 @@ def test_publish_uses_write_and_sqlite_wins():
         db = PM.make_db("write")
         assert isinstance(db, PM.SqliteStore)
         db.close()
+
+
+def test_write_fallback_warns_on_server():
+    """쓰기 계정을 비워 읽기 계정으로 쓸 때 — 서버(dev·prd)는 경고 한 줄(값 없음), local은 조용히(op-03)."""
+    no_write = {**FULL, "RDB_WRITE_USER": None, "RDB_WRITE_PASSWORD": None}
+    # (run_env, 경고?)
+    for run, warned in (("dev", True), ("prd", True), ("local", False)):
+        err = io.StringIO()
+        with mock.patch.object(S, "_warned", set()), COMMON.env(**no_write, RUN_ENV=run), contextlib.redirect_stderr(err):
+            assert mssql.login("write")[0]["user"] == "ru"
+        out = err.getvalue()
+        assert ("읽기 계정으로" in out) == warned and len(out.splitlines()) == int(warned), (run, out)
+        assert "rp" not in out, out  # 계정 값은 안 찍음

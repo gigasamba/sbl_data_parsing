@@ -196,7 +196,7 @@
 - 규칙:
   1. 벡터는 pgvector에만, EDW에는 넣지 않는다.
   2. 접속 블록 하나 — settings.yaml `required.edw`(`edw_host`·`edw_port`·`edw_database`·`edw_read_user`·`edw_read_password`·`edw_write_user`·`edw_write_password`, 모델 `common.connections.rdb` · 게시 표 `parsing_meta_table` — 비우면 `AI.ParsingMeta`). 서버는 접속 칸을 채우고, PC는 아무것도 채우지 않는다(가짜 EDW — 5). 드라이버는 pymssql만(`common.store.mssql.login(role)`).
-  3. 읽기 계정: RDB 원천 목록·discover·고객 목록·FileStorageMap·ParsingMeta 상태·`run_pipeline.py` 읽기·MCP 전부. 쓰기 계정: ParsingMeta 게시(INSERT/UPDATE)·`loaded_at` UPDATE — 쓰기 계정 이름·비밀번호를 둘 다 비우면 `login("write")`가 읽기 계정을 쓴다(검색 MCP 프로세스는 제외 — 4).
+  3. 읽기 계정: RDB 원천 목록·discover·고객 목록·FileStorageMap·ParsingMeta 상태·`run_pipeline.py` 읽기·MCP 전부. 쓰기 계정: ParsingMeta 게시(INSERT/UPDATE)·`loaded_at` UPDATE — 쓰기 계정 이름·비밀번호를 둘 다 비우면 `login("write")`가 읽기 계정을 쓴다(검색 MCP 프로세스는 제외 — 4) 그때 읽기 계정에 ParsingMeta INSERT·UPDATE 권한이 있어야 하고, 같은 계정을 검색 MCP `query_edw`도 쓴다(그 권한이 질의 도구 계정에도 열림). 서버(dev·prd)는 이 대체를 쓸 때 경고 한 줄을 낸다(값 없음).
   4. MCP 프로세스는 `settings.edw_read_only()`를 먼저 불러 설정 객체의 쓰기 계정을 비운다.
   5. PC 대역: `dev.local.local_edw_sqlite_file`의 sqlite 파일 하나(비우면 `valid_env/edw/edw_copy.sqlite` — 없으면 `valid_env/edw/edw.sqlite`를 복사, 원본 생성: `python -m validation.e2e.edw_standin`, `local`에서만 열림)를 `AI`·`CRMS`·`LAS`·`SFDC` 별칭으로 ATTACH(`mssql.standin`, 기본 읽기 전용). `query_edw`는 읽기 전용으로 연다.
 - 파일: `common/store/{mssql,parsing_meta_db}.py`, `common/config/settings.py`.

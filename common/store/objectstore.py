@@ -45,7 +45,15 @@ def _warn_tls_off():
 
 
 def client(timeout=None):
-    """boto3 s3 클라이언트. timeout(초)이 있으면 connect·read 둘 다 그 값으로(근거 이미지 받기 시간 상한)."""
+    """boto3 s3 클라이언트. timeout(초)이 있으면 connect·read 둘 다 그 값으로(근거 이미지 받기 시간 상한).
+    PC(RUN_ENV=local)는 거부 — 칸을 비워도 boto3 기본값(AWS 주소·~/.aws 키)으로 실제 S3에 닿을 수 있어서(op-14). 모든 S3 접속이 여기를 거친다."""
+    from common.config.settings import guard_run_env
+
+    if guard_run_env() == "local":
+        raise RuntimeError(
+            "[objectstore] PC(RUN_ENV=local)는 Object Storage(S3)에 접속하지 않음 — 원본은 valid_env/object_storage 폴더, "
+            "게시는 file:// 폴더를 쓴다(op-14). s3:// 원천은 개발 서버(dev)에서 돌린다."
+        )
     import boto3
     from botocore.config import Config
 

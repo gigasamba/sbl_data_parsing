@@ -66,13 +66,17 @@ def login(role, extra=True):
     쓰기 계정 이름·비밀번호가 둘 다 비면 "write"도 읽기 계정을 쓴다(op-03) — 검색 MCP(읽기 전용 프로세스)는 예외로 빠진 칸."""
     import json
 
-    from common.config.settings import _EDW_READ_ONLY, cfg, checked, reveal
+    from common.config.settings import _EDW_READ_ONLY, _warn_once, cfg, checked, guard_run_env, reveal
 
     if role not in ("read", "write"):
         raise ValueError(f"EDW 계정 역할은 read·write만 — {role!r}")
     c = cfg().connections.rdb
     if role == "write" and not c.write.user and not reveal(c.write.password) and not _EDW_READ_ONLY[0]:
         role = "read"
+        if guard_run_env() != "local":  # 서버(모르는 글자도 서버로 봄)
+            _warn_once(
+                "[edw] 쓰기 계정 칸이 비어 읽기 계정으로 ParsingMeta에 씀 — 읽기 계정에 ParsingMeta INSERT·UPDATE 권한이 필요(op-03)"
+            )
     acct = c.read if role == "read" else c.write
     checked("RDB_PORT")
     kw = {
@@ -110,6 +114,7 @@ def standin_path():
     local은 비면 valid_env/edw/edw_copy.sqlite — 없으면 git의 valid_env/edw/edw.sqlite를 복사해 만든다(원본에는 쓰지 않음, op-14)."""
     import os
     import shutil
+    import tempfile
 
     from common.config.settings import cfg, guard_run_env
     from common.core import paths
@@ -122,9 +127,15 @@ def standin_path():
         return p
     copy, seed = paths.LOCAL_EDW_COPY, paths.LOCAL_EDW_SEED
     if not copy.exists() and seed.is_file():  # 원본이 없는 곳(이미지)은 그대로 — 여는 쪽이 실패를 알림
-        tmp = copy.with_name(f"{copy.name}.{os.getpid()}.tmp")
-        shutil.copyfile(seed, tmp)
-        os.replace(tmp, copy)  # 다른 프로세스가 반쯤 쓴 사본을 열지 않게(한 번에 바꿈)
+        fd, tmp = tempfile.mkstemp(dir=copy.parent, suffix=".tmp")
+        os.close(fd)
+        try:
+            shutil.copyfile(seed, tmp)
+            os.link(tmp, copy)  # 다 쓴 사본만 이름을 얻음 · 이미 있으면 덮지 않음(먼저 만든 프로세스가 쓰는 중일 수 있음)
+        except FileExistsError:
+            pass  # 다른 프로세스가 먼저 만듦
+        finally:
+            os.unlink(tmp)
     return copy.as_posix()
 
 

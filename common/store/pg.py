@@ -34,6 +34,11 @@ def conf():
         raise SystemExit(f"PG 접속 정보 없음 — settings.yaml {where}를 채움")
     if not re.fullmatch(r"[a-z_][a-z0-9_]{0,62}", c["PG_SCHEMA"]):
         raise SystemExit("PG_SCHEMA는 소문자·숫자·_ 만")
+    if given("PG_SCHEMA") is None and guard_run_env() != "local":  # 서버가 스키마를 안 적음 — 어느 스키마에 쓰는지 알림
+        from common.config.layout import to_yaml
+        from common.config.settings import _warn_once
+
+        _warn_once(f"[pg] {to_yaml('common.connections.pg.db_schema')}가 비어 기본 스키마 {c['PG_SCHEMA']}를 씀")
     return c
 
 
