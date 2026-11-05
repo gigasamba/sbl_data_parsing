@@ -84,7 +84,7 @@ def weights(question=None):
     if question is not None:
         from mcp_server.services.search.question_type import classify
 
-        if classify(question)[0] == "aggregate":
+        if classify(question) == "aggregate":
             w["bm25"] = s.weights.bm25_table
     return w
 
