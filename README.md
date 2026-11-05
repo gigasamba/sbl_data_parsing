@@ -142,6 +142,8 @@ docker run -d --name sbl-mcp-pg -p 127.0.0.1:55433:5432 -v sbl_mcp_pgdata:/var/l
   -e POSTGRES_DB=rag -e POSTGRES_USER=rag -e POSTGRES_PASSWORD=<비밀번호> pgvector/pgvector:pg16
 ```
 
+- 작업 폴더(git worktree)에는 `settings.yaml`이 없다. 거기서 점검·시험을 돌릴 때는 `export RUN_ENV=local`을 먼저 한다 — 없으면 실행 환경을 읽지 못해 결과 폴더 `output/`이 저장소 한 단계 위에 생긴다.
+
 ### 4-2. settings.yaml 작성
 
 저장소 루트에 `settings.yaml`을 만들고 `chmod 600`한다(방법 A 예시):
