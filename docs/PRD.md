@@ -93,7 +93,7 @@
 | 문서 키는 원본 경로 하나 — 검색 DB `doc.file_path` = Object Storage 원본 경로 = EDW `s3_key`(청크는 `doc_id`만), ParsingMeta와 이 값으로 잇는다 | sha256 `doc_key`는 검색 DB에 안 둔다(ParsingMeta `sha256`만) | dev | [pl-25](prd/load-schema.md#pl-25) |  |
 | 원천 시스템별 PG 스키마 5벌(`<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`), 각자 `doc`·`chunk`·BM25 표, `doc_id` 시퀀스는 기준 스키마 하나를 함께 | 원천마다 메타가 다르고 BM25 점수를 섞지 않는다. MCP `source_system` 필수(등급 A) | done | [pl-28](prd/load-schema.md#pl-28) |  |
 | 원천 = 원본 경로(`s3_key`) 첫 마디 — `SFDC`·`CRMS`·`LAS`·`FAQ`(대소문자 무관)이거나 `SFDC-`·`SFDC_`·`CRMS-`·`CRMS_`·`las_`·`LAS_`로 시작하면 그 원천, 아니면 `other`(`gold_bundle`). `faq` 스키마만 `chunk.faq_group` 칸 | `AI.FileStorageMap.source_system` 칸은 읽지 않는다 — 경로만으로 정함 | done | [pl-28](prd/load-schema.md#pl-28) |  |
-| 게시는 EDW 키(`source_system`, `source_key`)가 이미 있는지 먼저 보고, 있으면 올리지 않는다(`--reparse` 목록만 예외) | Object Storage에 EDW 행 없는 고아 객체를 남기지 않는다 | todo | [pl-61](prd/load.md#pl-61) | `apply()`가 올린 뒤 `insert_new`가 키를 본다 — 이미 있는 키면 올린 객체가 고아로 남음 |
+| 게시는 EDW 키(`source_system`, `source_key`)가 이미 있는지 먼저 보고, 있으면 올리지 않는다(`--reparse` 목록만 예외) | Object Storage에 EDW 행 없는 고아 객체를 남기지 않는다 | done | [pl-61](prd/load.md#pl-61) |  |
 
 ## 검색 MCP (mcp) — AI 클라이언트가 부르는 도구 서버(이미지 `mcp-server`)
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -133,7 +133,7 @@
 | 같은 일은 한 곳(파싱 단계 사슬·프로세스 묶음 실행 = `parse_steps.py`, 날짜 조건 `_when` 한 벌), 서버·릴리스 스크립트 이름은 하는 일로, 같은 파일 이름 두 번 없음(보호 파일·공용 모듈 제외) | 같은 일이 여러 곳이면 한쪽만 고쳐진다(사용자 11-04) | done | [rn-06](prd/ops.md#rn-06) |  |
 | `ops.host.instance_name` 하나로 스키마·EDW 표·게시 경로·포트가 갈림, 파싱 MCP `mcp-data-parsing`·칸 `data_parsing`, 늘 같은 스위치·옛 칸 표 없음, 주석은 목적 한 줄 | 여러 벌이 서로 덮지 않고 설정을 읽기 쉽게(사용자 11-05) | done | [rn-07](prd/ops.md#rn-07) |  |
 | 파이프라인 폴더는 ETL 뜻대로 — extract는 고르기·받기·준비만, 엔진 파싱은 `transform/parse/`(엔진 실행 한 파일), 파일 이름은 하는 일로, 요건에 닿지 않는 코드·두 번째 같은 코드는 없음 | 폴더만 보고 단계의 일을 안다(사용자 11-05) | done | [rn-08](prd/ops.md#rn-08) |  |
-| run_pipeline 대상 고르기 — 파일 이름 키워드(`--filter RFP,proposal`)·`--start-offset` 뒤 `--skip-done`이 ParsingMeta 끝난 행(ok·partial — gold_version도, skipped_dup)을 뺀다 | 새벽 배치는 이름에 RFP·proposal이 든 문서만 처리한다(키워드가 정기 운영에 맞는지는 C-72 ③) | done | [pl-23](prd/ops.md#pl-23) |  |
+| run_pipeline 대상 고르기 — 기본은 모든 문서·시작 자리 0(`--filter <키워드>`로 이름을 좁힐 수 있음)·`--start-offset` 뒤 `--skip-done`이 ParsingMeta 끝난 행(ok·partial — gold_version도, skipped_dup)을 뺀다 | 새벽 배치는 FileStorageMap의 모든 새 문서를 처리한다(사용자 11-05) | done | [pl-23](prd/ops.md#pl-23) |  |
 | 새벽 배치는 `ops.nightly.nightly_start_time`·`nightly_max_docs`·`nightly_stop_time` 셋이 모두 있을 때만 돈다(하나라도 비면 안 돎 — 사용자 11-02) — systemd 타이머가 5분마다 `nightly_batch.sh scheduled` → `run_pipeline.py --start-offset 0 --skip-done --max-docs --deadline` | 지금 서버는 비워 둠(꺼짐) — 켜는 것은 사람(C-72) | done | [pl-23](prd/ops.md#pl-23) |  |
 | 전체 e2e는 local·dev·prd 셋에서 — 전체 문서 실행은 prd에서만 새 원천별 스키마 이름(새 `PG_SCHEMA`)으로, 옛 gold·`struct` 스키마는 2주 뒤 DB 담당자가 백업하고 지움 | 판 0002가 기준 스키마의 옛 표를 지운다. 사용자 11-02 | todo | [pl-54](prd/ops.md#pl-54) |  |
 | 새벽 배치 칸은 `ops.nightly.nightly_start_time`·`max_docs`·`stop_time`(시작 시각·문서 수 상한·마감 시각) 한 벌 — 하나라도 비면 안 돎 | 사용자 11-02 | done | [pl-23](prd/ops.md#pl-23) |  |
@@ -167,7 +167,7 @@
 | 환경마다 다른 경로·접속은 settings.yaml 필수(코드 기본값 없음) — 컨테이너 안 경로는 이미지 기본값 표 하나만, 호스트 `PATCH_CODE` 기본값 없음 | 사용자 11-02 | done | [op-09](prd/ops-settings.md#op-09) |  |
 | 은퇴한 설정(`common.paths.korean_font`·`eval_sets_dir` 등)은 없다 — 남아 있으면 시작 거부 | 쓰지 않는 칸 | done | [pl-21](prd/ops-settings.md#pl-21) |  |
 | run_pipeline 명령은 아무도 안 읽는 env(`FIG_OCR_BUDGET`·`SERVICE_MASTER_CSV`·`DIVISION_MASTER_CSV`·`PROD_MASTER_CSV`)를 넘기지 않는다 | C-51 | done | [pl-30](prd/ops-settings.md#pl-30) |  |
-| 서버 러너의 컨테이너 명령은 한 도우미가 만든다(`docker exec` · `PYTHONPATH` · 라이브러리 env 같게) · 게시·구조화가 시간 초과면 그 문서의 컨테이너 안 프로세스도 끈다 · 벌 이름 검사는 한 곳 · 스캔 회전 정책은 설정 칸 하나를 컨테이너가 직접 읽는다 · 레인 분류는 받기 단계 안에서(문서마다 따로 `docker exec` 없음) · 분류 캐시는 덧붙여 쓴다 | 명령마다 env가 다르면 같은 코드가 다르게 돈다. 끄지 않은 프로세스는 다음 문서와 CPU·메모리를 다툰다 | todo | [rn-09](prd/ops.md#rn-09) | `parse_cmd`에 `PYTHONPATH`가 없음. 시간 초과 때 끄는 것(`sweep_cmd`)은 파싱만. 스캔 회전 값이 run_pipeline → `stage --no-scan-rotate` → `stage_batch(scan_rotate)` → `filter_and_rotate --no-scan-rotate` 네 겹으로 전달. 분류는 문서마다 `docker exec`, 캐시는 문서마다 파일 전체를 다시 씀 |
+| 서버 러너의 컨테이너 명령은 한 도우미가 만든다(`docker exec` · `PYTHONPATH` · 라이브러리 env 같게) · 게시·구조화가 시간 초과면 그 문서의 컨테이너 안 프로세스도 끈다 · 벌 이름 검사는 한 곳 · 스캔 회전 정책은 설정 칸 하나를 컨테이너가 직접 읽는다 · 레인 분류는 받기 단계 안에서(문서마다 따로 `docker exec` 없음) · 분류 캐시는 덧붙여 쓴다 | 명령마다 env가 다르면 같은 코드가 다르게 돈다. 끄지 않은 프로세스는 다음 문서와 CPU·메모리를 다툰다 | todo | [rn-09](prd/ops.md#rn-09) | 한 도우미·시간 초과 정리는 반영. 스캔 회전 값이 run_pipeline → `stage --no-scan-rotate` → `stage_batch(scan_rotate)` → `filter_and_rotate --no-scan-rotate` 네 겹으로 전달. 분류는 문서마다 `docker exec`, 캐시는 문서마다 파일 전체를 다시 씀 |
 | 문서 1건의 반복 비용을 줄인다 — 원본 sha256은 한 번만 구하고 넘겨 씀 · 적재의 스키마 확인 질의는 하나(UNION) · 설정 파일은 프로세스마다 한 번 읽음 · `--set` 처리(`setarg.apply`)는 무거운 import 전에 | 문서 수천 건에서 같은 일을 되풀이하지 않는다 | todo | [rn-10](prd/ops.md#rn-10) | sha256을 중복 제외·거르기(`_record_skip`·회전 기록)·구조화가 각자 다시 구함. `pgvector_load`가 원천 스키마마다 따로 묻는다. 측정 전 — 줄일 크기는 `perf_report`로 먼저 잰다 |
 
 ## 테스트·평가 (test) — 변경을 어떻게 증명하나

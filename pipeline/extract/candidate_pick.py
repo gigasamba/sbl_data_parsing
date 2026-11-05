@@ -309,8 +309,9 @@ def rdb_pick(table, state, limit=0, done=frozenset()):
 
 
 # ── 원천 목록(run_pipeline이 컨테이너 안에서 한 번 부름) ──────────────────────────
-# `python -m pipeline.extract.candidate_pick list --filter RFP,proposal --start-offset N [--limit N] [--seqs 3,7] [--skip-done]
-#  [--max-docs N] [--faq-seen <파일>] --out <목록 파일>` — EDW FileStorageMap 목록(파일 크기 오름차순) → 끝난 문서 빼기(--skip-done) →
+# `python -m pipeline.extract.candidate_pick list [--filter RFP,proposal] [--start-offset N] [--limit N] [--seqs 3,7] [--skip-done]
+#  [--max-docs N] [--faq-seen <파일>] --out <목록 파일>` — EDW FileStorageMap 목록(파일 크기 오름차순, --filter가 없으면 모든 문서) →
+#  끝난 문서 빼기(--skip-done) →
 # FAQ 먼저(--faq-seen, --seqs·--limit 실행은 건너뜀) → 앞 --max-docs개. 목록 파일(JSON): {"total": 목록 행 수, "start": 시작 자리,
 # "docs": [{"seq", "id", "s3_key", "original_filename", "file_size"}, …]} — 처리 순서대로, seq = 목록 안 자리(FAQ 덧붙임 포함).
 FSM_SQL = (
@@ -320,11 +321,11 @@ FAQ_PREFIX = "FAQ/"
 
 
 def edw_rows(edw, keywords=(), faq=False):
-    """FileStorageMap 행(파일 크기 오름차순) — 이름 키워드(대소문자 무시, 하나라도 들면) 또는 faq=True면 FAQ 전체."""
+    """FileStorageMap 행(파일 크기 오름차순) — 이름 키워드(대소문자 무시, 하나라도 들면 — 없으면 모든 행) 또는 faq=True면 FAQ 전체."""
     if faq:
         return edw.q(FSM_SQL.format(cond="s3_key LIKE ?"), [FAQ_PREFIX + "%"])
     if not keywords:
-        raise SystemExit("[list] --filter 키워드가 비어 있음")
+        return edw.q(FSM_SQL.format(cond="1=1"), [])
     cond = " OR ".join(["LOWER(original_filename) LIKE ?"] * len(keywords))
     return edw.q(FSM_SQL.format(cond=cond), [f"%{k.lower()}%" for k in keywords])
 
@@ -442,7 +443,7 @@ def _list_cmd(argv):
     import argparse
 
     ap = argparse.ArgumentParser(prog="pipeline.extract.candidate_pick list")
-    ap.add_argument("--filter", default="RFP,proposal", help="원본 파일 이름 키워드(쉼표 — 하나라도 들면)")
+    ap.add_argument("--filter", default="", help="원본 파일 이름 키워드(쉼표 — 하나라도 들면)로 좁힘 — 기본 모든 문서")
     ap.add_argument("--start-offset", type=int, default=0)
     ap.add_argument("--limit", type=int, default=0, help="시험 — 이 개수만")
     ap.add_argument("--seqs", default="", help="목록 자리(쉼표) — 주면 연속 범위 대신 이것만")

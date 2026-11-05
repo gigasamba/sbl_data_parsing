@@ -59,7 +59,10 @@ README §5-3 ④ 연결 점검과 ⑤ 이미지 점검, 또는 한 번에 `bash 
 ## 2. 일상 실행 — run_pipeline(문서별 흐름)
 
 서버 입구는 `run_pipeline.py` 하나다 — 문서마다 파싱 → publish(Object Storage + EDW) → 원본 삭제 → 구조화·적재를 상주 컨테이너 안에서 `exec`로 돌린다. 자리·설정: [release-and-patch §5-4](release-and-patch.md#5-4-run_pipelinepy-자리와-설정).
-- 원본(`_staging/*.bin`·`_docflow/<seq>/_source_files`)은 **publish가 성공한 뒤에만** 지운다. 파싱·publish가 실패한 문서는 원본이 남고 `batch_progress/progress.log`에만 적힌다(EDW에 안 씀 — 다음 `--skip-done` 실행이 다시 고름). 구조화·적재가 실패하면 publish한 결과·EDW 행은 그대로이고 로그에만 적힌다.
+- **대상:** 기본은 FileStorageMap의 모든 문서를 처음(`--start-offset` 기본 0)부터. 이름으로 좁힐 때만 `--filter <키워드,…>`(하나라도 들면).
+- 파싱·publish·구조화가 실패하거나 시간 제한을 넘기면 그 문서의 컨테이너 안 프로세스도 끈다(다음 문서와 CPU·메모리를 다투지 않게).
+- publish는 EDW에 같은 키(원천·원본 전체 키)가 이미 있는 문서를 Object Storage에 올리지 않는다(EDW 행 없는 객체를 남기지 않음 — `--reparse` 목록만 새 날짜 폴더).
+- 원본(`_staging/*.bin`·그 ETag 파일 `*.etag`·`_docflow/<seq>/_source_files`)은 **publish가 성공한 뒤에만** 지운다. 파싱·publish가 실패한 문서는 원본이 남고 `batch_progress/progress.log`에만 적힌다(EDW에 안 씀 — 다음 `--skip-done` 실행이 다시 고름). 구조화·적재가 실패하면 publish한 결과·EDW 행은 그대로이고 로그에만 적힌다.
 - **게시·EDW 설정**(settings.yaml `required` — 빠지면 run_pipeline이 칸 이름을 찍고 종료 2): 게시 위치 `required.publish.publish_bucket`·`publish_prefix`, Object Storage 접속 `required.object_storage.object_storage_endpoint`·`object_storage_access_key`·`object_storage_secret_key`(`object_storage_region` 비우면 `us-east-1`, `object_storage_verify_tls` 비우면 검증 켬 — 사내 CA면 CA 파일 경로), EDW 접속 `required.edw.edw_host`·`edw_database`·`edw_read_*`·`edw_write_*`(`edw_port` 비우면 1433 · 쓰기 계정은 게시에 필수), 게시 표 `required.edw.parsing_meta_table`(비우면 `AI.ParsingMeta`). `dev.local.*`(가짜 EDW 등)은 PC 전용이라 서버에서는 읽지 않는다(`local_edw_sqlite_file`은 비운다).
 - **종료 코드**(PRD [pl-18](../prd/ops.md#pl-18)): `0` 대상 0건·모두 끝 · `1` 실패 문서가 하나라도 · `75` 마감(`--deadline`) 도달(실패 없음) 또는 다른 run_pipeline이 도는 중 · `2` 설정 문제. 실패와 마감이 함께면 `1`. 새벽 배치 unit은 `75`를 성공으로 친다.
 - **겹침 잠금:** run_pipeline은 `batch_progress/run_pipeline.lock`을 `flock`으로 잡는다 — 새벽 배치와 사람이 직접 돌린 run_pipeline이 함께 돌지 않는다(뒤에 온 쪽이 75). 죽으면 잠금은 저절로 풀린다. 작업 폴더(`ops.run_pipeline.run_pipeline_work_dir`)가 같아야 같은 잠금이다.
@@ -77,7 +80,7 @@ bash deploy/host/scripts/pipe_exec.sh publish                    # 대표 결과
 `bash deploy/host/scripts/mcp_keepalive.sh` + keepalive 타이머 — README §5-5.
 
 ### 2-2. 새벽 배치
-`ops.nightly.nightly_start_time`·`nightly_max_docs`·`nightly_stop_time` 세 칸 + `data-pipeline-nightly.timer` — README §5-5. 타이머는 5분마다 깨우고 `nightly_batch.sh scheduled`가 시작 시각부터 5분 안일 때만 `run_pipeline.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>`을 부른다(마감이 지나면 새 문서를 받지 않고, 받은 문서는 끝까지). 형식이 틀리면(HH:MM 아님 · 상한이 1 이상 정수 아님 · 마감이 시작보다 5분 이내) 종료 2. 지금 바로 돌리려면 run_pipeline을 직접 부른다.
+`ops.nightly.nightly_start_time`·`nightly_max_docs`·`nightly_stop_time` 세 칸 + `data-pipeline-nightly.timer` — README §5-5. 타이머는 5분마다 깨우고 `nightly_batch.sh scheduled`가 시작 시각부터 5분 안일 때만 applog 파티션 정리(`pipe_exec.sh migrate maintain --target applog` — 실패하면 경고만 남기고 계속) 뒤 `run_pipeline.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>`을 부른다(마감이 지나면 새 문서를 받지 않고, 받은 문서는 끝까지). 형식이 틀리면(HH:MM 아님 · 상한이 1 이상 정수 아님 · 마감이 시작보다 5분 이내) 종료 2. 지금 바로 돌리려면 run_pipeline을 직접 부른다.
 
 ### 2-3. 답변 생성 점검(코드 폴더에서, 이미지 밖)
 ```bash

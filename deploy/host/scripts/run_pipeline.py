@@ -15,8 +15,8 @@
 4) 종료 코드(pl-18): 0 = 대상 0건·모두 끝 · 1 = 실패 문서 있음 · 75 = 마감 도달(실패 없음) 또는 다른 run_pipeline이 도는 중
    (잠금 batch_progress/run_pipeline.lock — 사람이 돌린 실행과 새벽 배치가 겹치지 않게) · 2 = 설정 문제.
 
-사용: python3 run_pipeline.py --start-offset 1072 [--staging 20] [--struct-workers 2]
-                  [--filter RFP,proposal] [--limit N](시험: N건만) [--no-cleanup](임시 유지)
+사용: python3 run_pipeline.py [--start-offset N](기본 0) [--staging 20] [--struct-workers 2]
+                  [--filter RFP,proposal](기본 모든 문서 — 이름 키워드로 좁힐 때만) [--limit N](시험: N건만) [--no-cleanup](임시 유지)
 로그: test_space/batch_progress/progress.log · 문서별 파싱 로그 progress/doc_<seq>.log
 """
 
@@ -232,8 +232,16 @@ def cpu_gate(chan):
 
 LIB_ENV = "PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache"  # env 남김 — 라이브러리(파이썬 자체 env, 설정 칸 아님)
 DOC_MARK = "RUN_PIPELINE_DOC"  # 문서 표지 env(설정 칸 아님) — 고아 정리(sweep_cmd)가 /proc/*/environ에서 찾음
-#   파싱 명령에만 붙인다(컨테이너 하나): 정리는 그 문서 파싱이 실패한 직후에만 돌고, 그 문서의 게시·구조화는 파싱 성공 뒤에만 시작하므로
-#   정리 때 그 문서의 게시·구조화 프로세스는 없다. 다른 문서의 구조화·게시·파싱은 표지가 없거나 값이 달라(-zx 통째 비교) 끄지 않는다.
+#   문서 하나의 파싱·게시·구조화 명령에 붙인다: 한 문서의 세 단계는 차례로만 돌아 정리 때 그 문서의 다른 단계 프로세스는 없다.
+#   다른 문서의 프로세스는 값이 달라(-zx 통째 비교) 끄지 않는다.
+
+
+def pexec(script, seq=None):
+    """컨테이너 명령 한 줄(목록·받기·분류·파싱·게시·구조화·정리 모두 여기서) — docker exec · umask · 작업 폴더 · PYTHONPATH ·
+    라이브러리 env가 모두 같다. seq를 주면 그 문서 표지 env(DOC_MARK)도 붙인다(실패·시간 초과 뒤 sweep_cmd가 끔).
+    export라 script 안 여러 python(구조화 → 적재)에 같은 env가 간다. script는 통째로 따옴표(shlex) — 안의 따옴표도 그대로."""
+    env = f"PYTHONPATH={_img('code_root')} {LIB_ENV}" + (f" {DOC_MARK}={_inside(seq)}" if seq is not None else "")
+    return f"{DOCKER} exec {PIPE_C} bash -c " + shlex.quote(f"umask 0002 && cd {_app()} && export {env} && {script}")
 
 
 def sets(*pairs):
@@ -245,24 +253,20 @@ def sets(*pairs):
 def list_cmd(a):
     """대상 목록(컨테이너 안 candidate_pick list — EDW 읽기·끝난 문서 빼기·FAQ 먼저) → <결과 폴더>/_docflow/targets.json."""
     o = _img("output_root")
-    opt = f" --filter {a.filter} --start-offset {a.start_offset}"  # 글자는 main()이 거른 것만(따옴표 안에 들어감)
+    opt = (f" --filter {a.filter}" if a.filter else "") + f" --start-offset {a.start_offset}"  # 글자는 main()이 거른 것만
     opt += (f" --limit {a.limit}" if a.limit else "") + (f" --seqs {a.seqs}" if a.seqs else "")
     opt += (" --skip-done" if a.skip_done else "") + (f" --max-docs {a.max_docs}" if a.max_docs else "")
-    return (
-        f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && PYTHONPATH={_img('code_root')} {LIB_ENV} "
-        f"python -m pipeline.extract.candidate_pick list{opt} --faq-seen {o}/{FAQ_SEEN} --out {_inside('targets.json')}'"
-    )
+    return pexec(f"python -m pipeline.extract.candidate_pick list{opt} --faq-seen {o}/{FAQ_SEEN} --out {_inside('targets.json')}")
 
 
 def stage_cmd(seq):
     """문서 1개 미리 받기 — 컨테이너 안 candidate_ready stage(받기 → 같은 내용 하나만 → 형식·DRM·암호 거르기 → 파싱할 목록)."""
     o, inside = _img("output_root"), _inside(seq)
     st = sets(f"SOURCE_STAGING={o}/_staging", f"SOURCE_FETCH_WORKERS={POLICY['fetch_workers']}")
-    return (
-        f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && mkdir -p {o}/_staging && cd {_app()} && "
-        f"PYTHONPATH={_img('code_root')} {LIB_ENV} "
+    return pexec(
+        f"mkdir -p {o}/_staging && "
         f"python -m pipeline.extract.candidate_ready{st} stage --csv {inside}/batch.csv --out {inside} --prepared {inside}/prepared"
-        f"{'' if POLICY['scan_rotate'] else ' --no-scan-rotate'}'"
+        f"{'' if POLICY['scan_rotate'] else ' --no-scan-rotate'}"
     )
 
 
@@ -277,46 +281,36 @@ def parse_cmd(seq, chan, gate):
         *_parse_set(chan),
         f"CPU_MAX_LOAD={gate}",
     )
-    return (
-        f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && "
-        f"echo [envcheck] gate={gate} 채널={chan}; "
-        f"{DOC_MARK}={inside} {LIB_ENV} "
-        f"python -m pipeline.cli{doc} parse --staged'"
-    )
+    return pexec(f"echo [envcheck] gate={gate} 채널={chan}; python -m pipeline.cli{doc} parse --staged", seq)
 
 
 def struct_cmd(seq):
     """문서 1개 구조화 + 적재. 엔진 구성은 파싱과 같은 파일(코드 폴더 — 판 번호 없음, 실행 중에는 안 바뀜)."""
     inside = _inside(seq)
     st = sets(*_embed_set())  # 묶음·적재 python에
-    return (
-        f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && "
-        f"PYTHONPATH={_img('code_root')} {LIB_ENV} "
+    return pexec(
         f"python -m pipeline.transform.structure.gold_bundle{st} --parse-dir {inside}/parse --src {inside}/prepared"
         f" --out {inside}/bundle && "
-        f"{LIB_ENV} python -m pipeline.load.pgvector_load{st} load --bundle {inside}/bundle --rep-dir {inside}/parse/_rep "
-        f">> {inside}/structure.log 2>&1'"
+        f"python -m pipeline.load.pgvector_load{st} load --bundle {inside}/bundle --rep-dir {inside}/parse/_rep "
+        f">> {inside}/structure.log 2>&1",
+        seq,
     )
 
 
 def publish_cmd(seq):
     """문서 1개 publish(OS + EDW)."""
     inside = _inside(seq)
-    return (
-        f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && "
-        f"PYTHONPATH={_img('code_root')} {LIB_ENV} python -m pipeline.load.publish_parse_result "
-        f"--out {inside} --source-system FileStorageMap --apply "
-        f">> {inside}/publish.log 2>&1'"
+    return pexec(
+        f"python -m pipeline.load.publish_parse_result --out {inside} --source-system FileStorageMap --apply >> {inside}/publish.log 2>&1",
+        seq,
     )
 
 
 def sweep_cmd(seq):
     """고아 정리 — 이 문서 표지 env(DOC_MARK)를 가진 컨테이너 안 프로세스(bash·python·soffice까지 env 상속)를 모두 끔. environ 항목(NUL 구분)과
-    통째로 같을 때만(-zx — 앞부분만 맞추면 doc 1 정리가 doc 10~19·100…까지 끔)."""
-    inside = _inside(seq)
-    return (
-        f'{DOCKER} exec {PIPE_C} bash -c "for p in /proc/[0-9]*; do '
-        f"grep -aqzx '{DOC_MARK}={inside}' \\$p/environ 2>/dev/null && kill \\${{p##*/}} 2>/dev/null; done\""
+    통째로 같을 때만(-zx — 앞부분만 맞추면 doc 1 정리가 doc 10~19·100…까지 끔). 정리 명령 자신은 표지를 받지 않는다(seq 없이 pexec)."""
+    return pexec(
+        f'for p in /proc/[0-9]*; do grep -aqzx "{DOC_MARK}={_inside(seq)}" $p/environ 2>/dev/null && kill ${{p##*/}} 2>/dev/null; done'
     )
 
 
@@ -478,9 +472,7 @@ def run_pipeline_policy(doc):
 def stack_check():
     """엔진 구성 파일 확인 — 시작 때 한 번(파싱 컨테이너 안 show-stack — 파일을 못 읽거나 모양이 틀리면 종료 2, 시작하지 않음).
     없는 엔진은 파싱 입구가 거부한다(engine_check.resolve)."""
-    rc, _, err = sh(
-        f"{DOCKER} exec {PIPE_C} bash -c 'cd {_app()} && PYTHONPATH={_img('code_root')} python -m pipeline.cli show-stack'", timeout=120
-    )
+    rc, _, err = sh(pexec("python -m pipeline.cli show-stack"), timeout=120)
     if rc != 0:
         print(f"[중단] 엔진 구성 파일을 읽지 못함(종료 코드 {rc}) — {(err or '').strip()[-200:]}", flush=True)
         raise SystemExit(2)  # 설정 문제 = 2(실패 문서 1과 가름)
@@ -503,6 +495,15 @@ def sh(cmd, timeout=1800, log=None):
     finally:
         if log:
             f.close()
+
+
+def doc_sh(seq, cmd, timeout, log):
+    """문서 하나의 파싱·게시·구조화 명령 → 종료 코드(124 = 시간 초과). 실패·시간 초과면 호스트 쪽 docker exec만 끝나고 컨테이너 안
+    프로세스는 남을 수 있어 그 문서 표지 env를 가진 프로세스를 끈다(sweep_cmd)."""
+    rc, _, _ = sh(cmd, timeout=timeout, log=log)
+    if rc != 0:
+        sh(sweep_cmd(seq), timeout=30)
+    return rc
 
 
 def _tail(path, n=150):
@@ -532,30 +533,15 @@ def write_doc_csv(row, path):
         w.writerow([row["id"], row["s3_key"], row["original_filename"], row["file_size"]])
 
 
-_stage_reused: set = set()  # 이미 받아 둔 파일이라 컨테이너를 부르지 않은 문서(소요 기록의 reused)
-
-
-def _staged_for(d, row):
-    """문서 폴더 d가 이 행을 받은 결과인가 — seq는 실행마다 바뀌므로 그 폴더 manifest의 원본 키(key)가 이 행의 s3_key인지 본다."""
-    try:
-        lines = (d / "parse" / "_source" / "manifest.jsonl").read_text(encoding="utf-8").splitlines()
-        return any(json.loads(ln).get("key") == row["s3_key"] for ln in lines if ln.strip())
-    except (OSError, ValueError):
-        return False
-
-
 def stage_one(seq, row):
     """문서 1개 미리 받기(candidate_ready stage — 상주 컨테이너 env 그대로). 실패하면 그 문서 파싱이 실패로 끝난다(따로 받는 길 없음).
-    앞 실행의 _docflow/<seq>는 같은 원본일 때만 다시 쓰고(받은 표지 .staged·staging 원본·manifest 키), 다른 문서 것이면 지우고 새로 받는다."""
+    늘 stage를 부른다 — ETag 확인·같은 밤 중복 표시는 stage 안에 있고, staging 원본의 ETag가 같으면 stage가 다시 받지 않는다.
+    앞 실행의 _docflow/<seq>는 지우고 새로 만든다(seq는 실행마다 바뀜)."""
     d = DOCFLOW / f"{seq}"
-    reuse = (STAGING / _staging_bin(row)).exists() and (d / ".staged").exists() and _staged_for(d, row)
-    if not reuse and d.exists():
+    if d.exists():
         _wipe(seq)
     d.mkdir(parents=True, exist_ok=True)
     write_doc_csv(row, d / "batch.csv")
-    if reuse:
-        _stage_reused.add(seq)
-        return True
     rc, _, err = sh(stage_cmd(seq), timeout=900, log=d / "stage.log")
     if rc == 0:
         (d / ".staged").touch()
@@ -596,8 +582,10 @@ def classify_doc(seq, row, cache=None):
             return hit
     t_p = time.time()
     rc, out, _ = sh(  # PYTHONPATH = 코드 폴더 — 그러면 그룹 판별 1건이 extract.classify 행으로 남는다(doc_id = name)
-        f"{DOCKER} exec -e PYTHONPATH={_img('code_root')} {PIPE_C} python3 {_img('code_root')}/pipeline/extract/doc_lane_group.py "
-        f"{_img('output_root')}/_staging/{_staging_bin(row)} {shlex.quote(name)} {int(row.get('file_size') or 0)}",
+        pexec(
+            f"python3 {_img('code_root')}/pipeline/extract/doc_lane_group.py "
+            f"{_img('output_root')}/_staging/{_staging_bin(row)} {shlex.quote(name)} {int(row.get('file_size') or 0)}"
+        ),
         timeout=60,
     )
     probe_sec = time.time() - t_p
@@ -671,7 +659,6 @@ def downloader(rows, order):
                     sec=round(time.time() - t_w, 1),
                     bytes=row.get("file_size"),
                     doc=_doc_name(row),
-                    reused=seq in _stage_reused,
                 )
                 classify_doc(seq, row, cache=cache)  # OCR 필요도 사전 분류(캐시 우선) → 워커 배분용
                 with _flow_lock:
@@ -712,9 +699,7 @@ def parse_one(seq, row):
     print(f"[{now():%H:%M:%S}] doc#{seq} 파싱 시작 — {row['original_filename'][:44]}", flush=True)
     chan = _class.get(seq) or "light"
     gate = cpu_gate(chan)
-    rc, _, _ = sh(parse_cmd(seq, chan, gate), timeout=2700, log=doc_log)
-    if rc != 0:  # docker exec 고아 방지 — 타임아웃·실패면 이 문서 표지 env를 가진 컨테이너 안 프로세스를 끔
-        sh(sweep_cmd(seq), timeout=30)
+    rc = doc_sh(seq, parse_cmd(seq, chan, gate), 2700, doc_log)
     rep = d / "parse" / "_rep"
     n = len([p2 for p2 in rep.glob("*.json") if p2.name != "index.json"]) if rep.exists() else 0
     ok = rc == 0 and n > 0
@@ -730,12 +715,12 @@ def publish_one(seq):
     """silver 게시(OS + EDW — 파싱 바로 뒤, gold 전). 성공해야 원본을 지우고 gold로 넘어간다."""
     t1 = time.time()
     mark(seq, "pub_start")
-    rc, _, err = sh(publish_cmd(seq), timeout=900, log=PROG / f"doc_{seq}.log")
+    rc = doc_sh(seq, publish_cmd(seq), 900, PROG / f"doc_{seq}.log")
     ok = rc == 0
     mark(seq, "pub_end", ok=ok, sec=round(time.time() - t1, 1))
     log(
         f"doc#{seq} publish {'OK' if ok else 'FAIL'}({(time.time() - t1) / 60:.1f}분)"
-        + ("" if ok else f" — 원본 남김 · {err or _tail(DOCFLOW / str(seq) / 'publish.log')}")
+        + ("" if ok else f" — 원본 남김 · {'시간 초과 · ' if rc == 124 else ''}{_tail(DOCFLOW / str(seq) / 'publish.log')}")
     )
     return ok
 
@@ -745,12 +730,16 @@ def gold_one(seq, enq_t=None):
     t0 = time.time()
     wait = round(t0 - enq_t, 1) if enq_t else 0
     mark(seq, "struct_start", queue_wait=wait)
-    rc, _, err = sh(struct_cmd(seq), timeout=1800, log=PROG / f"doc_{seq}.log")
+    rc = doc_sh(seq, struct_cmd(seq), 1800, PROG / f"doc_{seq}.log")
     ok = rc == 0
     mark(seq, "struct_end", ok=ok, sec=round(time.time() - t0, 1))
     log(
         f"doc#{seq} 구조화+적재 {'OK' if ok else 'FAIL'}(대기 {wait / 60:.1f}분 · 실행 {(time.time() - t0) / 60:.1f}분)"
-        + ("" if ok else f" — silver는 남김(게시됨, gold는 silver에서 다시 만듦) · {err or _tail(DOCFLOW / str(seq) / 'structure.log')}")
+        + (
+            ""
+            if ok
+            else f" — silver는 남김(게시됨, gold는 silver에서 다시 만듦) · {'시간 초과 · ' if rc == 124 else ''}{_tail(DOCFLOW / str(seq) / 'structure.log')}"
+        )
     )
     # TODO(pl-24 · refactor.md C-81): DB 담당자가 AI.ParsingMeta.gold_status(pending·ok·failed)+이유 칸을 더하면 여기서 실패를 적는다.
     #   지금은 칸이 없어 로그에만. gold_version 칸(C-76 ③)이 있으면 비어 있으므로 다음 --skip-done이 다시 고른다 —
@@ -767,15 +756,24 @@ def _staging_bin(row):
     return hashlib.sha1(f"{SOURCE_BUCKET}|{row['s3_key']}".encode()).hexdigest() + ".bin"
 
 
+def _staging_etag(row):
+    """받은 판의 ETag 파일 — candidate_ready가 원본 옆에 같은 이름 .etag로 씀."""
+    return _staging_bin(row)[: -len(".bin")] + ".etag"
+
+
 def drop_original(seq, row):
-    """원본 삭제(silver 게시가 성공한 뒤에만): staging 원본과 문서 폴더의 링크(_source_files). 파싱 결과(parse/)는 gold가 씀.
+    """원본 삭제(silver 게시가 성공한 뒤에만): staging 원본·그 ETag 파일(<sha1>.etag — stage가 받은 판 표시)과 문서 폴더의 링크(_source_files). 파싱 결과(parse/)는 gold가 씀.
     컨테이너(uid 10001)가 만든 파일은 호스트가 못 지우므로 docker exec(같은 공유 볼륨, 그 uid)로 지우고 잔여만 호스트가 마무리."""
     if NO_CLEANUP:
         return
     o = _img("output_root")
-    sh(f"{DOCKER} exec {PIPE_C} bash -c 'rm -rf {_inside(seq, '_source_files')} ; rm -f {o}/_staging/{_staging_bin(row)}'", timeout=60)
+    sh(
+        pexec(f"rm -rf {_inside(seq, '_source_files')} ; rm -f {o}/_staging/{_staging_bin(row)} {o}/_staging/{_staging_etag(row)}"),
+        timeout=60,
+    )
     shutil.rmtree(DOCFLOW / f"{seq}" / "_source_files", ignore_errors=True)
     (STAGING / _staging_bin(row)).unlink(missing_ok=True)
+    (STAGING / _staging_etag(row)).unlink(missing_ok=True)
 
 
 def drop_temp(seq):
@@ -787,7 +785,7 @@ def drop_temp(seq):
 
 def _wipe(seq):
     """_docflow/<seq> 통째로 지움 — 컨테이너(uid 10001)가 만든 파일은 docker exec로, 잔여는 호스트가."""
-    sh(f"{DOCKER} exec {PIPE_C} bash -c 'rm -rf {_inside(seq)}'", timeout=60)
+    sh(pexec(f"rm -rf {_inside(seq)}"), timeout=60)
     shutil.rmtree(DOCFLOW / f"{seq}", ignore_errors=True)
 
 
@@ -906,7 +904,7 @@ def _ran(stage, fn, seq, *args):
 def main():
     global STAGING_TARGET, STRUCT_WORKERS, NO_CLEANUP, STRUCT_BACKLOG, CODE_DIR, DEADLINE_AT, _LOCK
     ap = argparse.ArgumentParser()
-    ap.add_argument("--start-offset", type=int, default=1072)
+    ap.add_argument("--start-offset", type=int, default=0, help="목록에서 시작할 자리(기본 0 = 처음부터)")
     ap.add_argument(
         "--staging",
         type=int,
@@ -919,7 +917,7 @@ def main():
         default=None,
         help="구조화 스레드 수 — 기본 settings.yaml ops.run_pipeline.structure.structure_workers(2)",
     )
-    ap.add_argument("--filter", default="RFP,proposal")
+    ap.add_argument("--filter", default="", help="원본 파일 이름 키워드(쉼표 — 하나라도 들면)로 좁힘 — 기본 모든 문서")
     ap.add_argument("--limit", type=int, default=0, help="시험 — 이 개수만 처리")
     ap.add_argument("--max-docs", type=int, default=0, help="새벽 배치 — 끝난 문서를 뺀 뒤 앞에서 이 개수만(0 = 상한 없음, 사용자 11-02)")
     ap.add_argument("--deadline", default="", help="새벽 배치 마감(HH:MM) — 지나면 새 문서를 받기 시작하지 않음(사용자 11-02)")
@@ -943,7 +941,7 @@ def main():
         help="코드 폴더(설정 배치 모듈·이미지 경로 표를 찾음 — 기본: 이 스크립트가 든 코드 폴더 · op-10, 기본 배치 경로 없음 — 사용자 11-02)",
     )
     a = ap.parse_args()
-    if not re.fullmatch(r"[\w,.\-]+", a.filter) or not re.fullmatch(r"[0-9,]*", a.seqs):  # 컨테이너 명령 줄에 그대로 들어감
+    if not re.fullmatch(r"[\w,.\-]*", a.filter) or not re.fullmatch(r"[0-9,]*", a.seqs):  # 컨테이너 명령 줄에 그대로 들어감
         print("[중단] --filter는 글자·숫자·_ , . -만(띄어쓰기 없음), --seqs는 숫자와 쉼표만", flush=True)
         raise SystemExit(2)
     CODE_DIR = Path(a.code) if a.code else None

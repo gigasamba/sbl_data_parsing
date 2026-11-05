@@ -27,7 +27,7 @@
 운영 이미지는 PC에서 빌드하지 않는다. 개발 서버에 불러온 **실행 이미지 그 판** 위에 **시험한 코드 폴더**를 COPY만 해서 앱마다 코드가 든 이미지 하나(`data-pipeline:<VERSION>`·`mcp-server:<VERSION>`)를 다시 빌드한다(`deploy/docker/Dockerfile.bake` — 패키지 설치·네트워크 없음). 구운 이미지는 코드 폴더 없이 뜬다. 순서: 개발 서버에서 굽기·판정 → 조각을 운영 서버로 옮김 → 운영 서버에서 불러오기·띄우기.
 
 1. 개발 서버(시험한 코드 폴더에서): `bash deploy/release/bake_prod_image.sh <실행 이미지 판>`(개발 서버가 지금 쓰는 실행 이미지 판 — settings.yaml 이미지 칸의 태그, 대상 하나만이면 뒤에 `pipeline` 또는 `mcp`). 코드 폴더는 스크립트가 든 폴더(다른 폴더면 `CODE_DIR=`), 새 태그는 코드 `VERSION`(다른 `TAG=`는 거부), 컨테이너 도구는 podman(없으면 docker — `DOCKER=`), 저장 폴더 `/var/tmp/bake`(`OUT=`).
-2. 스크립트 순서: ① 코드 `DEPS_HASH` = 실행 이미지 지문인지(다르면 멈춤) ② 빌드 — 라벨 `org.opencontainers.image.revision`(코드 커밋)·`org.opencontainers.image.base.digest`(실행 이미지 ID) ③ `selftest_gate.sh` 판정(`[판정] 통과`가 아니면 멈춤) ④ 저장·45 MB 분할·sha256 → `/var/tmp/bake/sbl_images/`(`load.sh` · `<태그>/BUILD.txt` · `<태그>/<이미지>/` + 같은 태그 폴더에 코드 묶음 `code-<태그>-<커밋>.tar.gz`·sha256).
+2. 스크립트 순서: ① 코드 `DEPS_HASH` = 실행 이미지 지문인지(다르면 멈춤) ② 빌드 — 라벨 `org.opencontainers.image.revision`(코드 커밋)·`org.opencontainers.image.base.digest`(실행 이미지 ID) ③ `selftest_gate.sh` 판정(`[판정] 통과`가 아니면 멈춤) ④ 저장·45 MB 분할·sha256 → `/var/tmp/bake/sbl_images/`(`load.sh` · `<태그>/BUILD.txt` · `<태그>/<이미지>/` + 같은 태그 폴더에 코드 묶음 `code-<태그>-<커밋>.tar.gz`·sha256). 코드 묶음에는 `.git`·`deploy/host/scripts/test_space/`·`valid_env/`·`validation/`·`settings*.yaml`(sample 빼고)·`output/`이 들어가지 않는다(코드 폴더가 git clone이면 `git archive`로 추적 파일만).
 3. 옮기기: `/var/tmp/bake/sbl_images/`를 운영 서버로 옮긴다.
 4. 운영 서버: `DOCKER=podman bash sbl_images/load.sh <태그>` → 코드 묶음을 `<새 루트>/sbl_data_parsing-<버전>`에 풀고(호스트 스크립트만 씀) settings.yaml 이미지 칸을 `data-pipeline:<VERSION>`·`mcp-server:<VERSION>`으로 → §1-1 2·3으로 띄우고 `host_ctl.sh check`. 셸·unit에 `CODE_DIR`을 두지 않는다(두면 compose가 코드 폴더를 덮어 붙임).
 5. 어느 판인지: `podman image inspect <태그> --format '{{json .Config.Labels}}'`.
@@ -96,6 +96,7 @@ for c in data-pipeline mcp-data-parsing; do   # 여러 벌이면 이름 끝 -<op
 ### 5-4. `run_pipeline.py` 자리와 설정
 
 - 코드 폴더에서 `python3 deploy/host/scripts/run_pipeline.py …`로 실행한다(다른 자리에 복사해 돌리면 `--code <코드 폴더>`).
+- 대상은 기본으로 FileStorageMap의 모든 문서, 시작 자리 0(`--start-offset`). 이름으로 좁힐 때만 `--filter <키워드,…>`.
 - 설정은 서버 settings.yaml(`--settings` · `SETTINGS_FILE` · `<루트>/settings.yaml` 순)에서 읽는다 — 호스트 python에 PyYAML 필요. 필요한 칸이 없으면 칸 경로만 찍고 종료 2.
   - 작업 폴더 `ops.run_pipeline.run_pipeline_work_dir`(비우면 스크립트 옆 `test_space/` — 진행 기록 `batch_progress/`)
   - 결과 폴더 `ops.host.host_output_dir`(컨테이너 `/app/output`의 원본 — 비우면 `<루트>/output`)
@@ -124,7 +125,7 @@ bash deploy/host/scripts/pipe_exec.sh show-stack                         # 엔�
 - ⚠ **0.1.0이 만든 스키마에 `up`하면 `0002_search`가 옛 표를 지운다** — 0.2.0은 새 `db_schema`로 올린다(§8-3).
 - 적재(`pgvector_load`)는 새 스키마면 만들고 기록, 기록이 있으면 `up`, 기록 없는 기존 스키마면 경고만 하고 계속한다. DB 판이 코드보다 낮으면 종료 2(`migrate up` 안내), 코드가 모르는 리비전이 있으면(옛 이미지로 되돌린 뒤 등) 적재·`up`·`stamp` 모두 종료 2. 검색 MCP는 버전을 보지 않는다.
 - 판을 바꾸는 리비전(표·컬럼)은 데이터 계약 변경이다 — DB 담당 협의가 먼저.
-- applog를 켰으면(`ops.log.log_db_enabled: true`) 매일 `bash deploy/host/scripts/pipe_exec.sh migrate maintain --target applog`(월 파티션 준비·보존 기한 지난 파티션 삭제)를 예약한다.
+- applog 월 파티션 준비·보존 기한 지난 파티션 삭제(`bash deploy/host/scripts/pipe_exec.sh migrate maintain --target applog`)는 새벽 배치(`nightly_batch.sh scheduled`)가 run_pipeline 앞에 매일 부른다(실패하면 경고만). 새벽 배치를 켜지 않은 서버는 이 명령을 따로 예약한다.
 - 엔진 구성 바꾸기: 코드 폴더의 `resources/config/pipeline_stack.json`을 고쳐 코드 폴더째 바꾼다(§1-1). 이미지에 없는 엔진이 있으면 파이프라인 진입점이 종료 2. 검색 MCP는 시작 때 읽으므로 바꾼 뒤 `mcp_keepalive.sh`로 다시 띄운다.
 - PC: `python -m common.store.db.dbtool <up|stamp|current|check|master load> --target … [--schema S] [--dim N | --bundle B] [--create-extension]`(README §4-4).
 

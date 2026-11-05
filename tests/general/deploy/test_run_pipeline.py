@@ -27,17 +27,19 @@ def _load():
 RD = _load()
 
 GOLDEN = {
-    "staging": "docker exec data-pipeline bash -c 'umask 0002 && mkdir -p /app/output/_staging && cd /app && PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.extract.candidate_ready --set SOURCE_STAGING=/app/output/_staging --set SOURCE_FETCH_WORKERS=2 stage --csv /app/output/_docflow/9/batch.csv --out /app/output/_docflow/9 --prepared /app/output/_docflow/9/prepared --no-scan-rotate'",
-    "parse_light": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && echo [envcheck] gate=9 채널=light; RUN_PIPELINE_DOC=/app/output/_docflow/7 PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/_docflow/7 --set DOC_DIR_PREPARED=/app/output/_docflow/7/prepared --set PARSE_IMAGES_ROOT=/app/output/_docflow/7/parse/_images --set PARSE_RAW_ROOT=/app/output/_docflow/7/parse --set VLM_MAX_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set CPU_MAX_LOAD=9 parse --staged'",
-    "parse_vlm": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && echo [envcheck] gate=1.3 채널=vlm; RUN_PIPELINE_DOC=/app/output/_docflow/9 PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/_docflow/9 --set DOC_DIR_PREPARED=/app/output/_docflow/9/prepared --set PARSE_IMAGES_ROOT=/app/output/_docflow/9/parse/_images --set PARSE_RAW_ROOT=/app/output/_docflow/9/parse --set VLM_MAX_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set VLM_MAX_CONCURRENCY=6 --set VLM_CONCURRENCY=6 --set PARSE_POST=supsub,charts,figures,context,attachments,vlm_page --set VLM_PAGE_MAX= --set CPU_MAX_LOAD=1.3 parse --staged'",
-    "struct": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.transform.structure.gold_bundle --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --parse-dir /app/output/_docflow/9/parse --src /app/output/_docflow/9/prepared --out /app/output/_docflow/9/bundle && PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.load.pgvector_load --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 load --bundle /app/output/_docflow/9/bundle --rep-dir /app/output/_docflow/9/parse/_rep >> /app/output/_docflow/9/structure.log 2>&1'",
-    "publish": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.load.publish_parse_result --out /app/output/_docflow/9 --source-system FileStorageMap --apply >> /app/output/_docflow/9/publish.log 2>&1'",
-    "sweep": "docker exec data-pipeline bash -c \"for p in /proc/[0-9]*; do grep -aqzx 'RUN_PIPELINE_DOC=/app/output/_docflow/9' \\$p/environ 2>/dev/null && kill \\${p##*/} 2>/dev/null; done\"",
-    "list": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.extract.candidate_pick list --filter RFP,proposal --start-offset 0 --skip-done --max-docs 30 --faq-seen /app/output/_faq_seen.txt --out /app/output/_docflow/targets.json'",
+    "staging": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && mkdir -p /app/output/_staging && python -m pipeline.extract.candidate_ready --set SOURCE_STAGING=/app/output/_staging --set SOURCE_FETCH_WORKERS=2 stage --csv /app/output/_docflow/9/batch.csv --out /app/output/_docflow/9 --prepared /app/output/_docflow/9/prepared --no-scan-rotate'",
+    "parse_light": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/7 && echo [envcheck] gate=9 채널=light; python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/_docflow/7 --set DOC_DIR_PREPARED=/app/output/_docflow/7/prepared --set PARSE_IMAGES_ROOT=/app/output/_docflow/7/parse/_images --set PARSE_RAW_ROOT=/app/output/_docflow/7/parse --set VLM_MAX_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set CPU_MAX_LOAD=9 parse --staged'",
+    "parse_vlm": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/9 && echo [envcheck] gate=1.3 채널=vlm; python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/_docflow/9 --set DOC_DIR_PREPARED=/app/output/_docflow/9/prepared --set PARSE_IMAGES_ROOT=/app/output/_docflow/9/parse/_images --set PARSE_RAW_ROOT=/app/output/_docflow/9/parse --set VLM_MAX_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set VLM_MAX_CONCURRENCY=6 --set VLM_CONCURRENCY=6 --set PARSE_POST=supsub,charts,figures,context,attachments,vlm_page --set VLM_PAGE_MAX= --set CPU_MAX_LOAD=1.3 parse --staged'",
+    "struct": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/9 && python -m pipeline.transform.structure.gold_bundle --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --parse-dir /app/output/_docflow/9/parse --src /app/output/_docflow/9/prepared --out /app/output/_docflow/9/bundle && python -m pipeline.load.pgvector_load --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 load --bundle /app/output/_docflow/9/bundle --rep-dir /app/output/_docflow/9/parse/_rep >> /app/output/_docflow/9/structure.log 2>&1'",
+    "list": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && python -m pipeline.extract.candidate_pick list --filter RFP,proposal --start-offset 0 --skip-done --max-docs 30 --faq-seen /app/output/_faq_seen.txt --out /app/output/_docflow/targets.json'",
+    "publish": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/9 && python -m pipeline.load.publish_parse_result --out /app/output/_docflow/9 --source-system FileStorageMap --apply >> /app/output/_docflow/9/publish.log 2>&1'",
+    "sweep": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && for p in /proc/[0-9]*; do grep -aqzx \"RUN_PIPELINE_DOC=/app/output/_docflow/9\" $p/environ 2>/dev/null && kill ${p##*/} 2>/dev/null; done'",
+    "list_all": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && python -m pipeline.extract.candidate_pick list --start-offset 0 --faq-seen /app/output/_faq_seen.txt --out /app/output/_docflow/targets.json'",
 }
 
 
 LIST_ARGS = argparse.Namespace(filter="RFP,proposal", start_offset=0, limit=0, seqs="", skip_done=True, max_docs=30)
+LIST_ALL = argparse.Namespace(filter="", start_offset=0, limit=0, seqs="", skip_done=False, max_docs=0)  # 기본 — 모든 문서
 
 
 def _built():
@@ -47,6 +49,7 @@ def _built():
         "parse_vlm": RD.parse_cmd(9, "vlm", "1.3"),
         "struct": RD.struct_cmd(9),
         "list": RD.list_cmd(LIST_ARGS),
+        "list_all": RD.list_cmd(LIST_ALL),
         "publish": RD.publish_cmd(9),
         "sweep": RD.sweep_cmd(9),
     }
@@ -110,9 +113,43 @@ def test_doc_folder_values():
 
 
 def test_sweep_marker_matches_parse():
-    """고아 정리가 찾는 표지 env가 파싱 명령이 주는 표지와 같다."""
+    """고아 정리가 찾는 표지 env가 파싱·게시·구조화 명령이 주는 표지와 같다(rn-09) — 정리 명령 자신은 표지를 받지 않는다."""
     mark = f"{RD.DOC_MARK}=/app/output/_docflow/9"
-    assert mark in _inner(GOLDEN["parse_vlm"]) and mark in GOLDEN["sweep"]
+    for name in ("parse_vlm", "publish", "struct"):
+        assert f" {mark} && " in _inner(GOLDEN[name]), name
+    assert f'"{mark}"' in GOLDEN["sweep"] and f" {mark} && " not in GOLDEN["sweep"]
+
+
+def test_one_env_for_every_command():
+    """rn-09 — 컨테이너 명령은 모두 한 도우미(pexec)가 만들어 앞부분(umask·작업 폴더·PYTHONPATH·라이브러리 env)이 같다."""
+    head = "umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache"
+    for name, cmd in _built().items():
+        assert cmd.startswith("docker exec data-pipeline bash -c ") and _inner(cmd).startswith(head), name
+
+
+def test_failed_stage_sweeps_doc(tmp_path):
+    """rn-09 — 파싱·게시·구조화가 실패하거나 시간 초과(124)면 그 문서의 컨테이너 안 프로세스를 끈다(sweep_cmd), 성공이면 안 끈다."""
+    cases = [  # (단계 함수, 부르는 법, 종료 코드, 정리 기대)
+        ("publish", lambda: RD.publish_one(4), 124, True),
+        ("publish", lambda: RD.publish_one(4), 0, False),
+        ("struct", lambda: RD.gold_one(4), 124, True),
+        ("struct", lambda: RD.gold_one(4), 1, True),
+        ("parse", lambda: RD.parse_one(4, {"s3_key": "k", "original_filename": "a.pdf", "file_size": 1}), 124, True),
+    ]
+    for stage, call, rc, want in cases:
+        calls = []
+
+        def sh(cmd, timeout=0, log=None, rc=rc, calls=calls):
+            calls.append(cmd)
+            return (rc, "", "") if len(calls) == 1 else (0, "", "")
+
+        with (
+            mock.patch.object(RD, "sh", sh),
+            mock.patch.object(RD, "PROG", tmp_path),
+            mock.patch.object(RD, "DOCFLOW", tmp_path / "flow"),
+        ):
+            call()
+        assert (RD.sweep_cmd(4) in calls) == want, (stage, rc, calls)
 
 
 # ── 레인·대기열 정책(docs/prd/runner.md rn-01·rn-02) ──
@@ -310,7 +347,7 @@ def test_classify_cache_skips_probe():
         ):
             assert RD.classify_doc(5, row, cache={"k": cached} if cached else {}) == want, name
         if out is not None:
-            assert sh.call_args[0][0].endswith(
+            assert _inner(sh.call_args[0][0]).endswith(
                 f"doc_lane_group.py {RD._img('output_root')}/_staging/{RD._staging_bin(row)} {shlex.quote(name)} 2048"
             ), name
 
@@ -327,19 +364,20 @@ def test_pg_count_sums_source_schemas():
     assert all(f"rag_{s}.doc" in seen[0] and f"rag_{s}.chunk" in seen[0] for s in SOURCES) and "rag.doc" not in seen[0], seen
 
 
-def test_stage_reuse_same_doc_only(tmp_path):
-    """앞 실행의 _docflow/<seq>는 그 폴더 manifest의 원본 키가 이 행일 때만 다시 쓴다 — seq는 실행마다 바뀜(다른 문서면 지우고 새로 받음)."""
+def test_stage_always_calls_stage(tmp_path):
+    """미리 받기는 늘 컨테이너 stage를 부른다(ETag 확인·같은 밤 중복 표시는 stage 안 — 다시 받을지도 stage가 ETag로 정함).
+    앞 실행의 _docflow/<seq>는 어느 문서 것이든 지우고 새로 만든다(seq는 실행마다 바뀜)."""
     import json
 
     row = {"id": "1", "s3_key": "SFDC/a/new.pdf", "original_filename": "new.pdf", "file_size": 3}
-    cases = [  # (폴더의 manifest 원본 키(None = 폴더 없음), .staged, staging 원본 있음, 기대 다시 씀)
-        ("SFDC/a/new.pdf", True, True, True),
-        ("SFDC/b/old.pdf", True, True, False),  # seq가 밀려 다른 문서의 폴더 — 지우고 받기
-        ("SFDC/a/new.pdf", False, True, False),  # 받기가 끝나지 않음
-        ("SFDC/a/new.pdf", True, False, False),  # staging 원본이 지워짐
-        (None, False, False, False),
+    cases = [  # (폴더의 manifest 원본 키(None = 폴더 없음), .staged, staging 원본 있음, stage 종료 코드)
+        ("SFDC/a/new.pdf", True, True, 0),  # 같은 문서를 받아 둔 폴더 — 그래도 stage(ETag 확인)
+        ("SFDC/b/old.pdf", True, True, 0),  # seq가 밀려 다른 문서의 폴더
+        ("SFDC/a/new.pdf", False, True, 0),  # 받기가 끝나지 않음
+        (None, False, False, 0),
+        (None, False, False, 1),  # stage 실패 — 그 문서는 실패
     ]
-    for key, staged, has_bin, want in cases:
+    for key, staged, has_bin, rc in cases:
         flow, staging = tmp_path / "flow", tmp_path / "staging"
         for p in (flow, staging):
             __import__("shutil").rmtree(p, ignore_errors=True)
@@ -354,19 +392,44 @@ def test_stage_reuse_same_doc_only(tmp_path):
         if has_bin:
             (staging / RD._staging_bin(row)).write_bytes(b"x")
         calls = []
-        RD._stage_reused.clear()
         with (
             mock.patch.object(RD, "DOCFLOW", flow),
             mock.patch.object(RD, "STAGING", staging),
             mock.patch.object(RD, "PROG", tmp_path),
-            mock.patch.object(RD, "sh", lambda cmd, timeout=0, log=None, calls=calls: calls.append((cmd, log)) or (0, "", "")),
+            mock.patch.object(RD, "sh", lambda cmd, timeout=0, log=None, calls=calls, rc=rc: calls.append((cmd, log)) or (rc, "", "")),
         ):
-            assert RD.stage_one(4, row) is True, key
-        assert (4 in RD._stage_reused) == want, (key, staged, has_bin)
-        assert (d / "stale.txt").exists() == want, key  # 다시 쓰지 않으면 앞 문서 흔적을 지움
+            assert RD.stage_one(4, row) is (rc == 0), key
+        assert not (d / "stale.txt").exists(), key  # 앞 실행 흔적은 지움
+        assert (d / ".staged").exists() is (rc == 0), key
         staged_logs = [lg for c, lg in calls if "candidate_ready" in c]
-        assert bool(staged_logs) != want, (key, calls)
-        assert all(lg == d / "stage.log" for lg in staged_logs), staged_logs  # 받기 기록은 문서 폴더마다(공유 기록에 섞이지 않게)
+        assert staged_logs == [d / "stage.log"], (key, calls)  # 늘 한 번 · 받기 기록은 문서 폴더마다
+
+
+def test_drop_original_removes_etag(tmp_path):
+    """게시 뒤 원본 삭제는 staging 원본(<sha1>.bin)과 그 ETag 파일(<sha1>.etag — candidate_ready가 씀)을 함께 지운다."""
+    row = {"s3_key": "SFDC/a/x.pdf"}
+    sha = RD._staging_bin(row)[: -len(".bin")]
+    cases = [  # (staging에 있는 파일, 지운 뒤 남는 파일)
+        ([f"{sha}.bin", f"{sha}.etag"], []),
+        ([f"{sha}.bin"], []),
+        ([f"{sha}.bin", f"{sha}.etag", "other.bin", "other.etag"], ["other.bin", "other.etag"]),
+    ]
+    for files, left in cases:
+        staging = tmp_path / "staging"
+        __import__("shutil").rmtree(staging, ignore_errors=True)
+        staging.mkdir()
+        for f in files:
+            (staging / f).write_bytes(b"x")
+        calls = []
+        with (
+            mock.patch.object(RD, "DOCFLOW", tmp_path / "flow"),
+            mock.patch.object(RD, "STAGING", staging),
+            mock.patch.object(RD, "sh", lambda cmd, timeout=0, calls=calls: calls.append(cmd) or (0, "", "")),
+        ):
+            RD.drop_original(4, row)
+        assert sorted(x.name for x in staging.iterdir()) == left, files
+        inner = _inner(calls[0])
+        assert f"/app/output/_staging/{sha}.bin" in inner and f"/app/output/_staging/{sha}.etag" in inner, inner
 
 
 def test_parse_one_skips_stage_dropped(tmp_path):

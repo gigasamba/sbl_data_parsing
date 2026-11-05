@@ -4,6 +4,7 @@
 #   scheduled = 타이머용 — NIGHTLY_TIME 시각(5분 창)에만 run_pipeline.py(문서별 flow — 서버 입구 하나)
 #     run_pipeline 인자: --start-offset 0 --skip-done(EDW ParsingMeta에 끝난 문서는 건너뜀) --max-docs NIGHTLY_MAX_DOCS --deadline NIGHTLY_DEADLINE
 #     (시작 시각·문서 수 상한·마감 시각 셋이 모두 있어야 돈다, 하나라도 비면 조용히 끝)
+#     run_pipeline 앞에 applog 월 파티션 정리(pipe_exec.sh migrate maintain --target applog) — 실패해도 경고만, 배치는 계속
 #   구조화·적재는 run_pipeline이 문서마다 부른다.
 #   설정: settings.yaml(SETTINGS_FILE, 기본 <루트>/settings.yaml — 루트 = 코드 폴더의 부모)의
 #     호스트 칸(이미지·RAG_OUT·DOC_SRC·자원·NIGHTLY_* 등)을 load_settings.sh load_settings가 셸 env로 — 이미 셸에 있는 이름은 그대로.
@@ -40,6 +41,8 @@ if [ "$mod" = "scheduled" ]; then
   d=$(( (d + 1440) % 1440 ))   # 자정을 넘는 창(23:58 → 00:02)
   if [ "$d" -ge 5 ]; then exit 0; fi
   # 새벽 배치 = run_pipeline을 바깥에서 부르는 것. 호스트 python(PyYAML·pymssql — refactor.md C-09)으로, 설정은 load_settings가 준 SETTINGS_FILE.
+  bash deploy/host/scripts/pipe_exec.sh migrate maintain --target applog \
+    || echo "[nightly_batch] 경고 — applog 파티션 정리(migrate maintain --target applog) 실패, 배치는 계속" >&2
   echo "[nightly_batch] $(date '+%F %T') 새벽 배치 — run_pipeline.py 시작"
   python3 deploy/host/scripts/run_pipeline.py --start-offset 0 --skip-done --max-docs "$n" --deadline "$dl" "$@"; rc=$?
   echo "[nightly_batch] $(date '+%F %T') 새벽 배치 — run_pipeline.py 끝 (종료 코드 $rc)"
