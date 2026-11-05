@@ -18,6 +18,7 @@
 5. 지원 형식 = 구성의 `parse` 키 43개: `.pptx` `.doc` `.docx` `.hwpx` `.png` `.jpg` `.jpeg` `.tif` `.tiff` `.bmp` `.eml` `.mht` `.mhtml` `.txt` `.html` `.htm` `.pdf_image` `.pdf_text` `.xls` `.xlsm` `.xlsx` `.ppt` `.msg` `.docm` `.pptm` `.rtf` `.csv` `.tsv` `.md` `.odt` `.ods` `.odp` `.xlsb` `.dotx` `.xltx` `.potx` `.ppsx` `.dot` `.xlt` `.pot` `.json` `.xml` `.log`. `.hwp`는 아직 아니다([pl-45](#pl-45)), 압축 파일은 지원하지 않는다.
 6. 구성의 엔진이 등록부(`pipeline/transform/parse/engines`)에 없거나 설치되지 않았으면 → 시작하지 않는다(종료 2).
 7. 파싱(`parse_engines`)은 입력 폴더의 파일을 그대로 문서로 본다 — 같은 내용 사본을 한 번만 돌려 복사하는 일과 확장자 거르기를 하지 않는다(중복 제외·미지원 거르기는 [pl-02](extract.md#pl-02)). 처리 엔진 없는 확장자 파일이 들어오면 엔진 후보가 없어 그 문서는 작업 0건이다. `--shard i/k`는 내용 sha256으로 문서를 나눈다.
+8. `.pptx`(anydoc)·`.txt`(plaintext)·`.csv`(markitdown)는 엔진 하나만 돈다 — 0.3.0 엔진 비교(`valid_env` 86건, 11-06)에서 보조 엔진(kreuzberg·markitdown)이 대표 결과에 더한 것이 없었다(사용자 11-06).
 
 ### QA
 - `tests/server/pipeline/test_engine_check.py` · `tests/server/pipeline/test_engine_run.py`.
@@ -91,7 +92,7 @@
 
 ### 규칙
 1. 엔진 `parser.py`의 `FORMATS`는 두고, 등록부 `pipeline/transform/parse/engines/registry.py`의 `EXTRA_FORMATS`(엔진별 추가 확장자)에 더한다 — `formats(엔진)` = `FORMATS` + `EXTRA_FORMATS`, `engines_for()`·`parse_engines --one --list`가 이것을 읽는다.
-2. 구성(우선순위 순): `.docm`·`.pptm`(kreuzberg, anydoc) · `.rtf`·`.odt`·`.ods`(anydoc, kreuzberg) · `.odp`(anydoc) · `.csv`(markitdown, kreuzberg) · `.tsv`(plaintext, kreuzberg) · `.md`(plaintext, markitdown) · `.xlsb`·`.dotx`·`.xltx`·`.potx`·`.ppsx`·`.dot`·`.xlt`·`.pot`(kreuzberg) · `.json`·`.xml`·`.log`(plaintext 하나 — 글 그대로).
+2. 구성(우선순위 순): `.docm`·`.pptm`(kreuzberg, anydoc) · `.rtf`·`.odt`·`.ods`(anydoc, kreuzberg) · `.odp`(anydoc) · `.csv`(markitdown — 보조 엔진 기여 0이라 뺌, 사용자 11-06) · `.tsv`(plaintext, kreuzberg) · `.md`(plaintext, markitdown) · `.xlsb`·`.dotx`·`.xltx`·`.potx`·`.ppsx`·`.dot`·`.xlt`·`.pot`(kreuzberg) · `.json`·`.xml`·`.log`(plaintext 하나 — 글 그대로).
 3. `.docm`·`.pptm`은 `office` 엔진에 주지 않는다(`office_stdlib`는 `.docx`가 아니면 xlsx로 다룸).
 4. 파싱 서비스가 받는 확장자(`pipeline.transform.parse.engine_check.allowed_exts()`) = 구성의 `parse` 키(`.pdf_*` → `.pdf`) − 이미지 확장자.
 

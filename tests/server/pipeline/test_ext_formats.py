@@ -188,7 +188,7 @@ EXT2 = (
     (".docm", ["kreuzberg", "anydoc"], _ooxml("word", f"{_W}.document.macroEnabled.main+xml")),
     (".pptm", ["kreuzberg", "anydoc"], _ooxml("ppt", f"{_P}.presentation.macroEnabled.main+xml")),
     (".rtf", ["anydoc", "kreuzberg"], _rtf),
-    (".csv", ["markitdown", "kreuzberg"], _text(f"name,value\n{TOKEN},1\n")),
+    (".csv", ["markitdown"], _text(f"name,value\n{TOKEN},1\n")),
     (".tsv", ["plaintext", "kreuzberg"], _text(f"name\tvalue\n{TOKEN}\t1\n")),
     (".md", ["plaintext", "markitdown"], _text(f"# 제목\n\n{TOKEN}\n")),
     (".odt", ["anydoc", "kreuzberg"], _odf("text", "<office:text><text:p>{t}</text:p></office:text>")),

@@ -22,8 +22,8 @@ cd /app
 umask 0002   # 그룹도 쓸 수 있게(파일 664·폴더 775) — 서버 운영 계정이 UID 10001이 쓴 결과를 고치고 지우게(결과 폴더 그룹·setgid는 server-guide §1-2)
 # 실제로 도는 코드의 판·커밋([image] 줄의 커밋은 실행 이미지를 빌드한 커밋이라 코드만 바꾼 배포와 다름).
 # 코드 폴더(실행 이미지 마운트)·구운 이미지 모두 /app/deploy/VERSION·CODE_COMMIT. CODE_COMMIT은 zip·git archive로 받을 때만 채워짐.
-_code_ver=$(tr -d ' \r\n' < /app/deploy/VERSION 2>/dev/null || true)
-_code_commit=$(tr -d '\r\n' < /app/deploy/CODE_COMMIT 2>/dev/null || true)
+_code_ver=$(tr -d ' \r\n' 2>/dev/null < /app/deploy/VERSION || true)  # 2>를 < 앞에 — 파일이 없을 때 셸 오류 줄도 숨김
+_code_commit=$(tr -d '\r\n' 2>/dev/null < /app/deploy/CODE_COMMIT || true)
 case "$_code_commit" in ''|'$Format'*) _code_commit="표시 없음(git clone — zip·git archive로 받으면 채워짐)" ;; *) _code_commit=${_code_commit##* } ;; esac
 echo "[code] 판 ${_code_ver:-?} · 커밋 ${_code_commit}" >&2
 

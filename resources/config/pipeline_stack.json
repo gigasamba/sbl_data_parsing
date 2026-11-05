@@ -1,8 +1,7 @@
 {
  "parse": {
   ".pptx": [
-   "anydoc",
-   "kreuzberg"
+   "anydoc"
   ],
   ".doc": [
    "kreuzberg"
@@ -45,8 +44,7 @@
    "kreuzberg"
   ],
   ".txt": [
-   "plaintext",
-   "markitdown"
+   "plaintext"
   ],
   ".html": [
    "html_stdlib",
@@ -96,8 +94,7 @@
    "kreuzberg"
   ],
   ".csv": [
-   "markitdown",
-   "kreuzberg"
+   "markitdown"
   ],
   ".tsv": [
    "plaintext",
