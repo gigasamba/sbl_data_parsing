@@ -117,41 +117,7 @@
 
 접속: `common.connections.rdb`(읽기 계정 `rdb.read`·쓰기 계정 `rdb.write`). `query_edw` 도구는 아무 칸이나 읽을 수 있어 아래 "읽는 곳"에서 뺀다.
 
-### edw.FileStorageMap
-
-`AI.FileStorageMap` — 원본 파일 목록(EDW 쪽 표 — 이 프로젝트는 칸을 더하거나 지우지 않는다). 저장소에는 PC 대역 정의만 있다(`valid_env/edw/ai.sql`). 아래는 이 프로젝트가 읽는 칸만이다. 시험 비교 대상이 아니다.
-
-| 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|---|
-| id | (EDW) | `23` | 행 번호 — 증분 수집 기준 | EDW | extract/candidate_pick `_rdb_rows`·`edw_rows` | 유지 |
-| s3_key | (EDW) | `SFDC/17ae1841-d031-48b5-85b2-2df6058b5857/kvx_rfp_main.pdf` | 원본 전체 키 = 문서 키 | EDW | source `_rdb_rows`(매니페스트 `key`), candidate_pick `edw_rows` | 유지 |
-| original_filename | (EDW) | `kvx_rfp_main.pdf` | 원본 파일 이름 | EDW | source, candidate_pick `edw_rows` | 유지 |
-| file_size | (EDW) | `448556` | 크기 | EDW | source, candidate_pick `edw_rows` | 유지 |
-| content_version_id | (EDW) | `1` | 판 id | EDW | source `_rdb_rows` | 유지 |
-| source_system | (EDW) | `SFDC` | 원천 — 코드는 읽지 않는다. 원천은 `s3_key` 첫 마디로 정한다(§1 원천) | EDW | 없음 | 유지 |
-| created_at | (EDW) | `2026-10-15 09:00:00` | 원천 등록 시각 — 같은 `s3_key` 여러 행 중 기준 행 고르기, 원천 표에 등록 시각이 없을 때 gold `doc.created_at`의 대체값(KST). 실제 EDW에 있는지는 D-1 | EDW | 적재 `edw_meta`(사슬 `file.created_at`) · (기준 행 고르기) | 유지 |
-
-### edw.SupersededRow
-
-같은 `s3_key`의 더 새 `FileStorageMap` 행 때문에 밀려난 행의 예외 이력. 표 이름과 칸은 DB 담당자가 정한다(D-9) — 아래는 안이다. 시험 비교 대상이 아니다.
-
-| 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|---|
-| file_storage_map_id | (EDW, 안) | `23` | 밀려난 `FileStorageMap` 행 id | (파이프라인 — 기준 행 고를 때) | (운영자) | 새로 |
-| s3_key | (EDW, 안) | `SFDC/17ae1841-…/kvx_rfp_main.pdf` | 겹친 문서의 원본 키 | 〃 | 〃 | 새로 |
-| kept_file_storage_map_id | (EDW, 안) | `31` | 기준으로 남은 행 id | 〃 | 〃 | 새로 |
-| reason | (EDW, 안) | `파싱 대상 아님 — 같은 s3_key의 더 새 행` | "파싱 대상 아님 — 같은 s3_key의 더 새 행" | 〃 | 〃 | 새로 |
-| recorded_at | (EDW, 안) | `2026-10-16 00:30:00` | 기록한 때 | 〃 | 〃 | 새로 |
-
-### edw.Quote
-
-PC 대역 EDW(`valid_env/edw/sfdc.sql`)에만 있는 **예시 칸**이다. 서버 EDW에는 Quote 표가 없어 기본 사슬에서 빠져 있다 — 표가 생기면 사슬 파일의 Quote 주석 줄을 켠다(실제 표·칸 이름은 D-1). 시험 비교 대상이 아니다.
-
-| 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|---|
-| Id | (예시) | `0Q0000000000000001` | Quote id | PC 대역 시드(`valid_env/edw/sfdc.sql`) | 적재 `edw_meta`(사슬 파일에서 quote 단계를 켤 때만) | 새로 |
-| OpportunityId | (예시) | `006202604700000000` | 연결된 영업 기회 | 〃 | 〃 | 새로 |
-| AccountId | (예시) | `001900500000000000` | 연결된 고객 계정 — 고객 이름은 `SFDC.Account` | 〃 | 〃 | 새로 |
+EDW 표(`AI.FileStorageMap`, 원천 표 SFDC·CRMS·LAS 등)는 서버에서 운영하는 표라 이 문서에 칸 명세를 두지 않는다. 이 프로젝트가 읽는 표·칸·잇는 키는 사슬 파일 [`resources/config/edw_chain.yaml`](../../resources/config/edw_chain.yaml)(서버 사본은 코드 폴더의 `edw_chain.yaml`)이 정하고, 그 값이 §2 gold `doc`의 `client_edw`·`created_at`·`attrs`로 매핑된다. 파싱 대상은 `AI.FileStorageMap`에서 고른다(원천 = `source_system` 칸 — [op-17](../prd/ops.md#op-17)). PC 대역 정의는 `valid_env/edw/*.sql`에 있다.
 
 ### edw.ParsingMeta
 
@@ -325,7 +291,7 @@ ID 모양 정규식(계약 번호·제품 코드 등). 읽는 곳: `common.core.
 | D-4 | `ParsingMeta.doc_key` 삭제 때 `UQ_ParsingMeta_dockey`·`IX_ParsingMeta_doc_key` 색인 처리 · `source_key`를 필수(NOT NULL)로 | 지금 `source_key`가 비면 `doc_key`가 겹침 키 |
 | D-6 | 원천별 gold 스키마 5벌 + 기준 스키마의 공용 `doc_id_seq`(§2) — 기존 서버 데이터는 백업 뒤 다시 적재 | 첫 적재가 전체 e2e와 함께 · refactor.md C-74·C-76 |
 | D-8 | FAQ 원천 등록 — Object Storage `FAQ/<uuid>/<파일>`을 `AI.FileStorageMap`에 등록(candidate_pick list는 `s3_key LIKE 'FAQ/%'`로 고름) | FAQ 행을 누가 어떻게 넣나 |
-| D-9 | 밀려난 `FileStorageMap` 행의 예외 이력 표(§3 `edw.SupersededRow` 안) — 표 이름·칸·누가 쓰나 | 요건 [pl-32](../prd/load-schema.md#pl-32) |
+| D-9 | 밀려난 `FileStorageMap` 행의 예외 이력 표 — 표 이름·칸·누가 쓰나 | 요건 [pl-32](../prd/load-schema.md#pl-32) |
 | D-10 | `applog` 스키마 추가(§6) — `up`의 `CREATE SCHEMA`, `maintain`의 파티션 생성·DROP, 앱의 INSERT와 `pipe_run` UPDATE 권한. 호출량 기준 용량(`mcp_log` 행 본문 최대 약 80KB) | 새 스키마이고 로그 쓰기가 기존 PG 접속 정보를 함께 씀 |
 | D-11 | `applog.mcp_log`의 `args`·`result` 읽기 권한 분리 | 문서 본문·EDW 결과가 들어가는데(`get_doc_fulltext` 응답은 문서 원문 전체) 판에 GRANT가 없어 지금은 앱 계정이 읽을 수 있음 |
 | D-12 | 실제 보존 기간 약 90~120일(월 단위 DROP)이 감사·개인정보 기준에 맞는지, `dbtool maintain` 매일 예약 | 예약이 약 2개월 이상 멈추면 새 달 파티션이 없어 DB 쓰기가 실패하고 대체 파일로만 쌓임 |

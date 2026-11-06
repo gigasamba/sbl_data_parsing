@@ -856,7 +856,7 @@ def resolve_run_env(environ=None, file=None):
 def require_run_env(app="", environ=None, sections=None):
     """앱 시작 관문 — RUN_ENV가 없거나 모르는 값이면 안내를 찍고 종료 코드 2. 값을 돌려준다.
     설정 파일을 읽고 sections(앱 절 — 없으면 이 이미지 절, image_sections)를 검증한다 — 모르는 칸·자리가 다른 칸·형식 오류면 이유(칸 경로·
-    오류 종류만, 값 없음)를 찍고 종료 2. 서버(dev·prd)는 파일이 없어도 거부하고 비밀 칸 길이·가짜 LLM·여러 벌도 본다, local은 서버 전용 칸을 비우고 경고(op-14)."""
+    오류 종류만, 값 없음)를 찍고 종료 2. 서버(dev·prd)는 파일이 없어도 거부하고 비밀 칸 길이·가짜 LLM·여러 벌·(prd) DEV 원천도 본다, local은 서버 전용 칸을 비우고 경고(op-14)."""
     environ = os.environ if environ is None else environ  # env 남김 — RUN_ENV 신호
     tag = f"[설정] {app + ': ' if app else ''}"
     try:
@@ -895,6 +895,14 @@ def require_run_env(app="", environ=None, sections=None):
             raise SystemExit(2) from None
         if st.common.dev.llm_fake:  # 가짜 LLM 응답은 local에서만, 서버는 시작 거부
             print(f"{tag}서버(RUN_ENV={value}) — {L.to_yaml('common.dev.llm_fake')}가 켜져 있어 시작하지 않음(local 전용)", file=sys.stderr)
+            raise SystemExit(2)
+        pipe = getattr(st, "pipeline", None)  # 파싱할 원천 DEV-<숫자>는 dev·local만(op-17)
+        dev_src = [s for s in (pipe.extract.source.systems or []) if s.startswith("DEV-")] if pipe is not None else []
+        if value == "prd" and dev_src:
+            print(
+                f"{tag}서버(RUN_ENV=prd) — {L.to_yaml('pipeline.extract.source.systems')}에 {dev_src}가 있어 시작하지 않음(dev·local 전용)",
+                file=sys.stderr,
+            )
             raise SystemExit(2)
     return value
 

@@ -128,12 +128,12 @@
 FAQ는 판을 잇지 않는다. 새 FAQ가 오면 gold faq를 비우고 FAQ 전체를 다시 넣는다 — [pl-13](#pl-13)("지우지 않음")의 FAQ 한정 예외. 검토 등급 A.
 
 ### 규칙
-1. 새 FAQ = FileStorageMap의 `FAQ/…` 키 중 결과 폴더의 `_faq_seen.txt`(교체를 마친 키 목록)에 없는 것. ParsingMeta는 판정에 쓰지 않는다. 파일이 없으면(처음) FAQ 전체를 한 번 교체한다.
+1. 새 FAQ = FileStorageMap에서 `source_system`이 `FAQ`(대소문자 무관)인 행의 키 중 결과 폴더의 `_faq_seen.txt`(교체를 마친 키 목록)에 없는 것. ParsingMeta는 판정에 쓰지 않는다. 파일이 없으면(처음) FAQ 전체를 한 번 교체한다.
 2. 컨테이너 안 `candidate_pick list --faq-seen <파일>`의 `faq_first`(처리 순서를 정한 뒤 — `--skip-done` 뒤, `--max-docs` 앞): FAQ 목록은 `--filter`와 상관없이 FileStorageMap에서 따로 읽는다(대상에 없는 FAQ는 목록 뒤에 덧붙임). `--start-offset`이 대상 수보다 커도 확인한다.
 3. 새 FAQ가 있으면 → 자식 프로세스 `pgvector_load faq-sync --reset`으로 gold faq의 문서·청크·키워드 색인을 한 트랜잭션에서 지우고, FAQ 전체를 이번 처리 맨 앞에 넣는다(이미 끝난 FAQ도). `_faq_seen.txt`는 `faq-sync` 결과(`--out` JSON — 목록 파일 옆 `faq_sync.json` — 지운 수·남은 `file_path`)를 읽은 **뒤에만** 적는다.
 4. 새 FAQ가 없으면 → 지우지 않고 gold에 없는 FAQ만 넣는다(`skipped_dup`은 뺌) — 중간에 멈춘 교체와 파싱 실패를 다음 실행이 채운다.
 5. 만약 `faq-sync` 결과를 못 읽으면(실패·시간 초과 1,800초) → 경고와 함께 FAQ 전체를 넣고 `_faq_seen.txt`는 그대로 둔다.
-6. `--seqs`·`--limit` 실행에서는 FAQ 교체를 하지 않는다(로그 한 줄).
+6. `--seqs`·`--limit` 실행과 원천 목록(`required.source.source_systems`)에 `FAQ`가 없는 실행에서는 FAQ 교체를 하지 않는다(로그 한 줄).
 7. 한계: 같은 실행 안에서 지우고 다시 넣는 사이에는 검색에 FAQ가 일부만 보인다. FileStorageMap에서 사라진 FAQ는 다음 교체 때 함께 빠진다.
 
 ### QA

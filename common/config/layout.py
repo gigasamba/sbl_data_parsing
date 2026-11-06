@@ -19,6 +19,11 @@ _WRITE_NEED = "필수 · dev·prd(pipeline — 게시) — local은 무시(비�
 REQUIRED_GROUPS = (
     ("env", "실행 환경", (("run_env", "common.run_env", "필수 · 모두(local·dev·prd)"),)),
     (
+        "source",
+        "파싱할 원천",
+        (("source_systems", "pipeline.extract.source.systems", "선택 — DEV-<숫자>는 dev·local만(prd면 시작 거부)"),),
+    ),
+    (
         "pg",
         "PostgreSQL(pgvector) — local은 접속 5칸을 모두 비우면 sqlite 대역(일부만 적으면 거부)",
         (
@@ -280,6 +285,7 @@ PLACED = {
     "pipeline.connections.rdb.columns.filename": "tuning.extract.source_columns.source_column_filename",
     "pipeline.connections.rdb.increment_col": "tuning.extract.source_columns.source_column_increment",
     "pipeline.connections.rdb.columns.key": "tuning.extract.source_columns.source_column_storage_key",
+    "pipeline.connections.rdb.columns.source_system": "tuning.extract.source_columns.source_column_source_system",
     "pipeline.extract.text_page_sec": "tuning.extract.text_engine_page_timeout_sec",
     "pipeline.load.publish.upload_statuses": "tuning.load.publish.publish_upload_statuses",
     "common.log.batch_size": "tuning.ops.log.log_batch_size",
@@ -425,6 +431,7 @@ TUNING_RARE = (  # 결과 파라미터(청크·순위·그림 고르기)·내부
     "pipeline.connections.rdb.columns.filename",
     "pipeline.connections.rdb.columns.key",
     "pipeline.connections.rdb.columns.size",
+    "pipeline.connections.rdb.columns.source_system",
     "pipeline.extract.fill_merged",
     "pipeline.extract.hidden_overlap_max",
     "pipeline.extract.kreuzberg_prose_filter",

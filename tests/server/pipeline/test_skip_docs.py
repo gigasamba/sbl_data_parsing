@@ -31,7 +31,9 @@ REASONS = [
     ("SFDC/g/g.pdf", "g.pdf", "fail", None),  # 파싱 실패는 다시 시도
 ]
 # rdb:csv 한 줄 묶음(run_pipeline batch.csv) — 모두 받기 전에 걸러짐(지원 안 하는 확장자) → 받을 것 0건이어도 멈추지 않음
-RDB_ROWS = [("1", "SFDC/u1/a.zip", "a.zip"), ("2", "SFDC/u2/b.7z", "b.7z")]
+RDB_ROWS = [("1", "SFDC/u1/a.zip", "a.zip"), ("2", "SFDC/u2/b.7z", "b.7z")]  # 원천 칸 = dev-1(키 첫 마디와 달라도 그 값, 대문자로 — op-17)
+# 원천 목록(extract.source.systems) → 건너뜀 기록 여부 — 목록 밖 행은 고르지도 기록하지도 않음
+RDB_SYSTEMS = [(None, True), ("DEV-1", True), ("dev-1,SFDC", True), ("SFDC", False)]
 
 
 @contextlib.contextmanager
@@ -54,7 +56,7 @@ def _rows(d):
 
 def test_record_upsert():
     with tempfile.TemporaryDirectory() as d, standin(d):
-        rows = [{"source_key": k, "source_system": CP.source_of(k), "file_name": n, "reason": r} for k, n, r, _ in REASONS]
+        rows = [{"source_key": k, "source_system": k.split("/", 1)[0], "file_name": n, "reason": r} for k, n, r, _ in REASONS]
         want = {k: w for k, _, _, w in REASONS if w}
         assert SD.record(rows) == len(want)
         got = _rows(d)
@@ -68,21 +70,32 @@ def test_record_upsert():
 
 
 def test_rdb_all_unsupported():
-    """받기 전 거름(rdb_pick) — 모두 지원 안 함이면 받을 것 0건으로 끝나고(빈 _source_files) 문서마다 skip_doc_info·extract.skip 행."""
+    """받기 전 거름(rdb_pick) — 모두 지원 안 함이면 받을 것 0건으로 끝나고(빈 _source_files) 문서마다 skip_doc_info·extract.skip 행.
+    원천 목록 밖 행은 고르지 않는다(기록도 없음)."""
+    for systems, picked in RDB_SYSTEMS:
+        _rdb_unsupported(systems, picked)
+
+
+def _rdb_unsupported(systems, picked):
     with tempfile.TemporaryDirectory() as d, standin(Path(d) / "pg"):
         root = Path(d)
         csv_f = root / "batch.csv"
-        csv_f.write_text("id,s3_key,original_filename,file_size\n" + "".join(f"{i},{k},{n},3\n" for i, k, n in RDB_ROWS), encoding="utf-8")
+        csv_f.write_text(
+            "id,s3_key,original_filename,file_size,source_system\n" + "".join(f"{i},{k},{n},3,dev-1\n" for i, k, n in RDB_ROWS),
+            encoding="utf-8",
+        )
         events = []
         with (
-            pc.PIPE.env(RDB_BUCKET="b", SOURCE_STAGING=str(root / "staging")),
+            pc.PIPE.env(RDB_BUCKET="b", SOURCE_STAGING=str(root / "staging"), SOURCE_SYSTEMS=systems),
             mock.patch.object(CP, "done_by_sha", lambda shas: {}),
             mock.patch("pipeline.shared.runtrace.skip_event", lambda name, reason, **m: events.append((name, reason))),
         ):
             _, left, _, only = CR.stage_batch(f"rdb:csv:{csv_f}", root / "out", root / "prepared", 0, _filter)
         assert left == [] and only.read_text(encoding="utf-8").split() == []
-        assert sorted(events) == [("a.zip", "unsupported_archive"), ("b.7z", "unsupported_archive")], events
-        assert {k: v[1] for k, v in _rows(root / "pg").items()} == {k: "unsupported_archive" for _, k, _ in RDB_ROWS}
+        want = [("a.zip", "unsupported_archive"), ("b.7z", "unsupported_archive")] if picked else []
+        assert sorted(events) == want, (systems, events)
+        got = {k: v[:2] for k, v in _rows(root / "pg").items()} if picked else {}
+        assert got == ({k: ("DEV-1", "unsupported_archive") for _, k, _ in RDB_ROWS} if picked else {}), (systems, got)
 
 
 def _filter(args):
@@ -94,16 +107,16 @@ def _filter(args):
 def test_list_excludes_skipped():
     """대상 목록 --skip-done — skip_doc_info에 있는 키를 빼서 --max-docs가 새 문서를 고름. --skip-done이 없으면 그대로."""
     fsm = [
-        (1, "SFDC/a/rfp_drm.pdf", "rfp_drm.pdf", 10),
-        (2, "SFDC/b/rfp_new.pdf", "rfp_new.pdf", 20),
-        (3, "SFDC/c/rfp_z.pdf", "rfp_z.pdf", 30),
+        (1, "SFDC/a/rfp_drm.pdf", "rfp_drm.pdf", 10, "SFDC"),
+        (2, "SFDC/b/rfp_new.pdf", "rfp_new.pdf", 20, "SFDC"),
+        (3, "SFDC/c/rfp_z.pdf", "rfp_z.pdf", 30, "SFDC"),
     ]
     with tempfile.TemporaryDirectory() as d, standin(Path(d) / "pg"):
         edw = Path(d) / "edw.sqlite"
         SqliteStore(str(edw)).close()
         cn = sqlite3.connect(edw)
-        cn.execute("CREATE TABLE FileStorageMap (id INTEGER, s3_key TEXT, original_filename TEXT, file_size INTEGER)")
-        cn.executemany("INSERT INTO FileStorageMap VALUES (?, ?, ?, ?)", fsm)
+        cn.execute("CREATE TABLE FileStorageMap (id INTEGER, s3_key TEXT, original_filename TEXT, file_size INTEGER, source_system TEXT)")
+        cn.executemany("INSERT INTO FileStorageMap VALUES (?, ?, ?, ?, ?)", fsm)
         cn.commit()
         cn.close()
         SD.record([{"source_key": "SFDC/a/rfp_drm.pdf", "source_system": "SFDC", "file_name": "rfp_drm.pdf", "reason": "drm_fasoo"}])

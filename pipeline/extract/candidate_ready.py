@@ -175,7 +175,7 @@ def _rdb_plan(table, state, limit=0, done=frozenset()):
             "original_filename": o.get("filename"),
             "content_version_id": o.get("content_version"),  # FileStorageMap 고유 칸
             "created_at": o.get("created_at"),  # 원천 등록 시각 → gold_bundle → gold doc.created_at
-            "source_system": _derive_source_from_key(o["key"]),
+            "source_system": o["source_system"],  # FileStorageMap.source_system(op-17 — 키에서 다시 구하지 않음)
             **_hashed(f),
         }  # publish_parse_result가 문서별로 이 값 사용(없으면 --source-system 폴백)
 
@@ -212,11 +212,20 @@ def resolve(source, out, limit=0, done=frozenset()):
 
 def _folder_tree(src, files, out, state):
     """PC 폴더 원천이 원천별 하위 폴더(`SFDC/<uuid>/<파일>` — Object Storage 키 모양)면: rdb 배치와 같게
-    평평한 폴더(`<out>/_source_files`)에 복사하고 manifest.jsonl에 상대 키(`key`)·원본 주소(`uri`)·원천을 적는다 — 구조화가 키 첫 마디로
-    원천을 고르고(gold_bundle), 원본 주소가 원래 파일을 가리키게. 같은 이름은 rdb와 같은 규칙(`<상위 폴더>__<이름>`)."""
+    평평한 폴더(`<out>/_source_files`)에 복사하고 manifest.jsonl에 상대 키(`key`)·원본 주소(`uri`)·원천(맨 위 폴더 이름)을 적는다 —
+    구조화·적재·게시가 그 원천을 쓰고(gold_bundle), 원본 주소가 원래 파일을 가리키게. 같은 이름은 rdb와 같은 규칙(`<상위 폴더>__<이름>`)."""
     local = out / "_source_files"
     local.mkdir(parents=True, exist_ok=True)
-    rows = [{"key": p.relative_to(src).as_posix(), "filename": p.name, "doc_id": p.parent.name, "path": p} for p in files]
+    rows = [
+        {
+            "key": p.relative_to(src).as_posix(),
+            "filename": p.name,
+            "doc_id": p.parent.name,
+            "path": p,
+            "source": p.relative_to(src).parts[0],
+        }
+        for p in files
+    ]
     name_of = CP._rdb_names(rows)
     man = []
     for r in rows:
@@ -229,7 +238,7 @@ def _folder_tree(src, files, out, state):
                 "uri": r["path"].resolve().as_uri(),
                 "key": r["key"],
                 "original_filename": r["filename"],
-                "source_system": _derive_source_from_key(r["key"]) or CP._known_source(r["key"].split("/", 1)[0]),
+                "source_system": CP._known_source(r["source"]),  # 맨 위 폴더 = 원천(_tree_files가 확인함)
                 **_hashed(f),
             }
         )
@@ -329,7 +338,7 @@ def _dedup(local, names, dedup_dir, state, seen=None):
     if run_dup:  # 같은 내용을 이미 파싱하는 원본이 있음 — 다음 대상 목록에서도 뺌
         from pipeline.extract import skip_docs
 
-        skip_docs.record([_skip_row(k, n, "duplicate_sha256") for n, k in run_dup])
+        skip_docs.record([_skip_row(k, n, "duplicate_sha256", man.get(n)) for n, k in run_dup])
     Path(dedup_dir).mkdir(parents=True, exist_ok=True)
     rest = sorted(
         f.name for f in Path(local).iterdir() if f.is_file() and not CP._hidden(f) and f.name != ".gitkeep" and f.name not in dropped
@@ -357,9 +366,9 @@ def _claim(seen, sha, key):
         tmp.unlink(missing_ok=True)
 
 
-def _skip_row(key, name, reason):
-    """skip_docs.record 행 하나 — 원본 키에서 원천 이름을 얻는다."""
-    return {"source_key": key, "source_system": CP.source_of(key), "file_name": name, "reason": reason}
+def _skip_row(key, name, reason, man_row):
+    """skip_docs.record 행 하나 — 원천은 manifest 행의 source_system(없으면 None)."""
+    return {"source_key": key, "source_system": (man_row or {}).get("source_system"), "file_name": name, "reason": reason}
 
 
 def _record_filtered(prepared, state):
@@ -376,7 +385,7 @@ def _record_filtered(prepared, state):
         rows = list(csv.DictReader(fh))
     man = _read_manifest(state)
     keys = {r["file"]: (man.get(r["file"]) or {}).get("key") or r["file"] for r in rows}
-    skip_docs.record([_skip_row(keys[r["file"]], r["file"], r["reason"]) for r in rows])
+    skip_docs.record([_skip_row(keys[r["file"]], r["file"], r["reason"], man.get(r["file"])) for r in rows])
 
 
 def _stage_cmd(argv):
@@ -389,7 +398,7 @@ def _stage_cmd(argv):
     from pipeline.parse_steps import run_step
 
     ap = argparse.ArgumentParser(prog="pipeline.extract.candidate_ready stage")
-    ap.add_argument("--csv", required=True, help="문서 위치 표(id·s3_key·original_filename·file_size)")
+    ap.add_argument("--csv", required=True, help="문서 위치 표(id·s3_key·original_filename·file_size·source_system)")
     ap.add_argument("--out", required=True, help="문서 결과 폴더(_source_files·parse/_source·dedup이 여기에)")
     ap.add_argument("--prepared", required=True, help="파싱 입력 폴더(거르기를 지난 파일)")
     ap.add_argument("--no-scan-rotate", action="store_true", help="이미지 PDF는 방향 보정 안 함(스캔 문서 정책)")
@@ -405,20 +414,6 @@ def _stage_cmd(argv):
     )
     print(f"[source] stage: 파싱할 문서 {len(left)}건 → {only}", flush=True)
     return 0
-
-
-def _derive_source_from_key(key):
-    """s3_key prefix로 출처 시스템 판별 — OS 경로의 폴더명(SFDC-test/CRMS-test/las_test)을 그대로 사용."""
-    if not key:
-        return None
-    first = key.split("/")[0] if "/" in key else key
-    if first.startswith(("SFDC-", "SFDC_")):
-        return "SFDC-test"
-    if first.startswith(("CRMS-", "CRMS_")):
-        return "CRMS-test"
-    if first.startswith(("las_", "LAS_")):
-        return "las_test"
-    return None
 
 
 if __name__ == "__main__":

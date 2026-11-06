@@ -90,6 +90,7 @@ NOTE_COL = 46  # 칸 주석이 시작하는 열(값 자리와 주석을 떼어 �
 NOTES = {
     # required
     "common.run_env": "실행 환경 · local(PC)·dev(개발 서버)·prd(운영 서버)",
+    "pipeline.extract.source.systems": "파싱할 원천 목록(FileStorageMap.source_system, 대소문자 무관) · SFDC·CRMS·LAS·FAQ·Other·DEV-<1~99> · 예 [DEV-1] (null = 모든 원천)",
     "common.connections.pg.host": "PG 주소 · 예 127.0.0.1",
     "common.connections.pg.port": "PG 포트 · 예 55433",
     "common.connections.pg.db": "PG 데이터베이스 이름 · 예 rag",
@@ -265,6 +266,7 @@ NOTES = {
     "pipeline.connections.rdb.columns.filename": "원천 목록 열 이름 — 원래 파일 이름 · 예 original_filename",
     "pipeline.connections.rdb.columns.key": "원천 목록 열 이름 — Object Storage key · 예 s3_key",
     "pipeline.connections.rdb.columns.size": "원천 목록 열 이름 — 파일 크기 · 예 file_size",
+    "pipeline.connections.rdb.columns.source_system": "원천 목록 열 이름 — 원천 · 예 source_system",
     "pipeline.extract.engine_retry": "엔진 비정상 종료 재시도 횟수",
     "pipeline.extract.fill_merged": "병합 셀 채우기",
     "pipeline.extract.hidden_overlap_max": "숨은 겹침 쪽 VLM 후보 상한 · 0 = 끔",

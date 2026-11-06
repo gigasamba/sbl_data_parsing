@@ -106,8 +106,8 @@ def rep_md_key(prefix, source_system, source_key, parse_date):
     붙여 구분한다 — 정리가 필요 없는 흔한 경로(사용자가 읽는 대부분)는 그대로 둔다. 원본 키 자체가 이미 이
     해시 접미사 모양으로 끝나면(드물지만 가능) 그것도 해시를 붙여 "해시 붙은 키"와 "우연히 그렇게 생긴
     원본 키"가 서로 안 겹치게 한다. ponytail: 남는 이론상 충돌(sha1 10자 충돌)은 막지 않음.
-    원본 키 첫 마디가 이미 원천 이름이면(대소문자 무시 — PC 폴더 원천 `CRMS/<uuid>/<파일>` + source_system CRMS) 원천 이름을
-    한 번만 쓴다(`CRMS/CRMS/…` 아님). 첫 마디가 원천 이름이 아니면(서버 — source_system FileStorageMap) 앞에 붙인다."""
+    원천 = manifest의 source_system(FileStorageMap.source_system 또는 PC 맨 위 폴더 — op-17). 원본 키 첫 마디가 이미 그 원천
+    이름이면(대소문자 무시 — `CRMS/<uuid>/<파일>` + CRMS, `DEV-1/…` + dev-1) 한 번만 쓴다(`CRMS/CRMS/…` 아님), 아니면 앞에 붙인다."""
     key = str(source_key)
     raw_segs = [s for s in key.strip("/").split("/") if s not in ("", ".", "..")]
     head = [] if raw_segs[:-1] and raw_segs[0].lower() == str(source_system).lower() else [safe_filename(source_system, "")]

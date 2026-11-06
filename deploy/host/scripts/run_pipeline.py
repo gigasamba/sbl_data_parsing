@@ -536,8 +536,8 @@ def log(msg):
 def write_doc_csv(row, path):
     with path.open("w", newline="", encoding="utf-8-sig") as fp:
         w = csv.writer(fp)
-        w.writerow(["id", "s3_key", "original_filename", "file_size"])
-        w.writerow([row["id"], row["s3_key"], row["original_filename"], row["file_size"]])
+        w.writerow(["id", "s3_key", "original_filename", "file_size", "source_system"])  # 원천 = FileStorageMap.source_system(op-17)
+        w.writerow([row["id"], row["s3_key"], row["original_filename"], row["file_size"], row["source_system"]])
 
 
 def stage_one(seq, row):

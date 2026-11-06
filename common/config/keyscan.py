@@ -34,7 +34,7 @@ NAME_LIST = {
     "VLM_EXTRA_BODY": "common/ai/llm.py(_EXTRA_ENV_KEY 표)",
     **{
         f"RDB_COL_{f}": "pipeline/extract/candidate_pick.py(_rdb_cols — 설정 칸 tuning.extract.source_columns.source_column_*)"
-        for f in ("CONTENT_VERSION", "DOC_ID", "FILENAME", "KEY", "SIZE")
+        for f in ("CONTENT_VERSION", "DOC_ID", "FILENAME", "KEY", "SIZE", "SOURCE_SYSTEM")
     },
 }
 # YAML에 넣지 않는 이름 — env로 남김(라이브러리가 읽음) · 인자(빌드·반입·시험 스크립트). 코드가 읽지 않는 이름은 대조하지 않는다.

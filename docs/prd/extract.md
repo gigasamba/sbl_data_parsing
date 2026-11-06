@@ -12,12 +12,12 @@
 
 ### 규칙
 1. 파싱 입력(`--source`, 설정 `extract.source.source_input_location`)은 둘 중 하나여야 한다 — 폴더, 또는 `rdb:csv:<경로>`(문서 위치 표 CSV). 그 밖의 값이면 → 오류로 멈춘다.
-2. `rdb:csv`의 칸 이름은 설정 `tuning.extract.source_columns`가 정한다 — 기본 `source_column_doc_id`=`id`, `source_column_storage_key`=`s3_key`, `source_column_filename`=`original_filename`, `source_column_file_size`=`file_size`, `source_column_content_version`=`content_version_id`.
-3. 대상 목록은 컨테이너 안 `python -m pipeline.extract.candidate_pick list`가 FileStorageMap에서 고른다(파일 이름 키워드 `--filter`, 작은 파일부터 — 규칙은 [ops.md#pl-10](ops.md#pl-10)·[pl-23](ops.md#pl-23)). 서버 러너 `run_pipeline.py`는 그 목록 파일을 읽어 문서마다 `batch.csv`(한 줄)를 만든다. 끝난 문서(ParsingMeta)·영구 건너뜀(`skip_doc_info`)을 뺄 때는 FileStorageMap `s3_key`를 그대로 비교한다 — 그 두 표의 원본 키는 `s3://버킷/` 앞머리가 없는 키라, FileStorageMap `s3_key`도 앞머리 없이 적혀 있어야 빠진다(앞머리가 붙은 행은 받기는 되지만 매번 다시 고름).
+2. `rdb:csv`의 칸 이름은 설정 `tuning.extract.source_columns`가 정한다 — 기본 `source_column_doc_id`=`id`, `source_column_storage_key`=`s3_key`, `source_column_filename`=`original_filename`, `source_column_file_size`=`file_size`, `source_column_content_version`=`content_version_id`, `source_column_source_system`=`source_system`.
+3. 대상 목록은 컨테이너 안 `python -m pipeline.extract.candidate_pick list`가 FileStorageMap에서 고른다(파일 이름 키워드 `--filter`, 작은 파일부터 — 규칙은 [ops.md#pl-10](ops.md#pl-10)·[pl-23](ops.md#pl-23)). 설정 `required.source.source_systems`(원천 목록)가 있으면 `source_system` 칸이 그 값인 행만 고른다(대소문자 무관 — 목록에 `FAQ`가 없으면 FAQ 먼저·교체 확인도 하지 않음, 비우면 모든 행). PC `rdb:csv` 받기(`rdb_pick`)도 같은 목록으로 거르고, 목록 밖 행은 건너뜀으로 기록하지 않는다. 원천 값은 들어오는 자리에서 대문자로 바꾼다(`FAQ`·`DEV-1`). 목록 파일·`batch.csv`(칸 `source_system` — 이름은 `tuning.extract.source_columns.source_column_source_system`)·manifest는 그 행의 `source_system` 값을 그대로 넘긴다([load-schema.md#pl-28](load-schema.md#pl-28) 규칙 3). 서버 러너 `run_pipeline.py`는 그 목록 파일을 읽어 문서마다 `batch.csv`(한 줄)를 만든다. 끝난 문서(ParsingMeta)·영구 건너뜀(`skip_doc_info`)을 뺄 때는 FileStorageMap `s3_key`를 그대로 비교한다 — 그 두 표의 원본 키는 `s3://버킷/` 앞머리가 없는 키라, FileStorageMap `s3_key`도 앞머리 없이 적혀 있어야 빠진다(앞머리가 붙은 행은 받기는 되지만 매번 다시 고름).
 4. 받기는 staging 하나다: `python -m pipeline.extract.candidate_ready stage --csv <batch.csv> --out <문서 폴더> --prepared <준비 폴더>`가 원본을 `extract.source.source_staging_dir` 폴더(`<sha1(버킷|키)>.bin`)에 받고(받아 둔 판의 ETag가 지금과 같을 때만 다시 받지 않음), 문서 폴더 `_source_files/`에 하드 링크로 놓은 뒤 같은 단계에서 중복·거르기([pl-02](#pl-02))까지 해 파싱할 이름을 `parse/_source/only.txt`에 적는다. 파싱은 `pipeline.cli parse --staged`로 그 목록만 읽는다. staging 칸이 비었거나 받지 못한 문서는 멈춘다(따로 받는 길 없음). PC의 `pipeline.cli parse --source`도 같은 함수(`stage_batch`)를 부른다.
 
 ### QA
-- `tests/server/pipeline/test_candidate.py`(`test_stage_batch` 등) · `tests/server/pipeline/test_span_stages.py::test_staging_span_counts` · `tests/server/pipeline/test_rdb_discover.py`.
+- `tests/server/pipeline/test_candidate.py`(`test_stage_batch` 등) · `tests/server/pipeline/test_span_stages.py::test_staging_span_counts` · `tests/server/pipeline/test_rdb_discover.py` · `tests/server/pipeline/test_target_list.py`(원천 목록 거르기·시작 관문).
 - Status: done
 
 <a id="pl-02"></a>
@@ -49,7 +49,7 @@
 지원 안 하는 확장자·확장자 없음·DRM·암호 문서는 다시 받아도 파싱할 수 없다. 기록이 없으면 밤마다 같은 문서를 다시 받고 `--max-docs` 자리를 차지한다(사용자 11-05).
 
 ### 규칙
-1. 건너뛴 이유가 `unsupported_*`·`drm_*`·`encrypted_*`·`duplicate_sha256`(이번 실행의 다른 원본과 같은 내용 — [pl-59](#pl-59))이면 → `applog.skip_doc_info`에 원본 키(`source_key` — `s3_key`, 폴더 원천은 상대 경로·이름)당 한 행을 쓴다. 칸: `source_system`(키 첫 마디가 원천 이름일 때만)·`file_name`·`reason`(확장자 없는 이름의 지원 안 함은 `no_extension`)·`level`(`error`)·`first_seen`·`last_seen`·`count`. 같은 키가 다시 오면 `last_seen`·`count`·이유만 바꾼다(`pipeline/extract/skip_docs.py` `record`).
+1. 건너뛴 이유가 `unsupported_*`·`drm_*`·`encrypted_*`·`duplicate_sha256`(이번 실행의 다른 원본과 같은 내용 — [pl-59](#pl-59))이면 → `applog.skip_doc_info`에 원본 키(`source_key` — `s3_key`, 폴더 원천은 상대 경로·이름)당 한 행을 쓴다. 칸: `source_system`(그 행의 FileStorageMap `source_system` 값 — manifest에서)·`file_name`·`reason`(확장자 없는 이름의 지원 안 함은 `no_extension`)·`level`(`error`)·`first_seen`·`last_seen`·`count`. 같은 키가 다시 오면 `last_seen`·`count`·이유만 바꾼다(`pipeline/extract/skip_docs.py` `record`).
 2. 쓰는 곳은 세 곳이다 — 받기 전 `candidate_pick.rdb_pick`(`_record_source_skipped`), 받은 뒤 `candidate_ready.stage_batch`(`_record_filtered` — `filter_and_rotate`의 `prepared/_records/skipped.csv`), 같은 밤 중복 `candidate_ready._dedup`.
 3. 같은 묶음·끝난 문서와의 중복(`dup_batch`·`dup_done` — 게시가 `skipped_dup`로 씀)과 파싱 실패(다음 실행이 다시 시도)는 쓰지 않는다.
 4. `candidate_pick list --skip-done`은 ParsingMeta에 끝난 키와 함께 이 표의 키를 뺀다(`skipped_keys`). `--skip-done`이 없으면 빼지 않는다(사람이 다시 돌려 볼 때).
@@ -114,11 +114,11 @@ A: `, 절 `DS`. 5행 = `divider`만 → 건너뜀. 머리글 없는 시트 `memo
    - 이번 실행의 표지: 문서 폴더(`_docflow/<순번>`) 위의 `_seen_sha/<sha256>`(내용 = 먼저 받은 원본 키). 대상 목록(`candidate_pick list`)이 실행을 시작할 때 비우고, `stage`가 중복 제외에서 만든다(임시 파일을 `os.link`로 붙여 — 동시에 받는 둘 중 하나만 이김). 같은 원본 키면(받기 다시 시도) 중복이 아니다.
 2. staging 파일을 다시 쓸 때는 내용이 같을 때만이다 — Object Storage ETag(받은 판 옆 `<이름>.etag`)가 지금과 같아야 한다. 크기만 같거나 ETag가 없으면 다시 받는다.
 3. `pipeline/extract`는 `pipeline/transform`을 import하지 않는다. 지원 확장자 목록(엔진이 있는 확장자)은 `pipeline/shared`의 한 곳에서 읽는다.
-4. 원본 키 → 원천 이름(`SFDC`·`CRMS`·`LAS`·`FAQ`)은 함수 하나가 정한다. 게시·구조화·건너뜀 기록이 모두 그 함수를 쓴다.
+4. 원천 이름은 FileStorageMap `source_system` 칸 값 하나다(PC 폴더는 맨 위 폴더 이름 — [load-schema.md#pl-28](load-schema.md#pl-28) 규칙 3). 게시·구조화·건너뜀 기록이 모두 manifest로 넘어온 그 값을 쓰고, 원본 키에서 다시 구하지 않는다.
 
 ### 비고(지금 코드와 다른 점)
 - 러너 `run_pipeline.stage_one`은 앞 실행의 문서 폴더를 원본 키만 보고 다시 쓴다(`stage`를 부르지 않음 — ETag 비교 없음, 이번 실행 표지도 만들지 않아 같은 밤 같은 내용 문서가 뒤에 오면 둘 다 파싱). 원본을 지울 때 `.etag` 옆 파일은 남는다(`drop_original`이 `.bin`만 지움).
-- `candidate_pick._filter_unsupported_rows`·`filter_and_rotate`가 `transform.parse.engines.registry`를 import한다. 원천 규칙이 `candidate_pick.source_of`·`_known_source`, `candidate_ready._derive_source_from_key`, 구조화의 키 첫 마디 판정으로 여럿이다.
+- `candidate_pick._filter_unsupported_rows`·`filter_and_rotate`가 `transform.parse.engines.registry`를 import한다.
 
 ### QA
 - `tests/server/pipeline/test_stage_batch.py` `test_same_night_dup`(문서마다 stage 사례 표: 같은 밤 같은 내용 → `dup_run`·`skip_doc_info` `duplicate_sha256`, 같은 원본 다시 받기·다른 내용 → 남음, 1건 중복 제외는 `keep.txt`만) · `test_rdb_stage_once`(크기 같고 ETag 다름 → 다시 받음, 같은 ETag → 다시 씀, manifest 한 번·sha256 담음) · `test_skip_docs.py`(`list`가 표지 폴더를 비움).

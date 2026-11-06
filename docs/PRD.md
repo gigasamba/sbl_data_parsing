@@ -12,7 +12,7 @@
 ## 수집 (extract) — 서버에서 문서 목록을 정하고 받아 오기까지
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
 |---|---|---|---|---|
-| 문서 목록은 EDW 표 `AI.FileStorageMap`에서 읽는다(`id`·`s3_key`·`original_filename`·`file_size`) — 컨테이너 안 `candidate_pick list`(서버 러너 `run_pipeline.py`가 부름)가 파일 이름 키워드(`--filter`)로 거르고 작은 파일부터 | 목록의 기준은 EDW다. Object Storage를 직접 훑지 않는다 | done | [pl-01](prd/extract.md#pl-01) |  |
+| 문서 목록은 EDW 표 `AI.FileStorageMap`에서 읽는다(`id`·`s3_key`·`original_filename`·`file_size`·`source_system`) — 컨테이너 안 `candidate_pick list`(서버 러너 `run_pipeline.py`가 부름)가 원천 목록(`required.source.source_systems` — 비우면 모든 원천)과 파일 이름 키워드(`--filter`)로 거르고 작은 파일부터 | 목록의 기준은 EDW다. Object Storage를 직접 훑지 않는다 | done | [pl-01](prd/extract.md#pl-01) |  |
 | 새 문서만 고른다 — 목록에서 EDW `AI.ParsingMeta`에 끝난 행(`ok`·`partial`·`skipped_dup`)이 있는 원본 키(`s3_key`)를 뺀다. `pipeline/extract/candidate_pick.py` `done_keys` 하나가 EDW를 읽기 계정으로 한 번 읽음(서버는 `list --skip-done`, PC 직접 파싱은 `unparsed`) | 끝난 문서를 다시 파싱하지 않는다. `not_parsed`·실패·기록 없음(옛 값 `skipped_disk_cap` 행 포함 — 더 쓰지 않음)은 다시 고른다(사용자 11-01). 영구 건너뜀 문서도 뺀다([pl-58](prd/extract.md#pl-58)). 서버에서 EDW를 못 읽으면 시작하지 않는다(종료 4) | done | [pl-23](prd/ops.md#pl-23) |  |
 | 파일은 Object Storage 버킷에서 `s3_key`로 받는다. 파싱 입력은 폴더 또는 목록 파일(`rdb:csv:<경로>`) 둘뿐 | 길을 하나로 | done | [pl-01](prd/extract.md#pl-01) |  |
 | 미리 받기(staging) — `run_pipeline`이 파싱보다 앞서 문서를 최대 20개(`ops.run_pipeline.staging.staging_max_docs`)까지 컨테이너 안 `candidate_ready stage`로 받아 `_staging`에 둔다. 원본을 받는 길은 이것 하나 — 같은 단계에서 같은 내용 하나만·형식·DRM·암호 거르기까지 하고 파싱은 남은 문서만 읽는다 | 다운로드를 기다리느라 파싱 워커가 놀지 않게. 받기에 실패한 문서는 파싱 실패로 끝난다(따로 받는 길 없음) | done | [pl-01](prd/extract.md#pl-01) |  |
@@ -26,7 +26,7 @@
 | 원본 zip은 받은 뒤 풀어서 안의 문서를 파싱한다(`candidate_ready`) — 메일 첨부 zip과 같게(pl-36) | zip 안의 문서도 검색되어야 한다(사용자 11-05) | todo | [pl-57](prd/extract.md#pl-57) | 지금은 '지원하지 않음' 표시만(pl-02) |
 | FAQ 원천 — 질의응답 엑셀을 행 단위로(시트 = FAQ 묶음, 행 하나 = 청크 하나). `FAQ/<uuid>/<파일>`을 FileStorageMap에 등록 | 질의응답을 문서 통째가 아니라 질문 하나 단위로 찾는다 | done | [pl-39](prd/extract.md#pl-39) |  |
 | 같은 밤에 받은 같은 내용 문서는 하나만 파싱한다 — 문서마다 따로 받는(stage) 서버 흐름에서도 이번 실행이 이미 받은 sha256과 같으면 `skipped_dup` + `applog.skip_doc_info` `duplicate_sha256`(먼저 받은 원본 키는 `pipe_event` `dup_of`) · staging 재사용은 내용이 같을 때만(ETag) | 같은 파일을 두 번 파싱·적재하지 않는다. 크기만 같은 새 판을 옛 파일로 파싱하지 않는다 | dev | [pl-59](prd/extract.md#pl-59) | 러너 `stage_one`이 앞 실행 문서 폴더를 원본 키만 보고 다시 씀(ETag 비교·이번 실행 표지 없음) · 원본 삭제가 `.etag` 옆 파일을 남김 |
-| 고르기·받기(extract)는 변환(transform)을 import하지 않는다 — 지원 확장자 목록은 `pipeline/shared`에 · 원본 키 → 원천 이름 규칙은 함수 하나 | ETL 방향을 지킨다(rn-08). 원천 이름이 자리마다 다르면 게시·구조화·건너뜀 기록의 원천이 어긋난다 | todo | [pl-59](prd/extract.md#pl-59) | `candidate_pick`·`filter_and_rotate`가 `transform.parse.engines.registry`를 import. 원천 규칙이 `candidate_pick.source_of`·`_known_source`, `candidate_ready._derive_source_from_key`, 구조화의 키 첫 마디 판정으로 여럿 |
+| 고르기·받기(extract)는 변환(transform)을 import하지 않는다 — 지원 확장자 목록은 `pipeline/shared`에 · 원천 이름은 FileStorageMap `source_system` 값 하나 | ETL 방향을 지킨다(rn-08). 원천 이름이 자리마다 다르면 게시·구조화·건너뜀 기록의 원천이 어긋난다 | todo | [pl-59](prd/extract.md#pl-59) | `candidate_pick`·`filter_and_rotate`가 `transform.parse.engines.registry`를 import |
 
 ## 변환 (transform) — 파싱·대표 결과 고르기·그림·구조화
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -93,7 +93,7 @@
 | ParsingMeta에는 파싱 정보만(원천 키·상태·silver 위치·엔진·`gold_status`·`silver_version`·`gold_version`·`sha256`), 고객·분류 라벨 같은 파일 메타는 검색 DB `doc`에만 | 중복 적재를 없앤다. 운영이 더한 칸은 DB 담당자가 지운다 | dev | [pl-25](prd/load-schema.md#pl-25) |  |
 | 문서 키는 원본 경로 하나 — 검색 DB `doc.file_path` = Object Storage 원본 경로 = EDW `s3_key`(청크는 `doc_id`만), ParsingMeta와 이 값으로 잇는다 | sha256 `doc_key`는 검색 DB에 안 둔다(ParsingMeta `sha256`만) | dev | [pl-25](prd/load-schema.md#pl-25) |  |
 | 원천 시스템별 PG 스키마 5벌(`<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`), 각자 `doc`·`chunk`·BM25 표, `doc_id` 시퀀스는 기준 스키마 하나를 함께 | 원천마다 메타가 다르고 BM25 점수를 섞지 않는다. MCP `source_system` 필수(등급 A) | done | [pl-28](prd/load-schema.md#pl-28) |  |
-| 원천 = 원본 경로(`s3_key`) 첫 마디 — `SFDC`·`CRMS`·`LAS`·`FAQ`(대소문자 무관)이거나 `SFDC-`·`SFDC_`·`CRMS-`·`CRMS_`·`las_`·`LAS_`로 시작하면 그 원천, 아니면 `other`(`gold_bundle`). `faq` 스키마만 `chunk.faq_group` 칸 | `AI.FileStorageMap.source_system` 칸은 읽지 않는다 — 경로만으로 정함 | done | [pl-28](prd/load-schema.md#pl-28) |  |
+| 원천 = EDW `AI.FileStorageMap.source_system` 칸 값 하나 — 고르기·구조화·적재(`SFDC`·`CRMS`·`LAS`·`FAQ`, 그 밖은 `other`)·게시가 모두 그 값을 쓴다(목록 파일·manifest로 넘김, PC 폴더는 맨 위 폴더 이름). `faq` 스키마만 `chunk.faq_group` 칸 | 원본 경로에서 원천을 다시 구하지 않는다 — 원천 칸 하나로 정함 | done | [pl-28](prd/load-schema.md#pl-28) |  |
 | 게시는 EDW 키(`source_system`, `source_key`)가 이미 있는지 먼저 보고, 있으면 올리지 않는다(`--reparse` 목록만 예외) | Object Storage에 EDW 행 없는 고아 객체를 남기지 않는다 | done | [pl-61](prd/load.md#pl-61) |  |
 
 ## 검색 MCP (mcp) — AI 클라이언트가 부르는 도구 서버(이미지 `mcp-server`)
@@ -161,7 +161,7 @@
 | PC(`local`)는 가짜 대상만 — `dev.local`의 가짜 EDW·게시 폴더·원본 폴더·새 문서 상한을 쓰고, 서버 전용 칸(EDW·Object Storage·서버 게시 버킷)은 비우고 경고, 경로는 저장소 루트 기준 상대 경로 | PC 시험에 EDW·Object Storage·토큰·배포 값이 필요 없게. 사용자 11-04·11-05 | done | [op-14](prd/ops-settings.md#op-14) |  |
 | 한 서버에 여러 벌(개발자별) — 코드 폴더 이름 끝 `-<숫자>`(벌 번호)가 컨테이너·compose 묶음·타이머 이름 끝에 붙고, 포트는 벌마다 설정으로(스키마는 함께 씀) | 개발 서버에 개발자마다 컨테이너를 띄움. 사용자 11-04 | done | [op-15](prd/ops-settings.md#op-15) |  |
 | 네 이미지에 개발 도구(sshd·git·uv·ruff·mypy·pytest 등)와 opencode(선택)가 들어 있고, 개발 서버에서 `option.devbox.ssh_port`를 적으면 `data-pipeline`이 SSH 작업 공간(코드 폴더 쓰기 가능·홈 `<루트>/home`)으로 뜬다 — 비우면 지금과 같고, prd는 거부 | 개발 서버 컨테이너 안에서 바로 고치고 시험한다. opencode는 내부망 모델만. 사용자 11-05 | done | [op-16](prd/ops.md#op-16) |  |
-| 개발 서버 개인 시험 벌 — 벌 폴더 = 코드 폴더, 원천 `DEV-<숫자>`(dev만 — 원천 스키마를 설정에 따라 만듦), 파싱할 원천 목록은 settings.yaml 맨 위, 처리 기록은 pgvector `doc` 칸 + `applog.error_doc_info`(EDW `ParsingMeta`는 안 씀) | 개발자마다 자기 문서만 파싱·검색해 시험한다. 사용자 11-06 — 0.3.0 | todo | [op-17](prd/ops.md#op-17) | 규칙 1~5 반영(벌 폴더 = 코드 폴더, 벌 번호 = 폴더 이름, 데이터 이름 접미사 없음). 규칙 6~18 남음 — DEV 원천 없음, 처리 기록은 ParsingMeta |
+| 개발 서버 개인 시험 벌 — 벌 폴더 = 코드 폴더, 원천 `DEV-<숫자>`(dev만 — 원천 스키마를 설정에 따라 만듦), 파싱할 원천 목록은 settings.yaml 맨 위, 처리 기록은 pgvector `doc` 칸 + `applog.error_doc_info`(EDW `ParsingMeta`는 안 씀) | 개발자마다 자기 문서만 파싱·검색해 시험한다. 사용자 11-06 — 0.3.0 | todo | [op-17](prd/ops.md#op-17) | 규칙 1~5·8·9·17 반영(벌 폴더 = 코드 폴더, 벌 번호 = 폴더 이름, 데이터 이름 접미사 없음, 파싱할 원천 목록 `required.source.source_systems`, 원천 = FileStorageMap `source_system` 칸). 남은 규칙 6·7·10~16·18~21 — DEV 원천 스키마 없음(DEV 원천은 `other`로 적재), 처리 기록은 ParsingMeta |
 | 설정은 settings.yaml 하나 — `settings.sample.yaml`에 모든 키가 기본값과 함께(`python -m common.config.sample`로 생성) | — | done | [op-05](prd/ops-settings.md#op-05) |  |
 | 배치 — 맨 위 `required`(필수·비밀) → 역할 절 7개(환경마다 정하는 값) → `tuning`(거의 안 바꾸는 값 — 분류 제목, 11-04). 옛 배치·옛 자리·모르는 칸은 시작 거부(칸 이름만 알림 — rn-07) | sample과 실제 파일의 차이를 줄였다 | done | [op-08](prd/ops-settings.md#op-08) |  |
 | 설정 이관은 옛 배치 settings.yaml → 새 배치만 | 운영 서버는 0.1.0(settings.yaml 하나). 사용자 11-02 | done | [op-08](prd/ops-settings.md#op-08) |  |

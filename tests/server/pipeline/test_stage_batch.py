@@ -154,11 +154,12 @@ STAGING_ROUNDS = [("e1", b"aaaa", 1), ("e2", b"bbbb", 2), ("e2", b"bbbb", 2)]
 
 
 def test_rdb_stage_once():
-    """rdb:csv 문서 1건 — manifest는 한 번 쓰고 sha256(+ 해시한 파일 표지)을 담음 · 거르기(자식)는 다시 해시하지 않음 · staging은 ETag로만 다시 씀."""
+    """rdb:csv 문서 1건 — manifest는 한 번 쓰고 sha256(+ 해시한 파일 표지)·원천(batch.csv source_system 칸 그대로 — 키 첫 마디와 달라도, op-17)을
+    담음 · 거르기(자식)는 다시 해시하지 않음 · staging은 ETag로만 다시 씀."""
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         csv_f = root / "batch.csv"
-        csv_f.write_text("id,s3_key,original_filename,file_size\n1,SFDC/u1/a.txt,a.txt,4\n", encoding="utf-8")
+        csv_f.write_text("id,s3_key,original_filename,file_size,source_system\n1,SFDC/u1/a.txt,a.txt,4,dev-1\n", encoding="utf-8")
         s3 = _S3({})
         writes = []
         real_write = CR._write_manifest
@@ -177,4 +178,5 @@ def test_rdb_stage_once():
                 assert left == ["a.txt"] and s3.got == got, (i, left, s3.got)
                 (row,) = CR.jl(state / "manifest.jsonl")
                 assert row["sha256"] == sha(body) and row["sha256_stat"] == SRCSHA.stat_of(out / "_source_files" / "a.txt"), row
+                assert row["source_system"] == "DEV-1", row  # 들어오는 자리에서 대문자로
         assert len(writes) == len(STAGING_ROUNDS), writes  # 묶음마다 한 번

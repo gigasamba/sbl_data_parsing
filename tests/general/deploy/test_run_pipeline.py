@@ -370,10 +370,11 @@ def test_pg_count_sums_source_schemas():
 
 def test_stage_always_calls_stage(tmp_path):
     """미리 받기는 늘 컨테이너 stage를 부른다(ETag 확인·같은 밤 중복 표시는 stage 안 — 다시 받을지도 stage가 ETag로 정함).
-    앞 실행의 _docflow/<seq>는 어느 문서 것이든 지우고 새로 만든다(seq는 실행마다 바뀜)."""
+    앞 실행의 _docflow/<seq>는 어느 문서 것이든 지우고 새로 만든다(seq는 실행마다 바뀜). batch.csv는 목록 행의 원천(source_system) 칸을 그대로 든다(op-17)."""
+    import csv
     import json
 
-    row = {"id": "1", "s3_key": "SFDC/a/new.pdf", "original_filename": "new.pdf", "file_size": 3}
+    row = {"id": "1", "s3_key": "SFDC/a/new.pdf", "original_filename": "new.pdf", "file_size": 3, "source_system": "dev-1"}
     cases = [  # (폴더의 manifest 원본 키(None = 폴더 없음), .staged, staging 원본 있음, stage 종료 코드)
         ("SFDC/a/new.pdf", True, True, 0),  # 같은 문서를 받아 둔 폴더 — 그래도 stage(ETag 확인)
         ("SFDC/b/old.pdf", True, True, 0),  # seq가 밀려 다른 문서의 폴더
@@ -404,6 +405,8 @@ def test_stage_always_calls_stage(tmp_path):
         ):
             assert RD.stage_one(4, row) is (rc == 0), key
         assert not (d / "stale.txt").exists(), key  # 앞 실행 흔적은 지움
+        with (d / "batch.csv").open(encoding="utf-8-sig", newline="") as fp:
+            assert list(csv.DictReader(fp)) == [{k: str(v) for k, v in row.items()}], key
         assert (d / ".staged").exists() is (rc == 0), key
         staged_logs = [lg for c, lg in calls if "candidate_ready" in c]
         assert staged_logs == [d / "stage.log"], (key, calls)  # 늘 한 번 · 받기 기록은 문서 폴더마다

@@ -2,8 +2,8 @@
 """파싱 대상 고르기(받기 전) — 원천 목록(폴더 또는 rdb:csv 문서 위치 표)에서 이미 처리한 판·ParsingMeta에 끝난 문서·
 지원 안 하는 형식을 뺀다. 받기·미리 받기·끝 정리는 candidate_ready.
 
-열: 실 EDW `AI.FileStorageMap`의 다섯 열만 읽는다 — doc_id=id · key=s3_key · size=file_size ·
-filename=original_filename · content_version=content_version_id(열 이름이 다른 csv는 extract.connections.rdb.columns로 — 식별자 화이트리스트만).
+열: 실 EDW `AI.FileStorageMap`의 여섯 열만 읽는다 — doc_id=id · key=s3_key · size=file_size ·
+filename=original_filename · content_version=content_version_id · source_system=source_system(원천 — 고르기·구조화·적재·게시가 이 값 하나, op-17)(열 이름이 다른 csv는 extract.connections.rdb.columns로 — 식별자 화이트리스트만).
 버킷 — key가 `s3://버킷/…` 꼴이면 그 안의 버킷, 아니면 RDB_BUCKET.
 이미 처리됐는지는 (key, 증분값) 쌍으로(`_rdb_is_done` — 같은 s3_key의 새 판을 "이미 처리됨"으로 오판하지 않게). 증분값 = RDB_INCREMENT_COL 열(비우면 doc_id 열).
 문서 이름 — original_filename을 그대로(없으면 doc_id), 같은 이름이 여럿이면 doc_id 접두(`<doc_id>__<이름>`)로 구분.
@@ -35,7 +35,14 @@ def _rdb_cols():
     """RDB 표의 열 이름(실 EDW `AI.FileStorageMap` 기본값 — 설정 extract.connections.rdb.columns). 열 이름도 식별자이므로
     화이트리스트로 확인(독립 검토 BLOCK 3 — SQL 삽입)."""
     c = pc.cfg().connections.rdb.columns
-    cols = {"doc_id": c.doc_id, "key": c.key, "size": c.size, "filename": c.filename, "content_version": c.content_version}
+    cols = {
+        "doc_id": c.doc_id,
+        "key": c.key,
+        "size": c.size,
+        "filename": c.filename,
+        "content_version": c.content_version,
+        "source_system": c.source_system,
+    }
     bad = {k: v for k, v in cols.items() if v and not COL_ID_RE.match(v)}
     if bad:
         raise ValueError(f"[source] RDB_COL_* 값이 올바르지 않음(영문·숫자·_ 만) — {bad}")
@@ -139,11 +146,17 @@ def _rdb_rows(table):
                 "size": int(r[cols["size"]]) if r.get(cols["size"]) not in (None, "") else None,
                 "filename": r.get(cols["filename"]) or None,
                 "content_version": r.get(cols["content_version"]) or None,
+                "source_system": src_name(r.get(cols["source_system"])),  # 원천(FileStorageMap.source_system — 대문자)
                 "updated_at": _inc_value(r, inc_col),
                 "created_at": r.get("created_at") or None,  # 원천 등록 시각 — 표에 칸이 있을 때만
             }
         )
     return mapped
+
+
+def src_name(v):
+    """원천 칸 값 → 대문자 이름(들어오는 자리에서 한 번 — 뒤 단계는 'FAQ'·'DEV-1'만 봄), 비면 None."""
+    return (str(v).strip().upper() or None) if v is not None else None
 
 
 def _filter_unsupported_rows(rows, name_of):
@@ -174,7 +187,7 @@ def _record_source_skipped(state, skipped):
         skip_event(s["file"], s["reason"])
     skip_docs.record(
         [
-            {"source_key": s["row"]["key"], "source_system": source_of(s["row"]["key"]), "file_name": s["file"], "reason": s["reason"]}
+            {"source_key": s["row"]["key"], "source_system": s["row"]["source_system"], "file_name": s["file"], "reason": s["reason"]}
             for s in skipped
         ]
     )
@@ -191,13 +204,8 @@ def _hidden(p):
     return p.name.startswith(".") or p.name == "__MACOSX"
 
 
-def source_of(key):
-    """원본 키 → 원천 이름(첫 마디가 원천 이름일 때만, 아니면 None) — skip_doc_info.source_system."""
-    return _known_source(str(key).split("/", 1)[0]) if key else None
-
-
 def _known_source(seg):
-    """원본 키 첫 마디가 원천 이름(SFDC·CRMS·LAS·FAQ — 검색 스키마 원천 목록, other 빼고)이면 대문자 이름, 아니면 None."""
+    """PC 폴더 원천의 맨 위 폴더 이름이 원천 이름(SFDC·CRMS·LAS·FAQ — 검색 스키마 원천 목록, other 빼고)이면 대문자 이름, 아니면 None."""
     from common.store.db.models.search_tables import SOURCES
 
     return seg.upper() if seg.lower() in set(SOURCES) - {"other"} else None
@@ -297,9 +305,11 @@ def unparsed(names, out):
 
 def rdb_pick(table, state, limit=0, done=frozenset()):
     """문서 위치 표(csv:)에서 이번에 받을 행 → {문서 이름: 행}(받기 전 — 다운로드 없음). 처리 기록(processed.jsonl)에 있는 판·
-    ParsingMeta에 끝난 원본 키(done — done_keys())·압축·엔진 없는 확장자를 뺀다. 반환: (by_name, 이번에 뺀 행 수)."""
+    ParsingMeta에 끝난 원본 키(done — done_keys())·압축·엔진 없는 확장자를 뺀다. 원천 목록(extract.source.systems)이 있으면 그 원천 행만.
+    반환: (by_name, 이번에 뺀 행 수 — 원천 목록 밖 행은 세지 않음)."""
     seen = _load_done(state)
-    every = _rdb_rows(table)
+    systems = pc.cfg().extract.source.systems
+    every = [r for r in _rdb_rows(table) if not systems or r["source_system"] in systems]  # 원천 목록 밖 행은 고르지 않음(건너뜀 기록 없음)
     rows = [r for r in every if not _rdb_is_done(seen, r["key"], r["etag"], r["updated_at"]) and r["key"] not in done]
     name_of = _rdb_names(rows)  # original_filename(또는 doc_id) — 충돌하면 doc_id 접두로 구분
     rows, skipped = _filter_unsupported_rows(rows, name_of)  # 압축·엔진 없는 확장자는 받기 전에 걸러냄
@@ -315,21 +325,28 @@ def rdb_pick(table, state, limit=0, done=frozenset()):
 #  [--max-docs N] [--faq-seen <파일>] --out <목록 파일>` — EDW FileStorageMap 목록(파일 크기 오름차순, --filter가 없으면 모든 문서) →
 #  끝난 문서 빼기(--skip-done) →
 # FAQ 먼저(--faq-seen, --seqs·--limit 실행은 건너뜀) → 앞 --max-docs개. 목록 파일(JSON): {"total": 목록 행 수, "start": 시작 자리,
-# "docs": [{"seq", "id", "s3_key", "original_filename", "file_size"}, …]} — 처리 순서대로, seq = 목록 안 자리(FAQ 덧붙임 포함).
+# "docs": [{"seq", "id", "s3_key", "original_filename", "file_size", "source_system"}, …]} — 처리 순서대로, seq = 목록 안 자리(FAQ 덧붙임 포함).
+# 원천 목록(extract.source.systems — required.source.source_systems)이 있으면 그 원천 행만(UPPER(source_system) — 대소문자 무관).
 FSM_SQL = (
-    "SELECT id, s3_key, original_filename, file_size FROM AI.FileStorageMap WHERE ({cond}) AND file_size IS NOT NULL ORDER BY file_size ASC"
+    "SELECT id, s3_key, original_filename, file_size, source_system FROM AI.FileStorageMap "
+    "WHERE ({cond}){src} AND file_size IS NOT NULL ORDER BY file_size ASC"
 )
 FAQ_PREFIX = "FAQ/"
+DOC_COLS = ("id", "s3_key", "original_filename", "file_size", "source_system")  # 목록 파일 docs 칸
 
 
-def edw_rows(edw, keywords=(), faq=False):
-    """FileStorageMap 행(파일 크기 오름차순) — 이름 키워드(대소문자 무시, 하나라도 들면 — 없으면 모든 행) 또는 faq=True면 FAQ 전체."""
+def edw_rows(edw, keywords=(), faq=False, systems=()):
+    """FileStorageMap 행(파일 크기 오름차순) — 이름 키워드(대소문자 무시, 하나라도 들면 — 없으면 모든 행) 또는 faq=True면 FAQ 전체
+    (원천 칸 FAQ). systems(대문자 원천 목록)가 있으면 그 원천 행만. 원천 칸은 대문자로 바꿔 돌려준다."""
+    src = f" AND UPPER(source_system) IN ({', '.join('?' * len(systems))})" if systems else ""
     if faq:
-        return edw.q(FSM_SQL.format(cond="s3_key LIKE ?"), [FAQ_PREFIX + "%"])
-    if not keywords:
-        return edw.q(FSM_SQL.format(cond="1=1"), [])
-    cond = " OR ".join(["LOWER(original_filename) LIKE ?"] * len(keywords))
-    return edw.q(FSM_SQL.format(cond=cond), [f"%{k.lower()}%" for k in keywords])
+        cond, args = "UPPER(source_system) = ?", ["FAQ"]
+    elif not keywords:
+        cond, args = "1=1", []
+    else:
+        cond, args = " OR ".join(["LOWER(original_filename) LIKE ?"] * len(keywords)), [f"%{k.lower()}%" for k in keywords]
+    rows = edw.q(FSM_SQL.format(cond=cond, src=src), [*args, *systems])
+    return [{**r, "source_system": src_name(r["source_system"])} for r in rows]
 
 
 def faq_status():
@@ -405,11 +422,12 @@ def list_targets(keywords, start, limit=0, seqs=(), skip_done=False, max_docs=0,
     total = 키워드 목록 행 수. faq_seen(교체를 마친 FAQ 키 파일)을 주면 FAQ 먼저 — sync(reset) = faq_sync 자리."""
     from common.store import mssql
 
-    use_faq = faq_seen is not None and not (seqs or limit)
+    systems = pc.cfg().extract.source.systems or []
+    use_faq = faq_seen is not None and not (seqs or limit) and (not systems or "FAQ" in systems)  # FAQ를 고르지 않으면 교체 확인도 안 함
     edw = mssql.EdwReader()
     try:
-        rows = edw_rows(edw, keywords)
-        faq_rows = edw_rows(edw, faq=True) if use_faq else []
+        rows = edw_rows(edw, keywords, systems=systems)
+        faq_rows = edw_rows(edw, faq=True, systems=systems) if use_faq else []
     finally:
         edw.close()
     total = len(rows)
@@ -434,7 +452,7 @@ def list_targets(keywords, start, limit=0, seqs=(), skip_done=False, max_docs=0,
     if use_faq:
         order = faq_first(rows, order, faq_rows, faq_status(), Path(faq_seen), sync)
     elif faq_seen is not None:
-        print("FAQ 교체 확인(pl-41) 건너뜀 — --seqs·--limit 실행", flush=True)
+        print("FAQ 교체 확인(pl-41) 건너뜀 — --seqs·--limit 실행 또는 원천 목록에 FAQ 없음", flush=True)
     if max_docs and len(order) > max_docs:
         print(f"max-docs: {len(order)}건 중 앞 {max_docs}건만(나머지는 다음 실행)", flush=True)
         order = order[:max_docs]
@@ -465,7 +483,7 @@ def _list_cmd(argv):
     shutil.rmtree(out.parent / RUN_SEEN, ignore_errors=True)  # 새 실행 — 앞 실행이 받은 sha256 표지를 비움
     sync = lambda reset: faq_sync(reset, out.with_name("faq_sync.json"))  # 결과는 목록 파일 옆
     rows, order, start, total = list_targets(keywords, a.start_offset, a.limit, seqs, a.skip_done, a.max_docs, a.faq_seen, sync)
-    docs = [{"seq": s, **{k: rows[s][k] for k in ("id", "s3_key", "original_filename", "file_size")}} for s in order]
+    docs = [{"seq": s, **{k: rows[s][k] for k in DOC_COLS}} for s in order]
     out.write_text(json.dumps({"total": total, "start": start, "docs": docs}, ensure_ascii=False, default=str), encoding="utf-8")
     print(f"[list] 대상 {len(docs)}건 → {out}", flush=True)
     return 0

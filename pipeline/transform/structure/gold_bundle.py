@@ -408,8 +408,8 @@ def main(argv=None):
     n_fig_dropped = 0  # 빈 VLM 그림은 청크를 만들지 않음
 
     # EDW 파일 메타(고객·원천 칸·등록 시각)는 적재가 EDW 조인으로 채운다(edw_doc_meta)
-    # rdb:csv 배치 — prepared 파일명 → 원본 s3_key 매핑 (source.py가 남긴 manifest.jsonl)
-    _manifest_keys = {}
+    # 받기(candidate_ready)가 남긴 manifest.jsonl — 파일명 → 원본 s3_key · 원천(FileStorageMap.source_system 또는 PC 맨 위 폴더 — op-17)
+    _manifest_keys, _manifest_src = {}, {}
     _mf = Path(a.parse_dir) / "_source" / "manifest.jsonl"
     if _mf.exists():
         for line in _mf.read_text(encoding="utf-8").splitlines():
@@ -417,6 +417,8 @@ def main(argv=None):
                 r = json.loads(line)
                 if r.get("file_name") and r.get("key"):
                     _manifest_keys[r["file_name"]] = r["key"]
+                if r.get("file_name"):
+                    _manifest_src[r["file_name"]] = r.get("source_system")
     docs, chunks, n_sum, seen_sha = [], [], {"lead": 0}, {}
     progress = contextlib.ExitStack()  # 60초마다 run.progress(처리한 문서/전체)
     progress.enter_context(runtrace.Progress(total=len(reps), done=lambda: len(docs), unit="doc"))
@@ -447,17 +449,9 @@ def main(argv=None):
             _s3_key = _manifest_keys.get(doc) or _manifest_keys.get(Path(path).name)
         if not _s3_key:  # PC 폴더 원천 — 원천 폴더 기준 상대 경로(`SFDC/<uuid>/<이름>` — s3_key와 같은 모양)
             _s3_key = _rel_to_source(path)
-        _src_sys = None
-        _seg = _s3_key.split("/", 1)[0].upper() if _s3_key else ""
-        if _seg in ("SFDC", "CRMS", "LAS", "FAQ"):  # 원본 키 첫 마디 = 원천(스키마 고르기)
-            _src_sys = _seg
-        elif _s3_key:
-            if _s3_key.startswith(("SFDC-", "SFDC_")):
-                _src_sys = "SFDC"
-            elif _s3_key.startswith(("CRMS-", "CRMS_")):
-                _src_sys = "CRMS"
-            elif _s3_key.startswith(("las_", "LAS_")):
-                _src_sys = "LAS"
+        _src_sys = _manifest_src.get(doc) or _manifest_src.get(
+            Path(path).name
+        )  # 원천 = manifest 값(키에서 구하지 않음 — 없으면 적재가 other)
         # pgvector doc에는 검색에 필요한 최소만(EDW 식별 + clients + summary).
         # clients는 main의 infer_clients(docs)가 이후에 채움. file_name은 file_path에서 유도.
         docs.append(

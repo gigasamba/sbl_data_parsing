@@ -250,7 +250,7 @@ def test_folder_tree():
     for n, r in man.items():
         assert (local / n).read_text(encoding="utf-8") == r["key"], r  # 복사본 = 그 키의 원본
         assert r["uri"] == (src / r["key"]).resolve().as_uri(), r
-        assert r["source_system"] == r["key"].split("/", 1)[0], r  # SFDC·CRMS(키 첫 마디)
+        assert r["source_system"] == r["key"].split("/", 1)[0], r  # SFDC·CRMS(맨 위 폴더 이름 — op-17)
     flat = root / "flat"
     flat.mkdir()
     (flat / "c.txt").write_text("c", encoding="utf-8")
