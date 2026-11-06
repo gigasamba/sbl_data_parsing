@@ -171,7 +171,7 @@ grep -E 'doc#[0-9]+ (파싱|publish|구조화\+적재) FAIL' <작업 폴더>/bat
 - 칸 설명은 `docs/architecture/db_schema.md` §4. UTF-8로 저장(Excel이면 "CSV UTF-8" — cp949도 읽힘). 머리글이 다르면 `master load`가 거부한다.
 
 #### `glossary.csv` 꼴
-머리글 `kind,canonical,variant,variant_kind,description,context_required,case_sensitive`. 한 줄 = 값 하나 — 같은 `kind`·`canonical`(원본 값) 줄이 한 고객·용어·ID 종류다. 값이 하나뿐인 종류(`client_id`·`status` 등)를 한 고객·용어에 두 줄 쓰면, 또는 모르는 `kind`·`variant_kind`를 쓰면 `master load`가 표를 바꾸지 않고 거부한다.
+머리글 `kind,canonical,variant,variant_kind,description,context_required,case_sensitive`. 한 줄 = 값 하나 — 고객·용어·ID 꼴 하나는 머리 줄(`client_id`·`concept_id`·`regex`)에서 시작하고, 바로 뒤따르는 같은 `kind`·`canonical` 줄이 거기에 붙는다(이름이 같은 고객 둘·이름이 빈 고객도 따로, ID 꼴은 `regex` 줄마다 하나 — `example`·`updated`는 그 앞 `regex` 줄 것). 머리 줄 없이 나온 줄, 값이 하나뿐인 종류(`status` 등)를 한 고객·용어에 두 줄 쓰면, 또는 모르는 `kind`·`variant_kind`를 쓰면 `master load`가 표를 바꾸지 않고 거부한다.
 
 ```csv
 kind,canonical,variant,variant_kind,description,context_required,case_sensitive
@@ -183,7 +183,7 @@ term,Contract Manufacturing Organization,CMO,abbr,,,
 id,contract_no,"C-[A-Z]{2,4}-\d{4}-\d{2}",regex,합성 데이터 형식,,
 ```
 
-**고객(`client`)** — `canonical` = 정식 이름(없으면 한글 이름).
+**고객(`client`)** — `canonical` = 정식 이름(비우면 `name_ko`가 이름). 첫 줄은 `client_id`(번호가 없어도 빈 값으로 둔다).
 
 | `variant_kind` | 쓰는 법 |
 |---|---|
@@ -196,7 +196,7 @@ id,contract_no,"C-[A-Z]{2,4}-\d{4}-\d{2}",regex,합성 데이터 형식,,
 
 - 영문 3자 이하 별칭(예 `PFE`)은 오탐 때문에 무시된다 — 4자 이상이나 한글로. 같은 별칭을 두 고객에 쓰지 않는다.
 
-**용어(`term`)** — `canonical` = 표준 이름(필수).
+**용어(`term`)** — `canonical` = 표준 이름(필수). 첫 줄은 `concept_id`.
 
 | `variant_kind` | 쓰는 법 |
 |---|---|
@@ -208,7 +208,7 @@ id,contract_no,"C-[A-Z]{2,4}-\d{4}-\d{2}",regex,합성 데이터 형식,,
 | `definition_en`·`source`·`owner`·`updated` | 빼도 됨 |
 | `status` | 없으면 반영 · 빼려면 `draft`·`rejected` |
 
-**ID 꼴(`id`)** — `canonical` = 종류(`contract_no`·`product_code` 등). `regex` 줄 하나 = 정규식 하나(대소문자 무시, `description`에 메모), `example`·`updated`는 참고용. 줄 순서가 검색 동점 처리 순서다.
+**ID 꼴(`id`)** — `canonical` = 종류(`contract_no`·`product_code` 등). `regex` 줄 하나 = 정규식 하나(대소문자 무시, `description`에 메모), 바로 뒤 `example`·`updated`는 그 꼴의 참고용. `regex` 줄 순서가 검색 동점 처리 순서다.
 
 - 오류(조용히 넘기지 않음): 명시한 `concept_id` 중복 · 없는 ID를 가리키는 `broader`/`related` · 깨진 정규식.
 - 초안 도구 `python -m pipeline.transform.structure.glossary_suggest`·`gen_roster --kind product`·`python -m pipeline.transform.structure.draft_terms --bundle <묶음>`은 `output/` 아래 초안(용어 사전 옛 칸 꼴 — 한 줄 = 개념 하나)만 만든다 — 사람이 확인해 `glossary.csv`의 `term` 줄로 옮긴다.
@@ -226,7 +226,7 @@ $DOCKER exec data-pipeline python -m pipeline.transform.structure.roster_from_ed
 `--out` 파일이 이미 있으면 고객 줄만 바꾸고 용어·ID 꼴 줄은 그대로 둔다(glossary 꼴이 아닌 파일이면 거부). 먼저 파일을 복사해 두고 바뀐 줄을 비교한 뒤 반영한다.
 
 #### 옛 CSV를 `glossary.csv`로 옮기기
-옛 판의 `client_roster.csv`·`domain_terms.csv`·`id_patterns.csv`가 있는 폴더를 한 번에 옮긴다(같은 대응 — 없는 파일은 건너뜀, 만들 파일이 이미 있으면 거부):
+옛 판의 `client_roster.csv`·`domain_terms.csv`·`id_patterns.csv`가 있는 폴더를 한 번에 옮긴다(같은 대응 — 없는 파일은 건너뜀. 만들 파일이 이미 있거나, 머리글이 옛 꼴과 다르거나(없는·모르는 칸), 머리글보다 칸이 많은 줄이 있으면 아무것도 쓰지 않고 거부):
 ```bash
 $DOCKER exec data-pipeline python -m common.store.master convert --src /app/output/glossary --out /app/output/glossary/glossary.csv
 ```

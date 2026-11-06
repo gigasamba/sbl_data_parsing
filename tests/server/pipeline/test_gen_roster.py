@@ -58,6 +58,11 @@ def selftest():
     except SystemExit:
         pass
     assert check_roster(out)[0] == [] and check_roster(out)[2] == 2  # --check는 glossary.csv도 읽음
+    wide = d / "wide.csv"  # Excel이 붙인 빈 열 — 그래도 glossary로 읽고, 'kind'·'client'를 고객 이름으로 읽지 않음
+    lines = out.read_text(encoding="utf-8").splitlines()
+    wide.write_text("\n".join([lines[0] + ",,", *lines[1:]]) + "\n", encoding="utf-8")
+    errs, _, n = check_roster(wide)
+    assert errs == [] and n == 2, (errs, n)
 
     # E15 — --check: cp949(한국어 Excel) 읽힘·짧은 영문 별칭 무시·별칭 충돌·같은 이름 여러 줄 경고, 빈 명부는 오류
     chk = d / "sfdc_export.csv"

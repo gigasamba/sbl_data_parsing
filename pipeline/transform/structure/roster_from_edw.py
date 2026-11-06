@@ -113,10 +113,8 @@ def write_client_roster(roster, out_path, extra=None, source=""):
 
 def _client_rows(path):
     """명부 파일 → ([(정식 이름, [별칭…])], 인코딩) — glossary.csv(고객 줄)와 옛 명부 꼴(SFDC 내보내기 등) 둘 다."""
-    txt, enc = T._read_text(path)
-    head = tuple(h.strip() for h in next(csv.reader(txt.splitlines()[:1]), []))
-    if head == M.COLS:
-        return T._roster_dicts(M.to_tables(M.read_csv(path))["client_roster"]), enc
+    if M.is_glossary(path):  # 첫 칸 kind — 옛 꼴로 읽으면 'kind'·'client'가 고객 이름이 됨. 머리글이 어긋나면 read_csv가 거부
+        return T._roster_dicts(M.to_tables(M.read_csv(path))["client_roster"]), T._read_text(path)[1]
     return T._roster_rows(path)
 
 

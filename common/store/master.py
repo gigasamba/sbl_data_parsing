@@ -31,7 +31,7 @@ SHAPES = {
     ),
     "id_patterns": ("id_type", "regex", "example", "note", "updated"),
 }  # fmt: skip
-# 구분 → (옛 표, 원본 값이 가는 칸, 설명을 가진 유사 종류, 설명이 가는 칸, {유사 종류: 옛 칸})
+# 구분 → (옛 표, 원본 값이 가는 칸, 머리 줄 유사 종류(설명을 가짐 — 한 고객·용어·ID 꼴의 시작), 설명이 가는 칸, {유사 종류: 옛 칸})
 KINDS = {
     "client": ("client_roster", "canonical_name", "client_id", "description", {
         "client_id": "client_id", "name_ko": "name_ko", "alias": "aliases", "client_type": "client_type", "segment": "segment",
@@ -44,42 +44,42 @@ KINDS = {
     }),
     "id": ("id_patterns", "id_type", "regex", "note", {"regex": "regex", "example": "example", "updated": "updated"}),
 }  # fmt: skip
-# 여러 줄 → 옛 칸 `|` 목록(id의 regex는 줄마다 한 행)
-LISTS = {"alias", "category", "synonym", "abbr", "weak", "broader", "related", "regex"}
+LISTS = {"alias", "category", "synonym", "abbr", "weak", "broader", "related"}  # 여러 줄 → 옛 칸 `|` 목록
 FLAGS = ("context_required", "case_sensitive")  # 용어(term)만 — 그 용어의 줄 어디에 적어도 됨(변환본은 concept_id 줄)
 
 
 def to_tables(rows):
-    """glossary 행 → {옛 표: [행 사전…]}(원본 값 처음 나온 순서, 빈 칸은 ''). 모르는 구분·유사 종류, 한 값 종류가 두 줄이면 SystemExit."""
-    groups: dict = {}
+    """glossary 행 → {옛 표: [행 사전…]}(파일 순서, 빈 칸은 ''). 고객·용어·ID 꼴 하나는 머리 줄(client_id·concept_id·regex)에서 시작하고
+    바로 뒤따르는 같은 구분·원본 값 줄이 거기에 붙는다 — 이름이 같은 고객 둘·이름 없는 용어도 따로, ID 꼴은 regex 줄마다 하나(그 줄 순서).
+    SystemExit: 모르는 구분·유사 종류 · 머리 줄 없이 나온 줄 · 값이 하나인 종류가 한 묶음에 두 줄."""
+    groups, cur = [], {}  # cur: 구분 → 지금 묶음 (첫 줄 번호, 원본 값, [줄…])
     for i, r in enumerate(rows, 1):
         kind, vk = r["kind"], r["variant_kind"]
         if kind not in KINDS or vk not in KINDS[kind][4]:
             raise SystemExit(f"[master] glossary {i}번째 줄: 모르는 구분·유사 종류 {kind!r}·{vk!r}")
-        groups.setdefault((kind, r["canonical"]), []).append(r)
+        head = KINDS[kind][2]
+        if vk == head:
+            cur[kind] = (i, r["canonical"], [])
+            groups.append((kind, cur[kind]))
+        elif kind not in cur or cur[kind][1] != r["canonical"]:
+            raise SystemExit(f"[master] glossary {i}번째 줄: {kind} {r['canonical']!r} 앞에 {head} 줄이 없음(머리 줄 바로 뒤에 적음)")
+        cur[kind][2].append(r)
     out: dict = {t: [] for t in SHAPES}
-    for (kind, canon), rs in groups.items():
+    for kind, (i, canon, rs) in groups:
         table, name_col, head, desc_col, cols = KINDS[kind]
         row = dict.fromkeys(SHAPES[table], "")
-        row[name_col] = canon
+        row[name_col], row[desc_col] = canon, rs[0]["description"]
         vals: dict = {}
         for r in rs:
             if r["variant"] or r["variant_kind"] not in LISTS:
                 vals.setdefault(r["variant_kind"], []).append(r["variant"])
-            if r["variant_kind"] == head and r["description"]:
-                row[desc_col] = r["description"]
             for f in FLAGS if kind == "term" else ():
                 row[f] = row[f] or r[f]
         for vk, vs in vals.items():
             if vk not in LISTS and len(vs) > 1:
-                raise SystemExit(f"[master] glossary {kind} {canon!r}: {vk} 줄이 둘 이상")
+                raise SystemExit(f"[master] glossary {i}번째 줄부터 {kind} {canon!r}: {vk} 줄이 둘 이상")
             row[cols[vk]] = "|".join(vs)
-        if kind == "id":  # 정규식 줄마다 한 행(설명 = 그 줄 메모)
-            out[table] += [
-                {**row, "regex": r["variant"], "note": r["description"]} for r in rs if r["variant_kind"] == "regex" and r["variant"]
-            ]
-        else:
-            out[table].append(row)
+        out[table].append(row)
     return out
 
 
@@ -113,20 +113,45 @@ def read_csv(folder=GLOSSARY):
 
     path = Path(folder) / CSV_NAME if Path(folder).is_dir() else Path(folder)  # 폴더(glossary.csv) 또는 파일 경로
     rows = list(csv.reader(_read_text(path)[0].splitlines()))
-    head = tuple(h.strip() for h in rows[0])
+    head = _head(rows[0] if rows else [])
     if head != COLS:
         raise SystemExit(f"[master] {path.name} 머리글이 표와 다름 — 칸을 바꾸려면 새 Alembic 판(master): {head}")
-    return [dict(zip(COLS, [*r, *[""] * len(COLS)][: len(COLS)])) for r in rows[1:] if r]
+    out = []
+    for n, r in enumerate(rows[1:], 2):
+        if not any(c.strip() for c in r):  # 빈 줄·Excel 끝 줄(',,,,,,')
+            continue
+        if any(c.strip() for c in r[len(COLS) :]):
+            raise SystemExit(f"[master] {path.name} {n}번째 줄: 칸이 머리글보다 많음(따옴표 없는 쉼표?)")
+        out.append(dict(zip(COLS, [*r, *[""] * len(COLS)][: len(COLS)])))
+    return out
+
+
+def _head(cells):
+    """머리글 칸(앞뒤 공백·끝의 빈 칸 뺌 — Excel이 붙이는 빈 열)."""
+    head = [h.strip() for h in cells]
+    while head and not head[-1]:
+        head.pop()
+    return tuple(head)
+
+
+def is_glossary(path):
+    """CSV 머리글이 glossary 꼴인지(첫 칸이 `kind`) — 명부 점검·초안 도구가 옛 꼴과 가를 때."""
+    import csv
+
+    from common.core.terms import _read_text
+
+    first = _read_text(path)[0].splitlines()[:1]
+    return _head(next(csv.reader(first), []))[:1] == ("kind",)
 
 
 def melt(tables):
-    """옛 행 모양 {옛 표: [행 사전…]} → glossary 행(to_tables의 반대 — 같은 대응). 원본 값 = 정식 이름(고객은 비면 한글 이름)·표준 이름·ID 종류.
-    목록 칸은 `|`(고객 별칭은 `;`도)로 나눠 한 줄씩, 빈 값은 줄을 만들지 않는다. 설명을 가진 종류(head) 줄은 늘 만든다(ID의 정규식은 나누지 않음)."""
+    """옛 행 모양 {옛 표: [행 사전…]} → glossary 행(to_tables의 반대 — 같은 대응). 원본 값 = 정식 이름·표준 이름·ID 종류(빈 값도 그대로).
+    목록 칸은 `|`(고객 별칭은 `;`도)로 나눠 한 줄씩, 빈 값은 줄을 만들지 않는다. 머리 줄(client_id·concept_id·regex)은 옛 행마다 늘 맨 앞에 만든다(ID의 정규식은 나누지 않음)."""
     out = []
     for kind, (table, name_col, head, desc_col, cols) in KINDS.items():
         for r in tables.get(table, []):
             r = {k: (v or "") for k, v in r.items() if k is not None}
-            canon = r.get(name_col, "") or (r.get("name_ko", "") if kind == "client" else "")
+            canon = r.get(name_col, "")
             flags = [r.get(f, "") for f in FLAGS] if kind == "term" else ["", ""]
             out.append(dict(zip(COLS, (kind, canon, r.get(cols[head], ""), head, r.get(desc_col, ""), *flags))))
             for vk, col in cols.items():
@@ -163,7 +188,22 @@ def convert(src, out):
     have = {n: src / f"{n}.csv" for n in SHAPES if (src / f"{n}.csv").is_file()}
     if not have:
         raise SystemExit(f"[master] {src}에 옛 마스터 CSV(client_roster·domain_terms·id_patterns)가 없음")
-    rows = melt({n: list(csv.DictReader(_read_text(f)[0].splitlines())) for n, f in have.items()})
+    tables = {}
+    for n, f in have.items():
+        lines = list(csv.reader(_read_text(f)[0].splitlines()))
+        head = _head(lines[0] if lines else [])
+        if set(head) != set(SHAPES[n]) or len(head) != len(SHAPES[n]):
+            missing, extra = sorted(set(SHAPES[n]) - set(head)), sorted(set(head) - set(SHAPES[n]))
+            raise SystemExit(f"[master] {f.name} 머리글이 옛 꼴과 다름 — 없는 칸 {missing} · 모르는(또는 겹친) 칸 {extra or list(head)}")
+        rows = []
+        for k, r in enumerate(lines[1:], 2):
+            if not any(c.strip() for c in r):
+                continue
+            if any(c.strip() for c in r[len(head) :]):
+                raise SystemExit(f"[master] {f.name} {k}번째 줄: 칸이 머리글보다 많음(따옴표 없는 쉼표?)")
+            rows.append(dict(zip(head, [*r, *[""] * len(head)])))
+        tables[n] = rows
+    rows = melt(tables)
     to_tables(rows)
     write_csv(rows, out)
     return len(rows)
@@ -179,8 +219,7 @@ def load(db, rows=None):
     with db.cn.transaction():
         cur = db.cn.cursor()
         cur.execute(f"DELETE FROM {s}.{TABLE}")
-        for i, r in enumerate(rows, 1):
-            cur.execute(sql, (i, *(r.get(c) or "" for c in COLS)))
+        cur.executemany(sql, [(i, *(r.get(c) or "" for c in COLS)) for i, r in enumerate(rows, 1)])
     return content_hash(rows)
 
 

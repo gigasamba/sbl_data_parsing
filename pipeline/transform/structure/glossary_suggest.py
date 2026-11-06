@@ -3,7 +3,7 @@
 후보를 draft CSV로 적는다. **검색에 쓰이지 않는다** — 사람이 검토해 glossary.csv로 옮겨야 반영됨(status=draft만).
 
 사용: python -m pipeline.transform.structure.glossary_suggest --chunks <chunks.jsonl> [--out output/glossary/domain_terms_draft.csv]
-      [--glossary-dir <domain_terms.csv가 있는 폴더>]
+      [--glossary-dir <glossary.csv가 있는 폴더>]
 """
 
 import common  # noqa: F401 — 설정 파일 검사(settings.pin_env)를 첫 줄에서
@@ -49,8 +49,21 @@ def _records(chunks_path):
             yield c.get("chunk_text", ""), loc
 
 
+def _glossary(folder):
+    """기준 사전(approved) — None = 마스터 표, 폴더 = 그 폴더 glossary.csv(마스터와 같은 길: read_csv → 옛 행 모양).
+    옛 domain_terms.csv만 있는 폴더는 거부(낡은 사전을 조용히 읽지 않음 — `python -m common.store.master convert`로 옮김)."""
+    if folder is None:
+        return load_glossary()
+    from common.core.terms import _master_glossary
+    from common.store import master as M
+
+    if not (Path(folder) / M.CSV_NAME).is_file():
+        raise SystemExit(f"[glossary_suggest] {folder}에 {M.CSV_NAME} 없음 — 옛 CSV면 `python -m common.store.master convert`로 옮김")
+    return dict(_master_glossary(M.Master(M.read_csv(Path(folder)))))
+
+
 def build_rows(chunks_path, glossary_dir):
-    glossary = {} if glossary_dir == "" else load_glossary(glossary_dir)  # None = 마스터 표
+    glossary = {} if glossary_dir == "" else _glossary(glossary_dir)
     candidates = scan_definitions(_records(chunks_path))
     new = filter_definitions(candidates, glossary=glossary)
     today = datetime.date.today().isoformat()
@@ -85,7 +98,7 @@ def build_cli():
     ap.add_argument("--out", default="output/glossary/domain_terms_draft.csv")
     ap.add_argument(
         "--glossary-dir",
-        help="이미 있는 짝을 거를 기준 사전(approved만) — 기본 마스터 표, 폴더면 그 폴더 domain_terms.csv, 빈 문자열이면 안 거름",
+        help="이미 있는 짝을 거를 기준 사전(approved만) — 기본 마스터 표, 폴더면 그 폴더 glossary.csv, 빈 문자열이면 안 거름",
     )
     return ap
 

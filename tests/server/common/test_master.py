@@ -78,10 +78,13 @@ OLD = {
         {"client_id": "C1", "canonical_name": "Argen Biopharma", "name_ko": "아르젠", "aliases": "Argen|ARG", "status": "active",
          "description": "샘플", "country": "US", "parent_client_id": "C0"},
         {"client_id": "C2", "canonical_name": "Old Bio", "aliases": "올드", "status": "inactive"},
+        {"client_id": "C3", "canonical_name": "Argen Biopharma", "aliases": "Argen US"},  # 같은 이름 둘째 고객 — 따로 남음
+        {"client_id": "C4", "name_ko": "그린셀"},  # 정식 이름 빈칸 — 빈칸 그대로
     ],
     "id_patterns": [
         {"id_type": "contract_no", "regex": r"C-[A-Z]{2,4}-\d{4}", "example": "C-AB-2024", "note": "합성", "updated": "2026-10-02"},
         {"id_type": "lot_no", "regex": r"LOT-\d{4}"},
+        {"id_type": "contract_no", "regex": r"CT-\d{4}", "example": "CT-2026"},  # 같은 종류 둘째 꼴 — 자기 예시·파일 순서 그대로
     ],
 }  # fmt: skip
 MELT = [
@@ -120,6 +123,12 @@ MELT = [
     ("term", "Draft Term", "D.1", "concept_id", "", "", ""),
     ("term", "Draft Term", "draft", "status", "", "", ""),
     ("id", "lot_no", r"LOT-\d{4}", "regex", "", "", ""),
+    ("client", "Argen Biopharma", "C3", "client_id", "", "", ""),
+    ("client", "Argen Biopharma", "Argen US", "alias", "", "", ""),
+    ("client", "", "C4", "client_id", "", "", ""),
+    ("client", "", "그린셀", "name_ko", "", "", ""),
+    ("id", "contract_no", r"CT-\d{4}", "regex", "", "", ""),
+    ("id", "contract_no", "CT-2026", "example", "", "", ""),
 ]
 
 
@@ -150,10 +159,16 @@ def test_glossary_same_as_old_csv():
                 old[r["canonical"]] = sorted(set(old.get(r["canonical"], [])) | set(al))
         got = T._aliases()
         assert {c: got[c] for c in old} == old and "Old Bio" not in got, got
-    bad = [  # 거부: 모르는 구분 · 모르는 유사 종류 · 한 값 종류가 두 줄
+    bad = [  # 거부: 모르는 구분 · 모르는 유사 종류 · 머리 줄 없는 줄 · 다른 원본 값 줄 · 한 값 종류가 두 줄
         [("unit", "g/L", "g/l", "variant", "", "", "")],
-        [("term", "X", "x", "synonyms", "", "", "")],
-        [("term", "X", "A", "concept_id", "", "", ""), ("term", "X", "B", "concept_id", "", "", "")],
+        [("term", "X", "A", "concept_id", "", "", ""), ("term", "X", "x", "synonyms", "", "", "")],
+        [("term", "X", "x", "synonym", "", "", "")],
+        [("term", "X", "A", "concept_id", "", "", ""), ("term", "Y", "y", "synonym", "", "", "")],
+        [
+            ("term", "X", "A", "concept_id", "", "", ""),
+            ("term", "X", "approved", "status", "", "", ""),
+            ("term", "X", "draft", "status", "", "", ""),
+        ],
     ]
     for rows in bad:
         try:
@@ -173,11 +188,46 @@ def test_convert_old_csv():
     tables = M.to_tables(M.read_csv(out))
     for name, cols in M.SHAPES.items():
         assert tables[name] == [{c: r.get(c, "") for c in cols} for r in OLD[name]], name
-    try:
-        M.convert(d, out)
-        raise AssertionError("있는 파일을 덮음")
-    except SystemExit:
-        pass
+    for f, text in (  # 거부: 있는 파일 덮기 · 모르는 칸 · 없는 칸 · 머리글보다 많은 칸(데이터를 조용히 버리지 않음)
+        (None, None),
+        ("id_patterns.csv", "id_type,regex,example,note,updated,owner\n"),
+        ("id_patterns.csv", "id_type,regex\n"),
+        ("id_patterns.csv", "id_type,regex,example,note,updated\nx,X-1,,,,extra\n"),
+    ):
+        e = d / "e"
+        shutil.rmtree(e, ignore_errors=True)
+        shutil.copytree(d, e, ignore=shutil.ignore_patterns("glossary.csv"))
+        if f:
+            (e / f).write_text(text, encoding="utf-8")
+        try:
+            M.convert(e, out if f is None else e / "glossary.csv")
+            raise AssertionError(f"거부 안 함: {f} {text!r}")
+        except SystemExit:
+            pass
+    # Excel 꼴 — 머리글 끝 빈 칸·빈 줄(',,,,,,')은 건너뜀
+    p = d / "x.csv"
+    p.write_text(",".join(COLS) + ",\nid,a,A-1,regex,,,\n,,,,,,\n\n", encoding="utf-8")
+    assert M.read_csv(p) == [dict(zip(COLS, ("id", "a", "A-1", "regex", "", "", "")))] and M.is_glossary(p)
+
+
+# 실제 데이터 지킴(op-17): c058d85f의 옛 CSV를 그대로 읽은 terms 출력 — (개수, 정렬 JSON sha256 앞 16자). glossary.csv나 대응을 바꿔
+# 값이 달라지면 실패한다(뜻이 바뀐 것인지 확인한 뒤 고친다 — 내용을 일부러 바꿨으면 새 값으로).
+SNAPSHOT = {"glossary": (124, "3dbb30fb6fc80917"), "ids": (9, "169ef6b5644a8855"), "aliases": (14, "4ce43c04c489be57")}
+
+
+def test_real_glossary_snapshot():
+    import hashlib
+    import json
+
+    def dig(o):
+        return hashlib.sha256(json.dumps(o, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+
+    m = M.Master(M.read_csv(GLOSSARY_ROOT))
+    with mock.patch.object(M, "get", lambda: m):
+        g, al = T.load_glossary(), T._aliases()
+        ids = [[t, p.pattern] for t, p in T.load_id_patterns_typed()]
+    got = {"glossary": (len(g), dig(g)), "ids": (len(ids), dig(ids)), "aliases": (len(al), dig(al))}
+    assert got == SNAPSHOT, got
 
 
 def test_load_hash_and_transaction():
@@ -198,19 +248,14 @@ def test_load_hash_and_transaction():
         assert h2 != m1.hash and M.read(db).hash == h2 and len(M.read(db).rows("id_patterns")) == len(m1.rows("id_patterns")) + 1
         # 한 트랜잭션 — 중간에 실패하면 이전 내용 그대로
         real = db.cn.cursor
-        calls = {"n": 0}
 
-        def flaky():
+        def flaky():  # DELETE 뒤 넣기에서 실패
             cur = real()
-            ex = cur.execute
 
-            def execute(sql, params=None):
-                calls["n"] += 1
-                if calls["n"] == 20:
-                    raise RuntimeError("boom")
-                return ex(sql, params)
+            def executemany(sql, rows):
+                raise RuntimeError("boom")
 
-            cur.execute = execute
+            cur.executemany = executemany
             return cur
 
         with mock.patch.object(db.cn, "cursor", flaky):
