@@ -22,6 +22,6 @@ case "$tool" in
 esac
 
 echo "[pipe_exec] $(date '+%F %T') $tool 시작(data-pipeline 안에서)"
-in_pipeline "data-pipeline$NAME_SUFFIX" "$@"; rc=$?
+in_pipeline "$PIPELINE_CNAME" "$@"; rc=$?   # 컨테이너 이름 — load_settings(ops.containers.pipeline.pipeline_container_name + 벌 번호)
 echo "[pipe_exec] $(date '+%F %T') $tool 끝 (종료 코드 $rc)"
 exit $rc

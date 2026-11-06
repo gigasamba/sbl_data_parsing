@@ -13,7 +13,7 @@ services:
   #   자원 칸: settings.yaml ops.containers.data_parsing.data_parsing_cpus·data_parsing_mem_limit·data_parsing_cpu_shares(DATA_PARSING_* — 비우면 아래 기본값과 같은 값).
   mcp-data-parsing:
     image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
-    container_name: mcp-data-parsing${NAME_SUFFIX:-}
+    container_name: ${DATA_PARSING_CNAME:?DATA_PARSING_CNAME 필요 — load_settings.sh load_settings가 냄(ops.containers.data_parsing.data_parsing_container_name + 벌 번호)}
     command: ["run-mcp-parsing"]
     restart: unless-stopped
     network_mode: host                      # 검색 MCP(mcp-server)가 127.0.0.1:8766으로 부름

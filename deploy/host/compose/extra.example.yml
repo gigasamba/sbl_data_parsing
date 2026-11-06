@@ -1,0 +1,19 @@
+# 더 붙일 compose 파일 예시(선택) — 서비스 하나에 볼륨·env를 더한다. 이 파일은 그대로 쓰지 않는다(예시).
+#   쓰는 법: 이 파일을 복사해 고친 뒤(예 <루트>/compose.extra.yml) settings.yaml에 적는다 —
+#     ops:
+#       host:
+#         extra_compose: [compose.extra.yml]     # = <루트>/compose.extra.yml(상대 경로는 루트 기준 — 없는 파일이면 host_ctl.sh 종료 2) · 여러 개면 목록 순서대로
+#   host_ctl.sh·mcp_keepalive.sh가 늘 맨 뒤에 -f로 붙인다(앞 파일의 같은 칸을 덮고, volumes·environment는 더함).
+#   확인: bash deploy/host/scripts/host_ctl.sh config --quiet   (값을 찍지 않고 문법만 — config만 쓰면 치환한 경로가 다 나옴)
+# 규칙:
+#   - 서비스 이름은 data-pipeline·mcp-data-parsing·mcp 중 하나(컨테이너 이름이 아님 — 컨테이너 이름은 ops.containers.*_container_name).
+#   - 호스트 경로는 절대 경로나 ${RAG_ROOT}(루트 — load_settings가 냄)로 시작한다. compose는 상대 경로를 이 파일이 아니라
+#     첫 compose 파일 폴더(deploy/host/compose) 기준으로 읽는다.
+#   - RHEL(SELinux)이라 bind 마운트 끝에 :z(읽기 전용이면 :ro,z). 컨테이너 사용자는 UID 10001 고정(이미지 사용자) — 그 UID가 읽을 수 있게 둔다.
+#   - 앱 설정 값은 env로 주지 않는다(앱은 settings.yaml만 읽음). env는 라이브러리·도구가 읽는 이름만.
+services:
+  data-pipeline:
+    volumes:
+      - ${RAG_ROOT:?RAG_ROOT 필요 — load_settings.sh load_settings가 냄}/extra_docs:/data/extra_docs:ro,z
+    environment:
+      TZ: Asia/Seoul

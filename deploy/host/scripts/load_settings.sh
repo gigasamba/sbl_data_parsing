@@ -26,6 +26,10 @@ if [ -z "${RAG_ROOT:-}" ] || [ "$RAG_ROOT" = "${_SETTINGS_AUTO_ROOT:-}" ]; then
   RAG_ROOT=$_SETTINGS_ROOT; _SETTINGS_AUTO_ROOT=$RAG_ROOT
 fi
 
+_host_default() {   # _host_default <모델 경로> — 코드 기본값(host_settings.tsv의 default.* 줄 — gen_host_keys.py가 설정 모델에서 만듦)
+  awk -F'\t' -v k="default.$1" '$1==k{print $4}' "$_SETTINGS_ROOT/deploy/host/scripts/host_settings.tsv" 2>/dev/null
+}
+
 settings_export() {   # settings_export <env|sh> [<절>...] — 줄을 표준 출력에(절이 없으면 호스트 칸 전부), 실패면 0 아닌 종료 코드(안내는 표준 오류)
   local fmt=$1
   shift
@@ -68,17 +72,38 @@ EOF
   # 기본값도 이 load_settings가 낸 이름으로 적음(다른 루트에서 다시 읽을 때 지움)
   [ -n "${DOCKER:-}" ] || { DOCKER=$(docker_default); _SETTINGS_KEYS="${_SETTINGS_KEYS:-} DOCKER"; }   # 셸 env > ops.host.container_cli > podman(없으면 docker)
   [ -n "${RAG_OUT:-}" ] || { RAG_OUT=$RAG_ROOT/output; _SETTINGS_KEYS="${_SETTINGS_KEYS:-} RAG_OUT"; }   # 적지 않으면 <루트>/output
-  export DOCKER RAG_OUT _SETTINGS_KEYS   # _SETTINGS_KEYS — 내부 신호: 이 load_settings가 낸 이름
+  # 호스트 쪽 붙일 원본(compose·host_ctl.sh) — 적지 않으면 <루트> 아래. 상대 경로는 <루트> 기준(compose는 상대 경로를 compose 파일 폴더 기준으로 읽으므로 절대 경로로)
+  [ -n "${EDW_CHAIN_SRC:-}" ] || { EDW_CHAIN_SRC=$RAG_ROOT/edw_chain.yaml; _SETTINGS_KEYS="${_SETTINGS_KEYS:-} EDW_CHAIN_SRC"; }   # ops.host.host_edw_chain_file
+  [ -n "${DEVBOX_HOME:-}" ] || { DEVBOX_HOME=$RAG_ROOT/home; _SETTINGS_KEYS="${_SETTINGS_KEYS:-} DEVBOX_HOME"; }   # option.devbox.home_dir
+  case "$EDW_CHAIN_SRC" in /*) ;; *) EDW_CHAIN_SRC=$RAG_ROOT/$EDW_CHAIN_SRC ;; esac
+  case "$DEVBOX_HOME" in /*) ;; *) DEVBOX_HOME=$RAG_ROOT/$DEVBOX_HOME ;; esac
+  if [ -n "${EXTRA_COMPOSE:-}" ]; then   # ops.host.extra_compose(쉼표 목록) — 상대 경로는 <루트> 기준 절대 경로로(host_ctl.sh가 -f로 붙임)
+    local f fs abs=
+    IFS=, read -r -a fs <<< "$EXTRA_COMPOSE"
+    for f in ${fs[@]+"${fs[@]}"}; do
+      case "$f" in "") continue ;; /*) ;; *) f=$RAG_ROOT/$f ;; esac
+      abs="${abs:+$abs,}$f"
+    done
+    EXTRA_COMPOSE=$abs; export EXTRA_COMPOSE
+  fi
+  export DOCKER RAG_OUT EDW_CHAIN_SRC DEVBOX_HOME _SETTINGS_KEYS   # _SETTINGS_KEYS — 내부 신호: 이 load_settings가 낸 이름
   INSTANCE=; [[ $(basename "$RAG_ROOT") =~ -([1-9][0-9]?)$ ]] && INSTANCE=${BASH_REMATCH[1]}   # 벌 번호 — 루트(코드 폴더) 이름 끝 -<1~99>(날짜·판 꼴 숫자는 아님 — run_pipeline.py instance_of와 같은 규칙)
   if [ -n "$INSTANCE" ]; then   # 여러 벌 — 운영(prd)은 한 벌, 포트는 벌마다 달라야 함
     [ "${RUN_ENV:-}" = prd ] && { echo "[설정] 코드 폴더 이름 끝 -$INSTANCE(벌 번호)는 개발 서버(dev)에서만 — 운영(prd)은 한 벌(폴더 이름을 바꿀 것)" >&2; return 2; }
-    local d   # 코드 기본 포트 — host_settings.tsv의 default.* 줄(gen_host_keys.py가 설정 모델에서 만듦)
-    d=$(awk -F'\t' '$1=="default.mcp.server.port"{print $4}' "$_SETTINGS_ROOT/deploy/host/scripts/host_settings.tsv")
+    local d   # 코드 기본 포트
+    d=$(_host_default mcp.server.port)
     [ "${MCP_PORT:-$d}" = "$d" ] && { echo "[설정] 여러 벌 — search.server.mcp_port가 기본값($d) 그대로: 벌마다 다른 포트를 적음" >&2; return 2; }
-    d=$(awk -F'\t' '$1=="default.common.runtime.data_parsing_port"{print $4}' "$_SETTINGS_ROOT/deploy/host/scripts/host_settings.tsv")
+    d=$(_host_default common.runtime.data_parsing_port)
     [ "${DATA_PARSING_PORT:-$d}" = "$d" ] && { echo "[설정] 여러 벌 — ops.services.data_parsing.data_parsing_port가 기본값($d) 그대로: 벌마다 다른 포트를 적음" >&2; return 2; }
   fi
   NAME_SUFFIX=${INSTANCE:+-$INSTANCE}; export INSTANCE NAME_SUFFIX   # 여러 벌 — 컨테이너·compose 묶음·타이머 이름 끝(비우면 한 벌, 이름 그대로)
+  # 컨테이너·compose 묶음 이름(셸·compose는 이 넷만 씀) = 밑 이름(settings.yaml ops.containers.<서비스>.<서비스>_container_name·
+  #   ops.host.compose_project > 코드 기본값) + NAME_SUFFIX. 파이썬 쪽은 run_pipeline.py configure()가 같은 규칙.
+  PIPELINE_CNAME=${PIPELINE_CONTAINER:-$(_host_default common.host.pipeline_container)}$NAME_SUFFIX
+  DATA_PARSING_CNAME=${DATA_PARSING_CONTAINER:-$(_host_default common.host.data_parsing_container)}$NAME_SUFFIX
+  MCP_CNAME=${MCP_CONTAINER:-$(_host_default common.host.mcp_container)}$NAME_SUFFIX
+  COMPOSE_PNAME=${COMPOSE_PROJECT:-$(_host_default common.host.compose_project)}$NAME_SUFFIX
+  export PIPELINE_CNAME DATA_PARSING_CNAME MCP_CNAME COMPOSE_PNAME
   return 0
 }
 

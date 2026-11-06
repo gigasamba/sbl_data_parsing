@@ -118,6 +118,15 @@ NOT_SETTINGS = {
         "인자",
         "호스트 스크립트 변수 — 여러 벌 이름 끝 -<벌 번호 — 코드 폴더 이름 끝 숫자>(load_settings.sh가 구해 compose container_name·묶음 이름·타이머에, op-15)",
     ),
+    **{
+        n: ("인자", f"호스트 스크립트 변수 — {what} 이름 = 밑 이름(설정 {key}) + NAME_SUFFIX(load_settings.sh가 구해 compose·스크립트에)")
+        for n, what, key in (
+            ("PIPELINE_CNAME", "data-pipeline 컨테이너", "PIPELINE_CONTAINER"),
+            ("DATA_PARSING_CNAME", "mcp-data-parsing 컨테이너", "DATA_PARSING_CONTAINER"),
+            ("MCP_CNAME", "mcp-server 컨테이너", "MCP_CONTAINER"),
+            ("COMPOSE_PNAME", "compose 묶음", "COMPOSE_PROJECT"),
+        )
+    },
     "POSTGRES_DB": ("env로 남김", "PG 컨테이너 env — compose가 PG_DB로 채움(설정 칸은 op-08에 지움)"),
     "POSTGRES_USER": ("env로 남김", "PG 컨테이너 env — compose가 PG_USER로 채움(설정 칸은 op-08에 지움)"),
 }

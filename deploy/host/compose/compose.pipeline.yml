@@ -26,7 +26,7 @@ services:
   #   (설정 모델 기본값과 같음).
   data-pipeline:
     image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
-    container_name: data-pipeline${NAME_SUFFIX:-}
+    container_name: ${PIPELINE_CNAME:?PIPELINE_CNAME 필요 — load_settings.sh load_settings가 냄(ops.containers.pipeline.pipeline_container_name + 벌 번호)}
     command: ["idle"]
     restart: unless-stopped
     network_mode: host                      # PostgreSQL·모델 API·parse_document 작업 서비스(127.0.0.1)에 서버 주소 그대로
@@ -38,7 +38,7 @@ services:
       - *settings
       # EDW 조인 사슬 서버 사본(파일 하나, settings.yaml과 같은 방식) — 적재가 도는 이 컨테이너와 mcp-server가 씀. host_ctl.sh init이 없을 때만 기본 파일을 복사해 둠
       #   (원본 파일이 없으면 podman은 마운트를 거부하고 docker는 폴더를 만듦). 앱은 ops.paths.edw_chain_file에 이 경로를 적었을 때만 이 사본을 씀.
-      - ${RAG_ROOT:?RAG_ROOT=<서버 루트 — 코드 폴더 자체> 필요 — load_settings.sh load_settings가 냄}/edw_chain.yaml:/etc/rag/edw_chain.yaml:ro,z
+      - ${EDW_CHAIN_SRC:?EDW_CHAIN_SRC 필요 — load_settings.sh load_settings가 냄(ops.host.host_edw_chain_file, 비우면 <루트>/edw_chain.yaml)}:/etc/rag/edw_chain.yaml:ro,z
       - ${DOC_SRC:?DOC_SRC=<원본 문서 폴더>}:${APP_DOCS_MOUNT:?APP_DOCS_MOUNT 필요 — load_settings.sh load_settings가 냄}:ro,z
       - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:${APP_OUTPUT_ROOT:?APP_OUTPUT_ROOT 필요 — load_settings.sh load_settings가 냄}:z
     mem_limit: ${PARSE_MEM_LIMIT:-24g}

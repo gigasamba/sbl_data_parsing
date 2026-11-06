@@ -121,6 +121,7 @@ def test_timers():
             for name in ("data-pipeline-nightly.service", "mcp-server-keepalive.service"):
                 text = (units_dir / name.replace(".", suffix + ".", 1)).read_text(encoding="utf-8")
                 assert "@CODE_DIR@" not in text and f"WorkingDirectory={_posix(SCRIPT.parents[3])}\n" in text, (name, text)
+                assert "DOCKER=" not in text, (name, "컨테이너 도구는 settings.yaml ops.host.container_cli — unit이 덮지 않음")
 
 
 FAKE = """case "$1" in
@@ -191,3 +192,45 @@ def test_init_refuses_chain_dir():
         r = _run(bash, ["init"], {"DC_ROOT": _posix(root)})
         assert r.returncode == 4, (r.returncode, r.stdout, r.stderr)
         assert "edw_chain.yaml 자리에 폴더가 있음" in r.stderr and bad.is_dir() and not any(bad.iterdir()), r.stderr
+
+
+PLACE_CASES = [  # (settings.yaml 덧붙임, 사슬 사본 자리, 홈 자리 — 루트 기준, 종료 코드) — ops.host.host_edw_chain_file·option.devbox.home_dir
+    ("option:\n  devbox: {ssh_port: 2222}\n", "edw_chain.yaml", "home", 0),  # 비우면 <루트> 아래
+    (
+        "ops:\n  host: {host_edw_chain_file: chain_alt.yaml}\noption:\n  devbox: {ssh_port: 2222, home_dir: devhome}\n",
+        "chain_alt.yaml",
+        "devhome",
+        0,
+    ),
+    (
+        "ops:\n  host: {host_edw_chain_file: sub/c.yaml}\noption:\n  devbox: {ssh_port: 2222, home_dir: a/b/h}\n",
+        "sub/c.yaml",
+        "a/b/h",
+        0,
+    ),  # 위 폴더도 만듦
+    ("ops:\n  host: {host_edw_chain_file: blocker/c.yaml}\n", "blocker/c.yaml", "", 5),  # 위 자리가 파일 — 복사 실패면 init 실패
+]
+
+
+def test_init_places_from_settings():
+    """init이 사슬 사본·개발 작업 공간 홈을 설정 자리(상대 = 루트 기준, 위 폴더도)에 만들고 코드 폴더 a+rX에서 그 자리를 뺀다 —
+    기본 자리에는 안 만듦. 복사가 실패하면 종료 5."""
+    bash = _need_bash()
+    if not bash:
+        return
+    for more, chain, home, rc in PLACE_CASES:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d) / "dev"
+            root.mkdir()
+            (root / "blocker").write_text("", encoding="utf-8")
+            (root / "settings.yaml").write_text("required:\n  env: {run_env: dev}\n" + more, encoding="utf-8")
+            r = _run(bash, ["init"], {"DC_ROOT": _posix(root)})
+            assert r.returncode == rc, (more, r.returncode, r.stderr + r.stdout)
+            if rc:
+                assert "복사 실패" in r.stderr, r.stderr
+                continue
+            assert (root / chain).is_file() and (root / home).is_dir(), (chain, home, r.stdout)
+            skip = r.stdout.split("빼는 자리:", 1)[1].splitlines()[0]  # 코드 폴더 a+rX에서 빼는 자리(find -path)
+            assert f"./{chain}" in skip.split() and f"./{home}" in skip.split(), skip
+            for other in {"edw_chain.yaml", "home"} - {chain, home}:
+                assert not (root / other).exists(), (other, r.stdout)

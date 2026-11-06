@@ -61,6 +61,9 @@ IMAGE_PATHS = {
     "image_env": "/app/docker/image_env.txt",  # 빌드 때 이미지 ENV를 적어 둔 파일(common.config.boot — 라이브러리 env가 이미지 값만 덮게)
     "docs_mount": "/data/docs",  # 원본 폴더를 읽기 전용으로 붙이는 자리(compose DOC_SRC → 이 자리 · pipeline DOC_DIR 기본값)
 }
+# 코드가 읽지 않는 약속 자리(compose·Dockerfile·dev_entry.sh에만 같은 글자 — 바꾸면 그 파일들을 함께):
+#   /etc/rag/settings.yaml(설정 파일 — compose x-settings·SETTINGS_FILE) · /etc/rag/edw_chain.yaml(EDW 사슬 사본 — 호스트 ops.host.host_edw_chain_file)
+#   · /home/rag(개발 작업 공간 홈 — 호스트 option.devbox.home_dir) · /etc/devbox(작업 공간 부품 — git_cred.py·compose.opencode.yml)
 IMAGE_PATHS["prepared_out"] = IMAGE_PATHS["output_root"] + "/prepared"  # 원본 사본(prepare) 자리(pipeline DOC_DIR_PREPARED 기본값)
 # 이미지 안 모델 기본값 — 규칙은 "settings.yaml > 코드 기본값" 하나라 Dockerfile ENV로 굽지 않고 여기 둔다.
 # 이미지 신호 RAG_MODULE로 그 이미지 값만 고른다. PC·시험 하위 프로세스(RAG_MODULE 없음)는 PC 기본값.
@@ -1481,6 +1484,11 @@ class CommonHostDevbox(Section):
         "DEVBOX_OPENCODE_CONFIG",
         "개발 작업 공간의 opencode 설정 파일(호스트 경로, 선택) — 읽기 전용으로 붙이고 OPENCODE_CONFIG로 가리킴. 비우면 이미지의 틀(홈의 ~/.config/opencode/opencode.json)",
     )
+    home_dir: str | None = F(
+        None,
+        "DEVBOX_HOME",
+        "개발 작업 공간 홈 폴더(호스트 경로) — 컨테이너 /home/rag로 붙임(SSH 열쇠·opencode 설정·작업 기록). 비우면 <루트>/home(host_ctl.sh init이 만듦 — 10001, 700)",
+    )
     gitea_url: str | None = F(
         None,
         "DEVBOX_GITEA_URL",
@@ -1494,16 +1502,48 @@ class CommonHostDevbox(Section):
     git_user_email: str | None = F(None, "DEVBOX_GIT_USER_EMAIL", "개발 작업 공간의 git 커밋 메일(git config user.email, 선택)")
 
 
+_CONTAINER_NAME = r"^[A-Za-z0-9][A-Za-z0-9_.-]*$"  # docker·podman 컨테이너 이름 꼴(명령 줄에 그대로 들어감)
+
+
+def _cname(default, env, what):
+    return F(
+        default,
+        env,
+        f"{what} 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>가 붙음). host_ctl.sh·mcp_keepalive.sh·pipe_exec.sh·run_pipeline.py가 이 이름으로 찾음",
+        pattern=_CONTAINER_NAME,
+    )
+
+
 class CommonHost(Section):
+    compose_project: str = F(
+        "compose",
+        "COMPOSE_PROJECT",
+        "compose 묶음(project) 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>). host_ctl.sh·mcp_keepalive.sh가 -p로 줌 — 바꾸면 옛 묶음은 down으로 먼저 내림",
+        pattern=r"^[a-z0-9][a-z0-9_-]*$",
+    )
+    data_parsing_container: str = _cname("mcp-data-parsing", "DATA_PARSING_CONTAINER", "parse_document 작업 서비스 전용")
     devbox: CommonHostDevbox = Field(default_factory=CommonHostDevbox)
     doc_src: str | None = F(None, "DOC_SRC", "호스트 원본 문서 폴더 — compose가 컨테이너 /data/docs에 읽기 전용으로 붙임")
     docker: str | None = F(None, "DOCKER", "호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등 — op-10)")
+    edw_chain_src: str | None = F(
+        None,
+        "EDW_CHAIN_SRC",
+        "호스트의 EDW 조인 사슬 사본 파일 — compose가 컨테이너 /etc/rag/edw_chain.yaml로 읽기 전용으로 붙이는 원본. 비우면 <루트>/edw_chain.yaml(host_ctl.sh init이 없을 때만 만듦)",
+    )
+    extra_compose: CsvList | None = F(
+        None,
+        "EXTRA_COMPOSE",
+        "더 붙일 compose 파일 목록(볼륨·env 더하기 — 틀 deploy/host/compose/extra.example.yml — 예 compose.extra.yml = <루트>/compose.extra.yml). 상대 경로는 루트(코드 폴더) 기준."
+        " host_ctl.sh·mcp_keepalive.sh가 늘 맨 뒤에 -f로 더함",
+    )
     image_stage_dir: str | None = F(None, "IMAGE_STAGE_DIR", "prune_images.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값)")
+    mcp_container: str = _cname("mcp-server", "MCP_CONTAINER", "검색 MCP")
     output_root: str | None = F(
         None,
         "RAG_OUT",
         "호스트의 결과(output) 폴더(서버 경로) — compose가 컨테이너 /app/output으로 마운트하는 원본. 비우면 <루트>/output",
     )
+    pipeline_container: str = _cname("data-pipeline", "PIPELINE_CONTAINER", "일괄 상주 파이프라인")
     pg_container: str | None = F(
         None,
         "PG_CONTAINER",

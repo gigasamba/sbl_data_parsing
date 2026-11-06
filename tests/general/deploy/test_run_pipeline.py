@@ -4,6 +4,7 @@ PC 일반 시험: `PYTHONPATH=$PWD .venv/bin/python -m pytest tests/general`."""
 
 import argparse
 import importlib.util
+import os
 import re
 import shlex
 from unittest import mock
@@ -25,6 +26,7 @@ def _load():
 
 
 RD = _load()
+RD.PIPE_C = "data-pipeline"  # configure()가 채우는 값(코드 기본 밑 이름 · 한 벌) — 아래 고정 명령 글자용
 
 GOLDEN = {
     "staging": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && mkdir -p /app/output/_staging && python -m pipeline.extract.candidate_ready --set SOURCE_STAGING=/app/output/_staging --set SOURCE_FETCH_WORKERS=2 stage --csv /app/output/_docflow/9/batch.csv --out /app/output/_docflow/9 --prepared /app/output/_docflow/9/prepared --no-scan-rotate'",
@@ -248,17 +250,26 @@ def test_instance_names(tmp_path):
         ("prd", "sbl_data_parsing-main-2", ports, None),
         ("dev", "sbl_data_parsing-main-2", {"mcp.server.port": "8775"}, None),  # 파싱 포트가 기본값 그대로
         ("dev", "sbl_data_parsing-main-2", {"common.runtime.data_parsing_port": "8776"}, None),  # 검색 포트가 기본값 그대로
+        ("dev", "sbl_data_parsing-main", {"common.host.pipeline_container": "rag-pipe"}, "rag-pipe"),  # 밑 이름 바꿈(한 벌)
+        ("dev", "sbl_data_parsing-main-2", {**ports, "common.host.pipeline_container": "rag-pipe"}, "rag-pipe-2"),  # 밑 이름 + 벌 번호
+        ("dev", "sbl_data_parsing-main", {"common.host.pipeline_container": "a b;ls"}, None),  # 명령 줄에 들어가는 이름 — 꼴 거부
+        ("dev", "sbl_data_parsing-main", {"env:PIPELINE_CNAME": "from-shell-4"}, "from-shell-4"),  # load_settings가 낸 이름이 먼저
+        ("dev", "sbl_data_parsing-main", {"env:PIPELINE_CNAME": "a b"}, None),
     ):
         rd = _load()  # 모듈 값을 바꾸므로 따로 읽음
         model = {}
         base = {**req, "common.run_env": run, "common.connections.pg.db_schema": "rag", "common.connections.rdb.port": "1433"}
+        env = {k[4:]: v for k, v in extra.items() if k.startswith("env:")}  # 호스트 셸 env(load_settings가 냄)
         for p, v in {**base, **extra}.items():
-            rd._host().layout().set_path(model, p, v)
+            if not p.startswith("env:"):
+                rd._host().layout().set_path(model, p, v)
         root = tmp_path / name
         root.mkdir(exist_ok=True)
         f = root / "settings.yaml"
         f.write_text(yaml.safe_dump(rd._host().layout().to_file(model)), encoding="utf-8")
-        with mock.patch.object(rd, "_root", return_value=root):  # 루트(코드 폴더) — 이름 끝 -<숫자>가 벌 번호
+        with mock.patch.object(rd, "_root", return_value=root), mock.patch.dict(os.environ, env):  # env 남김 — 시험(호스트 셸 env)
+            if not env:
+                os.environ.pop("PIPELINE_CNAME", None)  # env 남김 — 시험(부른 셸 값이 끼지 않게)
             probs = rd.configure(f)
         if want is None:
             assert probs, (run, name, extra)

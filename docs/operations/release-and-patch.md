@@ -199,10 +199,10 @@ crms:
 - 새 `filter` 이름은 `search`의 이름 있는 인자가 아니라 `attrs` 거르기로 쓴다(이름 있는 인자는 계약에 고정).
 - **이름을 바꾸면 안 되는 키:** SFDC `sf_op_id`(`list_doc_fulltext`가 키 이름 그대로 읽음 — EDW 칸 `from`만 바꾼다), 분류 힌트 키(`title`·`entity_*`·`sent_received__c`·`subject`·`stagename`·`real_rfp__c`·`rfp_received_*`·LAS `approvalname` — 분류가 이름으로 읽음). `doc_class`는 분류가 쓰는 키라 사슬에 쓰지 않는다.
 
-**③ 실제 실행 전에 점검** — 파일만 읽고 검사한다(EDW·PG에 붙지 않음).
+**③ 실제 실행 전에 점검** — 파일만 읽고 검사한다(EDW·PG에 붙지 않음). 컨테이너 이름 변수 `$PIPELINE_CNAME`·`$MCP_CNAME`·`$DATA_PARSING_CNAME`(settings.yaml 밑 이름 `ops.containers.*_container_name` + 벌 번호)은 벌 폴더에서 `. deploy/host/scripts/load_settings.sh && load_settings`가 낸다(DOCKER도 — 아래 명령은 그 셸에서).
 ```bash
-$DOCKER exec data-pipeline python -m pipeline.load.edw_doc_meta --check                                   # 설정 칸이 가리키는 파일
-$DOCKER exec data-pipeline python -m pipeline.load.edw_doc_meta --check --file /etc/rag/edw_chain.yaml   # 칸을 적기 전에 사본만
+$DOCKER exec $PIPELINE_CNAME python -m pipeline.load.edw_doc_meta --check                                   # 설정 칸이 가리키는 파일
+$DOCKER exec $PIPELINE_CNAME python -m pipeline.load.edw_doc_meta --check --file /etc/rag/edw_chain.yaml   # 칸을 적기 전에 사본만
 # 기대(기본 파일): [edw_meta] 사슬 설정 OK(…) — sfdc 단계 11·키 15(거르기 5) · crms 단계 4·키 4(거르기 2) · las 단계 4·키 3(거르기 2) · faq 단계 1·키 0(거르기 0) · other 단계 1·키 0(거르기 0)   (종료 코드 0)
 # 틀리면: [edw_meta] 사슬 설정 오류(…): <원천>.<자리>: … — 틀린 곳을 모두 적음   (종료 코드 1)
 ```

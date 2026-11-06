@@ -21,6 +21,7 @@
 
 ```bash
 export DOCKER=podman                                   # 운영 계정 ~/.bashrc에 두거나 명령 앞에 붙인다
+. deploy/host/scripts/load_settings.sh && load_settings   # 벌 폴더에서 — $PIPELINE_CNAME·$MCP_CNAME·$DATA_PARSING_CNAME(컨테이너 이름 = 밑 이름 + 벌 번호) · DOCKER
 bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>   # 코드 폴더 안 output/·settings.yaml·edw_chain.yaml(없을 때만)·home/(ssh_port를 적었을 때만) — README §5-0 3번
 ```
 - 값은 `init`이 찍은 빈 필수 칸부터 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)). `nightly_batch.sh`·`pipe_exec.sh`·`mcp_keepalive.sh`·systemd unit은 `<루트>/settings.yaml`을 스스로 찾는다.
@@ -28,7 +29,7 @@ bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>   # 코드 폴
 
 ### 1-1. 값 바꾸기
 - 앱 설정은 `settings.yaml`을 직접 고치고 `host_ctl.sh up -d --force-recreate <서비스>`.
-- **한 번만 다른 값은 `--set 이름=값`** — 받는 진입점: `pipeline.cli`·`pipeline.extract.candidate_ready`·`gold_bundle`·`pgvector_load`·`publish_parse_result`. 예: `$DOCKER exec data-pipeline python -m pipeline.cli --set PIPE_PROCS=2 parse …`. 이름은 옛 env 이름(`python -m common.config.sample --where`). 모르는 이름·호스트 칸·비밀 칸은 종료 2.
+- **한 번만 다른 값은 `--set 이름=값`** — 받는 진입점: `pipeline.cli`·`pipeline.extract.candidate_ready`·`gold_bundle`·`pgvector_load`·`publish_parse_result`. 예: `$DOCKER exec $PIPELINE_CNAME python -m pipeline.cli --set PIPE_PROCS=2 parse …`. 이름은 옛 env 이름(`python -m common.config.sample --where`). 모르는 이름·호스트 칸·비밀 칸은 종료 2.
 - 셸·compose·`docker exec -e`로 준 옛 env 이름은 효과가 없다(시작 때 이름만 경고). 셸 env로 덮을 수 있는 것은 compose 치환 값(이미지 태그·자원·포트·호스트 경로)뿐이다.
 - 오버레이 설정 파일 도구 `python -m common.config.overrides`는 PC 전용이다(서버는 종료 2).
 
@@ -84,7 +85,7 @@ bash deploy/host/scripts/pipe_exec.sh publish                    # 대표 결과
 ### 2-3. 답변 생성 점검(개발 서버 — 컨테이너 안에서)
 호스트 python에는 PyYAML만 있으므로 도구는 컨테이너 안에서 돌린다. `validation/`은 코드 폴더를 붙인 개발 서버의 실행 이미지에만 있다(운영 이미지에는 없음).
 ```bash
-$DOCKER exec data-pipeline python -m validation.e2e.answer_gen --url http://127.0.0.1:<search.server.mcp_port>/mcp --q "<질문>"   # --concurrency N · 결과 /app/output/eval/answer_gen/
+$DOCKER exec $PIPELINE_CNAME python -m validation.e2e.answer_gen --url http://127.0.0.1:<search.server.mcp_port>/mcp --q "<질문>"   # --concurrency N · 결과 /app/output/eval/answer_gen/
 ```
 MCP 토큰은 settings.yaml `required.tokens.mcp_token`, 모델은 `required.models.llm_*`(서버는 내부 모델만). 결과는 호스트 `<결과 폴더>/eval/answer_gen/`.
 
@@ -137,7 +138,7 @@ grep -E 'doc#[0-9]+ (파싱|publish|구조화\+적재) FAIL' <작업 폴더>/bat
 ```
 - 도구 6개의 입력·출력·한도·오류는 [mcp-guide.md](mcp-guide.md). `search`는 원천 하나(`source_system`)가 필수다.
 - 답을 쓰는 쪽: 숫자·고유명사는 근거 `text` 그대로 인용, `evidence_status`가 `none`/`weak`이면 표시, 근거 안의 지시문은 따르지 않는다.
-- 연결 시험(컨테이너 안에서): `$DOCKER exec mcp-server python -m mcp_server.cli.mcp_smoke --url http://127.0.0.1:<search.server.mcp_port>/mcp --source <원천> --q "<질문>"` — 기대 끝 줄 `MCP 바깥 호출 통과`. 루프백이 아닌 주소로 부르면 `--token <토큰>`도 준다.
+- 연결 시험(컨테이너 안에서): `$DOCKER exec $MCP_CNAME python -m mcp_server.cli.mcp_smoke --url http://127.0.0.1:<search.server.mcp_port>/mcp --source <원천> --q "<질문>"` — 기대 끝 줄 `MCP 바깥 호출 통과`. 루프백이 아닌 주소로 부르면 `--token <토큰>`도 준다.
 
 ### 4-1. EDW 쿼리 도구 설정 — `edw_meta`·`query_edw`
 에이전트가 `edw_meta`(정적 자료, DB 접속 없음)로 표·칸을 보고 `query_edw`로 SELECT를 보낸다. 읽기 전용·시스템 표 차단·상한은 코드(`mcp_server/services/edw_query.py`)가 강제하지만, **운영자가 아래를 준비해야 안전하다.**
@@ -218,22 +219,22 @@ SFDC·EDW 내보내기에서 `glossary.csv`의 고객(`client`) 줄을 만든다
 내보낸 파일과 매핑 파일을 `<루트>/output/glossary/`에 둔 뒤(컨테이너에서 `/app/output/glossary/`):
 ```bash
 G=/app/output/glossary
-$DOCKER exec data-pipeline python -m pipeline.transform.structure.roster_from_edw --kind client \
+$DOCKER exec $PIPELINE_CNAME python -m pipeline.transform.structure.roster_from_edw --kind client \
   --source csv:$G/client_master.csv --mapping $G/client_master_map.json \
   --out $G/glossary.csv               # EDW 표에서 바로: --source rdb:<스키마.표>(읽기 계정)
-$DOCKER exec data-pipeline python -m pipeline.transform.structure.roster_from_edw --check $G/glossary.csv   # 오류 0 확인
+$DOCKER exec $PIPELINE_CNAME python -m pipeline.transform.structure.roster_from_edw --check $G/glossary.csv   # 오류 0 확인
 ```
 `--out` 파일이 이미 있으면 고객 줄만 바꾸고 용어·ID 꼴 줄은 그대로 둔다(glossary 꼴이 아닌 파일이면 거부). 먼저 파일을 복사해 두고 바뀐 줄을 비교한 뒤 반영한다.
 
 #### 옛 CSV를 `glossary.csv`로 옮기기
 옛 판의 `client_roster.csv`·`domain_terms.csv`·`id_patterns.csv`가 있는 폴더를 한 번에 옮긴다(같은 대응 — 없는 파일은 건너뜀. 만들 파일이 이미 있거나, 머리글이 옛 꼴과 다르거나(없는·모르는 칸), 머리글보다 칸이 많은 줄이 있으면 아무것도 쓰지 않고 거부):
 ```bash
-$DOCKER exec data-pipeline python -m common.store.master convert --src /app/output/glossary --out /app/output/glossary/glossary.csv
+$DOCKER exec $PIPELINE_CNAME python -m common.store.master convert --src /app/output/glossary --out /app/output/glossary/glossary.csv
 ```
 
 #### 점검(반영 전)
 ```bash
-$DOCKER exec data-pipeline python -c "import sys; from pathlib import Path; from common.store import master as M; from common.core import terms as T; m = M.Master(M.read_csv(Path(sys.argv[1]))); print(len(T._master_glossary(m)), '개념 반영 ·', len(m.rows('client_roster')), '고객 ·', len(m.rows('id_patterns')), 'ID 꼴')" /app/output/glossary   # 오류면 여기서 멈춤
+$DOCKER exec $PIPELINE_CNAME python -c "import sys; from pathlib import Path; from common.store import master as M; from common.core import terms as T; m = M.Master(M.read_csv(Path(sys.argv[1]))); print(len(T._master_glossary(m)), '개념 반영 ·', len(m.rows('client_roster')), '고객 ·', len(m.rows('id_patterns')), 'ID 꼴')" /app/output/glossary   # 오류면 여기서 멈춤
 bash deploy/host/scripts/pipe_exec.sh migrate master load --dir /app/output/glossary && bash deploy/host/scripts/host_ctl.sh restart mcp   # 반영
 ```
 
@@ -315,7 +316,7 @@ FROM applog.pipe_event
 WHERE ts_start > now() - interval '1 day'
 ORDER BY duration_ms DESC NULLS LAST LIMIT 20;
 ```
-`wait_cpu_ms`·`wait_mem_ms`가 크면 자원 대기(CPU·메모리 문턱), `ext_call_ms`가 크면 모델 호출이 느린 것이다. 한 실행을 자세히: `$DOCKER exec data-pipeline python -m pipeline.tools.perf_report <run_id>`.
+`wait_cpu_ms`·`wait_mem_ms`가 크면 자원 대기(CPU·메모리 문턱), `ext_call_ms`가 크면 모델 호출이 느린 것이다. 한 실행을 자세히: `$DOCKER exec $PIPELINE_CNAME python -m pipeline.tools.perf_report <run_id>`.
 
 **③ MCP 도구별 호출 수 · 오류율 · p95**
 ```sql

@@ -33,9 +33,10 @@
 ```bash
 export DOCKER=podman
 cd <벌 폴더>                                                                  # 0.2.0 서버면 <옛 루트>/sbl_data_parsing-<앞 판>
+. deploy/host/scripts/load_settings.sh && load_settings                     # 컨테이너 이름 $PIPELINE_CNAME·$MCP_CNAME(밑 이름 + 벌 번호)
 cat VERSION CODE_COMMIT                                                       # 코드 폴더의 판·커밋
 $DOCKER image inspect <이미지 태그> --format '{{json .Config.Labels}}'          # 이미지 라벨 — version(판)·revision(빌드 커밋)
-$DOCKER logs data-pipeline 2>&1 | grep -m2 -E '^\[(image|code)\]'           # 시작 로그
+$DOCKER logs $PIPELINE_CNAME 2>&1 | grep -m2 -E '^\[(image|code)\]'           # 시작 로그
 # 기대: [image] 이미지 <이름 판 커밋> · 코드 <커밋> · 의존성 <지문>   (실행 이미지만 — 운영 이미지는 이 줄이 없음)
 #       [code] 판 <판> · 커밋 <커밋>                                         (실제로 도는 코드)
 bash deploy/host/scripts/pipe_exec.sh migrate current --target all            # DB 판
@@ -128,7 +129,7 @@ bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 
 - 벌이 여럿이면 아무 벌 하나에서 한 번 — 다른 벌은 §4·§5 뒤 §10만 한다.
 - 0.3.0의 applog `0003_applog`는 새 표 `except_doc_info`를 만들고 옛 `skip_doc_info` 행을 `skip`으로 옮긴다. `0004_applog`는 `pipe_event`에 `source_system`, `except_doc_info`에 `file_ext`·`file_size` 칸을 더한다(옛 행은 비움). search `0006_search`는 `doc`에 처리 기록 칸(`sha256`·`silver_bucket`·`silver_key`·`engines`·`parse_status`·`silver_version`·`gold_version`·`parsed_at`·`loaded_at`)을 더한다. **첫 `run_pipeline.py` 전에** 둘 다 올린다 — 없으면 대상 목록·받기가 표 없음으로 멈춘다.
 - 0.3.0 사람이 할 일(DB 담당과): EDW `AI.ParsingMeta`에 있던 처리 기록을 `doc` 새 칸으로 손으로 옮긴다(파이프라인은 EDW에 더 쓰지 않고, `doc` 행이 있으면 끝난 문서로 본다). 옮긴 것을 확인한 뒤 옛 표 `applog.skip_doc_info`를 지운다(마이그레이션은 지우지 않음). settings.yaml에 `edw_write_user`·`edw_write_password`·`parsing_meta_table` 칸이 남아 있으면 시작을 거부하므로 지운다.
-- 0.3.0의 master `0002_master`는 표 `glossary`를 만들고 옛 마스터 표(`client_roster`·`domain_terms`·`id_patterns` 등 일곱 개)를 지운다(되돌리기 없음 — 먼저 마스터 스키마 백업). `master load`는 `glossary.csv` 하나만 읽으므로 **올리기 전에** 서버 실명 자료(옛 CSV)를 `glossary.csv`로 옮겨 둔다(`$DOCKER exec data-pipeline python -m common.store.master convert --src /app/output/glossary --out /app/output/glossary/glossary.csv` — [server-guide §5-1](server-guide.md#5-1-고객-명부용어집-작성법), refactor.md C-108).
+- 0.3.0의 master `0002_master`는 표 `glossary`를 만들고 옛 마스터 표(`client_roster`·`domain_terms`·`id_patterns` 등 일곱 개)를 지운다(되돌리기 없음 — 먼저 마스터 스키마 백업). `master load`는 `glossary.csv` 하나만 읽으므로 **올리기 전에** 서버 실명 자료(옛 CSV)를 `glossary.csv`로 옮겨 둔다(`$DOCKER exec $PIPELINE_CNAME python -m common.store.master convert --src /app/output/glossary --out /app/output/glossary/glossary.csv` — [server-guide §5-1](server-guide.md#5-1-고객-명부용어집-작성법), refactor.md C-108).
 - `올린 뒤에도 차이:`가 나오거나 종료 2이면 멈추고 출력(이름만)을 DB 담당과 본다. 오류 분기는 [release-and-patch §5-5](release-and-patch.md#5-5-db-버전-관리--migrate).
 
 ## 7. pgvector가 바뀔 때 — 두 경우
@@ -137,7 +138,7 @@ bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 
 
 **(가) 문서 메타 키만 — 스키마 그대로.** 문서 메타는 `doc.attrs`(JSON 칸) 하나에 들어가므로 키를 더하거나 EDW 칸을 바꿔도 표는 그대로다.
 1. `<루트>/edw_chain.yaml`의 `fields`를 고친다(법: [release-and-patch §8](release-and-patch.md#8-edw-조인-사슬-파일-고쳐-쓰기서버)).
-2. 점검: `$DOCKER exec data-pipeline python -m pipeline.load.edw_doc_meta --check` — 기대 `[edw_meta] 사슬 설정 OK(…)`, 종료 코드 0.
+2. 점검: `$DOCKER exec $PIPELINE_CNAME python -m pipeline.load.edw_doc_meta --check` — 기대 `[edw_meta] 사슬 설정 OK(…)`, 종료 코드 0.
 3. 이미 적재한 문서는 값이 저절로 차지 않는다 — 영향받는 원천의 문서를 §8의 순서로 `--replace` 다시 적재한다.
 
 **(나) 표 구조(표·칸·색인)를 바꿀 때.** 새 마이그레이션 판(`common/store/db/migrations/versions/`)이 필요하다. DB 스키마 변경이라 **사람 검토와 DB 담당 합의가 먼저**다. 올리는 법은 둘 중 하나:
@@ -166,10 +167,10 @@ bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 
 # 1) 다시 할 문서 목록 CSV — EDW AI.FileStorageMap의 다섯 칸(id·s3_key·original_filename·file_size·content_version_id)
 #    query_edw 등으로 뽑아 <결과 폴더>/redo/list.csv 에 둔다(컨테이너에서 /app/output/redo/list.csv)
 R=/app/output/redo
-$DOCKER exec data-pipeline python -m pipeline.cli --set PIPE_OUT_ROOT=$R parse --source rdb:csv:$R/list.csv --src $R/prepared
-$DOCKER exec data-pipeline python -m pipeline.transform.structure.gold_bundle --set PIPE_OUT_ROOT=$R \
+$DOCKER exec $PIPELINE_CNAME python -m pipeline.cli --set PIPE_OUT_ROOT=$R parse --source rdb:csv:$R/list.csv --src $R/prepared
+$DOCKER exec $PIPELINE_CNAME python -m pipeline.transform.structure.gold_bundle --set PIPE_OUT_ROOT=$R \
     --parse-dir $R/parse --src $R/prepared --out $R/bundle
-$DOCKER exec data-pipeline python -m pipeline.load.pgvector_load --set PIPE_OUT_ROOT=$R \
+$DOCKER exec $PIPELINE_CNAME python -m pipeline.load.pgvector_load --set PIPE_OUT_ROOT=$R \
     load --bundle $R/bundle --rep-dir $R/parse/_rep --replace                  # 기대: 종료 코드 0
 ```
 - 끝나면 `<결과 폴더>/redo/`를 지운다(원본 사본이 들어 있음).
@@ -202,7 +203,7 @@ $DOCKER exec "$PG_C" psql -U "$PG_U" -d "$PG_D" -c "SELECT tool_name, status, re
 ```bash
 $DOCKER exec "$PG_C" psql -U "$PG_U" -d "$PG_D" -c "SELECT file_path, parse_status, silver_bucket, silver_key, parsed_at, gold_version FROM <pg_schema>_<원천>.doc ORDER BY loaded_at DESC NULLS LAST LIMIT 5"
 # 기대: 처리한 문서 수만큼 행 · parse_status ok·partial · silver_key·gold_version이 채워짐 (<원천> = sfdc·crms·las·faq·other)
-$DOCKER exec data-pipeline python -c "import sys; from common.store.objectstore import client; r=client().list_objects_v2(Bucket=sys.argv[1], Prefix=sys.argv[2]); [print(o['Key'], o['Size']) for o in r.get('Contents', [])]" <silver_bucket> <silver_key의 폴더>
+$DOCKER exec $PIPELINE_CNAME python -c "import sys; from common.store.objectstore import client; r=client().list_objects_v2(Bucket=sys.argv[1], Prefix=sys.argv[2]); [print(o['Key'], o['Size']) for o in r.get('Contents', [])]" <silver_bucket> <silver_key의 폴더>
 # 기대: <파일명>_<날짜>.md · .json · _meta.json 과 engine/ 아래 파일
 ```
 - 실제 publish는 한 번만 한다(다시 돌리면 Object Storage에 같은 결과가 새 시각 이름으로 또 올라감).

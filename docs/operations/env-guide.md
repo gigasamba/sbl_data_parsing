@@ -130,6 +130,10 @@
 | `DATA_PIPELINE_IMAGE`·`MCP_SERVER_IMAGE`(`required.deploy.pipeline_image`·`mcp_image`) | dev `*-runtime:<판>` · prd `*:<판>` |
 | `RAG_OUT`(`ops.host.host_output_dir`) | 결과 폴더(컨테이너 `/app/output`) |
 | `DOC_SRC`(`required.deploy.host_docs_dir`) | 원본 문서 폴더(컨테이너 `/data/docs:ro`) |
+| `EDW_CHAIN_SRC`(`ops.host.host_edw_chain_file`) | EDW 사슬 사본(컨테이너 `/etc/rag/edw_chain.yaml:ro`) — 비우면 `<루트>/edw_chain.yaml`, 상대 경로는 루트 기준 |
+| `EXTRA_COMPOSE`(`ops.host.extra_compose`) | 더 붙일 compose 파일 목록(볼륨·env 더하기 — 틀 `deploy/host/compose/extra.example.yml`) — `host_ctl.sh`·`mcp_keepalive.sh`가 맨 뒤에 붙임. 상대 경로는 루트 기준(예 `compose.extra.yml` = `<루트>/compose.extra.yml`) · 없는 파일이면 `host_ctl.sh` 종료 2 |
+| `COMPOSE_PROJECT`(`ops.host.compose_project`) | compose 묶음 밑 이름(기본 `compose`) — 실제 이름은 끝에 벌 번호(`-<숫자>`) |
+| `PIPELINE_CONTAINER`·`DATA_PARSING_CONTAINER`·`MCP_CONTAINER`(`ops.containers.<pipeline·data_parsing·mcp>.<…>_container_name`) | 컨테이너 밑 이름(기본 `data-pipeline`·`mcp-data-parsing`·`mcp-server`) — 실제 이름은 끝에 벌 번호. 바꾸기 전에 `host_ctl.sh down` |
 
 ### 원천·경로 묶음
 코드 주석의 "env-guide 1-2"가 이 절이다.
@@ -165,6 +169,7 @@
 | 이름 | 기본 | 뜻 |
 |---|---|---|
 | `DEVBOX_SSH_PORT`(`option.devbox.ssh_port`) | 비움(끔) | 적으면 `data-pipeline`을 SSH 작업 공간(`devbox`)으로 띄움 — 그 포트에서 sshd(호스트 네트워크 그대로, 개발자마다 다르게) · 코드 폴더 쓰기 가능 · 홈 `<루트>/home`(포트를 적은 뒤 `host_ctl.sh init`이 만듦 — 없으면 `host_ctl.sh up` 종료 2). 개발 서버(dev)의 실행 이미지에서만 — prd·코드가 든 이미지면 `host_ctl.sh` 종료 2 |
+| `DEVBOX_HOME`(`option.devbox.home_dir`) | 비움(`<루트>/home`) | 작업 공간 홈의 호스트 폴더 — `/home/rag`로 붙임. `host_ctl.sh init`이 만듦(UID 10001, 700) · 상대 경로는 루트 기준 |
 | `DEVBOX_OPENCODE_CONFIG`(`option.devbox.opencode_config`) | 비움(이미지의 틀) | opencode 설정 파일의 호스트 경로 — 읽기 전용으로 붙이고 `OPENCODE_CONFIG`로 가리킴. 비우면 홈의 `~/.config/opencode/opencode.json`(첫 시작에 틀 복사 — 내부망 모델만) |
 | `DEVBOX_GITEA_URL`·`DEVBOX_GITEA_USER`·`DEVBOX_GITEA_TOKEN`(`option.devbox.gitea_url`·`gitea_user`·`gitea_token` — 토큰은 비밀) | 비움(설정 안 함) | 셋 다 적으면 작업 공간 시작 때 `~/.git-credentials`(권한 600)에서 그 호스트 줄 `<scheme>://<계정>:<토큰>@<호스트[:포트]>`만 바꾸고(다른 줄 그대로) `git config --global credential.helper store` — 하나라도 비우면 전에 쓴 줄(`~/.devbox/gitea_host`)을 지움. 주소는 `http(s)://호스트[:포트][/경로]`(`https://` 권장 — http면 토큰이 암호화 없이 감). 컨테이너 안에서 붙인 settings.yaml을 직접 읽는다(토큰은 env로 안 넘김) |
 | `DEVBOX_GIT_USER_NAME`·`DEVBOX_GIT_USER_EMAIL`(`option.devbox.git_user_name`·`git_user_email`) | 비움 | 적으면 작업 공간 시작 때 `git config --global user.name`·`user.email` |

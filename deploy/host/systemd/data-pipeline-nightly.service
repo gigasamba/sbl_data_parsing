@@ -15,9 +15,8 @@ After=network-online.target docker.service
 
 [Service]
 Type=oneshot
-# 서버 컨테이너 도구 = root podman 하나(이미지를 sudo podman load로 넣은 저장소와 같게). docker 서버면 User=rag(docker 그룹)·DOCKER=docker.
+# 서버 컨테이너 도구 = root podman 하나(이미지를 sudo podman load로 넣은 저장소와 같게) — 도구 이름은 settings.yaml ops.host.container_cli(비우면 podman, 없으면 docker — load_settings.sh). docker 서버면 User=rag(docker 그룹).
 User=root
-Environment=DOCKER=podman
 # WorkingDirectory = 코드 폴더(host_ctl.sh timers가 채움) — 설정 파일은 그 폴더(루트 = 코드 폴더)에서 load_settings.sh가 찾는다.
 WorkingDirectory=@CODE_DIR@
 ExecStart=/bin/bash deploy/host/scripts/nightly_batch.sh scheduled

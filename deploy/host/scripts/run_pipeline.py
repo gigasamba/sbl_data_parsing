@@ -47,7 +47,7 @@ ROOT = Path(__file__).resolve().parent
 #   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.run_pipeline.run_pipeline_work_dir(비우면 이 스크립트 옆 test_space/), 결과 공유 폴더는
 #   ops.host.host_output_dir(RAG_OUT — 컨테이너 /app/output의 원본 그대로), 비우면 <루트>/output(load_settings.sh와 같음).
 TEST = PROG = DOCSPACE = DOCFLOW = STAGING = None  # configure()가 채움
-PIPE_C = "data-pipeline"  # docker exec 대상 상주 컨테이너(목록·받기·파싱·게시·구조화·정리) — configure()가 벌 번호(코드 폴더 이름 끝 -<숫자>)를 붙임
+PIPE_C = None  # docker exec 대상 상주 컨테이너(목록·받기·파싱·게시·구조화·정리) — configure()가 밑 이름 + 벌 번호로 채움
 DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.container_cli(없으면 podman, 그것도 없으면 docker)로 채움
 CODE_DIR = None  # --code(설정 배치 모듈 layout.py·이미지 경로 표를 찾을 코드 폴더 — 운영자 폴더에서 돌릴 때, 기본 배치 경로 없음)
 SOURCE_BUCKET = PG_CONTAINER = PG_USER = PG_DB = PG_SCHEMA = None  # staging 파일 이름의 원천 버킷 · 문서 수 세기(psql)
@@ -189,8 +189,13 @@ def configure(settings_file=None):
             d = _const(f"default.{p}")
             if str(_host().get(doc, p) or d) == d:
                 return [f"여러 벌 — {_host().layout().to_yaml(p)}가 기본값({d}) 그대로: 벌마다 다른 포트를 적음"]
-    # 여러 벌 — host_ctl.sh가 띄운 이 루트의 컨테이너(load_settings.sh NAME_SUFFIX와 같은 규칙)
-    PIPE_C = "data-pipeline" + (f"-{inst}" if inst else "")
+    # 컨테이너 이름 — load_settings가 낸 PIPELINE_CNAME, 없으면 같은 규칙으로: 밑 이름(ops.containers.pipeline.pipeline_container_name > 코드 기본값) + 벌 번호
+    PIPE_C = os.environ.get("PIPELINE_CNAME") or (  # env 남김 — 호스트 도구(load_settings.sh load_settings가 냄)
+        (_host().get(doc, "common.host.pipeline_container") or _const("default.common.host.pipeline_container"))
+        + (f"-{inst}" if inst else "")
+    )
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", PIPE_C):  # 명령 줄에 그대로 들어감 — 설정 모델과 같은 꼴
+        return [f"{_host().layout().to_yaml('common.host.pipeline_container')}: 컨테이너 이름 꼴이 아님(영문·숫자·_.-)"]
     MCP_JOBS_DIR = DOCSPACE / "_mcp_parse" / "jobs"  # mcp-data-parsing의 작업 폴더(같은 결과 폴더 — run_mcp_parsing.JOBS_DIR)
     SOURCE_BUCKET = _host().get(doc, "pipeline.connections.rdb.bucket")
     PG_CONTAINER = _host().get(doc, "common.host.pg_container")

@@ -522,6 +522,25 @@ for d in /home/sbl/sbl_data_parsing-main-*; do bash $d/deploy/host/scripts/host_
 
 - 확인: `bash deploy/host/scripts/host_ctl.sh ps` — 그 벌의 컨테이너만 보인다. 자세한 것은 [server-guide §1-3](docs/operations/server-guide.md#1-3-한-서버에-여러-벌-띄우기개발자별).
 
+**컨테이너 이름·볼륨 바꾸기**
+- 이름은 settings.yaml의 밑 이름 + 벌 번호다 — `ops.containers.<pipeline|data_parsing|mcp>.<…>_container_name`(기본 `data-pipeline`·`mcp-data-parsing`·`mcp-server`) · `ops.host.compose_project`(기본 `compose`). 바꾸기 전에 옛 이름의 컨테이너를 `host_ctl.sh down`으로 내린다(새 이름으로 하나 더 뜨지 않게).
+- 볼륨·env를 더하려면 compose 파일을 하나 더 만들고(틀: `deploy/host/compose/extra.example.yml` — 호스트 경로는 절대 경로나 `${RAG_ROOT}`로, 끝에 `:z`) `ops.host.extra_compose`에 적는다(상대 경로는 루트 기준 — 예 `compose.extra.yml` = `<루트>/compose.extra.yml`, 없는 파일이면 `host_ctl.sh` 종료 2). `host_ctl.sh`와 MCP 살리기 타이머(`mcp_keepalive.sh`)가 늘 맨 뒤에 붙인다.
+- 사슬 사본·작업 공간 홈의 호스트 자리: `ops.host.host_edw_chain_file`(기본 `<루트>/edw_chain.yaml`) · `option.devbox.home_dir`(기본 `<루트>/home`) — 상대 경로는 루트 기준.
+```bash
+# 벌 폴더 안에서(root 셸) — settings.yaml에 적고
+#   ops:
+#     host: {compose_project: rag, extra_compose: [compose.extra.yml]}
+#     containers:
+#       pipeline: {pipeline_container_name: rag-pipeline}
+#       data_parsing: {data_parsing_container_name: rag-parsing}
+#       mcp: {mcp_container_name: rag-mcp}
+cd /home/sbl/sbl_data_parsing-main-2
+bash deploy/host/scripts/host_ctl.sh down                                        # 옛 이름 내리기(이름을 바꾸기 전에)
+cp deploy/host/compose/extra.example.yml compose.extra.yml               # <루트>/compose.extra.yml — 고쳐 씀(볼륨·env)
+bash deploy/host/scripts/host_ctl.sh config --quiet                              # 문법만 확인(값은 안 찍음)
+bash deploy/host/scripts/host_ctl.sh up -d                                       # → rag-pipeline-2 · rag-parsing-2 · rag-mcp-2 (묶음 rag-2)
+```
+
 **개발 작업 공간(SSH·opencode — 개발 서버만, 선택)**
 - 네 이미지 모두 개발 도구(sshd·git·uv·ruff·mypy·pytest·ripgrep·sqlite3·tmux·vim 등)와 opencode(이미지를 만들 때 `assets/opencode/opencode`가 있으면)를 담고 있다. 앱은 이 도구를 쓰지 않는다 — 켜지 않으면 이미지는 지금처럼 돈다.
 - 켜기: 그 벌의 `settings.yaml` 맨 아래 `option.devbox.ssh_port`에 포트를 적고(개발자마다 다르게) `host_ctl.sh init --group <운영 그룹>`을 다시 불러 `<루트>/home`(10001, 700)을 만든다(없으면 `host_ctl.sh up`이 종료 2). 그러면 `host_ctl.sh`가 `data-pipeline`을 SSH 작업 공간으로 띄운다 — 명령 `devbox`(sshd, 컨테이너 사용자 UID 10001 · 열쇠 로그인만), 코드 폴더를 쓰기 가능으로, 홈 `/home/rag` = `<루트>/home`. 실행 이미지(`*-runtime`)에서만 되고, 운영(`prd`)이면 `host_ctl.sh`가 거부한다(종료 2).

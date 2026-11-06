@@ -1,11 +1,18 @@
 # 자동 생성 — PYTHONPATH=. python deploy/release/gen_host_keys.py(고치지 말 것)
 common.run_env	RUN_ENV	text
+common.host.compose_project	COMPOSE_PROJECT	text
+common.host.data_parsing_container	DATA_PARSING_CONTAINER	text
 common.host.devbox.ssh_port	DEVBOX_SSH_PORT	num
 common.host.devbox.opencode_config	DEVBOX_OPENCODE_CONFIG	text
+common.host.devbox.home_dir	DEVBOX_HOME	text
 common.host.doc_src	DOC_SRC	text
 common.host.docker	DOCKER	text
+common.host.edw_chain_src	EDW_CHAIN_SRC	text
+common.host.extra_compose	EXTRA_COMPOSE	list
 common.host.image_stage_dir	IMAGE_STAGE_DIR	text
+common.host.mcp_container	MCP_CONTAINER	text
 common.host.output_root	RAG_OUT	text
+common.host.pipeline_container	PIPELINE_CONTAINER	text
 common.host.prune_keep	PRUNE_KEEP	num
 common.runtime.data_parsing_port	DATA_PARSING_PORT	num
 pipeline.host.image	DATA_PIPELINE_IMAGE	text
@@ -25,5 +32,9 @@ mcp.server.port	MCP_PORT	num
 image.code_root	APP_CODE_ROOT	const	/app/deploy
 image.docs_mount	APP_DOCS_MOUNT	const	/data/docs
 image.output_root	APP_OUTPUT_ROOT	const	/app/output
+default.common.host.compose_project	COMPOSE_PROJECT_DEFAULT	const	compose
+default.common.host.data_parsing_container	DATA_PARSING_CONTAINER_DEFAULT	const	mcp-data-parsing
+default.common.host.mcp_container	MCP_CONTAINER_DEFAULT	const	mcp-server
+default.common.host.pipeline_container	PIPELINE_CONTAINER_DEFAULT	const	data-pipeline
 default.common.runtime.data_parsing_port	DATA_PARSING_PORT_DEFAULT	const	8766
 default.mcp.server.port	MCP_PORT_DEFAULT	const	8765

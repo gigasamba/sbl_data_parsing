@@ -36,7 +36,7 @@
   1. Dockerfile 타깃 `pipeline-runtime`·`mcp-runtime`(이미지 `data-pipeline-runtime`·`mcp-server-runtime`) = OS 패키지·LibreOffice·휠·`assets/` 모델·사용자 10001·ENV만. 코드가 든 `pipeline`·`mcp`는 그 위에 코드 COPY만 얹는다.
   2. 실행 이미지 시작 `deploy/docker/runtime_entry.sh`: ① `/app/deploy`에 코드 폴더가 없으면 종료 2 ② 이미지 의존성 지문(`/app/docker/deps_hash`) ≠ 코드의 `deploy/docker/DEPS_HASH`(`deploy/release/deps_hash.sh` — requirements-core·image의 sha256)면 종료 2 ③ 이미지 판·코드 커밋(`CODE_COMMIT`)을 한 줄 남기고 코드 폴더의 `deploy/docker/entrypoint.sh`로 넘긴다.
   3. 코드 폴더 묶음 = 이 커밋의 git 추적 파일 + `CODE_COMMIT`, `valid_env/`·`validation/` 뺌 — `build_ship.sh`가 `output/ship/code-<버전>-<커밋>.tar.gz`로 만든다. `/app/deploy`에 읽기 전용(`:ro,z`)으로 붙인다.
-  4. compose는 컨테이너마다 파일 하나 — `compose.pipeline.yml`·`compose.data-parsing.yml`·`compose.mcp-server.yml`, 개발 서버는 각각 `compose.code.yml`·`compose.code.data-parsing.yml`·`compose.code.mcp-server.yml`을 덧붙인다(셸에 `CODE_DIR`가 있거나, 이미지가 `*-runtime`이고 `CODE_DIR`가 비면 자기 코드 폴더 — `in_container.sh` `code_dir_default`).
+  4. compose는 컨테이너마다 파일 하나 — `compose.pipeline.yml`·`compose.data-parsing.yml`·`compose.mcp-server.yml`, 개발 서버는 각각 `compose.code.yml`·`compose.code.data-parsing.yml`·`compose.code.mcp-server.yml`을 덧붙인다(셸에 `CODE_DIR`가 있으면 셋 다, 아니면 이미지마다 — 그 이미지가 `*-runtime`이면 그 짝, 코드 폴더는 자기 코드 폴더 — `host_ctl.sh`).
   5. 반입: 이미지 git(`sbl_images` — 판 폴더마다 분할 조각 + `load.sh`)과 코드 git을 공용 폴더에 zip으로 받아 풀고, 코드 폴더는 벌 폴더 이름으로 바꾼다. README §5-0.
 - 파일: `deploy/docker/{Dockerfile,runtime_entry.sh,DEPS_HASH}`, `deploy/release/{build_ship.sh,deps_hash.sh}`, `deploy/host/compose/`, `deploy/host/scripts/in_container.sh`.
 - QA: `tests/server/common/test_deps_hash.py`(DEPS_HASH ↔ requirements) · 통과. 실행 이미지에 코드 트리를 붙여 `selftest` `[판정]` 통과 · 코드 없이 띄우면 종료 2.

@@ -54,7 +54,8 @@ def test_compose_dev():
     assert dev["command"] == ["devbox"] and "DEVBOX_SSH_PORT" in dev["environment"]["SSH_PORT"]
     ro = code["volumes"][0]
     assert _target(ro)[1] == "ro,z" and _target(dev["volumes"][0]) == [_target(ro)[0], "z"], dev["volumes"][0]  # 같은 자리 — 쓰기 가능
-    assert dev["volumes"][1].endswith("/home:/home/rag:z"), dev["volumes"]
+    home = dev["volumes"][1]  # option.devbox.home_dir
+    assert home.startswith("${DEVBOX_HOME:?") and home.endswith(":/home/rag:z"), dev["volumes"]
     oc = _svc("compose.opencode.yml")
     assert oc["volumes"][0].endswith(":" + oc["environment"]["OPENCODE_CONFIG"] + ":ro,z"), oc
 

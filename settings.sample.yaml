@@ -181,22 +181,28 @@ ops:
     soffice_path: null                        # soffice 실행 파일 (null = PATH · 이미지 /usr/bin/soffice)
   # ---- 호스트 — 컨테이너 도구·여러 벌·이미지 정리 ----
   host:
+    compose_project: compose                  # compose 묶음 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>)
     container_cli: null                       # 컨테이너 명령 · docker·podman (null = podman, 없으면 docker)
+    host_edw_chain_file: null                 # 호스트 EDW 사슬 사본 파일(루트 기준 상대 또는 절대 경로) · 예 /srv/rag/edw_chain.yaml (null = <루트>/edw_chain.yaml)
+    extra_compose: null                       # 더 붙일 compose 파일(루트 기준 상대 또는 절대 경로 — 없는 파일이면 host_ctl.sh 종료 2) · 예 [compose.extra.yml] = <루트>/compose.extra.yml (null = 없음)
     prune_stage_dir: null                     # prune_images.sh가 정리할 조각·tar 폴더 (null = 정리 안 함)
     host_output_dir: null                     # 호스트 결과 폴더(절대 경로) · 예 /srv/rag/output (null = <루트>/output)
     prune_keep_versions: 2                    # 남길 이미지 판 수 · 정수
   # ---- 서버 컨테이너 — CPU·메모리 한도 ----
   containers:
-    pipeline:
-      pipeline_cpus: 5.0                      # data-pipeline 컨테이너 CPU(호스트 CPU 수 이하) · 숫자
-      pipeline_mem_limit: 24g                 # data-pipeline 메모리 · 예 16g
     data_parsing:
+      data_parsing_container_name: mcp-data-parsing  # parse MCP 서비스 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>)
       data_parsing_cpus: 3.0                  # parse MCP 서비스 컨테이너 CPU · 숫자
       data_parsing_mem_limit: 8g              # parse MCP 서비스 메모리 · 예 8g
       data_parsing_cpu_shares: 4096           # parse MCP 서비스 CPU 나눔 비율(일괄 작업 1024)
     mcp:
+      mcp_container_name: mcp-server          # 검색 MCP 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>)
       mcp_cpus: 1.0                           # mcp-server 컨테이너 CPU · 숫자
       mcp_mem_limit: 4g                       # mcp-server 메모리 · 예 4g
+    pipeline:
+      pipeline_container_name: data-pipeline  # 일괄 data-pipeline 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>)
+      pipeline_cpus: 5.0                      # data-pipeline 컨테이너 CPU(호스트 CPU 수 이하) · 숫자
+      pipeline_mem_limit: 24g                 # data-pipeline 메모리 · 예 16g
   # ---- 상주 서비스 — parse MCP ----
   services:
     data_parsing:
@@ -437,6 +443,7 @@ option:
   devbox:
     ssh_port: null                            # 개발 작업 공간 SSH 포트(dev만 — 개발자마다 다르게) · 예 2222 (null = 끔)
     opencode_config: null                     # opencode 설정 파일(호스트 절대 경로) · 예 /home/sbl/opencode.json (null = 이미지의 틀)
+    home_dir: null                            # 개발 작업 공간 홈 폴더(루트 기준 상대 또는 절대 경로) · 예 /srv/rag/home-hong (null = <루트>/home)
     gitea_url: null                           # 내부망 gitea 주소(http(s)://호스트[:포트][/경로] — http는 토큰이 암호화 없이 감) · 예 https://gitea.corp.local:3000 (null = git 계정 설정 안 함 — 주소·계정·토큰을 모두 적어야 씀)
     gitea_user: null                          # gitea 계정 이름 · 예 hong (null = 설정 안 함)
     gitea_token: null                         # gitea 접근 토큰 · 예 gitea 설정 > 응용 > 토큰에서 만든 값 (null = 설정 안 함) [비밀]
