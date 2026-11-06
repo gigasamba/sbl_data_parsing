@@ -99,7 +99,19 @@ A: `, 절 `DS`. 5행 = `divider`만 → 건너뜀. 머리글 없는 시트 `memo
 <a id="pl-57"></a>
 ## pl-57 · 원본 zip은 풀어서 안의 문서를 파싱
 - 이유(사용자 11-05): zip으로 올라온 원본 안의 문서도 검색되어야 한다. 메일 첨부 zip은 이미 풀어 파싱한다(pl-36).
-- 요건(되어야 할 모습): 받은 원본이 zip이면 `candidate_ready`가 풀어 안의 문서를 각각 파싱 입력으로 둔다. 안 파일의 키·처리 기록·깊이·크기·개수 상한·암호 zip 처리는 설계 때 정해 여기 적는다.
+
+### 규칙(사용자 11-06 결정)
+1. 압축 원본 하나 = 검색 문서 하나(메일 첨부와 같은 방식 — [transform.md#pl-36](transform.md#pl-36)). 안 파일은 형식별 엔진으로 글을 뽑아 대표 본문에 `[파일 <안 경로>]` 절로 덧붙인다(글자만 — 표 구조·그림 설명 없음). 문서 키·처리 기록은 압축 원본 하나(`s3_key` 그대로).
+2. 푸는 형식: `.zip`·`.tar`·`.tgz`·`.tar.gz`(표준 라이브러리). `.7z`·`.rar`·`.bz2`·`.xz`, tar가 아닌 `.gz`는 지금처럼 `unsupported_archive`.
+3. 압축 엔진 `archive`(엔진 폴더 `engines/archive` — 새 엔진이라 다른 엔진 지문은 그대로, 사람 검토 등급 A)는 안 파일 목록을 본문으로 내고, 안 파일 파싱은 대표 결과의 첨부 단계(`mail_attachments`, 후보정 `attachments`)가 한다(P0 캐시 같음).
+4. 안의 압축은 한 단계 더 푼다(그 밑은 풀지 않음).
+5. 안전 상한(평소엔 걸리지 않을 큰 값, 설정 칸): 풀린 크기 합계 `tuning.extract.archive.max_total_mb`(2048), 파일 수 `max_files`(1000). 안 파일 하나의 크기 상한은 없다.
+6. 받기의 거르기(pl-02 `_unsupported_reason`)가 머리만 읽어 판정하고, 걸리면 `applog.except_doc_info`에 `skip`으로 남겨 다음 실행도 건너뛴다: 암호 `encrypted_archive` · 깨짐 `broken_archive` · 상한 넘음 `archive_too_big`.
+7. 공용 읽기(목록·상한·암호 판정)는 `pipeline/shared/archive.py` 한 곳 — 받기(extract)와 첨부 단계(transform)가 같이 쓴다. 나중에 안 파일마다 문서 하나로 바꿀 때도 이 목록을 쓴다.
+
+### QA
+- `tests/server/pipeline/test_archive.py` 사례 표: zip·tar.gz 풀림 → `[파일 …]` 절 · 안 zip 한 단계 · 두 단계 밑은 안 풂 · 암호 → `encrypted_archive` · 깨짐 → `broken_archive` · 파일 수·합계 넘음 → `archive_too_big` · `.7z` → `unsupported_archive`.
+
 - 비고(현재와 다른 점): 원본 zip은 "지원하지 않음"(`skipped_unsupported`)으로 표시만 한다(`filter_and_rotate.ARCHIVE_EXT` — pl-02).
 - Status: todo
 
