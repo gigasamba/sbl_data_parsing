@@ -11,6 +11,8 @@ from pathlib import Path
 
 from common.core.paths import APP_ROOT  # output/ 경계(attach_dir)
 from pipeline import config as pc
+from pipeline.extract.unpack import PARTS
+from pipeline.shared.ext_groups import MAIL_EXTS
 from pipeline.shared.raw_cache import raw_engine_path, raw_root
 from pipeline.shared.vlmcall import sha
 from pipeline.transform.parse.parse_engines import engine_version
@@ -33,7 +35,7 @@ def attach_dir():
 
 def parts_of(doc_path):
     """받기 단계가 꺼내 둔 안 파일 목록(parts.json)과 그 폴더 — 없으면 빈 목록(상자가 아님·받기 단계를 안 거침)."""
-    d = Path(doc_path).parent / "_parts" / Path(doc_path).name
+    d = Path(doc_path).parent / PARTS / Path(doc_path).name
     try:
         return d, json.loads((d / "parts.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -171,7 +173,7 @@ def mail_blocks(doc_path, base_text):
     안 파일은 받기 단계가 꺼낸 것만(크기·개수·깊이 상한도 거기서 — unpack). 꺼낸 것이 없으면 (본문 그대로, 빈 목록, 0 통계)."""
     stats = {"n": 0, "parsed": 0, "cached": 0, "sources": []}
     blocks = []
-    if Path(doc_path).suffix.lower() in (".eml", ".msg"):
+    if Path(doc_path).suffix.lower() in MAIL_EXTS:
         th = thread_paragraphs(base_text)
         if th:
             blocks.append(th)

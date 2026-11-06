@@ -18,16 +18,16 @@ from xml.etree import ElementTree as ET
 
 from pipeline import config as pc
 from pipeline.extract import archive
-from pipeline.shared.ext_groups import IMG_EXTS, OOXML_EXTS
+from pipeline.shared.ext_groups import IMG_EXTS, MAIL_EXTS, OFFICE_EXTS
 
 KIND = {"archive": "파일", "mail": "첨부", "office": "개체"}  # 변환 단계 절 이름표
-OFFICE_EXTS = OOXML_EXTS | {".dotx", ".potx", ".ppsx", ".xltx"}  # 새 형식 오피스(서식·쇼 파일 포함)
+PARTS = "_parts"  # 준비 폴더 아래 꺼낸 안 문서 폴더(변환 단계 mail_attachments.parts_of도 이 이름)
 _PR = "{http://schemas.openxmlformats.org/package/2006/relationships}Relationship"
 _R_ID = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 _P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
 _S = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
-_OWNER = re.compile(r"(word)/_rels/document\.xml\.rels|(ppt/slides)/_rels/slide\d+\.xml\.rels|(xl/worksheets)/_rels/sheet\d+\.xml\.rels")
+_OWNER = re.compile(r"word/_rels/document\.xml\.rels|ppt/slides/_rels/slide\d+\.xml\.rels|xl/worksheets/_rels/sheet\d+\.xml\.rels")
 _OBJ = ("/oleObject", "/package")  # 개체 연결 — 차트 엑셀은 charts/_rels에서만 가리켜 여기 안 걸림
 _OLE_DOCS = (("WordDocument", ".doc"), ("Workbook", ".xls"), ("Book", ".xls"), ("PowerPoint Document", ".ppt"))
 
@@ -36,7 +36,7 @@ def box_kind(name):
     ext = Path(name).suffix.lower()
     if archive.kind_of(name):
         return "archive"
-    return "mail" if ext in (".eml", ".msg") else "office" if ext in OFFICE_EXTS else None
+    return "mail" if ext in MAIL_EXTS else "office" if ext in OFFICE_EXTS else None
 
 
 # ── 메일 ─────────────────────────────────────────────────────────────────
@@ -47,7 +47,8 @@ def _eml_parts(part):
     for sub in part.iter_parts():
         if sub.get_content_type() == "message/rfc822":
             inner = sub.get_content()
-            yield sub.get_filename() or f"{inner['subject'] or '메일'}.eml", inner.as_bytes(), {}, True
+            name = sub.get_filename() or inner["subject"] or "메일"
+            yield (name if name.lower().endswith(".eml") else f"{name}.eml"), inner.as_bytes(), {}, True  # 이름에 .eml이 없어도 메일로 엶
         elif sub.is_multipart():
             yield from _eml_parts(sub)
         elif sub.get_content_maintype() != "image" and sub.get_filename():
@@ -115,22 +116,24 @@ def _unwrap(name, data):
     return None
 
 
+def _rel_targets(z, base, part):
+    """<base>/_rels/<part>.rels → {연결 id: zip 안 경로}."""
+    return {
+        r.get("Id"): posixpath.normpath(posixpath.join(base, r.get("Target")))
+        for r in ET.fromstring(z.read(f"{base}/_rels/{part}.rels")).iter(_PR)
+    }
+
+
 def _slide_order(z):
     """ppt/slides/slideN.xml → 발표 순서(1부터) — 파일 번호와 순서가 다를 수 있다."""
-    rels = {
-        r.get("Id"): posixpath.normpath(posixpath.join("ppt", r.get("Target")))
-        for r in ET.fromstring(z.read("ppt/_rels/presentation.xml.rels")).iter(_PR)
-    }
+    rels = _rel_targets(z, "ppt", "presentation.xml")
     ids = [s.get(_R_ID) for s in ET.fromstring(z.read("ppt/presentation.xml")).iter(_P + "sldId")]
     return {rels[i]: n for n, i in enumerate(ids, 1) if i in rels}
 
 
 def _sheet_names(z):
     """xl/worksheets/sheetN.xml → (시트 이름, 다음 시트 이름) — 위치 표시를 그 시트 끝(다음 시트 이름표 앞)에."""
-    rels = {
-        r.get("Id"): posixpath.normpath(posixpath.join("xl", r.get("Target")))
-        for r in ET.fromstring(z.read("xl/_rels/workbook.xml.rels")).iter(_PR)
-    }
+    rels = _rel_targets(z, "xl", "workbook.xml")
     sheets = [(rels.get(s.get(_R_ID)), s.get("name")) for s in ET.fromstring(z.read("xl/workbook.xml")).iter(_S + "sheet")]
     return {f: (n, sheets[i + 1][1] if i + 1 < len(sheets) else None) for i, (f, n) in enumerate(sheets)}
 
@@ -206,7 +209,9 @@ def _children(path, kind):
 
 def _expand(path, label, depth, dst, out, seq):
     """path가 상자면 안 파일을 dst에 꺼내 out에 더한다(깊이 상한까지 다시). 열렸으면 True. 읽기 실패만 거기서 멈추고
-    쓰기 실패(디스크 가득 등)는 그대로 올린다(덜 꺼낸 목록을 다 꺼낸 것처럼 남기지 않게)."""
+    쓰기 실패(디스크 가득 등)는 그대로 올린다(덜 꺼낸 목록을 다 꺼낸 것처럼 남기지 않게).
+    목록에서 그 안 파일로 대신하는 것: 열린 안 압축(압축 엔진 글은 목록뿐) · 안 메일(.eml 엔진이 글을 이미 읽음 — 깊이 상한으로
+    못 열어도 뺌)."""
     kind = box_kind(path.name)
     if kind is None or depth >= pc.cfg().extract.attach.max_depth:
         return False
@@ -221,31 +226,22 @@ def _expand(path, label, depth, dst, out, seq):
             break
         except READ_FAIL:
             break  # 읽는 도중 깨진 압축 — 거기까지 꺼낸 것만
-        # 목록에서 그 안 파일로 대신: 풀린 안 압축(압축 엔진 글은 목록뿐) · 안 메일(.eml 엔진이 글을 이미 읽음 — 첨부만)
-        _keep(name, data, where, label, depth, kind, dst, out, seq, inline or box_kind(name) == "archive")
+        full = f"{label}/{name}" if label else name
+        f = dst / f"{next(seq):05d}{re.sub(r'[^.\w]', '', Path(name).suffix.lower())[:10]}"
+        f.write_bytes(data)
+        item = {"file": f.name, "name": full, "depth": depth + 1, "kind": KIND[kind], "where": where}
+        out.append(item)
+        opened = _expand(f, full, depth + 1, dst, out, seq)
+        if inline or (opened and box_kind(name) == "archive"):
+            out.remove(item)
+            f.unlink()
     return True
 
 
-def _keep(name, data, where, label, depth, kind, dst, out, seq, swap):
-    """안 파일 하나를 번호 이름으로 쓰고 목록에 더한다 — 그 파일이 또 상자면 다시 연다. swap이면 열린 상자는 그 안 파일로
-    대신한다(안 메일은 깊이 상한으로 못 열어도 뺌 — 글은 엔진이 이미 읽음)."""
-    full = f"{label}/{name}" if label else name
-    ext = re.sub(r"[^.\w]", "", Path(name).suffix.lower())[:10]
-    dst.mkdir(parents=True, exist_ok=True)
-    f = dst / f"{next(seq):05d}{ext}"
-    f.write_bytes(data)
-    item = {"file": f.name, "name": full, "depth": depth + 1, "kind": KIND[kind], "where": where}
-    out.append(item)
-    opened = _expand(f, full, depth + 1, dst, out, seq)
-    if swap and (opened or box_kind(name) == "mail"):
-        out.remove(item)
-        f.unlink()
-
-
 def is_fresh(doc, parts_root):
-    """꺼낸 목록이 원본보다 새것이면 True — 원본이 안 바뀐 재실행은 다시 풀지 않는다."""
+    """상자가 아니거나 꺼낸 목록이 원본보다 새것이면 True — 원본이 안 바뀐 재실행은 다시 거르거나 풀지 않는다."""
     j = Path(parts_root) / Path(doc).name / "parts.json"
-    return j.exists() and j.stat().st_mtime >= Path(doc).stat().st_mtime
+    return box_kind(Path(doc).name) is None or (j.exists() and j.stat().st_mtime >= Path(doc).stat().st_mtime)
 
 
 def unpack(doc, parts_root):
@@ -257,7 +253,7 @@ def unpack(doc, parts_root):
     if box_kind(doc.name) is None:
         return []
     out: list[dict] = []
-    _expand(doc, "", 0, dst, out, itertools.count(1))
     dst.mkdir(parents=True, exist_ok=True)
+    _expand(doc, "", 0, dst, out, itertools.count(1))
     (dst / "parts.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
     return out

@@ -42,9 +42,8 @@ def _read(a, kind, item):
 
 
 def _walk(p, kind):
-    """(안 경로, 풀린 크기, 암호?, 읽기 함수) — 안의 압축은 크기가 상한 안일 때만 한 단계 풀고, 풀리지 않으면(tar 아닌 .gz·깨짐)
-    보통 파일로 둔다(바깥 압축 전체를 버리지 않게). 안의 압축은 남은 상한(합계 − 지금까지)보다 작을 때만 연다.
-    읽기 함수는 다음 항목으로 넘어가기 전에만 쓴다(안의 압축은 그 항목들을 다 내줄 때까지 열어 둠)."""
+    """거르기용 목록 (안 경로, 풀린 크기, 암호?) — 안의 압축은 크기가 상한 안일 때만 한 단계 풀고, 풀리지 않으면(tar 아닌 .gz·깨짐)
+    보통 파일로 둔다(바깥 압축 전체를 버리지 않게). 안의 압축은 남은 상한(합계 − 지금까지)보다 작을 때만 연다."""
     cap, seen = _cap_bytes(), 0
     with _open(p, kind) as a:
         for name, size, enc, item in _members(a, kind):
@@ -59,12 +58,12 @@ def _walk(p, kind):
                     b = None
             if b is None:
                 seen += size
-                yield name, size, enc, lambda item=item: _read(a, kind, item)
+                yield name, size, enc
                 continue
             with b:
-                for n2, s2, e2, it2 in sub:
+                for n2, s2, e2, _ in sub:
                     seen += s2
-                    yield f"{name}/{n2}", s2, e2, lambda b=b, inner=inner, it2=it2: _read(b, inner, it2)
+                    yield f"{name}/{n2}", s2, e2
 
 
 def check(p):
@@ -78,7 +77,7 @@ def check(p):
     max_files, cap = pc.cfg().extract.archive.max_files, _cap_bytes()
     total = n = 0
     try:
-        for _name, size, enc, _read_fn in _walk(p, kind):
+        for _name, size, enc in _walk(p, kind):
             if enc:
                 return "encrypted_archive"
             n, total = n + 1, total + size

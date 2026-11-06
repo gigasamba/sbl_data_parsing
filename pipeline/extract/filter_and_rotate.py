@@ -353,7 +353,7 @@ def main():
     # 기록 파일은 하위 폴더 _records/에(parse_engines는 이 폴더의 맨 위 파일만 문서로 훑는다 — 기록이 "건너뜀 .csv"로 세지지 않게)
     records = out / "_records"
     records.mkdir(exist_ok=True)
-    parts = out / "_parts"  # 꺼낸 안 문서(pl-63) — 하위 폴더라 파싱 대상(맨 위 파일)이 아님
+    parts = out / unpack.PARTS  # 꺼낸 안 문서(pl-63) — 하위 폴더라 파싱 대상(맨 위 파일)이 아님
     if (out / "skipped.jsonl").exists() and not (records / "skipped.jsonl").exists():  # 예전 자리의 누적 기록은 옮겨 이어 씀
         (out / "skipped.jsonl").replace(records / "skipped.jsonl")
     skipped_log = Path(pc.cfg().extract.skipped_log or (records / "skipped.jsonl"))  # S7c — 설정 객체
@@ -385,7 +385,9 @@ def main():
         if unsup:
             _record_skip(p, unsup, skipped, skipped_log)
             continue
-        bad = archive.check(p)  # 압축 원본 — 암호·깨짐·안전 상한(pl-57)
+        bad = (
+            None if unpack.is_fresh(p, parts) else archive.check(p)
+        )  # 압축 원본 — 암호·깨짐·안전 상한(pl-57 — 이미 풀어 둔 원본은 다시 안 봄)
         if bad:
             _record_skip(p, bad, skipped, skipped_log)
             continue
@@ -427,7 +429,7 @@ def main():
                 place(p, dst)
         else:
             place(p, dst)
-        if not unpack.is_fresh(dst, parts):  # 문서 안 문서(압축·메일 첨부·오피스 개체)를 _parts/<이름>/에(pl-63)
+        if not unpack.is_fresh(p, parts):  # 문서 안 문서(압축·메일 첨부·오피스 개체)를 _parts/<이름>/에(pl-63)
             unpack.unpack(dst, parts)
         angles = ", ".join(f"{r['page']}쪽 {r['angle']}°" for r in log if r["file"] == p.name)
         print(f"{p.name}: {angles or '복사'}", flush=True)
