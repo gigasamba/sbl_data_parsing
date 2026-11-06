@@ -17,7 +17,7 @@ def selftest():
         and head("search") == "0006_search"
         and known("search") == ["0006_search", "0005_search", "0004_search", "0003_search", "0002_search", "0001_search"]
     )
-    assert head("applog") == "0003_applog" and known("applog") == ["0003_applog", "0002_applog", "0001_applog"]
+    assert head("applog") == "0004_applog" and known("applog") == ["0004_applog", "0003_applog", "0002_applog", "0001_applog"]
     assert head("master") == "0001_master" and known("master") == ["0001_master"]
     assert not list((MIGRATIONS / "versions").glob("*struct*"))  # struct 갈래 없음(엔진 구성·원천 목록은 파일)
     print("[selftest] dbtool — 판 폴더 갈래 search 하나·끝 판·HNSW 2000 같음 통과")
@@ -141,3 +141,96 @@ def test_applog_schema_only_applog():  # --target applog --schema <검색 스키
             raise AssertionError("거부해야 함")
         except DbToolError as e:
             assert e.code == 2 and "applog 스키마에만" in err.getvalue(), err.getvalue()
+
+
+# up --sql(DB 없이 SQL만) — (인자, 들어 있어야 할 글자, 없어야 할 글자)
+UP_SQL = [
+    (
+        ["--target", "applog"],
+        [
+            "CREATE TABLE applog.alembic_version",
+            "CREATE TABLE applog.except_doc_info",
+            "PARTITION OF applog.pipe_event",
+            "ALTER TABLE applog.pipe_event ADD COLUMN source_system TEXT;",
+            "ADD COLUMN file_ext TEXT",
+            "-- 수동: 월 파티션",
+            "COMMIT;",
+        ],
+        [],
+    ),
+    (
+        ["--target", "applog", "--from", "0003_applog"],  # 있는 DB — 0003 → 0004만
+        ["ALTER TABLE applog.except_doc_info ADD COLUMN file_ext TEXT, ADD COLUMN file_size BIGINT", "SET version_num='0004_applog'"],
+        ["CREATE TABLE applog.except_doc_info", "CREATE TABLE applog.alembic_version"],
+    ),
+    (
+        ["--target", "search", "--schema", "demo", "--dim", "768"],
+        ["CREATE SCHEMA IF NOT EXISTS demo;", "demo_sfdc.chunk", "vector(768)", "SET version_num='0006_search'", "-- 수동: vector 확장"],
+        ["applog."],
+    ),
+    (["--target", "master", "--schema", "demo"], ["CREATE TABLE demo_master.master_meta", "demo_master.alembic_version"], []),
+]
+
+
+def test_up_sql():
+    import contextlib
+    import io
+    import tempfile
+    from pathlib import Path
+    from unittest import mock
+
+    from common.store import pg
+    from common.store.db import dbtool
+
+    no_db = mock.Mock(side_effect=AssertionError("DB에 붙음"))
+    with tempfile.TemporaryDirectory() as d, mock.patch.object(dbtool, "engine", no_db), mock.patch.object(pg, "has_conn", no_db):
+        for args, has, hasnt in UP_SQL:
+            out = Path(d) / "up.sql"
+            with contextlib.redirect_stdout(io.StringIO()):
+                assert dbtool.main(["up", "--sql", str(out), *args]) == 0, args
+            sql = out.read_text(encoding="utf-8")
+            assert all(s in sql for s in has) and not any(s in sql for s in hasnt), (args, [s for s in has if s not in sql])
+
+
+# up --sql 거부 — (인자, 안내 글자): 실패하면 파일을 남기지 않는다
+UP_SQL_REJECT = [
+    (["--target", "search", "--schema", "demo"], "차원이 필요"),  # 빈 스키마부터(0001·0002가 차원을 읽음)
+    (["--target", "search", "--schema", "demo", "--from", "0001_search"], "차원이 필요"),  # 0002가 남음
+    (["--target", "applog", "--from", "0005_search"], "고른 갈래"),  # 고르지 않은 갈래의 판
+    (["--target", "all", "--schema", "demo", "--from", "nope"], "고른 갈래"),
+]
+
+
+def test_up_sql_rules():
+    import contextlib
+    import io
+    import re
+    import tempfile
+    from pathlib import Path
+    from unittest import mock
+
+    from common.store import pg
+    from common.store.db import dbtool
+
+    for f in sorted((MIGRATIONS / "versions").glob("*.py")):  # 차원을 읽는 판 = NEEDS_DIM
+        rev = re.search(r'^revision = "([^"]+)"', f.read_text(encoding="utf-8"), re.M).group(1)
+        assert ('["dim"]' in f.read_text(encoding="utf-8")) == (rev in dbtool.NEEDS_DIM), rev
+    no_pg = mock.Mock(side_effect=AssertionError("접속 정보를 읽음"))
+    with tempfile.TemporaryDirectory() as d, mock.patch.object(pg, "conf", no_pg), mock.patch.object(dbtool, "engine", no_pg):
+        out = Path(d) / "up.sql"
+        for args, msg in UP_SQL_REJECT:
+            err = io.StringIO()
+            try:
+                with contextlib.redirect_stderr(err):
+                    dbtool.main(["up", "--sql", str(out), *args])
+                raise AssertionError(f"거부해야 함: {args}")
+            except dbtool.DbToolError as e:
+                assert e.code == 2 and msg in err.getvalue(), (args, err.getvalue())
+            assert not list(Path(d).iterdir()), args  # 반쯤 쓴 파일 없음
+        err = io.StringIO()  # 스키마 이름은 설정 기본값(접속 정보 없이) · --from 없는 갈래는 경고 줄 + 주석
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            assert dbtool.main(["up", "--sql", str(out), "--target", "all", "--dim", "8", "--from", "0003_applog"]) == 0
+        sql = out.read_text(encoding="utf-8")
+        assert "빈 스키마부터" in err.getvalue() and sql.count("-- 주의:") == 2 and ";;" not in sql, err.getvalue()
+        assert "CREATE TABLE applog.except_doc_info" not in sql and "\r" not in out.read_bytes().decode("utf-8")
+        assert [p.name for p in Path(d).iterdir()] == ["up.sql"]

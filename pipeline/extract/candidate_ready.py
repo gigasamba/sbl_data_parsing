@@ -24,7 +24,7 @@ from pathlib import Path
 from common.config import settings as C
 from common.core import span as SP  # 성능 span
 from common.core.console import utf8_stdout
-from common.core.contract import file_hash, jl
+from common.core.contract import file_hash
 from common.core.contract import safe_path_join as _safe_join  # 경로 잇기(load 단계와 같은 함수)
 from common.core.paths import atomic_write_text, tmp_path_for
 from common.store import objectstore
@@ -35,9 +35,8 @@ from pipeline.shared.srcsha import sha_of, stat_of
 
 
 def _read_manifest(state):
-    """state/manifest.jsonl → {file_name: 행}(없으면 빈 사전)."""
-    man_f = state / "manifest.jsonl"
-    return {r["file_name"]: r for r in jl(man_f)} if man_f.exists() else {}
+    """state/manifest.jsonl → {file_name: 행}(없으면 빈 사전) — 고쳐 다시 쓰므로 공용 읽기(span.manifest_rows)의 사본."""
+    return dict(SP.manifest_rows(state / "manifest.jsonl"))
 
 
 def _write_manifest(state, rows):
@@ -83,7 +82,14 @@ def download(rows, state, workers=1):
 
     def _one(o):
         name = o["filename"] or o["key"]
-        with SP.span("extract.download", "extract", doc_id=name, ext=Path(name).suffix.lower(), file_bytes=o["size"]) as sp:
+        with SP.span(
+            "extract.download",
+            "extract",
+            doc_id=name,
+            ext=Path(name).suffix.lower(),
+            file_bytes=o["size"],
+            source_system=o.get("source_system"),
+        ) as sp:
             return _fetch(o, sp)
 
     def _fetch(o, sp):
@@ -314,10 +320,11 @@ def _dedup(local, names, dedup_dir, state, seen=None):
     rep = {r["group"]: r["file"] for r in rows if r["representative"]}
     man = _read_manifest(state)
     key_of = {n: r.get("key") or n for n, r in man.items()}
+    src_of = {n: r.get("source_system") for n, r in man.items()}
     dropped, dups = set(), []
     for r in rows:
         if not r["representative"]:
-            skip_event(r["file"], "dup_batch", dup_of=rep[r["group"]])
+            skip_event(r["file"], "dup_batch", src_of.get(r["file"]), dup_of=rep[r["group"]])
             dropped.add(r["file"])
             dups.append(r["file"])
     picked = [n for n in names if n in keep]
@@ -326,13 +333,13 @@ def _dedup(local, names, dedup_dir, state, seen=None):
     for n in picked:
         key, hit = key_of.get(n, n), done.get(keep[n])
         if hit and hit[0] != key:
-            skip_event(n, "dup_done", dup_of=hit[0])
+            skip_event(n, "dup_done", src_of.get(n), dup_of=hit[0])
             dropped.add(n)
             dups.append(n)
             continue
         first = _claim(seen, keep[n], key) if seen is not None else None
         if first:
-            skip_event(n, "dup_run", dup_of=first)
+            skip_event(n, "dup_run", src_of.get(n), dup_of=first)
             dropped.add(n)
             dups.append(n)
         else:
@@ -369,8 +376,15 @@ def _claim(seen, sha, key):
 
 
 def _skip_row(key, name, reason, man_row):
-    """except_docs.record 행 하나 — 원천은 manifest 행의 source_system(없으면 None)."""
-    return {"source_key": key, "source_system": (man_row or {}).get("source_system"), "file_name": name, "reason": reason}
+    """except_docs.record 행 하나 — 원천·크기는 manifest 행의 source_system·크기(span.manifest_size — 없으면 None)."""
+    man_row = man_row or {}
+    return {
+        "source_key": key,
+        "source_system": man_row.get("source_system"),
+        "file_name": name,
+        "file_size": SP.manifest_size(man_row),
+        "reason": reason,
+    }
 
 
 def _record_filtered(prepared, state):

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """pgvector 우리 스키마 판 관리 명령.
   python -m common.store.db.dbtool up      --target search|all [--schema S] [--dim N | --bundle B] [--create-extension]
+  python -m common.store.db.dbtool up --sql <파일> [--from <지금 판> …] …  — DB에 붙지 않고 up이 실행할 SQL을 파일로(DB 담당이 보고 손으로 실행)
   python -m common.store.db.dbtool current --target …   — 지금 판·코드의 끝 판
   python -m common.store.db.dbtool check   --target …   — current와 같고, 판이 끝이 아니면 종료 코드 1
   python -m common.store.db.dbtool maintain --target applog  — 현재+2개월 파티션 생성/만료 기록 정리(매일 예약)
@@ -247,6 +248,63 @@ def upgrade(target, schema, dim=None, conn=None):
         maintain_applog(schema, conn=conn, prune=False)
 
 
+# DB를 읽어야 하는 up의 확인 — --sql 파일에는 사람이 할 일로 적는다(글자 안 {S}·{dim}은 채움)
+MANUAL = {
+    "search": (
+        "vector 확장이 있어야 함 — 없으면 DB 관리자가 CREATE EXTENSION vector",
+        "스키마 {S}·{S}_<원천>에 판 표(alembic_version) 없이 표가 있으면 남의 스키마 — 실행하지 말 것(up은 거부)",
+        "있는 chunk 표의 embedding 차원이 {dim}인지(다르면 임베딩 모델이 바뀜 — 새 스키마로)",
+    ),
+    "applog": ("월 파티션 — 판 0001은 이 SQL을 만든 달 기준, 실행 뒤 dbtool maintain --target applog(매일 예약)가 현재+2개월을 맞춘다",),
+    "master": (),
+}
+
+
+NEEDS_DIM = ("0001_search", "0002_search")  # 판 파일이 attributes["dim"]을 읽는 판(test_dbtool이 판 파일과 대조)
+
+
+def up_sql(a, out):
+    """`up --sql <파일>` — DB에도 접속 정보에도 붙지 않고 up이 실행할 SQL을 파일로(Alembic 오프라인). --from <판>(갈래마다 하나 — 갈래는
+    판 번호로 앎)이 없는 갈래는 빈 스키마부터(경고 줄 + SQL 주석). 판 확인·남의 스키마·차원·vector 확장처럼 DB를 읽는 확인은 `-- 수동:` 줄로.
+    파일은 다 만든 뒤에만 한 번에 씀(실패하면 파일 없음)."""
+    import io
+
+    from alembic import command
+
+    from common.config.settings import cfg
+    from common.core.paths import atomic_write_bytes
+
+    dim, starts, targets = _dim_arg(a), a.from_rev or [], _targets(a)
+    if bad := [r for r in starts if not any(r in known(t) for t in targets)]:
+        raise DbToolError(f"--from {bad} — 고른 갈래({', '.join(targets)})의 판이 아님(dbtool current로 지금 판 확인)")
+    buf = io.StringIO()
+    for target in targets:
+        given = _schema_arg(a, target)
+        if target != "applog" and given is None:  # 기준 스키마 이름만 설정에서(접속 정보는 읽지 않음 — common.store.pg.conf 아님)
+            given = cfg().connections.pg.db_schema
+            if not given:
+                raise DbToolError("기준 스키마 이름 없음 — --schema S 또는 settings.yaml required.pg.pg_schema")
+        schema = schema_of(target, given)
+        start = next((r for r in starts if r in known(target)), None)
+        todo = known(target)[: known(target).index(start)] if start else known(target)  # 이 SQL이 올리는 판들
+        if dim is None and set(todo) & set(NEEDS_DIM):
+            raise DbToolError(
+                f"{target}: 판 {sorted(set(todo) & set(NEEDS_DIM))}은 차원이 필요 — --dim N 또는 --bundle <묶음>(있는 스키마는 --from <지금 판>)"
+            )
+        buf.write(f"-- {target} {schema}: 판 {start or '처음(빈 스키마)'} → {head(target)}\n")
+        if start is None:
+            warn = f"{target}: --from이 없어 빈 스키마부터 만드는 SQL — 이미 표가 있는 DB에는 --from <지금 판>"
+            print(f"[migrate] 경고: {warn}", file=sys.stderr, flush=True)
+            buf.write(f"-- 주의: {warn}\n")
+        buf.write(f"-- 수동: 지금 판이 {start or '없음'}인지 먼저 — SELECT version_num FROM {schema}.alembic_version\n")
+        buf.writelines(f"-- 수동: {m.format(S=schema, dim=dim)}\n" for m in MANUAL[target] if dim is not None or "{dim}" not in m)
+        rng = f"{start}:{target}@head" if start else f"{target}@head"
+        command.upgrade(_config(target=target, schema=schema, dim=dim, create_schema=True, out=buf), rng, sql=True)
+    atomic_write_bytes(out, buf.getvalue().encode("utf-8"))  # 같은 폴더 임시 파일 → 이름 바꾸기(LF 그대로)
+    print(f"[migrate] SQL → {out} (DB에 붙지 않음 — 실행은 DB 담당이 직접)")
+    return 0
+
+
 def maintain_applog(schema="applog", *, conn=None, prune=True, now=None):
     """명시적 Alembic 유지 관리: 현재+2개월 생성, 만료 월 DROP/pipe_run DELETE. sink에서는 호출 금지."""
     from alembic.migration import MigrationContext
@@ -344,13 +402,21 @@ def main(argv=None):
     ap.add_argument("--bundle", help="묶음 폴더 — meta.json의 dim")
     ap.add_argument("--dir", help="master load — CSV 폴더(기본 git resources/vocab/glossary · 서버 기밀 명부는 서버 폴더)")
     ap.add_argument("--create-extension", action="store_true", help="vector 확장이 없으면 만들기(PC·단독 시험만)")
+    ap.add_argument("--sql", help="up — DB에 붙지 않고 실행할 SQL을 이 파일로(Alembic 오프라인 · DB 담당 검토용)")
+    ap.add_argument("--from", dest="from_rev", action="append", help="up --sql — 지금 판(갈래마다 하나, 여러 번) · 없으면 빈 스키마부터")
     a = ap.parse_args(argv)
+    if (a.sql or a.from_rev) and a.cmd != "up":
+        ap.error("--sql·--from은 up에만")
+    if a.from_rev and not a.sql:
+        ap.error("--from은 --sql과 함께만(DB에 붙는 up은 지금 판을 DB에서 읽음)")
     if a.cmd == "maintain" and a.target != "applog":
         ap.error("maintain은 --target applog만 지원")
     if (a.cmd == "master") != (a.sub == "load"):
         ap.error("master는 `master load`로만")
     if a.target == "applog":
         schema_of("applog", a.schema)  # 스키마 이름 거부는 접속 확인보다 먼저
+    if a.sql:
+        return up_sql(a, a.sql)
     from common.store.pg import has_conn
 
     if not has_conn():

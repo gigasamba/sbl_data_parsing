@@ -467,7 +467,9 @@ def main(argv=None):
         )
         first = len(chunks)
         seq = 0
-        with SP.span("transform.structure", doc_id=doc, ext=Path(doc).suffix.lower(), cpu=False) as sp:  # 청킹+위치(bbox) 계산 1문서
+        with SP.span(
+            "transform.structure", doc_id=doc, ext=Path(doc).suffix.lower(), source_system=_src_sys, cpu=False
+        ) as sp:  # 청킹+위치(bbox) 계산 1문서
             rows = S.faq_rows(orig) if _src_sys == "FAQ" and orig else None
             if _src_sys == "FAQ" and not orig:
                 print(f"[bundle] 경고: FAQ 원본이 없어 행 단위로 못 자름 — 일반 청킹: {doc}", flush=True)

@@ -117,7 +117,7 @@ pgvector의 표는 코드가 실행 중에 만들지 않는다. 모두 Alembic �
 | 갈래(`--target`) | 스키마 | 끝 판 |
 |---|---|---|
 | `search` | 기준 스키마(`required.pg.pg_schema`) + 원천 스키마 5벌 `<기준>_{sfdc,crms,las,faq,other}` | `0006_search`(0001→0006 차례로 — 0006은 `doc` 처리 기록 칸) |
-| `applog` | `applog`(고정 이름 — 다른 `--schema`는 종료 2, PC 시험 스키마 `test_*`만 예외) | `0003_applog`(0001→0003 — 0003은 적재 안 된 문서 표 `except_doc_info`) |
+| `applog` | `applog`(고정 이름 — 다른 `--schema`는 종료 2, PC 시험 스키마 `test_*`만 예외) | `0004_applog`(0001→0004 — 0003은 적재 안 된 문서 표 `except_doc_info`, 0004는 `pipe_event` 원천·`except_doc_info` 확장자·크기 칸) |
 | `master` | `<기준>_master` | `0001_master` — 채우기는 `master load` |
 
 | 명령 | 하는 일 |
@@ -294,12 +294,13 @@ cp valid_env/edw/edw.sqlite output/demo/edw.sqlite   # EDW 대역 사본(원본 
 ```bash
 .venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle output/demo/bundle --create-extension
 .venv/bin/python -m common.store.db.dbtool master load --schema demo
-.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0006_search · applog 0003_applog · master 0001_master
+.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0006_search · applog 0004_applog · master 0001_master
 .venv/bin/python -m common.store.db.dbtool check --target all      # 기대: 갈래마다 판 끝, 종료 코드 0
 ```
 
 - 초기화 순서: `dbtool up`(search·applog·master) → `dbtool master load` → 파싱·구조화·적재. 서버는 마스터 표가 비었으면 구조화·검색이 시작하지 않는다. `resources/vocab/glossary/*.csv`를 고치면 `master load`를 다시 돌린다(이미 적재한 문서는 자동으로 다시 처리하지 않음).
 - `--bundle`은 벡터 차원을 `meta.json`에서 읽으려고 준다(또는 `--dim`). `--create-extension`은 새 PG일 때만.
+- DB에 붙지 않고 SQL만 보려면 같은 인자에 `--sql <파일>`(있는 DB는 `--from <지금 판>` — 갈래마다 하나) — DB 담당이 읽고 고쳐 손으로 실행한다. DB를 읽어야 하는 확인(지금 판·vector 확장·남의 스키마·차원)은 파일 안 `-- 수동:` 줄.
 
 **⑤ 적재 — 번들 → pgvector**
 
@@ -438,7 +439,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 4. 설정을 채운다 — `<루트>/settings.yaml` 맨 위 `required`의 빈 값(§5-3 ② "꼭 채울 값"). 이미지 칸에는 2에서 불러온 실행 이미지 태그(`data-pipeline-runtime:<이미지 판>`·`mcp-server-runtime:<이미지 판>`). 자원 상한도 본다(아래).
    - EDW 표 설명 자료(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료, 받는 곳은 refactor.md C-91)를 루트 아래 결과 폴더에 복사하고(`<루트>/output/edw_meta/`, UID 10001이 읽을 수 있게) `search.edw_meta.edw_meta_catalog_dir: /app/output/edw_meta`를 적는다. 없으면 `edw_meta` 도구만 `not_configured`로 답한다(나머지 도구는 그대로).
 5. `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline`(코드 폴더에서 — DB 도구가 그 안에서 돈다).
-6. DB(§5-3 ③): `bash deploy/host/scripts/pipe_exec.sh migrate check --target all` → `… migrate up --target all --dim <임베딩 차원>`(차원 = 임베딩 모델 출력 크기, 모델 담당 확인) → `… migrate master load` → `… migrate check --target all`(기대: 갈래마다 판 끝).
+6. DB(§5-3 ③): `bash deploy/host/scripts/pipe_exec.sh migrate check --target all` → `… migrate up --target all --dim <임베딩 차원>`(차원 = 임베딩 모델 출력 크기, 모델 담당 확인 · DB 담당이 SQL을 먼저 보려면 같은 명령에 `--sql /app/output/up.sql` — DB에 붙지 않고 `<루트>/output/up.sql`만 씀) → `… migrate master load` → `… migrate check --target all`(기대: 갈래마다 판 끝).
 7. `bash deploy/host/scripts/host_ctl.sh up -d mcp-data-parsing mcp`(검색 MCP는 시작할 때 마스터 표를 읽으므로 6 뒤).
 8. `bash deploy/host/scripts/host_ctl.sh check` — check_env → ping_models → migrate check → 두 이미지 selftest → 검색 MCP `/health`, 처음 실패에서 멈춘다. 기대 마지막 줄: `[host_ctl check] 통과 — 6개`. 실행 이미지(`*-runtime`)면 스크립트가 자기 코드 폴더를 `/app/deploy`에 붙인다(셸·systemd에 `CODE_DIR`가 있으면 그 값).
 9. 시작 로그 첫 줄 `[image] 이미지 … · 코드 <커밋> · 의존성 …`으로 판을 확인하고, 첫 게시는 §5-3 ④의 미리보기부터, 첫 문서를 넣은 뒤 `mcp_smoke --source <원천>`으로 검색 근거를 확인한다(§4-5).

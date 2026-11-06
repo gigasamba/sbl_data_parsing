@@ -22,7 +22,7 @@
 | 무엇 | 서버에 미치는 것 | 이 문서의 절 |
 |---|---|---|
 | 네 이미지에 개발 도구·opencode가 들어가고 패키지 목록이 바뀜 | 새 실행 이미지 필요(코드 폴더만으로는 못 바꿈) | §3 |
-| applog 판 `0003_applog` — 적재 안 된 문서 표 `except_doc_info` · 검색 판 `0006_search` — `doc` 처리 기록 칸 · EDW에 쓰지 않음(쓰기 계정·`parsing_meta_table` 칸 없앰) | 첫 `run_pipeline.py` 전에 `migrate up` · 옛 기록 옮기기 | §6 |
+| applog 판 `0003_applog` — 적재 안 된 문서 표 `except_doc_info` · `0004_applog` — `pipe_event` 원천·`except_doc_info` 확장자·크기 칸 · 검색 판 `0006_search` — `doc` 처리 기록 칸 · EDW에 쓰지 않음(쓰기 계정·`parsing_meta_table` 칸 없앰) | 첫 `run_pipeline.py` 전에 `migrate up` · 옛 기록 옮기기 | §6 |
 | settings.yaml 칸 이름 정리 · 맨 아래 선택 절 `option.devbox` | 옛 이름이 남으면 모든 명령이 시작 거부 | §5 |
 | 벌 폴더 = 코드 폴더(`settings.yaml`·`edw_chain.yaml`·`output/`이 코드 폴더 안), 벌 번호 = 폴더 이름 끝 `-<숫자>`, 칸 `ops.host.instance_name` 지움 | 처음 한 번 옛 루트에서 옮김 · 그 칸이 남으면 시작 거부 | §4 · §5 |
 | 개발자별 벌(폴더 이름 끝 번호)·gitea | 개발 서버만, 원할 때 | §9 |
@@ -113,16 +113,18 @@ $DOCKER run --rm --entrypoint python -v "$PWD:/app/deploy:ro,z" <새 실행 이�
 ```bash
 bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline     # 벌 폴더에서 — pipe_exec.sh가 이 안에서 돈다
 bash deploy/host/scripts/pipe_exec.sh migrate current --target all
-# 기대(0.2.0 → 0.3.0): applog applog: 판 낮음 ['0001_applog'] · 코드의 끝 판 0003_applog · search도 판 낮음(끝 판 0006_search) (master는 "끝")
+# 기대(0.2.0 → 0.3.0): applog applog: 판 낮음 ['0001_applog'] · 코드의 끝 판 0004_applog · search도 판 낮음(끝 판 0006_search) (master는 "끝")
 bash deploy/host/scripts/pipe_exec.sh migrate up --target applog
-# 기대: [migrate] applog applog: 판 ['0003_applog'] (끝 0003_applog)
+# 기대: [migrate] applog applog: 판 ['0004_applog'] (끝 0004_applog)
 bash deploy/host/scripts/pipe_exec.sh migrate up --target search                # 0.3.0: 원천 스키마 5벌 doc에 처리 기록 칸(0006_search)
 bash deploy/host/scripts/pipe_exec.sh migrate up --target master
 bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 기대: 갈래마다 "판 끝 [...] · 코드의 끝 판 ...", 종료 코드 0
 ```
+- **applog는 모든 벌이 함께 쓴다 — 어느 벌이든 0.3.0 코드 폴더로 바꾸기 전에 `migrate up --target applog`(또는 `--sql` 파일을 손으로 실행)를 먼저 끝낸다.** 판 `0004_applog` 전의 applog에는 새 코드의 사건 행(`source_system` 칸)이 들어가지 못해 그 벌의 applog 기록이 모두 파일 대체 기록(`output/logs/*.jsonl`)으로 가고, 적재 안 된 문서 기록(`except_doc_info`)은 칸 없음으로 실패한다.
+- DB 담당이 SQL을 먼저 보고 손으로 실행하려면: `bash deploy/host/scripts/pipe_exec.sh migrate up --target applog --from 0001_applog --sql /app/output/up_applog.sql`(DB·접속 정보 없이 — 스키마 이름만 설정에서 · `<벌 폴더>/output/`에 다 만든 뒤 한 번에 씀 · `--from` = `migrate current`가 보인 지금 판, 갈래마다 — 없는 갈래는 빈 스키마부터라 경고 줄과 `-- 주의:` 주석이 나온다 · 차원을 읽는 판(`0001_search`·`0002_search`)이 들면 `--dim`이 필요). DB를 읽어야 하는 확인(지금 판·vector 확장·남의 스키마·차원)은 파일 안 `-- 수동:` 줄이다. 손으로 실행한 뒤 `migrate check --target all`.
 - 갈래(`--target`)마다 따로 올리면 어느 갈래가 바뀌었는지 출력에서 바로 보인다. 한 번에는 `--target all`.
 - 벌이 여럿이면 아무 벌 하나에서 한 번 — 다른 벌은 §4·§5 뒤 §10만 한다.
-- 0.3.0의 applog `0003_applog`는 새 표 `except_doc_info`를 만들고 옛 `skip_doc_info` 행을 `skip`으로 옮긴다. search `0006_search`는 `doc`에 처리 기록 칸(`sha256`·`silver_bucket`·`silver_key`·`engines`·`parse_status`·`silver_version`·`gold_version`·`parsed_at`·`loaded_at`)을 더한다. **첫 `run_pipeline.py` 전에** 둘 다 올린다 — 없으면 대상 목록·받기가 표 없음으로 멈춘다.
+- 0.3.0의 applog `0003_applog`는 새 표 `except_doc_info`를 만들고 옛 `skip_doc_info` 행을 `skip`으로 옮긴다. `0004_applog`는 `pipe_event`에 `source_system`, `except_doc_info`에 `file_ext`·`file_size` 칸을 더한다(옛 행은 비움). search `0006_search`는 `doc`에 처리 기록 칸(`sha256`·`silver_bucket`·`silver_key`·`engines`·`parse_status`·`silver_version`·`gold_version`·`parsed_at`·`loaded_at`)을 더한다. **첫 `run_pipeline.py` 전에** 둘 다 올린다 — 없으면 대상 목록·받기가 표 없음으로 멈춘다.
 - 0.3.0 사람이 할 일(DB 담당과): EDW `AI.ParsingMeta`에 있던 처리 기록을 `doc` 새 칸으로 손으로 옮긴다(파이프라인은 EDW에 더 쓰지 않고, `doc` 행이 있으면 끝난 문서로 본다). 옮긴 것을 확인한 뒤 옛 표 `applog.skip_doc_info`를 지운다(마이그레이션은 지우지 않음). settings.yaml에 `edw_write_user`·`edw_write_password`·`parsing_meta_table` 칸이 남아 있으면 시작을 거부하므로 지운다.
 - `올린 뒤에도 차이:`가 나오거나 종료 2이면 멈추고 출력(이름만)을 DB 담당과 본다. 오류 분기는 [release-and-patch §5-5](release-and-patch.md#5-5-db-버전-관리--migrate).
 
@@ -218,7 +220,7 @@ bash deploy/host/scripts/host_ctl.sh timers
 - `$B.new`(새 판 코드)는 확인 뒤 사람이 지운다.
 - 0.2.0에서 처음 올렸다면(§4 마지막) 옛 루트가 그대로 있다 — 새 벌 폴더에서 `host_ctl.sh down` 뒤 `<옛 루트>/sbl_data_parsing-<앞 판>`에서 `host_ctl.sh up -d --force-recreate …` → `host_ctl.sh timers`.
 
-**DB:** 새 판이 DB 판을 올렸으면 옛 코드는 그 판을 모른다 — 적재·`migrate`가 "이 코드가 모르는 판"으로 종료 2(0.3.0의 applog `0003_applog`면 매일 하는 `migrate maintain --target applog`가 멈춘다). 내리는 명령(downgrade)은 없으니 **백업에서 그 스키마를 되살린다** — DB 담당과 함께.
+**DB:** 새 판이 DB 판을 올렸으면 옛 코드는 그 판을 모른다 — 적재·`migrate`가 "이 코드가 모르는 판"으로 종료 2(0.3.0의 applog `0004_applog`면 매일 하는 `migrate maintain --target applog`가 멈춘다). 내리는 명령(downgrade)은 없으니 **백업에서 그 스키마를 되살린다** — DB 담당과 함께.
 ```bash
 SC=applog                                                                     # 판이 바뀐 스키마(검색이면 $S와 ${S}_<원천>…)
 $DOCKER exec "$PG_C" psql -U "$PG_U" -d "$PG_D" -c "ALTER SCHEMA $SC RENAME TO ${SC}_rollback_$(date +%m%d)"   # 지우지 않고 비켜 둠

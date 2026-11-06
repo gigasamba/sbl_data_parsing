@@ -184,10 +184,16 @@ def _record_source_skipped(state, skipped):
     from pipeline.shared.runtrace import skip_event
 
     for s in skipped:
-        skip_event(s["file"], s["reason"])
+        skip_event(s["file"], s["reason"], s["row"]["source_system"])
     except_docs.record(
         [
-            {"source_key": s["row"]["key"], "source_system": s["row"]["source_system"], "file_name": s["file"], "reason": s["reason"]}
+            {
+                "source_key": s["row"]["key"],
+                "source_system": s["row"]["source_system"],
+                "file_name": s["file"],
+                "file_size": s["row"]["size"],
+                "reason": s["reason"],
+            }
             for s in skipped
         ]
     )

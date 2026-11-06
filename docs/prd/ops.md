@@ -219,7 +219,7 @@
   4. dev·prd 시작 관문: 비어 있지 않은 비밀 설정이 8자(`MIN_SECRET_LENGTH`) 미만이면 칸 경로만 알리고 종료 2.
   5. MCP SDK 줄(`mcp.*`)은 stderr JSON으로만. 요청마다의 INFO는 `ops.log.log_level=DEBUG`일 때만. stdio 모드의 stdout은 JSON-RPC 전용.
 - 규칙 — DB(`applog` 스키마, Alembic 갈래 `applog` — `common/store/db/migrations/versions/0001_applog_base.py`):
-  1. 표: `mcp_log`(월 파티션, 키 `requested_at`) · `pipe_event`(월 파티션, 키 `ts_start`) · `pipe_run`(`run_id` PK, 시작 running → 종료 UPSERT).
+  1. 표: `mcp_log`(월 파티션, 키 `requested_at`) · `pipe_event`(월 파티션, 키 `ts_start`) · `pipe_run`(`run_id` PK, 시작 running → 종료 UPSERT). applog는 여러 벌이 함께 쓰므로 문서 사건(`doc_id` 있음) 행은 원천 `source_system`(판 `0004_applog`)을 채우고 빈 `ext`·`file_bytes`를 메운다(원천·크기는 이번 실행 manifest, 확장자는 이름 — 그 밖의 사건은 `source_system` NULL · 시험 `test_span_soft.py` `DOC_COLS`).
   2. `common/store/logsink.py` `emit(table,row)` → 제한 큐(`tuning.ops.log.log_queue_size` 10000, 차면 즉시 버리고 `dropped`) → 배치 INSERT(`log_batch_size` 200 · `log_flush_sec` 1 · `log_db_timeout_sec` 2). DB 실패면 `ops.log.log_fallback_dir`(기본 `output/logs`) jsonl, 프로세스당 경고 한 번. 파일 로그는 이 예비 한 곳뿐이다 — 실행 출력은 컨테이너 로그(서버 stdout), 실행 기록 파일(`RUNLOG.md`·`runlog.jsonl`·`logs/<시각>_<도구>.log`)·질의 기록 파일은 없다(op-13). 종료 flush는 `log_shutdown_sec` 5초 안.
   3. 켜기 `ops.log.log_db_enabled` — 서버(두 이미지) 기본 true, PC 기본 false(op-13). 서버는 새 코드를 띄우기 전에 `migrate up --target all`(applog 포함). 보존 `log_retention_days` 90. `dbtool up --target applog`(현재 달 + 2개월 준비), 매일 `dbtool maintain --target applog`(다음 달 준비·만료 파티션 DROP·`pipe_run` DELETE — 서버는 새벽 배치가 run_pipeline 앞에 부름, [pl-23](#pl-23)). sink는 DDL을 하지 않는다.
 - 규칙 — MCP 감사(`mcp_server/services/call_log.py`):
@@ -336,5 +336,5 @@
 ### 사람 검토
 DB 스키마(마이그레이션 — `doc` 칸·`except_doc_info`·DEV 스키마), MCP 계약(dev 값), 비밀값 파일 권한(init), EDW 쓰기 중단.
 
-- 비고: 규칙 1~5·8·9·11·12·14~18 반영 — 처리 기록 `doc` 칸(판 `0006_search` — `search_tables.DOC_RECORD`, 게시 `publish/silver.jsonl` → 적재 `--silver`), 끝난 문서·내용 중복 `pipeline/shared/gold_docs.py`, `applog.except_doc_info`(판 `0003_applog` — `pipeline/shared/except_docs.py`), 원문 도구는 `doc` 칸에서 읽음, EDW 쓰기 없음. 남은 것: 규칙 6·7·10(DEV 원천 스키마 — 지금 DEV 원천은 `other`로 적재), 13(서버의 ParsingMeta 기록 옮기기 — 사람, refactor.md C-107), 19~21(glossary). 쓰기 계정·`parsing_meta_table` 칸은 없앴다(남은 settings.yaml은 시작 거부 — C-107). 대상 목록 표는 `required.edw.edw_file_table`(기본 `AI.FileStorageMap`, `<스키마>.<표>`만 — 사용자 11-06, 시험 `test_target_list.py` `TABLES`).
+- 비고: 규칙 1~5·8·9·11·12·14~18 반영 — 처리 기록 `doc` 칸(판 `0006_search` — `search_tables.DOC_RECORD`, 게시 `publish/silver.jsonl` → 적재 `--silver`), 끝난 문서·내용 중복 `pipeline/shared/gold_docs.py`, `applog.except_doc_info`(판 `0003_applog` — `pipeline/shared/except_docs.py` · 판 `0004_applog` `file_ext`·`file_size`), 원문 도구는 `doc` 칸에서 읽음, EDW 쓰기 없음. 남은 것: 규칙 6·7·10(DEV 원천 스키마 — 지금 DEV 원천은 `other`로 적재), 13(서버의 ParsingMeta 기록 옮기기 — 사람, refactor.md C-107), 19~21(glossary). 쓰기 계정·`parsing_meta_table` 칸은 없앴다(남은 settings.yaml은 시작 거부 — C-107). 대상 목록 표는 `required.edw.edw_file_table`(기본 `AI.FileStorageMap`, `<스키마>.<표>`만 — 사용자 11-06, 시험 `test_target_list.py` `TABLES`).
 - Status: todo

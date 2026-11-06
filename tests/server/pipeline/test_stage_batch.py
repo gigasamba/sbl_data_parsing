@@ -14,6 +14,7 @@ from unittest import mock
 
 from common.config.settings import COMMON
 from common.core import jsonlog, span
+from common.core.contract import jl
 from common.store import pg as PGC
 from pipeline import config as pc
 from pipeline.extract import candidate_ready as CR
@@ -164,7 +165,7 @@ def test_rdb_stage_once():
                 with mock.patch.object(SRCSHA, "file_hash", side_effect=AssertionError("다시 해시함")):
                     _, left, state, _ = CR.stage_batch(f"rdb:csv:{csv_f}", out, out / "prepared", 0, _filter)
                 assert left == ["a.txt"] and s3.got == got, (i, left, s3.got)
-                (row,) = CR.jl(state / "manifest.jsonl")
+                (row,) = jl(state / "manifest.jsonl")
                 assert row["sha256"] == sha(body) and row["sha256_stat"] == SRCSHA.stat_of(out / "_source_files" / "a.txt"), row
                 assert row["source_system"] == "DEV-1", row  # 들어오는 자리에서 대문자로
         assert len(writes) == len(STAGING_ROUNDS), writes  # 묶음마다 한 번

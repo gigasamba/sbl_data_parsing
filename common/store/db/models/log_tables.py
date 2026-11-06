@@ -114,6 +114,7 @@ def log_metadata(schema="applog"):
             "err_kind": Text,
             "err": Text,
             "app_version": Text,
+            "source_system": Text,  # 판 0004 — 문서 사건(doc_id 있음)만, 이번 실행 manifest의 원천
         },
     }
     for name, fields in specs.items():
@@ -162,6 +163,8 @@ def log_metadata(schema="applog"):
         Column("first_seen", DateTime(timezone=True), nullable=False, server_default=now),
         Column("last_seen", DateTime(timezone=True), nullable=False, server_default=now),
         Column("count", Integer, nullable=False, server_default=text("1")),
+        Column("file_ext", Text),  # 판 0004 — 소문자, 점 없음(file_name에서)
+        Column("file_size", BigInteger),  # 판 0004 — 원천 표 file_size(모르면 NULL)
     )
     return md
 

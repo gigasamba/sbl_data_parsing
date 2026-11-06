@@ -21,7 +21,7 @@ def _schema():
 
 
 def standin():
-    """PC 대역(sqlite) — 표가 없으면 표 정의(log_tables)에서 만든다."""
+    """PC 대역(sqlite) — 표가 없으면 표 정의(log_tables)에서 만들고, 앞서 만든 대역 파일에 없는 칸(판 0004 file_ext·file_size)은 더한다."""
     from sqlalchemy.dialects import postgresql
     from sqlalchemy.schema import CreateTable
 
@@ -30,8 +30,13 @@ def standin():
 
     schema = _schema()
     db = StandinPG(schema)
-    ddl = CreateTable(log_metadata(schema).tables[f"{schema}.{TABLE}"], if_not_exists=True).compile(dialect=postgresql.dialect())
+    table = log_metadata(schema).tables[f"{schema}.{TABLE}"]
+    ddl = CreateTable(table, if_not_exists=True).compile(dialect=postgresql.dialect())
     db.q(f"CREATE SCHEMA IF NOT EXISTS {schema};\n{str(ddl).strip()}")  # CREATE SCHEMA로 시작 = 대역의 DDL 묶음(DEFAULT now() 번역)
+    have = {r[1] for r in db.sqlite.execute(f"PRAGMA table_info({TABLE})")}
+    for col in table.columns:
+        if col.name not in have:
+            db.sqlite.execute(f"ALTER TABLE {TABLE} ADD COLUMN {col.name} {col.type.compile(dialect=postgresql.dialect())}")
     return db
 
 
@@ -58,22 +63,26 @@ def reason_of(name, reason):
 def _upsert(rows, kind):
     s = _schema()
     sql = (
-        f"INSERT INTO {s}.{TABLE} (source_key, except_type, source_system, file_name, reason, level, first_seen, last_seen, count) "
-        "VALUES (%s, %s, %s, %s, %s, 'error', now(), now(), 1) ON CONFLICT (source_key, except_type) DO UPDATE SET "
-        f"source_system = EXCLUDED.source_system, file_name = EXCLUDED.file_name, reason = EXCLUDED.reason, "
-        f"last_seen = EXCLUDED.last_seen, count = {TABLE}.count + 1"
+        f"INSERT INTO {s}.{TABLE} (source_key, except_type, source_system, file_name, file_ext, file_size, reason, level, first_seen, last_seen, count) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, 'error', now(), now(), 1) ON CONFLICT (source_key, except_type) DO UPDATE SET "
+        f"source_system = EXCLUDED.source_system, file_name = EXCLUDED.file_name, file_ext = EXCLUDED.file_ext, "
+        f"file_size = COALESCE(EXCLUDED.file_size, {TABLE}.file_size), reason = EXCLUDED.reason, last_seen = EXCLUDED.last_seen, "
+        f"count = {TABLE}.count + 1"  # 크기를 모르는 기록(게시·적재 실패)이 앞서 안 크기를 지우지 않게
     )
     db = _db()
     try:
         for r in rows:
-            db.q(sql, (r["source_key"], kind, r.get("source_system"), r["file_name"], r["reason"]))
+            ext = Path(r.get("file_name") or r["source_key"]).suffix.lower().lstrip(".") or None  # 소문자, 점 없음(판 0004)
+            size = r.get("file_size")
+            size = int(size) if size not in (None, "") else None
+            db.q(sql, (r["source_key"], kind, r.get("source_system"), r.get("file_name"), ext, size, r["reason"]))
     finally:
         _close(db)
     return len(rows)
 
 
 def record(rows):
-    """rows = [{source_key, source_system, file_name, reason}] — 영구 이유만 skip 행으로 upsert(처음 본 시각은 그대로, 마지막 시각·횟수 갱신).
+    """rows = [{source_key, source_system, file_name, reason, file_size(있으면)}] — 영구 이유만 skip 행으로 upsert(처음 본 시각은 그대로, 마지막 시각·횟수 갱신).
     반환: 쓴 행 수."""
     todo = [{**r, "reason": reason_of(r["file_name"], r["reason"])} for r in rows]
     todo = [r for r in todo if r["reason"] and r["source_key"]]
@@ -85,7 +94,7 @@ def record(rows):
 
 
 def record_error(rows):
-    """rows = [{source_key, source_system, file_name, reason}] — 파싱·적재 실패를 error 행으로 upsert(다음 실행은 다시 고름). 반환: 쓴 행 수."""
+    """rows = [{source_key, source_system, file_name, reason, file_size(있으면)}] — 파싱·적재 실패를 error 행으로 upsert(다음 실행은 다시 고름). 반환: 쓴 행 수."""
     todo = [r for r in rows if r.get("source_key") and r.get("reason")]
     if todo:
         _upsert(todo, "error")
@@ -124,6 +133,7 @@ def _error_cmd(argv):
                 "source_key": r["s3_key"],
                 "source_system": r.get("source_system"),
                 "file_name": r.get("original_filename"),
+                "file_size": r.get("file_size"),
                 "reason": a.reason,
             }
             for r in csv.DictReader(fh)
