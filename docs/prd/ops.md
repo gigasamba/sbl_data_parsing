@@ -332,10 +332,11 @@
 12. 적재되지 않은 문서(파싱 실패·내용 중복·DRM 등)의 기록은 `applog.error_doc_info` 하나 — `skip_doc_info`를 합친다.
 13. 서버에 쌓인 ParsingMeta 기록은 사람이 옮긴다(도구 없음).
 
-### 남은 것
-- `doc`에 더할 칸 목록, `error_doc_info`의 칸과 "다시 고름 / 영구 뺌" 구분, 끝난 문서·내용 중복 판정을 어느 표로 하는지.
-- 원천을 `source_system` 칸으로 정할 때 구조화·적재·게시의 원천 판정(지금은 원본 경로 첫 마디 — pl-28 규칙 3)도 같은 칸으로 바꾸는지.
-- EDW 쓰기 계정이 필요 없어지는지(ParsingMeta를 안 쓰면 EDW는 읽기만).
+14. `doc`에 더할 칸: `sha256`(내용 중복 판정) · silver 위치(버킷·키) · `engines`(수행한 엔진 전부 + 대표 표시) · `parse_status`(`ok`·`partial`) · `silver_version` · `gold_version` · `parsed_at`(silver — 파싱·게시 시각) · `loaded_at`(gold — 적재 시각). `gold_status`·`gold_reason`(pl-55 — EDW에서 gold 실패를 보려던 칸)은 두지 않는다.
+15. 끝난 문서 = 원천 스키마 어디든 `doc`에 행이 있는 원본 키. 내용 중복 = 다른 원본 키의 `doc.sha256`이 같음.
+16. 적재되지 않은 문서 기록은 `applog.except_doc_info` 하나(`skip_doc_info`를 바꿈) — `except_type` `skip`(영구 뺌 — 미지원·DRM·암호·내용 중복) · `error`(기록만, 다음 실행이 다시 고름 — 파싱·적재 실패). 처음·마지막 시각·횟수 유지.
+17. 원천은 FileStorageMap `source_system` 값 하나로 고르기·구조화·적재·게시가 모두 정한다(목록 파일·manifest로 넘김). Object Storage 경로 = `<원천>/…`, PC = `valid_env/object_storage/<원천>/`. 원본 경로 첫 마디 규칙(pl-28 규칙 3)은 없앤다.
+18. EDW는 읽기만(FileStorageMap·메타 사슬) — 쓰기 계정은 다시 선택.
 
 ### 사람 검토
 DB 스키마(마이그레이션 — `doc` 칸·`error_doc_info`·DEV 스키마), MCP 계약(dev 값), 비밀값 파일 권한(init), EDW 쓰기 중단.
