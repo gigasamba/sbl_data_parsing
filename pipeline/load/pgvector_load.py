@@ -155,7 +155,7 @@ def _kst(v):
     except ValueError:
         print(f"[pgstore] created_at 형식이 아님 — 비워 둠: {v!r}", flush=True)
         return None
-    return (t if t.tzinfo else t.replace(tzinfo=timezone(timedelta(hours=9)))).isoformat()
+    return (t if t.tzinfo else t.replace(tzinfo=_KST)).isoformat()
 
 
 def require_vectors(meta):

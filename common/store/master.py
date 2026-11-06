@@ -116,13 +116,18 @@ def read_csv(folder=GLOSSARY):
     head = _head(rows[0] if rows else [])
     if head != COLS:
         raise SystemExit(f"[master] {path.name} 머리글이 표와 다름 — 칸을 바꾸려면 새 Alembic 판(master): {head}")
+    return _rows(rows, head, path.name)
+
+
+def _rows(lines, head, name):
+    """CSV 줄(머리글 포함) → [행 사전…](빈 줄 건너뜀, 모자란 칸은 빈 값). 칸이 머리글보다 많으면 거부."""
     out = []
-    for n, r in enumerate(rows[1:], 2):
+    for n, r in enumerate(lines[1:], 2):
         if not any(c.strip() for c in r):  # 빈 줄·Excel 끝 줄(',,,,,,')
             continue
-        if any(c.strip() for c in r[len(COLS) :]):
-            raise SystemExit(f"[master] {path.name} {n}번째 줄: 칸이 머리글보다 많음(따옴표 없는 쉼표?)")
-        out.append(dict(zip(COLS, [*r, *[""] * len(COLS)][: len(COLS)])))
+        if any(c.strip() for c in r[len(head) :]):
+            raise SystemExit(f"[master] {name} {n}번째 줄: 칸이 머리글보다 많음(따옴표 없는 쉼표?)")
+        out.append(dict(zip(head, [*r, *[""] * len(head)])))
     return out
 
 
@@ -195,14 +200,7 @@ def convert(src, out):
         if set(head) != set(SHAPES[n]) or len(head) != len(SHAPES[n]):
             missing, extra = sorted(set(SHAPES[n]) - set(head)), sorted(set(head) - set(SHAPES[n]))
             raise SystemExit(f"[master] {f.name} 머리글이 옛 꼴과 다름 — 없는 칸 {missing} · 모르는(또는 겹친) 칸 {extra or list(head)}")
-        rows = []
-        for k, r in enumerate(lines[1:], 2):
-            if not any(c.strip() for c in r):
-                continue
-            if any(c.strip() for c in r[len(head) :]):
-                raise SystemExit(f"[master] {f.name} {k}번째 줄: 칸이 머리글보다 많음(따옴표 없는 쉼표?)")
-            rows.append(dict(zip(head, [*r, *[""] * len(head)])))
-        tables[n] = rows
+        tables[n] = _rows(lines, head, f.name)
     rows = melt(tables)
     to_tables(rows)
     write_csv(rows, out)

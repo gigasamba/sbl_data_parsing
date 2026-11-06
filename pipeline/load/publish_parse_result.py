@@ -244,7 +244,7 @@ def _vlm_model(model, env_fallback):
 
 def engines_used(rep_json, env_fallback=True):
     """문서 하나의 대표 결과(`_rep/<문서>.json` 전체, status_of()가 쓰는 index.json 요약이 아님)
-    에서 실제로 쓰인 엔진 전부(VLM·OCR 포함) → (engines_used 목록, 한 줄 요약) — 목록은 gold `doc.engines`(대표는
+    에서 실제로 쓰인 엔진 전부(VLM·OCR 포함) → engines_used 목록 — gold `doc.engines`(대표는
     role "rep"). 순수 함수(rep_json만 읽음) — 단 env_fallback=True(기본)이면 rep에 VLM 모델
     이름이 없을 때만 현재 프로세스의 VLM_MODEL을 대신 읽는다(그 항목에 "source":"env_fallback"
     표시 — publish는 파싱과 다른 실행·env일 수 있어 rep를 1차로, env는 rep에 없을 때만의 대체).
@@ -255,22 +255,17 @@ def engines_used(rep_json, env_fallback=True):
       (+모델 rep.post.vlm_models.page) → role='vlm_page' · rep.post.figures(+모델 rep.post.vlm_models.figure) →
       role='vlm_figure' · rep.agent(판단 기록, 있으면) →
       role='agent'. 항목 = {"engine","role","status","version_or_model","calls"}.
-    rep_json이 비었으면([], None)."""
+    rep_json이 비었으면 []."""
     if not rep_json:
-        return [], None
+        return []
     out = []
     rep = rep_json.get("rep") or {}
     tried = rep.get("tried") or {}
     chosen = rep.get("engine")
-    text_names, ocr_names = [], []
     for eng in sorted(tried):
         info = tried[eng] or {}
         role = "rep" if eng == chosen else ("ocr" if eng in _OCR_ENGINE_NAMES else "candidate")
         out.append({"engine": eng, "role": role, "status": info.get("status"), "version_or_model": info.get("version"), "calls": 1})
-        if role == "candidate":
-            text_names.append(eng)
-        elif role == "ocr":
-            ocr_names.append(eng)
     post = rep_json.get("post") or {}
     vlm_models = post.get("vlm_models") or {}
     page_calls, fig_calls = post.get("vlm_page_calls") or 0, post.get("figures") or 0
@@ -291,18 +286,7 @@ def engines_used(rep_json, env_fallback=True):
         out.append(
             {"engine": agent.get("agent") or "agent", "role": "agent", "status": agent.get("status"), "version_or_model": None, "calls": 1}
         )
-    parts = [f"rep={chosen}"] if chosen else []
-    if text_names:
-        parts.append("text=" + ",".join(text_names))
-    if ocr_names:
-        parts.append("ocr=" + ",".join(ocr_names))
-    vlm_bits = ([f"page×{page_calls}"] if page_calls else []) + ([f"fig×{fig_calls}"] if fig_calls else [])
-    if vlm_bits:
-        parts.append(f"vlm={page_model or fig_model or '모델?'} " + " ".join(vlm_bits))
-    if agent:
-        parts.append(f"agent={agent.get('agent') or 'agent'}")
-    summary = "; ".join(parts) or None
-    return out, (summary[:512] if summary else None)
+    return out
 
 
 def raw_artifacts(parse_dir, name, figs, runs=None, rep=None):
@@ -394,7 +378,7 @@ def plan(
         # engines_used()에도 쓰고(요건(b)) 올릴 때의 render_md·raw_artifacts에도 그대로 재사용(중복 읽기 없음).
         rep_path = Path(rep_dir) / f"{name}.json"
         full_rep = json.loads(rep_path.read_text(encoding="utf-8")) if rep_path.exists() else None
-        eng_list = engines_used(full_rep)[0] if full_rep else []
+        eng_list = engines_used(full_rep) if full_rep else []
         row = {
             "source_system": e.get("source_system") or source_system,  # manifest이 들고 온 원천, 없으면 --source-system 폴백
             "source_key": source_key,

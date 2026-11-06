@@ -344,11 +344,10 @@ def _dedup(local, names, dedup_dir, state, seen=None):
     man = _read_manifest(state)
     key_of = {n: r.get("key") or n for n, r in man.items()}
     src_of = {n: r.get("source_system") for n, r in man.items()}
-    dropped, dups = set(), []
+    dups: list[str] = []
     for r in rows:
         if not r["representative"]:
             skip_event(r["file"], "dup_batch", src_of.get(r["file"]), dup_of=rep[r["group"]])
-            dropped.add(r["file"])
             dups.append(r["file"])
     picked = [n for n in names if n in keep]
     done = CP.done_by_sha({keep[n] for n in picked})
@@ -357,13 +356,11 @@ def _dedup(local, names, dedup_dir, state, seen=None):
         key, hit = key_of.get(n, n), done.get(keep[n])
         if hit and hit[0] != key:
             skip_event(n, "dup_done", src_of.get(n), dup_of=hit[0])
-            dropped.add(n)
             dups.append(n)
             continue
         first = _claim(seen, keep[n], key) if seen is not None else None
         if first:
             skip_event(n, "dup_run", src_of.get(n), dup_of=first)
-            dropped.add(n)
             dups.append(n)
         else:
             left.append(n)
@@ -372,6 +369,7 @@ def _dedup(local, names, dedup_dir, state, seen=None):
 
         except_docs.record([_skip_row(key_of.get(n, n), n, "duplicate_sha256", man.get(n)) for n in dups])
     Path(dedup_dir).mkdir(parents=True, exist_ok=True)
+    dropped = set(dups)
     rest = sorted(
         f.name for f in Path(local).iterdir() if f.is_file() and not CP._hidden(f) and f.name != ".gitkeep" and f.name not in dropped
     )
