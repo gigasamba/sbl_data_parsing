@@ -129,13 +129,13 @@
 메일의 핵심 내용이 첨부에 있는 경우가 많다.
 
 ### 규칙
-1. `.eml`·`.msg`의 첨부(zip 첨부는 풀어서)를 형식별 엔진으로 재귀 파싱한다 — 깊이 `tuning.extract.attach.attachment_max_depth`(1), 첨부 하나 `attachment_max_mb`(20 MB) 넘으면 건너뜀, 문서당 `attachment_max_count`(10)개까지.
+1. `.eml`·`.msg`의 첨부와 메일 안 메일(이름 없이 통째로 붙은 전달 메일 포함)은 받기 단계가 준비 폴더 `_parts/`에 꺼내 두고([extract.md#pl-63](extract.md#pl-63)), 첨부 단계가 형식별 엔진으로 파싱한다 — 깊이 `tuning.extract.attach.attachment_max_depth`(2 — 압축·오피스 개체와 같이 셈, 사용자 11-06), 첨부 하나 `attachment_max_mb`(20 MB) 넘으면 건너뜀, 문서당 `attachment_max_count`(10)개까지.
 2. 결과는 대표 본문에 `[첨부 <파일명>]` 절로 덧붙이고, 인용 스레드는 접는다.
 3. 인라인 그림(cid)은 그림 기능([pl-05](#pl-05))이 맡는다.
 
 ### QA
-- `tests/general/pipeline/test_attachments.py`.
-- Status: done
+- `tests/general/pipeline/test_attachments.py` · `tests/server/pipeline/test_unpack.py`(pl-63).
+- Status: todo(깊이 2·메일 안 메일·받기 단계 꺼내기 — pl-63과 함께)
 
 <a id="pl-37"></a>
 ## pl-37 · 그림 근처 맥락
