@@ -588,6 +588,7 @@ def represent(stack, parse_dir, src=None):
     out_dir = pd / "_rep"
     out_dir.mkdir(parents=True, exist_ok=True)
     index, last, conflicts_out = [], last_runs(pd), []  # conflicts_out — 표 행 라벨 자리의 엔진 간 표기 충돌
+    side: dict = {}  # 문서 → (stage_times, 본문·facts sha) — 끝에서 _rep/<문서>.json을 다시 읽지 않게
     from pipeline.transform.represent.crosscheck import build
 
     meta = build(parse_dir, src) if src else {}  # 교차 확인 (라벨, 값) — 엔진별 결과가 있는 파싱 모듈에서 미리 → 구조화는 _rep만 읽음
@@ -625,6 +626,7 @@ def represent(stack, parse_dir, src=None):
                     old_sha = (old_rep.get("source") or {}).get("sha256")  # 64자 — runs.jsonl(last)의 sha는 앞 16자
                     cur_sha = _current_sha16(doc, last)
                     if old_sha and cur_sha and old_sha[:16] == cur_sha:
+                        side[doc] = (old_rep.get("stage_times", {}), _content(doc, old))
                         return {
                             "doc": doc,
                             "format": dd["format"],
@@ -770,6 +772,7 @@ def represent(stack, parse_dir, src=None):
             flush=True,
         )
         (out_dir / f"{doc}.json").write_text(json.dumps(rep, ensure_ascii=False), encoding="utf-8")
+        side[doc] = (rep["rep"]["stage_times"], _content(doc, rep))
         return {
             "doc": doc,
             "format": dd["format"],
@@ -835,17 +838,15 @@ def represent(stack, parse_dir, src=None):
                     ],
                 ]
             )
+    done = [r["doc"] for r in index if r.get("engine")]
+    digest = _digest(json.loads(json.dumps(index)), [side[d][1] for d in done])  # 파일에서 읽은 것과 같은 값으로(JSON 왕복)
     (out_dir / "index.json").write_text(
-        json.dumps({"stack": stack.get("name"), "docs": index}, ensure_ascii=False, indent=1), encoding="utf-8"
+        json.dumps({"stack": stack.get("name"), "docs": index, "digest": digest}, ensure_ascii=False, indent=1), encoding="utf-8"
     )
     with (out_dir / "conflicts.jsonl").open("w", encoding="utf-8") as f:  # 값은 같은데 표기가 갈린 표 행
         for r in conflicts_out:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
-    _times = [  # 문서마다 _rep/<문서>.json을 한 번만 읽음
-        json.loads((out_dir / f"{r['doc']}.json").read_text(encoding="utf-8")).get("rep", {}).get("stage_times", {})
-        for r in index
-        if r.get("engine")
-    ]
+    _times = [side[d][0] for d in done]
     _agg = {k: round(sum(t.get(k, 0) for t in _times), 1) for k in ("load", "merge", "fuse", "scanfill", "post", "table")}
     print(
         "[represent] 단계별 누적: " + " ".join(f"{k}={_agg[k]:.0f}s" for k in ("load", "merge", "fuse", "scanfill", "post", "table")),
@@ -854,27 +855,27 @@ def represent(stack, parse_dir, src=None):
     return index
 
 
+def _content(doc, rep):
+    """digest의 문서 하나 몫 — 길이·개수가 같은 내용 교체도 잡게 본문·facts의 sha256(facts는 파일에서 읽은 것과 같게 JSON 왕복)."""
+    facts = json.loads(json.dumps(rep.get("facts") or [], ensure_ascii=False))
+    return {
+        "doc": doc,
+        "text_sha": hashlib.sha256((rep.get("text") or "").encode("utf-8")).hexdigest(),
+        "facts_sha": hashlib.sha256(json.dumps(facts, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest(),
+    }
+
+
+def _digest(index, content):
+    """대표 결과 digest — index 행(시도 기록 tried는 시각이라 뺌) + 대표 결과가 있는 문서의 _content 목록(index 순서)."""
+    core = [{k: v for k, v in r.items() if k != "tried"} for r in index]
+    return hashlib.sha256(json.dumps({"core": core, "content": content}, sort_keys=True).encode()).hexdigest()[:16]
+
+
 def rep_digest(parse_dir):
-    """(index.json 문서 목록, 대표 결과 digest) — 파싱 끝 표시(_DONE.json)가 바뀌었는지 가르는 값.
-    길이·개수가 같은 내용 교체도 잡게 본문·facts의 sha256도 넣는다."""
-    rep_dir = Path(parse_dir) / "_rep"
-    idx = json.loads((rep_dir / "index.json").read_text(encoding="utf-8"))["docs"]
-    core = [{k: v for k, v in r.items() if k != "tried"} for r in idx]  # 시도 기록(시각)은 빼고 대표 결과만 비교
-    content = []
-    for r in idx:
-        if not r.get("engine"):
-            continue
-        rep = json.loads((rep_dir / f"{r['doc']}.json").read_text(encoding="utf-8"))
-        content.append(
-            {
-                "doc": r["doc"],
-                "text_sha": hashlib.sha256((rep.get("text") or "").encode("utf-8")).hexdigest(),
-                "facts_sha": hashlib.sha256(
-                    json.dumps(rep.get("facts") or [], sort_keys=True, ensure_ascii=False).encode("utf-8")
-                ).hexdigest(),
-            }
-        )
-    return idx, hashlib.sha256(json.dumps({"core": core, "content": content}, sort_keys=True).encode()).hexdigest()[:16]
+    """(index.json 문서 목록, 대표 결과 digest) — 파싱 끝 표시(_DONE.json)가 바뀌었는지 가르는 값. digest는 represent()가
+    문서를 쓸 때 메모리에서 계산해 index.json에 넣어 둔 것(_rep/<문서>.json을 다시 읽지 않음)."""
+    idx = json.loads((Path(parse_dir) / "_rep" / "index.json").read_text(encoding="utf-8"))
+    return idx["docs"], idx["digest"]
 
 
 def write_mark(parse_dir, **kw):

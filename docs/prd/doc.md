@@ -60,7 +60,7 @@
 <a id="op-10"></a>
 ## op-10 · 서버 설치·업그레이드 — 길 하나, podman 기본
 - 규칙:
-  1. 설치 길은 README §5-0·§5-3에만 쓰고 다른 문서는 링크한다. 0.2.0 올리기·되돌리기는 [release-and-patch.md §8-3·§8-5](../operations/release-and-patch.md), 배포 사람 할 일은 §8.
+  1. 설치 길은 README §5-0·§5-3에만 쓰고 다른 문서는 링크한다. 운영 중인 서버의 판 올리기·되돌리기는 [upgrade-guide.md](../operations/upgrade-guide.md) 하나(판 번호와 상관없는 순서 — 지난 0.2.0 배포 절차는 [history/deploy_0_2_0.md](../history/deploy_0_2_0.md)).
   2. 컨테이너 도구 = 셸 `DOCKER` > settings.yaml `ops.host.container_cli` > podman > docker(`load_settings.sh` `docker_default`, 설정을 읽은 뒤 정함). `stage_images.sh`·`load.sh`도 podman 우선.
   3. 서버 상주 컨테이너 셋: 일괄 `data-pipeline`(파싱·구조화·적재 — 문서 폴더 읽기 전용 + 결과 폴더, 자원 `ops.containers.pipeline.pipeline_cpus` 5·`pipeline_mem_limit` 24g), `mcp-data-parsing`([ops.md#rn-03](ops.md#rn-03)), `mcp-server`. pgvector·redis는 우리 것이 아니다.
   4. 운영 작업(`pipe_exec.sh parse|publish`, `pipe_exec.sh <도구>|migrate|show-stack|check`, `dbtool`)은 상주 `data-pipeline` 안에서 `docker exec`(`in_container.sh` `in_pipeline` — 안 떠 있으면 종료 2). 일회성 작업 컨테이너는 없다. 이미지 점검(`docker run --rm … selftest`)만 예외.
@@ -79,7 +79,7 @@
 
 <a id="op-13"></a>
 ## op-13 · 서버 루트 폴더 하나 — 판마다 새 루트, `/srv/rag`·`env/`·`code/live` 없음
-- 이유: 서버 아무 자리에 폴더 하나(예 `/home/dev/`)를 만들어 그 안에서 실행한다. 판(버전)마다 루트를 새로 만들어 판끼리 섞이지 않게 하고, 검색 DB(pgvector — 따로 떠 있는 PG 컨테이너)만 함께 본다(사용자 11-04).
+- 이유: 서버 아무 자리에 폴더 하나(예 `/home/sbl/dev/`)를 만들어 그 안에서 실행한다. 판(버전)마다 루트를 새로 만들어 판끼리 섞이지 않게 하고, 검색 DB(pgvector — 따로 떠 있는 PG 컨테이너)만 함께 본다(사용자 11-04).
 - 규칙:
   1. 루트 = 코드 zip을 푼 폴더의 부모. 호스트 스크립트는 자기 위치에서 루트를 구한다(env·고정 경로 없음).
   2. 루트 바로 아래: `settings.yaml`(git의 `settings.sample.yaml`을 복사해 이름을 바꾸고, 맨 위 `required`의 빈 필수값을 직접 채움) · `edw_chain.yaml` · 코드 폴더(`sbl_data_parsing-<판>/`) · `output/`(결과 — `output/_mcp_parse/jobs` 포함) · `backup/`. 이미지 폴더(`sbl_images-main/`)는 한 단계 위 공용 폴더(예 `/home/sbl/`)에 하나 — 한 이미지를 여러 벌(op-15)이 같이 쓴다(사용자 11-04).

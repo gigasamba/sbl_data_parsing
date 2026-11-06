@@ -15,7 +15,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-STACK_BODY_KEYS = ("parse", "source", "embed", "chunk", "graph", "retrieve", "k")  # 파일 body 칸(name은 따로, 메모는 docs)
+STACK_BODY_KEYS = ("parse", "source", "embed", "chunk", "retrieve", "k")  # 파일 body 칸(name은 따로, 메모는 docs)
 
 
 class StackBody(BaseModel):
@@ -26,7 +26,6 @@ class StackBody(BaseModel):
     source: str | None = None
     embed: str
     chunk: Literal["structure"]  # 청커는 structure 하나(pipeline/transform/structure/chunking.py CHUNKERS)
-    graph: str
     retrieve: str
     k: int
 

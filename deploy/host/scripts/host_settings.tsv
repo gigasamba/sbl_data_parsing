@@ -1,5 +1,7 @@
 # 자동 생성 — PYTHONPATH=. python deploy/release/gen_host_keys.py(고치지 말 것)
 common.run_env	RUN_ENV	text
+common.host.devbox.ssh_port	DEVBOX_SSH_PORT	num
+common.host.devbox.opencode_config	DEVBOX_OPENCODE_CONFIG	text
 common.host.doc_src	DOC_SRC	text
 common.host.docker	DOCKER	text
 common.host.instance	INSTANCE	text

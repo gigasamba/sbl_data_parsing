@@ -278,20 +278,21 @@ def test_retry_doubles_limit():
         seen.append(tmo)
         if len(seen) == 1:
             raise TimeoutError(f"문서×엔진 시간 제한 초과({tmo}초)")
+        return 7  # 자식이 알려 준 본문 글자 수
 
     with mock.patch.object(RA, "_isolated", once):
-        err, tmo = RA._run_with_retry("pymupdf", Path("a.pdf"), Path("a.json"), "default", 20.0, [], None)
-    assert err is None and seen == [20.0, 40.0] and tmo == 40.0, (err, seen)
+        err, tmo, chars = RA._run_with_retry("pymupdf", Path("a.pdf"), Path("a.json"), "default", 20.0, [], None)
+    assert err is None and seen == [20.0, 40.0] and tmo == 40.0 and chars == 7, (err, seen, chars)
 
     seen.clear()
     always = mock.Mock(side_effect=TimeoutError("시간 제한 초과"))
     with mock.patch.object(RA, "_isolated", always):
-        err, tmo = RA._run_with_retry("pymupdf", Path("a.pdf"), Path("a.json"), "default", 20.0, [], None)
-    assert err and "Timeout" in err and always.call_count == 2 and tmo == 40.0  # 한 번만 더 — 세 번째 없음
+        err, tmo, chars = RA._run_with_retry("pymupdf", Path("a.pdf"), Path("a.json"), "default", 20.0, [], None)
+    assert chars == 0 and err and "Timeout" in err and always.call_count == 2 and tmo == 40.0  # 한 번만 더 — 세 번째 없음
 
     other = mock.Mock(side_effect=RuntimeError("깨짐"))
     with mock.patch.object(RA, "_isolated", other):
-        err, _ = RA._run_with_retry("pymupdf", Path("a.pdf"), Path("a.json"), "default", 20.0, [], None)
+        err, _, _ = RA._run_with_retry("pymupdf", Path("a.pdf"), Path("a.json"), "default", 20.0, [], None)
     assert err and other.call_count == 1  # 시간 초과가 아니면 다시 안 함
 
 

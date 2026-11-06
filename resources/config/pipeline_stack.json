@@ -1,8 +1,7 @@
 {
  "parse": {
   ".pptx": [
-   "anydoc",
-   "kreuzberg"
+   "anydoc"
   ],
   ".doc": [
    "kreuzberg"
@@ -45,8 +44,7 @@
    "kreuzberg"
   ],
   ".txt": [
-   "plaintext",
-   "markitdown"
+   "plaintext"
   ],
   ".html": [
    "html_stdlib",
@@ -96,8 +94,7 @@
    "kreuzberg"
   ],
   ".csv": [
-   "markitdown",
-   "kreuzberg"
+   "markitdown"
   ],
   ".tsv": [
    "plaintext",
@@ -156,7 +153,6 @@
  "name": "dev-v1",
  "embed": "api",
  "chunk": "structure",
- "graph": "table+entity",
  "retrieve": "hybrid",
  "k": 10,
  "updated": "2026-10-07 19:29"

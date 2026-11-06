@@ -110,13 +110,13 @@ def test_run_all_job_spans_and_usage():
             pid, returncode = 1, 0
 
             def communicate(self, timeout=None):
-                return "엔진 출력\n" + span.USAGE_PREFIX + '{"cpu_ms": 1234, "rss_peak_mb": 321.5}\n', ""
+                return "엔진 출력\n" + run_all.CHARS_PREFIX + "42\n" + span.USAGE_PREFIX + '{"cpu_ms": 1234, "rss_peak_mb": 321.5}\n', ""
 
         rows.clear()
         with span.span("extract.parse", doc_id="a.pdf", engine="e1"):
             with mock.patch.object(RS, "gated_popen", lambda *a, **k: Proc()):
-                run_all._isolated_once("e1", Path("a.pdf"), Path("/nonexistent/out.json"), "default", 5, sys.executable)
-    assert rows[0]["cpu_ms"] == 1234 and rows[0]["rss_peak_mb"] == 321.5
+                chars = run_all._isolated_once("e1", Path("a.pdf"), Path("/nonexistent/out.json"), "default", 5, sys.executable)
+    assert rows[0]["cpu_ms"] == 1234 and rows[0]["rss_peak_mb"] == 321.5 and chars == 42  # 본문 글자 수도 자식 줄에서(결과 파일 안 읽음)
 
 
 def test_run_all_redact_shared():

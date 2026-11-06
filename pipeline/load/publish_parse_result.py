@@ -15,10 +15,11 @@ DDL은 실행하지 않는다(표는 사람이 만듦). SQL은 식별자 화이�
    마지막에 써서 완료 표시). 원천 원본은 읽기만(수정·삭제·업로드 금지).
 ② 겹침/건너뜀 키(KEY) = (source_system, source_key) — source_key는 **원본 Object Storage 전체 키**(경로 포함,
    manifest의 "key" — 키가 없으면 상대 경로인 file_name). 두 폴더의 같은 이름 파일이 서로 안 겹친다.
-③ Object Storage 키 = `rep_md_key()` → `<PM_PREFIX>/<source_system>/<원본 키 세그먼트별 safe_name>/<파일명>_<parse_date>.md`.
-   이미 있으면 건너뜀(덮어쓰지 않음) — `--reparse` 목록만 예외로, 그때도 같은 날짜가 있으면 접미사를
+③ Object Storage 키 = `rep_md_key()` → `<PM_PREFIX>/<source_system>/<원본 키 세그먼트별 safe_name>/<파일명>_<parse_date>.md`
+   (원본 키가 이미 `<source_system>/`로 시작하면 원천 이름을 한 번만). 같은 이름이 있으면 덮어쓰지 않고 접미사를
    붙여(`_unique_parse_date`) 새 폴더를 만든다. 정리로 키가 바뀌면 원본 키의 짧은 해시를 덧붙인다(`rep_md_key()`).
-④ EDW = INSERT만(KEY가 이미 있으면 건너뜀, 재파싱 행은 예외). UPDATE 없음.
+④ EDW = INSERT만(KEY가 이미 있으면 건너뜀, 재파싱 행은 예외). UPDATE 없음. KEY가 이미 있는 문서는 올리기 전에 걸러
+   아예 올리지 않는다(`apply()` — EDW 행 없는 고아 객체를 만들지 않게). `--reparse` 목록만 예외(새 날짜 폴더).
 ⑥ DRM·파싱 실패(`EDW_EXCLUDED_STATUSES`)는 EDW에 넣지 않고 `render_excluded_report()`로 마크다운 보고서만.
 
 상태(parse_status) = ok · partial(교차 정확도 < criteria.json run.cross_acc_full) · failed · skipped_drm(DRM·암호 래핑) ·
@@ -104,9 +105,12 @@ def rep_md_key(prefix, source_system, source_key, parse_date):
     세그먼트 중 하나라도 원본과 달라지면 마지막 세그먼트에 **원본 전체 키의 sha1 앞 10자**(`__h<hex10>`)를
     붙여 구분한다 — 정리가 필요 없는 흔한 경로(사용자가 읽는 대부분)는 그대로 둔다. 원본 키 자체가 이미 이
     해시 접미사 모양으로 끝나면(드물지만 가능) 그것도 해시를 붙여 "해시 붙은 키"와 "우연히 그렇게 생긴
-    원본 키"가 서로 안 겹치게 한다. ponytail: 남는 이론상 충돌(sha1 10자 충돌)은 막지 않음."""
+    원본 키"가 서로 안 겹치게 한다. ponytail: 남는 이론상 충돌(sha1 10자 충돌)은 막지 않음.
+    원본 키 첫 마디가 이미 원천 이름이면(대소문자 무시 — PC 폴더 원천 `CRMS/<uuid>/<파일>` + source_system CRMS) 원천 이름을
+    한 번만 쓴다(`CRMS/CRMS/…` 아님). 첫 마디가 원천 이름이 아니면(서버 — source_system FileStorageMap) 앞에 붙인다."""
     key = str(source_key)
     raw_segs = [s for s in key.strip("/").split("/") if s not in ("", ".", "..")]
+    head = [] if raw_segs[:-1] and raw_segs[0].lower() == str(source_system).lower() else [safe_filename(source_system, "")]
     segs = [safe_filename(s, "") for s in raw_segs] or [safe_filename(key, "")]
     # 정리된 경로를 원본 키 '문자열 전체'와 비교 — 세그먼트 치환뿐 아니라 빈 칸·'.'·'..'·앞뒤 '/' 걷어내기로 바뀐
     # 경우(예: 'a//b'·'a/./b'·'a/b/' → 'a/b')도 해시를 붙여 서로 다른 원본 키가 같은 결과 키로 접히지 않게
@@ -114,7 +118,7 @@ def rep_md_key(prefix, source_system, source_key, parse_date):
         h = f"h{_hash10(source_key)}"
         segs[-1] = f"{segs[-1]}__{h}" if segs[-1] else h
     # <출처>/<나머지 폴더>/<파일명>_<날짜>.md
-    base = "/".join([safe_filename(source_system, ""), *segs[:-1], f"{doc_stem(source_key)}_{parse_date}.md"])
+    base = "/".join([*head, *segs[:-1], f"{doc_stem(source_key)}_{parse_date}.md"])
     return f"{prefix.rstrip('/')}/{base}" if prefix else base
 
 
@@ -476,15 +480,23 @@ def render_excluded_report(entries):
 def apply(entries, storage, db, md_dir, prefix=""):
     """업로드(.md — 같은 이름이 이미 있으면 덮어쓰지 않고 접미사로 새 이름) + EDW INSERT(KEY가
     이미 있으면 건너뜀 — db.insert_new, UPDATE·MERGE 없음 · DRM·실패는 EDW_EXCLUDED_STATUSES라 아예 안 보냄).
+    올리기 전에 EDW에서 KEY를 한 번에 본다 — 이미 있으면 올리지 않는다(EDW 행 없는 고아 객체 방지 · `--reparse` 목록만 예외).
     entries = plan()의 반환값 그대로. md_dir: .md를 잠깐 썼다가 올린 뒤 바로 지우는 로컬 폴더
-    각 행에 "upload_result"를 채운다: "uploaded"(이 실행이 새로 올림) · "excluded"(PM_UPLOAD_STATUSES 밖이거나 렌더할 대표 결과가 없음).
+    각 행에 "upload_result"를 채운다: "uploaded"(이 실행이 새로 올림) · "excluded"(PM_UPLOAD_STATUSES 밖이거나 렌더할 대표 결과가 없음) ·
+    "exists"(EDW에 KEY가 이미 있어 올리지 않음).
     --apply일 때만 부른다(네트워크·쓰기)."""
-    uploaded = excluded = 0
+    uploaded = excluded = exists = 0
+    ask = {e["row"]["source_key"] for e in entries if e["upload"] and not e["reparse"] and e["row"]["source_key"] is not None}
+    have = {(r["source_system"], r["source_key"]) for r in db.rows_where("source_key", sorted(ask))} if ask else set()
     for e in entries:
         row = e["row"]
         if not e["upload"]:
             e["upload_result"] = "excluded"
             excluded += 1
+            continue
+        if not e["reparse"] and (row["source_system"] or "unknown", row["source_key"]) in have:  # 빈 원천 = 'unknown'(insert_new와 같음)
+            e["upload_result"] = "exists"
+            exists += 1
             continue
         fkey = e.get("file_key") or rep_md_key(prefix, row["source_system"], row["source_key"], row["parse_date"])
         if storage.head(fkey) is not None:  # 같은 시각 이름이 이미 있으면(드묾) 접미사로 새 이름 — 덮어쓰지 않음
@@ -523,6 +535,7 @@ def apply(entries, storage, db, md_dir, prefix=""):
     return {
         "uploaded": uploaded,
         "upload_excluded": excluded,
+        "upload_skip_existing": exists,
         "inserted": inserted,
         "edw_skip_existing": key_skipped,
         "edw_excluded_drm_failed": edw_excluded,

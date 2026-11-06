@@ -197,14 +197,12 @@
 쓰지 않는 칸은 고칠 때 헷갈리게 한다.
 
 ### 규칙
-1. `mcp_server/services/search/question_type.TYPE_TABLE`은 검색이 실제로 읽는 값만 가진다(지금 읽는 것은 `rank_rules.weights()`의 `aggregate` 판정 — BM25 가중을 표 집계용으로).
-
-### 비고(지금 코드와 다른 점)
-- 표의 `first_tool`·`search` 칸과 `aggregate` 밖 유형의 결과를 아무도 읽지 않는다.
+1. `mcp_server/services/search/question_type.TYPE_TABLE`은 (유형 이름, 단서 정규식) 쌍만 가진다 — 첫 도구·검색 설정 칸은 없다. `classify()`는 유형 이름 하나를 낸다. 검색이 읽는 것은 `rank_rules.weights()`의 `aggregate` 판정(BM25 가중을 표 집계용으로)이고, 다른 유형은 정확도 점검(`resources/vocab/qtype_labels.json`)만 쓴다.
 
 ### QA
-- 정할 것: `tests/server/mcp/test_question_type.py`가 남은 칸만 본다.
-- Status: todo
+- `tests/server/mcp/test_question_type.py` — 질문 → 유형 사례 표 + 고정 세트 정확도. MCP 도구 계약은 그대로.
+- 반영: 0.3.0(11-05).
+- Status: done
 
 ## 코드와 다른 점 · 지울 코드
 

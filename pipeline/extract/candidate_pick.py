@@ -12,6 +12,7 @@ filename=original_filename · content_version=content_version_id(열 이름이 �
 import csv
 import json
 import re
+import shutil
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -21,6 +22,7 @@ from common.core.contract import jl
 from common.core.contract import safe_filename as _safe_name
 from pipeline import config as pc
 
+RUN_SEEN = "_seen_sha"  # 이번 실행이 받은 원본 sha256 표지 폴더(목록 파일 옆) — list가 비우고, 문서마다 stage가 채움
 COL_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")  # csv 열 이름(RDB_COL_*) 화이트리스트
 
 
@@ -309,8 +311,9 @@ def rdb_pick(table, state, limit=0, done=frozenset()):
 
 
 # ── 원천 목록(run_pipeline이 컨테이너 안에서 한 번 부름) ──────────────────────────
-# `python -m pipeline.extract.candidate_pick list --filter RFP,proposal --start-offset N [--limit N] [--seqs 3,7] [--skip-done]
-#  [--max-docs N] [--faq-seen <파일>] --out <목록 파일>` — EDW FileStorageMap 목록(파일 크기 오름차순) → 끝난 문서 빼기(--skip-done) →
+# `python -m pipeline.extract.candidate_pick list [--filter RFP,proposal] [--start-offset N] [--limit N] [--seqs 3,7] [--skip-done]
+#  [--max-docs N] [--faq-seen <파일>] --out <목록 파일>` — EDW FileStorageMap 목록(파일 크기 오름차순, --filter가 없으면 모든 문서) →
+#  끝난 문서 빼기(--skip-done) →
 # FAQ 먼저(--faq-seen, --seqs·--limit 실행은 건너뜀) → 앞 --max-docs개. 목록 파일(JSON): {"total": 목록 행 수, "start": 시작 자리,
 # "docs": [{"seq", "id", "s3_key", "original_filename", "file_size"}, …]} — 처리 순서대로, seq = 목록 안 자리(FAQ 덧붙임 포함).
 FSM_SQL = (
@@ -320,11 +323,11 @@ FAQ_PREFIX = "FAQ/"
 
 
 def edw_rows(edw, keywords=(), faq=False):
-    """FileStorageMap 행(파일 크기 오름차순) — 이름 키워드(대소문자 무시, 하나라도 들면) 또는 faq=True면 FAQ 전체."""
+    """FileStorageMap 행(파일 크기 오름차순) — 이름 키워드(대소문자 무시, 하나라도 들면 — 없으면 모든 행) 또는 faq=True면 FAQ 전체."""
     if faq:
         return edw.q(FSM_SQL.format(cond="s3_key LIKE ?"), [FAQ_PREFIX + "%"])
     if not keywords:
-        raise SystemExit("[list] --filter 키워드가 비어 있음")
+        return edw.q(FSM_SQL.format(cond="1=1"), [])
     cond = " OR ".join(["LOWER(original_filename) LIKE ?"] * len(keywords))
     return edw.q(FSM_SQL.format(cond=cond), [f"%{k.lower()}%" for k in keywords])
 
@@ -442,7 +445,7 @@ def _list_cmd(argv):
     import argparse
 
     ap = argparse.ArgumentParser(prog="pipeline.extract.candidate_pick list")
-    ap.add_argument("--filter", default="RFP,proposal", help="원본 파일 이름 키워드(쉼표 — 하나라도 들면)")
+    ap.add_argument("--filter", default="", help="원본 파일 이름 키워드(쉼표 — 하나라도 들면)로 좁힘 — 기본 모든 문서")
     ap.add_argument("--start-offset", type=int, default=0)
     ap.add_argument("--limit", type=int, default=0, help="시험 — 이 개수만")
     ap.add_argument("--seqs", default="", help="목록 자리(쉼표) — 주면 연속 범위 대신 이것만")
@@ -459,6 +462,7 @@ def _list_cmd(argv):
     seqs = [int(x) for x in a.seqs.split(",") if x.strip()]
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
+    shutil.rmtree(out.parent / RUN_SEEN, ignore_errors=True)  # 새 실행 — 앞 실행이 받은 sha256 표지를 비움
     sync = lambda reset: faq_sync(reset, out.with_name("faq_sync.json"))  # 결과는 목록 파일 옆
     rows, order, start, total = list_targets(keywords, a.start_offset, a.limit, seqs, a.skip_done, a.max_docs, a.faq_seen, sync)
     docs = [{"seq": s, **{k: rows[s][k] for k in ("id", "s3_key", "original_filename", "file_size")}} for s in order]

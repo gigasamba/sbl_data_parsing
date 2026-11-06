@@ -1,13 +1,14 @@
 """영구 건너뜀 문서 기록(pl-58) — 파싱할 수 없는 원본(지원 안 하는 확장자·확장자 없음·DRM·암호)을 `applog.skip_doc_info`에
 원본 키당 한 행으로 남기고(처음·마지막 본 시각·횟수), 대상 목록(`candidate_pick.list_targets --skip-done`)이 그 키를 뺀다 —
-밤마다 같은 문서를 다시 받지 않게. 중복(`dup_*`)은 게시가 ParsingMeta `skipped_dup`로 쓰므로, 파싱 실패는 다시 시도하므로 여기 쓰지 않는다.
+밤마다 같은 문서를 다시 받지 않게. 이번 실행의 다른 원본과 같은 내용(`duplicate_sha256` — 원래 원본 키는 pipe_event `dup_of`)도 쓴다.
+같은 묶음·끝난 문서와의 중복(`dup_batch`·`dup_done`)은 게시가 ParsingMeta `skipped_dup`로만 쓰고, 파싱 실패는 다시 시도하므로 여기 쓰지 않는다.
 PG 접속 정보가 있으면 PG(`dbtool up --target applog` — 판 0002), 없으면 PC 대역 sqlite(`<standin_dir>/applog.sqlite` — 표를 바로 만듦,
 서버는 대역을 쓰지 않고 멈춤)."""
 
 from pathlib import Path
 
 TABLE = "skip_doc_info"
-PERMANENT = ("unsupported_", "drm_", "encrypted_")  # 이유 앞부분 — 원본이 바뀌지 않는 한 다시 받아도 같은 결과
+PERMANENT = ("unsupported_", "drm_", "encrypted_", "duplicate_")  # 이유 앞부분 — 원본이 바뀌지 않는 한 다시 받아도 같은 결과
 
 
 def _schema():

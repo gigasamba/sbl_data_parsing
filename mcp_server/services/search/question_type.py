@@ -1,15 +1,14 @@
-"""질문 유형 라우터 — 규칙만(LLM 0회), 질문 글자만 보고 유형 하나 + 첫 도구·검색 설정을 고른다.
+"""질문 유형 라우터 — 규칙만(LLM 0회), 질문 글자만 보고 유형 하나를 고른다.
 
 TYPE_TABLE은 **우선순위 목록**(위가 더 구체적 — 하나만 고름, 첫 매치가 이김). 예: "몇 개인가"(count)와
 "흐름도"(figure)가 같은 질문에 있으면 figure가 더 구체적(그림을 읽어야 답이 나옴)이라 위에 둔다.
 ponytail: 정규식 하나로 유형을 가르는 규칙 — 겹치는 단서(최근 N년 추이를 "최신"으로, 총액이 들어간 비교 질문을
 "집계"로)는 오분류할 수 있다(resources/vocab/qtype_labels.json 혼동 행렬). 더 정확해야 하면 작은 LLM 분류로.
 
-호출자: rank_rules.py weights()(bm25 가중 조정).
+호출자: rank_rules.py weights()(유형이 aggregate면 bm25 가중 조정 — 다른 유형은 정확도 점검만 씀).
 정확도 점검: tests/server/mcp/test_question_type.py(resources/vocab/qtype_labels.json)
 """
 
-import copy
 import re
 
 from common.core.docmeta import RE_LATEST_QUESTION  # 최신판 질문 단서
@@ -44,24 +43,20 @@ _ALL_RE = re.compile(r"모두|전부|빠짐없이|\ball\b", re.I)
 AGGREGATE_RE = re.compile("|".join(p.pattern for p in (COUNT_RE, SUM_RE, MAXMIN_RE, _AVG_RE)), re.I)
 LIST_TYPE_RE = re.compile("|".join(p.pattern for p in (LIST_RE, _ALL_RE)), re.I)
 
-# 유형별 첫 도구·검색 설정 — 순서 = 우선순위(하나만 고름).
+# 유형별 단서 — 순서 = 우선순위(하나만 고름).
 TYPE_TABLE = [
-    ("aggregate", AGGREGATE_RE, {"first_tool": "aggregate", "search": {}}),
-    ("latest", RE_LATEST_QUESTION, {"first_tool": "search", "search": {"recency": "2"}}),
-    # 그림 설명은 이미 일반 청크로 색인돼 기본 검색이 찾음 — methods를 좁히지 않는다
-    ("figure", _FIGURE_RE, {"first_tool": "search", "search": {}}),
-    ("list", LIST_TYPE_RE, {"first_tool": "search", "search": {}}),
-    ("compare", _COMPARE_RE, {"first_tool": "search", "search": {}}),
-    ("trend", _TREND_RE, {"first_tool": "search", "search": {}}),
-    ("term", _TERM_RE, {"first_tool": "lookup_term", "search": {}}),
+    ("aggregate", AGGREGATE_RE),
+    ("latest", RE_LATEST_QUESTION),
+    ("figure", _FIGURE_RE),
+    ("list", LIST_TYPE_RE),
+    ("compare", _COMPARE_RE),
+    ("trend", _TREND_RE),
+    ("term", _TERM_RE),
 ]
-DEFAULT_TYPE, DEFAULT_CONFIG = "general", {"first_tool": "search", "search": {}}
+DEFAULT_TYPE = "general"
 
 
 def classify(question):
-    """질문 글자만 보고 유형 하나 + {"first_tool", "search"}(호출자가 복사해 씀 — TYPE_TABLE 항목을 직접 안 건드림)."""
+    """질문 글자만 보고 유형 이름 하나."""
     q = question or ""
-    for qtype, rx, cfg in TYPE_TABLE:
-        if rx.search(q):
-            return qtype, copy.deepcopy(cfg)
-    return DEFAULT_TYPE, copy.deepcopy(DEFAULT_CONFIG)
+    return next((qtype for qtype, rx in TYPE_TABLE if rx.search(q)), DEFAULT_TYPE)

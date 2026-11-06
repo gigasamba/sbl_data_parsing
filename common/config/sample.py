@@ -19,7 +19,7 @@ from common.core.console import utf8_stdout
 OUT = S.REPO_ROOT / "settings.sample.yaml"
 HEAD = """# settings.sample.yaml — 설정 파일 구조와 설명. 생성: python -m common.config.sample (손으로 고치지 않음)
 # 복사해 [필수] 칸을 채우면 시작된다 — PC: 저장소 루트 settings.yaml(권한 600) · 서버: <루트>/settings.yaml(루트 = 코드 폴더의 부모 · UID 10001·권한 640).
-# 순서: required(사람이 채울 값) → common·extract·transform·load·search·ops(환경마다 정하는 값) → tuning(거의 안 바꾸는 값) → dev(PC 전용 — 서버는 비움).
+# 순서: required(사람이 채울 값) → common·extract·transform·load·search·ops(환경마다 정하는 값) → tuning(거의 안 바꾸는 값) → dev(PC 전용 — 서버는 비움) → option(선택 기능 — 비우면 끔).
 #   빈 칸(`이름:` 뒤가 비어 있음) = 사람이 꼭 적을 값([필수] — 주석에 예). null = 비워 두면 코드 기본값·계산값·끔(주석의 "null = …"). 그 밖의 값 = 코드 기본값.
 #   복사할 때는 [필수] 칸과 바꿀 칸만 옮기기를 권장 — 적힌 값은 코드 기본값보다 이겨서, 나중에 코드 기본값이 바뀌어도 반영되지 않는다.
 #   [필수 · 언제(어느 앱)] — 언제 = 모두·local(PC)·dev·prd(서버), 앱 = pipeline·mcp·호스트 스크립트. [선택] = 비워도 됨. [비밀] = settings.yaml에만(출력·로그에 안 나옴).
@@ -71,6 +71,7 @@ CATEGORIES = {
         ("검증 페이지", ("dev.search_ui",)),
         ("PC 시험 Docker", ("dev.docker",)),
     ),
+    "option": (("개발 작업 공간 — SSH·opencode(개발 서버 dev만)", ("option.devbox",)),),
     "tuning": (  # 거의 안 바꾸는 값을 분류별로(자리는 tuning.<역할 자리>)
         ("공통 — 접속·모델 호출(제한 시간·재시도·캐시)", ("tuning.common.connections", "tuning.common.models")),
         ("공통 — 검색 글자 정규화·용어 초안", ("tuning.common.text",)),
@@ -201,6 +202,8 @@ NOTES = {
     "common.host.instance": "여러 벌(dev만) 이름 · 영소문자·숫자·- · 예 jehun — 스키마·컨테이너·표 이름 끝에 붙음 (null = 한 벌)",
     "common.host.image_stage_dir": "prune_images.sh가 정리할 조각·tar 폴더 (null = 정리 안 함)",
     "common.host.prune_keep": "남길 이미지 판 수",
+    "common.host.devbox.ssh_port": "개발 작업 공간 SSH 포트(dev만 — 개발자마다 다르게) · 예 2222 (null = 끔)",
+    "common.host.devbox.opencode_config": "opencode 설정 파일(호스트 절대 경로) · 예 /home/sbl/opencode.json (null = 이미지의 틀)",
     "pipeline.host.parse_cpus": "data-pipeline 컨테이너 CPU(호스트 CPU 수 이하)",
     "pipeline.host.parse_mem_limit": "data-pipeline 메모리 · 예 16g",
     "pipeline.host.data_parsing_cpus": "parse MCP 서비스 컨테이너 CPU",
@@ -362,6 +365,7 @@ NOTES = {
 TITLES = {
     "tuning": "tuning — 거의 바꾸지 않는 값(분류별 — 결과 파라미터·내부 상한·제한 시간·자원 세부값). 코드 기본값 그대로 두는 것이 보통.",
     "dev": "dev — PC 전용(RUN_ENV=local): 외부 모델·지출 상한·로컬 대체 DB·PC 시험 도구. 서버(dev·prd)는 이 절을 비워 둔다(서버에서 거부).",
+    "option": "option — 선택 기능(앱이 쓰지 않음 — 호스트 스크립트만). 비우면 끔.",
 }
 
 
@@ -385,7 +389,7 @@ def build(classes=None):
     for sec in L.SECTIONS:
         if sec not in tree:
             continue
-        lines.append(f"\n# {'═' * 94}" if sec in ("common", "tuning", "dev") else "")
+        lines.append(f"\n# {'═' * 94}" if sec in ("common", "tuning", "dev", "option") else "")
         if sec in TITLES:
             lines.append(f"# {TITLES[sec]}")
             lines.append(f"# {'═' * 94}")

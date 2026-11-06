@@ -63,6 +63,22 @@ def selftest():
     assert rep8["text"].index("| 1 | 2 |") < rep8["text"].index(footnote), rep8["text"]
     print("[selftest] 리뷰 지적 5 — 칸 사이 짧은 각주는 지워지지 않고 표 뒤에 원래 순서대로 남음(rep.table_inline.residue 집계) 통과")
 
+    # (9) 0.3.0 엔진 비교 — 위 칸과 같아 찾기에서 빠진 칸 둘이 이어진 간격 글("ABX-101 고객사A")과 본문 엔진만의
+    # 표기("46355" — 고른 grid는 날짜)는 표에 이미 있는 칸이라 표 뒤에 다시 붙지 않는다(한글 xlsx 334줄 중복).
+    own = [["ID", "과제", "고객", "기록일"], ["B1", "ABX-101", "고객사A", "46355"], ["B2", "ABX-101", "고객사A", "46356"]]
+    other = [["ID", "과제", "고객", "기록일"], ["B1", "ABX-101", "고객사A", "2026-11-29"], ["B2", "ABX-101", "고객사A", "2026-11-30"]]
+    rep9 = {"text": "ID 과제 고객 기록일 B1 ABX-101 고객사A 46355 B2 ABX-101 고객사A 46356", "tables": [{"grid": own, "page": 1}]}
+    info9 = inline_tables(rep9, "eng1", {"eng2": {"tables": [{"grid": other, "page": 1}]}})
+    assert info9["inlined"] == 1 and info9["residue"] == 0, (info9, rep9["text"])
+    assert rep9["text"].count("ABX-101") == 2, rep9["text"]
+    print("[selftest] 표 칸으로만 된 간격 글(이어진 칸·본문 엔진 표기)은 표 뒤에 다시 안 붙음 통과")
+
+    # (10) 한 글자 칸("1")을 이어 만든 숫자 각주("11")는 칸이 아니라 각주 — 남는다
+    rep10 = {"text": "머리말\nA\nB\n1\n11\n2\n꼬리말", "tables": [{"grid": [["A", "B"], ["1", "2"]], "page": None}]}
+    info10 = inline_tables(rep10, "eng1", {})
+    assert info10["inlined"] == 1 and info10["residue"] == 1 and "\n11\n" in rep10["text"], (info10, rep10["text"])
+    print("[selftest] 한 글자 칸으로 이은 숫자 각주는 지우지 않음 통과")
+
     print("[selftest] table_inline 전체 통과")
 
 

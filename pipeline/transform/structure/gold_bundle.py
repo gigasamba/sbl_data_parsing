@@ -24,10 +24,7 @@ from common.core import docmeta as DM  # 날짜·개정·구판·문서군(struc
 from common.core import span as SP  # 성능 span
 from common.core import terms as T  # 고객 명부·이름 정규화·ID 모양(검색과 같은 규칙)
 from common.core.console import utf8_stdout
-from common.core.contract import (  # 문서 ID(doc_key) 규칙(orig_sha256으로 parse와 같은 값)
-    file_hash,
-    original_file_hash,
-)
+from common.core.contract import original_file_hash  # 문서 ID(doc_key) 규칙(orig_sha256으로 parse와 같은 값)
 from common.core.meaning import strip_page_numbers
 from common.core.paths import APP_ROOT  # 폴더 재편 뒤 이 상수만 바뀌면 됨
 from common.core.text import (  # 색인 본문·토큰 규칙(모듈 계약)
@@ -37,6 +34,7 @@ from common.core.text import (  # 색인 본문·토큰 규칙(모듈 계약)
 from common.store import master  # 마스터 표 해시(묶음 meta.json master_hash)
 from pipeline import config as pc
 from pipeline.shared import runtrace  # run.progress
+from pipeline.shared.srcsha import sha_of  # 받기가 manifest에 남긴 원본 sha256(같은 파일일 때 — 없으면 다시 구함)
 from pipeline.transform.structure import chunking as S  # 청킹·개체 정규식(구조화 모듈)
 from pipeline.transform.structure import client_roster as ST  # name_hits·seed_roster(구조화 전용)
 
@@ -218,6 +216,7 @@ def infer_clients(docs, head=400, roster=None):
     알려진 고객 = 고객 명부(roster, 기본 T._aliases() — stack.json client_aliases·CLIENT_ROSTER·GLOSSARY_DIR org_client)
     + 주요 바이오·제약사 공개 이름 seed(pipeline.transform.structure.client_roster.seed_roster()) 합집합 — roster를
     명시하면(시험 등) seed는 안 더함.
+    정규식은 이름 조각이 본문에 글자 그대로(대소문자 무시) 있는 고객만 돌린다(ST.may_hit — 결과는 같고 정규식 수만 줄어듦).
     ponytail: 알려진 고객 수 × 문서 전체 길이 스캔(O(roster×len(text))) — 명부가 아주 커지면 아호코라식 등으로."""
     if roster is None:
         roster = dict(T._aliases())
@@ -226,9 +225,12 @@ def infer_clients(docs, head=400, roster=None):
     for d in docs:
         text = d.get("full_text") or ""
         head_text = text[:head]
+        low = ST.fold_text(text)
         scored = []
         for c, al in roster.items():
             names = [n for n in [c, *al] if n]
+            if not any(ST.may_hit(n, low) for n in names):
+                continue
             cnt = sum(ST.name_hits(n, text) for n in names)  # 경계 인식 카운트(raw substring 아님, 원문 그대로 — 공백은 name_hits가 처리)
             if cnt == 0:
                 continue
@@ -432,7 +434,7 @@ def main(argv=None):
         so = (raw.get("rep") or {}).get("source") or {}
         path = (a.path_prefix.rstrip("/\\") + "/" + doc) if a.path_prefix else (str(orig.resolve()) if orig else so["path"])
         h = (
-            (original_file_hash(orig) or file_hash(orig)) if orig else so["sha256"]
+            (original_file_hash(orig) or sha_of(orig)) if orig else so["sha256"]
         )  # 원본이 로컬에 있어도 회전된 바이트 대신 원본 식별(rotation.csv) 먼저
         if h in seen_sha:  # 같은 내용 다른 이름(사본) — 한 번만, 다른 경로는 aliases에
             docs[seen_sha[h]].setdefault("aliases", []).append(path)

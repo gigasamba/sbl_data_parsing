@@ -17,7 +17,7 @@
 
 ### 1-2. 파일 모양
 
-- `name`(예 `dev-v1`) · `parse`(형식 키 → 엔진 목록 — 문서마다 그 엔진들이 동시에 돎) · `source` · `embed` · `chunk` · `graph` · `retrieve` · `k`, 선택 `updated` · `client_aliases`(`common/core/terms.py`가 읽음 — 지금 파일에 없음).
+- `name`(예 `dev-v1`) · `parse`(형식 키 → 엔진 목록 — 문서마다 그 엔진들이 동시에 돎) · `source` · `embed` · `chunk` · `retrieve` · `k`, 선택 `updated` · `client_aliases`(`common/core/terms.py`가 읽음 — 지금 파일에 없음).
 - 형식 키는 확장자, PDF는 `.pdf_text`·`.pdf_image`.
 
 ### 1-3. 바꾸기·되돌리기·보기
@@ -45,7 +45,7 @@ LLM·VLM을 **부르는** 단계의 지시서 패키지 7개 — `resources/prom
 | `resources/prompts/common/<패키지>/` | 여러 단계·이미지가 함께 쓰는 지시서, 공용 꼬리 `_common/` | 모든 이미지(`resources/` 폴더째) |
 | `resources/prompts/pipeline/<패키지>/` | 파싱·구조화·평가 지시서 | 모든 이미지 |
 
-- 찾는 자리는 `common/core/paths.py` `resolve_agent_dir()` 한 곳이다. 순서는 ① `resources/prompts/common` ② `resources/prompts/pipeline` ③ `valid_env/answer_test`(`rag_qa` — PC 전용 데이터 · 이미지에 없음). 코드에는 폴더가 없는 갈래 셋(`resources/prompts/mcp`·`validation/e2e`·`dev_tools/unit_test/fixtures`)이 더 있어 늘 건너뛴다(요건: [test.md#e2-15](../prd/test.md#e2-15)). 패키지 이름은 겹치지 않아 순서가 결과를 바꾸지는 않지만, 결정적이어야 캐시·로그가 재현된다.
+- 찾는 자리는 `common/core/paths.py` `resolve_agent_dir()` 한 곳이다. 순서는 ① `resources/prompts/common` ② `resources/prompts/pipeline` ③ `valid_env/answer_test`(`rag_qa` — PC 전용 데이터 · 이미지에 없음). 패키지 이름은 겹치지 않아 순서가 결과를 바꾸지는 않지만, 결정적이어야 캐시·로그가 재현된다.
 - `resources/`는 저장소 루트 바로 아래이고, 이미지 안에서는 `/app/deploy/resources`다(`paths.RES_ROOT` = 코드 패키지들이 import되는 자리의 `resources/`).
 
 ### 2-2. 패키지 구성

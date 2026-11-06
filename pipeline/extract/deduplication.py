@@ -14,9 +14,9 @@ import re
 from pathlib import Path
 
 from common.core.console import utf8_stdout
-from common.core.contract import file_hash
 from common.core.paths import APP_ROOT, doc_dir
 from pipeline.extract.candidate_pick import _hidden
+from pipeline.shared.srcsha import sha_of
 
 # 대표 고르기 — 이름에 사본 표시("(1)"·"사본"·날짜 등)가 없는 것 → 최신 수정 → 큰 파일
 _NOISE = re.compile(
@@ -26,7 +26,7 @@ _NOISE = re.compile(
 
 def run_folder(src, out, names=None, write_keep=True):
     """폴더의 파일(names를 주면 그 이름만 — 이번 묶음)을 해시로 묶어 대표만 keep — (keep {대표 이름: sha256}, groups.csv 행, 중복 그룹 수).
-    write_keep=False면 <out>/keep.txt를 쓰지 않는다(부른 쪽이 씀).
+    write_keep=False면 <out>/keep.txt를 쓰지 않는다(부른 쪽이 씀). sha256은 받기가 manifest에 남긴 값(srcsha.sha_of).
     지문은 (경로·크기·수정 시각)이 같으면 fingerprints.jsonl 캐시를 다시 쓴다(새·바뀐 파일만 읽음)."""
     files = sorted(
         p for p in Path(src).iterdir() if p.is_file() and not _hidden(p) and p.name != ".gitkeep" and (names is None or p.name in names)
@@ -45,7 +45,7 @@ def run_folder(src, out, names=None, write_keep=True):
         st = p.stat()
         r = cache.get((str(p), st.st_size, st.st_mtime))
         if r is None or "sha" not in r:
-            r = {"path": str(p), "size": st.st_size, "mtime": st.st_mtime, "sha": file_hash(p), "file_name": p.name, "source_id": None}
+            r = {"path": str(p), "size": st.st_size, "mtime": st.st_mtime, "sha": sha_of(p), "file_name": p.name, "source_id": None}
         info.append(r)
     cache_path.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in info) + "\n", encoding="utf-8")
 

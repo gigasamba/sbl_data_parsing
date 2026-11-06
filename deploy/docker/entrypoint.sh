@@ -9,8 +9,8 @@
 #   tool <이름> = 고정 표의 도구 하나(check_env·ping_models·check_modules·cli·rdb_discover·gen_roster·glossary_suggest — pipe_exec.sh가 쓰는 자리)
 #     이름만 받는다(다른 형태는 종료 64).
 #   모듈(트리거 1회): parse(= 가져오기(폴더·rdb:csv, PARSE_SOURCE) → dedup → prepare → 파싱·대표 결과) · structure(구조화·임베딩) · load(PostgreSQL) · publish(대표 결과 .md Object Storage 업로드 + EDW 메타 — pipeline.load.publish_parse_result --apply)
-#   migrate up|stamp|current|check [--target search|all] [--schema S] [--dim N|--bundle B] = pgvector 우리 스키마 판 관리(Alembic,
-#     common.store.db.dbtool) — data-pipeline 이미지만, up·stamp는 load와 같은 잠금(current·check는 읽기만 — 잠금 없음). 서버 절차 docs/operations/release-and-patch.md §5-5
+#   migrate up|current|check [--target search|all] [--schema S] [--dim N|--bundle B] = pgvector 우리 스키마 판 관리(Alembic,
+#     common.store.db.dbtool) — data-pipeline 이미지만, up은 load와 같은 잠금(current·check는 읽기만 — 잠금 없음). 서버 절차 docs/operations/release-and-patch.md §5-5
 #   show-stack = 지금 엔진 구성(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 코드 폴더 바꾸기) — 두 이미지. docs/architecture/resources.md §1
 #   이미지 2개: RAG_MODULE마다 쓸 수 있는 명령이 다름(아래 case가 거름):
 #     pipeline(data-pipeline)=parse·publish·show-stack·idle·migrate·run-mcp-parsing ·
@@ -22,8 +22,8 @@ cd /app
 umask 0002   # 그룹도 쓸 수 있게(파일 664·폴더 775) — 서버 운영 계정이 UID 10001이 쓴 결과를 고치고 지우게(결과 폴더 그룹·setgid는 server-guide §1-2)
 # 실제로 도는 코드의 판·커밋([image] 줄의 커밋은 실행 이미지를 빌드한 커밋이라 코드만 바꾼 배포와 다름).
 # 코드 폴더(실행 이미지 마운트)·구운 이미지 모두 /app/deploy/VERSION·CODE_COMMIT. CODE_COMMIT은 zip·git archive로 받을 때만 채워짐.
-_code_ver=$(tr -d ' \r\n' < /app/deploy/VERSION 2>/dev/null || true)
-_code_commit=$(tr -d '\r\n' < /app/deploy/CODE_COMMIT 2>/dev/null || true)
+_code_ver=$(tr -d ' \r\n' 2>/dev/null < /app/deploy/VERSION || true)  # 2>를 < 앞에 — 파일이 없을 때 셸 오류 줄도 숨김
+_code_commit=$(tr -d '\r\n' 2>/dev/null < /app/deploy/CODE_COMMIT || true)
 case "$_code_commit" in ''|'$Format'*) _code_commit="표시 없음(git clone — zip·git archive로 받으면 채워짐)" ;; *) _code_commit=${_code_commit##* } ;; esac
 echo "[code] 판 ${_code_ver:-?} · 커밋 ${_code_commit}" >&2
 
@@ -106,13 +106,13 @@ case "$cmd" in
   parse)
     preflight
     locked python -m pipeline.cli parse --source "${PARSE_SOURCE:-${DOC_DIR:?}}" --src "${DOC_DIR_PREPARED:?}" "$@";;
-  migrate)    # pgvector 판 관리. up·stamp는 적재와 겹치지 않게 같은 잠금, 읽기만 하는 current·check는 잠금·
+  migrate)    # pgvector 판 관리. up은 적재와 겹치지 않게 같은 잠금, 읽기만 하는 current·check는 잠금·
     # 쓰기 확인(preflight) 없이. 명령 낱말은 인자 어디에 있어도 찾는다(옵션 값은 건너뜀 — 예: `migrate --target x check`)
     verb=""; skip=0
     for arg in "$@"; do
       if [ "$skip" = 1 ]; then skip=0; continue; fi
       case "$arg" in
-        --target|--schema|--dim|--bundle|--pg-cases) skip=1;;
+        --target|--schema|--dim|--bundle) skip=1;;
         -*) ;;
         *) verb="$arg"; break;;
       esac

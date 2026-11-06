@@ -1,6 +1,6 @@
 """settings.yaml 배치 — 파일의 칸 자리(YAML 경로) ↔ 설정 모델의 칸 경로(common.* · pipeline.* · mcp.*).
 파일은 `required`(운영자가 꼭 채울 값) → 역할 절 `common`·`extract`·`transform`·`load`·`search`·`ops`(환경마다 운영자가 정하는 값) →
-`tuning`(거의 안 바꾸는 값 — 분류별) → `dev`(PC 전용 — 서버는 비워 둠) 순서다.
+`tuning`(거의 안 바꾸는 값 — 분류별) → `dev`(PC 전용 — 서버는 비워 둠) → `option`(선택 기능 — 비우면 끔) 순서다.
 코드는 모델 경로(`cfg().extract.ocr.dpi` 등)를 그대로 쓰고, read_settings()가 파일을 읽은 직후 to_model()로 모델 배치로 바꾼다.
   · required: 칸마다 자리를 적은 표(REQUIRED). 이름·자리를 바꾼 칸: 표(PLACED — 모델 경로 → 파일 자리).
   · tuning: 모델 경로 모음(TUNING) — 자리는 `tuning.` + 역할 자리. PC 전용 칸(LOCAL): 자리는 `dev.` + 역할 자리(앞 `common.` 뺌).
@@ -10,7 +10,7 @@
 """
 
 # 파일 최상위 절 — 이 순서로 sample에 낸다.
-SECTIONS = ("required", "common", "extract", "transform", "load", "search", "ops", "tuning", "dev")
+SECTIONS = ("required", "common", "extract", "transform", "load", "search", "ops", "tuning", "dev", "option")
 
 # required — (카테고리 열쇠, 제목, [(칸 이름, 모델 경로, 필수 조건)]). 조건은 sample 주석 머리에 그대로 — "필수 · <언제·어느 앱>" 또는 "선택".
 _PG_NEED = "필수 · dev·prd(pipeline·mcp) — local은 비우면 sqlite 대역"
@@ -111,6 +111,7 @@ ROLES = (
     ("common.runtime.", "ops.runtime."),
     ("common.log.", "ops.log."),
     ("common.paths.", "ops.paths."),
+    ("common.host.devbox.", "option.devbox."),  # 선택 기능(개발 작업 공간) — 파일 맨 아래 option 절
     ("common.host.", "ops.host."),
     ("common.dev.", "dev."),
     ("common.", "common."),

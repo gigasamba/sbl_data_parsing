@@ -6,7 +6,8 @@
 #   bash deploy/host/scripts/host_ctl.sh check                       배포 뒤 점검을 차례로 — 처음 실패에서 멈추고 마지막 한 줄로 판정
 # 하는 일: 코드 폴더 루트로 cd → settings.yaml을 셸 env로(load_settings.sh load_settings — 값은 출력 안 함) → 실행 이미지(*-runtime)면
 #   이 코드 폴더를 CODE_DIR로(in_container.sh code_dir_default — 파이프라인 이미지 기준, 개발 서버는 두 이미지가 함께 runtime) →
-#   $DOCKER compose -f compose.pipeline.yml -f compose.data-parsing.yml -f compose.mcp-server.yml [+ CODE_DIR면 compose.code*.yml] "$@".
+#   $DOCKER compose -f compose.pipeline.yml -f compose.data-parsing.yml -f compose.mcp-server.yml [+ CODE_DIR면 compose.code*.yml]
+#   [+ option.devbox.ssh_port면 compose.dev.yml(+ opencode_config면 compose.opencode.yml) — prd·코드가 든 이미지면 종료 2] "$@".
 # 묶음 이름은 compose<NAME_SUFFIX>(한 벌은 compose, 여러 벌은 compose-<instance>) — mcp_keepalive.sh도 같은 이름으로 부른다.
 # 종료 코드: compose 그대로 · 설정을 못 읽으면 load_settings의 코드(2) · init/check는 아래 설명.
 set -uo pipefail
@@ -15,7 +16,7 @@ if [ -n "${DC_ROOT:-}" ]; then RAG_ROOT=$DC_ROOT; fi   # 시험 루트(init) —
 . deploy/host/scripts/load_settings.sh   # 루트 RAG_ROOT·load_settings 한 곳(값은 아래 load_settings에서)
 
 # init — 서버 루트(이 코드 폴더의 부모)를 한 번에 채운다(값·파일 내용은 찍지 않음). 여러 번 불러도 안전.
-#   폴더: <결과 폴더>(UID 10001:<그룹>, 2775 — setgid) · <결과 폴더>/_mcp_parse/jobs(같음) · <루트>/backup(700)
+#   폴더: <결과 폴더>(UID 10001:<그룹>, 2775 — setgid) · <결과 폴더>/_mcp_parse/jobs(같음) · <루트>/backup(700) · <루트>/home(10001, 700 — 개발 작업 공간 홈)
 #   코드 폴더(이 스크립트의 폴더 — zip을 푼 sbl_data_parsing-<판>): chmod -R a+rX(컨테이너 UID 10001이 읽게)
 #   settings.yaml: 코드 폴더의 settings.sample.yaml을 <루트>/settings.yaml로 — **없을 때만**(있으면 절대 덮지 않음), 10001:<그룹> 640.
 #   edw_chain.yaml: resources/config/edw_chain.yaml을 <루트>/edw_chain.yaml로 — 같은 규칙(없을 때만, 10001:<그룹> 640). data-pipeline·mcp-server가 이 파일을
@@ -59,6 +60,7 @@ dc_init() {
   _mk "$out" 2775 1
   _mk "$jobs" 2775 1
   _mk "$root/backup" 700 0
+  _mk "$root/home" 700 1   # 개발 작업 공간(option.devbox)의 홈 /home/rag — 쓰지 않아도 빈 폴더로 둠
   if [ -z "$test" ]; then chmod -R a+rX . && echo "  권한  $(pwd) (a+rX)"; else echo "  (시험 — 코드 폴더 a+rX 건너뜀)"; fi
   _cp settings.sample.yaml "$sf"
   if [ -d "$chain" ]; then   # docker가 init 전에 띄운 마운트로 빈 폴더를 만든 경우 — 지우지 않고 멈춤(앱은 IsADirectoryError)
@@ -111,12 +113,12 @@ dc_check() {
   _vol() { vol=(); case "$1" in *-runtime:*) vol=(-v "$(pwd):/app/deploy:ro,z") ;; esac; }   # 실행 이미지(개발)는 이 코드 폴더를 붙임
   # shellcheck disable=SC2086 — DOCKER는 낱말 나눔(sudo podman)
   _step check_env "출력의 FAIL 줄 확인(server-guide §2)" bash deploy/host/scripts/pipe_exec.sh check_env || return 1
-  _step ping_models "모델 주소·키(settings.yaml common.models) — 서버는 내부망 모델만" bash deploy/host/scripts/pipe_exec.sh ping_models || return 1
-  _step "migrate check" "migrate up --target all · master load(§8-3 5)" bash deploy/host/scripts/pipe_exec.sh migrate check --target all || return 1
+  _step ping_models "모델 주소·키(settings.yaml required.models) — 서버는 내부망 모델만" bash deploy/host/scripts/pipe_exec.sh ping_models || return 1
+  _step "migrate check" "migrate up --target all · master load(upgrade-guide §6)" bash deploy/host/scripts/pipe_exec.sh migrate check --target all || return 1
   _vol "${DATA_PIPELINE_IMAGE:-}"
-  _step "selftest data-pipeline" "FAIL 줄의 시험 이름으로 원인 찾기(release-and-patch §3-3)" bash deploy/release/selftest_gate.sh $DOCKER run --rm ${vol[@]+"${vol[@]}"} "${DATA_PIPELINE_IMAGE:-}" selftest || return 1
+  _step "selftest data-pipeline" "FAIL 줄의 시험 이름으로 원인 찾기(release-and-patch §3)" bash deploy/release/selftest_gate.sh $DOCKER run --rm ${vol[@]+"${vol[@]}"} "${DATA_PIPELINE_IMAGE:-}" selftest || return 1
   _vol "${MCP_SERVER_IMAGE:-}"
-  _step "selftest mcp-server" "FAIL 줄의 시험 이름으로 원인 찾기(release-and-patch §3-3)" bash deploy/release/selftest_gate.sh $DOCKER run --rm ${vol[@]+"${vol[@]}"} "${MCP_SERVER_IMAGE:-}" selftest || return 1
+  _step "selftest mcp-server" "FAIL 줄의 시험 이름으로 원인 찾기(release-and-patch §3)" bash deploy/release/selftest_gate.sh $DOCKER run --rm ${vol[@]+"${vol[@]}"} "${MCP_SERVER_IMAGE:-}" selftest || return 1
   _step "검색 MCP" "\`$DOCKER logs mcp-server$NAME_SUFFIX\` 마지막 줄 — mcp_keepalive.sh가 다시 띄웠는데도 /health 응답 없음" bash deploy/host/scripts/mcp_keepalive.sh || return 1
   echo "[host_ctl check] 통과 — ${n}개"
 }
@@ -149,5 +151,12 @@ esac
 C=deploy/host/compose
 files="-f $C/compose.pipeline.yml -f $C/compose.data-parsing.yml -f $C/compose.mcp-server.yml"
 [ -n "${CODE_DIR:-}" ] && files="$files -f $C/compose.code.yml -f $C/compose.code.data-parsing.yml -f $C/compose.code.mcp-server.yml"
+# 개발 작업 공간(선택 — option.devbox.ssh_port를 적었을 때만): data-pipeline을 SSH 작업 공간으로(compose.dev.yml) + opencode 설정 파일(compose.opencode.yml)
+if [ -n "${DEVBOX_SSH_PORT:-}" ]; then
+  [ "${RUN_ENV:-}" = prd ] && { echo "[host_ctl] option.devbox.ssh_port는 개발 서버(dev)에서만 — 운영(prd)은 비워 둠" >&2; exit 2; }
+  [ -n "${CODE_DIR:-}" ] || { echo "[host_ctl] option.devbox.ssh_port — 개발 작업 공간은 실행 이미지(*-runtime)에서만(코드 폴더를 쓰기 가능으로 붙임)" >&2; exit 2; }
+  files="$files -f $C/compose.dev.yml"
+  [ -n "${DEVBOX_OPENCODE_CONFIG:-}" ] && files="$files -f $C/compose.opencode.yml"
+fi
 # shellcheck disable=SC2086 — DOCKER(sudo podman처럼 두 낱말)·파일 인자는 낱말 나눔
 exec $DOCKER compose -p "compose$NAME_SUFFIX" $files "$@"   # 묶음 이름 — 한 벌은 compose 기본(폴더 이름 compose) 그대로, 여러 벌은 compose-<instance>

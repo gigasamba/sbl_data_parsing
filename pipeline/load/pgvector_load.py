@@ -47,7 +47,7 @@ def _require_marked_schema(db, what="--replace"):
     if not _has_marker(db):
         raise SystemExit(
             f"{what} 거부: 스키마 {db.schema}에 우리 표식(판 표 alembic_version)이 없음 — "
-            "남의 기존 스키마일 수 있음(deploy로 먼저 만들거나 다른 PG_SCHEMA 사용 · 판 기록 전 옛 우리 스키마면 migrate stamp)"
+            "남의 기존 스키마일 수 있음(deploy로 먼저 만들거나 다른 PG_SCHEMA 사용)"
         )
 
 
@@ -93,10 +93,9 @@ def deploy(db, dim):
                 cur.execute(dbtool.standin_script(sdb.schema, int(dim)))
             dbtool.check_dim(sdb.q, sdb.schema, dim)  # 대역 파일이 이전 차원으로 남아 있을 때(PG는 판 올리기 전 precheck가 봄)
     elif dbtool.status(db.q, "search", db.schema)[0] == "없음" and dbtool.has_tables(db.q, db.schema):
-        # 판 기록 없는 기존 스키마(stamp 전): DDL·비교 없이 경고 뒤 계속.
-        # 비교·거부는 사람이 돌리는 migrate up|stamp에서만. 빠진 표·색인은 채우지 않음(check가 보임)
+        # 판 기록 없는 기존 스키마: DDL 없이 경고 뒤 계속(migrate up은 이런 스키마를 거부 — 새 스키마로 다시 적재). 빠진 표·색인은 채우지 않음
         dbtool.require_current(db.q, "search", db.schema)
-        kind += "(확인 안 함 — 판 기록 없는 기존 스키마: migrate check)"  # 색인을 만들지도 보지도 않음
+        kind += "(확인 안 함 — 판 기록 없는 기존 스키마)"  # 색인을 만들지도 보지도 않음
     else:
         _upgrade(db.schema, int(dim))  # 새 스키마 = 만들고 판 기록 · 판 기록 있음 = 끝까지(끝이면 그대로, 모르는 판은 거부)
     return kind

@@ -6,6 +6,8 @@
   tessdata/{kor,eng,osd}.traineddata    Tesseract 한국어·영어(tessdata_best)·방향 — tesseract(지금 이 자산을 쓰는 엔진 없음) (TESSDATA_PREFIX)
   fonts/GoNotoCurrent-Regular.ttf       marker 렌더링 글꼴(marker settings.FONT_PATH — 없으면 첫 실행 때 인터넷에서 받으려다 실패)
   rapidocr/*.onnx                       RapidOCR 한국어 PP-OCRv5 인식 + 검출·방향 — rapidocr_ko(최종 추천 엔진, 패키지 폴더 안)
+  opencode/opencode                     opencode 실행 파일(linux-x64-baseline — 선택, 개발 작업 공간) — 원본 <ASSET_SRC>/dl/opencode. 이미지 빌드가
+                                        통째로 /usr/local/bin에 넣으므로 조각으로 나누지 않고, 서버 install은 건너뜀(이미지에 이미 있음)
   (PostgreSQL 16 + pgvector Docker 이미지는 여기 없음 — 별도 브랜치 dev_server_pgvector를 ZIP으로 받아 docker load)
   wheels/psycopg*·typing_extensions·tzdata  PostgreSQL 드라이버(psycopg 3, Linux x86_64 · Python 3.12)
 용량 때문에 뺀 것: docling 모델(약 530 MB) · EasyOCR 모델(99 MB) · RapidOCR 중국어 인식(21 MB, 기본 rapidocr 엔진용) — 모두 최종 추천 10개 밖 — docling·docling_ocr 모델은 이 도구에 없음. GitHub 파일 한도(100 MB) 때문에 90 MB 넘는 파일은 .partNN으로 나눠 담고 설치할 때 합친다(sha256 확인). 목록·해시 = assets/MANIFEST.json.
@@ -57,6 +59,7 @@ def sources():
                 out[f"rapidocr/{f.name}"] = f
     for f in sorted((scratch / "dl" / "wheels_pg").glob("*.whl")):  # psycopg 드라이버
         out[f"wheels/{f.name}"] = f
+    out["opencode/opencode"] = scratch / "dl" / "opencode"  # 없으면 pack이 "없음(건너뜀)" — 이미지는 opencode 없이 빌드(ALLOW_NO_ASSETS=1)
     # docling 모델(HF 캐시, 약 530 MB)은 용량 때문에 제외
     return out
 
@@ -80,7 +83,7 @@ def pack():
         dst.parent.mkdir(parents=True, exist_ok=True)
         size = src.stat().st_size
         parts = []
-        if size > PART:
+        if size > PART and not rel.startswith("opencode/"):  # opencode는 Dockerfile이 파일 하나로 COPY
             with open(src, "rb") as f:
                 i = 0
                 while chunk := f.read(PART):
@@ -134,8 +137,8 @@ def install(python):
             continue
         if kind == "fonts":
             dst = t["font"]
-        elif kind == "tessdata":
-            continue  # 그대로 씀
+        elif kind in ("tessdata", "opencode"):
+            continue  # 그대로 씀(opencode는 이미지 빌드가 이미 넣음)
         else:
             base = t.get(kind)
             dst = (base / rest) if base else None
@@ -161,6 +164,10 @@ def check(python):
         if kind == "wheels":
             ok = _py_path(python, "import en_core_web_sm;print(en_core_web_sm.__file__)") is not None
             print(f"| {rel} | {python} | {'✓' if ok else '✗ install 필요'} |")
+            continue
+        if kind == "opencode":  # 이미지 안은 PATH(/usr/local/bin), PC는 assets/ 자리
+            where = shutil.which("opencode") or str(A / rel)
+            print(f"| {rel} | {where} | {'✓' if Path(where).is_file() else '✗'} |")
             continue
         dst = {"fonts": t["font"], "tessdata": A / rel}.get(kind) or ((t.get(kind) / rest) if t.get(kind) else None)
         ok = bool(dst) and dst.exists() and dst.stat().st_size == meta["size"]

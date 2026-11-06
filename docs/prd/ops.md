@@ -11,7 +11,7 @@
   1. CLI `pipeline.cli`는 `parse`·`show-stack`·`selftest`. 이미지 entrypoint(`deploy/docker/entrypoint.sh`)가 `publish`·`migrate`·`check`·`services`·`resources`·`tool`·`ask`·`mcp`·`run-mcp-parsing`·`idle`을 더한다. `idle` = 상주 컨테이너가 떠 있기만 한다(run_pipeline이 `docker exec`).
   2. 서버 실행은 호스트 python의 `deploy/host/scripts/run_pipeline.py`(PyYAML·pymssql 필요)가 상주 컨테이너 `data-pipeline` 안에서 문서마다 명령을 `docker exec`로 돌린다. 컨테이너 명령은 settings.yaml `ops.host.container_cli`(없으면 podman). PC에서는 실행하지 않는다.
   3. 시작: 설정 파일 = `--settings` → `SETTINGS_FILE` → `<루트>/settings.yaml`(루트 = 코드 폴더의 부모 — op-13). `required.env.run_env`가 dev·prd가 아니거나 필요한 칸이 없으면 칸 경로만 찍고 종료 2. 코드 폴더 = `--code`(없으면 스크립트가 든 코드 폴더) — 그 안의 `common/config/layout.py`·`deploy/host/scripts/host_settings.tsv`로 설정 배치와 컨테이너 안 경로를 읽는다.
-  4. 대상 목록(컨테이너 안 `python -m pipeline.extract.candidate_pick list` — run_pipeline은 목록 파일 `<결과 자리>/_docflow/targets.json`만 읽음): EDW `SELECT id, s3_key, original_filename, file_size FROM AI.FileStorageMap WHERE (<이름 조건>) AND file_size IS NOT NULL ORDER BY file_size ASC`. 이름 조건 = `--filter`(기본 `RFP,proposal`)의 낱말마다 `LOWER(original_filename) LIKE '%낱말%'`를 OR. 순번(seq)은 이 순서. `--start-offset N`(기본 1072 — 새벽 배치는 0)부터, `--seqs`면 그 순번만, `--skip-done`이면 끝난 문서([pl-23](#pl-23))를 빼고, FAQ 먼저([load.md#pl-41](load.md#pl-41)), `--max-docs`면 그 뒤 앞에서 N건, `--limit`은 시험용(그 전에 자름). `--filter`는 글자·숫자·`_` `,` `.` `-`만, `--seqs`는 숫자와 쉼표만(아니면 종료 2).
+  4. 대상 목록(컨테이너 안 `python -m pipeline.extract.candidate_pick list` — run_pipeline은 목록 파일 `<결과 자리>/_docflow/targets.json`만 읽음): EDW `SELECT id, s3_key, original_filename, file_size FROM AI.FileStorageMap WHERE (<이름 조건>) AND file_size IS NOT NULL ORDER BY file_size ASC`. 이름 조건 = `--filter`의 낱말마다 `LOWER(original_filename) LIKE '%낱말%'`를 OR — `--filter`가 없으면 이름 조건 없이 모든 문서(기본). 순번(seq)은 이 순서. `--start-offset N`(기본 0)부터, `--seqs`면 그 순번만, `--skip-done`이면 끝난 문서([pl-23](#pl-23))를 빼고, FAQ 먼저([load.md#pl-41](load.md#pl-41)), `--max-docs`면 그 뒤 앞에서 N건, `--limit`은 시험용(그 전에 자름). `--filter`는 글자·숫자·`_` `,` `.` `-`만, `--seqs`는 숫자와 쉼표만(아니면 종료 2).
   5. 문서마다: 미리 받기(`candidate_ready stage` — 받기 → 중복 → 거르기) → 레인 분류 → 파싱 → 게시 → 원본 삭제 → gold(구조화+적재) → 임시 삭제([pl-24](#pl-24)). 배치 장벽 없이 끝나는 순서대로 흐른다.
   6. 레인·대기열은 [rn-01](#rn-01)·[rn-02](#rn-02), MCP 양보는 [rn-03](#rn-03)·[rn-04](#rn-04), 종료 코드는 [pl-18](#pl-18).
   7. 문서별 값은 컨테이너 명령에 `--set`으로 준다(같은 이름은 뒤 값이 이김):
@@ -34,7 +34,7 @@
   2. "끝난 행" = `parse_status`가 `skipped_dup`, 또는 `ok`·`partial`이면서 `gold_version`이 있음(`gold_version` 칸이 없는 EDW에서는 `parse_status`만 봄). `not_parsed`·실패·행 없음(옛 값 `skipped_disk_cap` 행 포함 — 더 쓰지 않음)은 다시 고른다. 목록은 `common/store/parsing_meta_db.DONE_STATUSES` 한 곳.
   3. 끝난 문서 빼기는 `pipeline/extract/candidate_pick.py` `done_keys` 하나 — 서버는 `candidate_pick list --skip-done`, PC 직접 파싱(`pipeline.cli parse --source`)은 고르기 때. EDW를 한 번 읽는다(읽기 계정, PC는 sqlite 대역). 못 읽으면 RUN_ENV가 local이 아니면 종료 4, 그 밖은 받은 목록 그대로 + 로그 한 줄. 키 = 수집 manifest의 `key`(없으면 이름).
   4. 전체 재파싱은 사람이 전체 e2e를 시작할 때만([pl-54](#pl-54)).
-  5. 새벽 배치: settings.yaml `ops.nightly.nightly_start_time`(시작 HH:MM)·`nightly_max_docs`(새 문서 수 상한, 1 이상)·`nightly_stop_time`(마감 HH:MM, 시작보다 5분 넘게 뒤) — 하나라도 비면 돌지 않는다. systemd `data-pipeline-nightly.timer`(`OnCalendar=*:0/5`)가 `nightly_batch.sh scheduled`를 부르고, 시작 시각부터 5분 안이면 `run_pipeline.py --start-offset 0 --skip-done --max-docs <n> --deadline <hh:mm>`. 형식 오류면 종료 2. 서비스 `TimeoutStartSec=6h`.
+  5. 새벽 배치: settings.yaml `ops.nightly.nightly_start_time`(시작 HH:MM)·`nightly_max_docs`(새 문서 수 상한, 1 이상)·`nightly_stop_time`(마감 HH:MM, 시작보다 5분 넘게 뒤) — 하나라도 비면 돌지 않는다. systemd `data-pipeline-nightly.timer`(`OnCalendar=*:0/5`)가 `nightly_batch.sh scheduled`를 부르고, 시작 시각부터 5분 안이면 applog 파티션 정리(`pipe_exec.sh migrate maintain --target applog` — 실패해도 경고만, 배치는 계속) 뒤 `run_pipeline.py --start-offset 0 --skip-done --max-docs <n> --deadline <hh:mm>`. 형식 오류면 종료 2. 서비스 `TimeoutStartSec=6h`.
 - 파일: `pipeline/extract/candidate_pick.py`(`done_keys`·`list_targets`·`unparsed`), `common/store/parsing_meta_db.py`, `deploy/host/scripts/{run_pipeline.py,nightly_batch.sh}`, `deploy/host/systemd/data-pipeline-nightly.{timer,service}`.
 - QA: `tests/general/deploy/test_trigger_gate.py`·`tests/server/pipeline/test_nightly_time.py`·`test_run_pipeline`(`deadline_at`) · `tests/server/pipeline/test_target_list.py`·`test_parse_pick.py` · 통과. 서버 확인 refactor.md C-72.
 - Status: done
@@ -43,7 +43,7 @@
 ## pl-54 · 전체 e2e — local·dev·prd, prd 전체 문서 실행은 새 `PG_SCHEMA`로
 - 이유: 판 0002가 기준 스키마의 옛 표를 지우고 0.2.0은 전체 다시 적재다.
 - 할 일: 전체 e2e를 local·dev·prd에서 돌린다. 전체 문서 실행은 prd에서만, 새 기준 스키마 이름(`required.pg.pg_schema`)으로. 옛 gold·`struct` 스키마는 2주 뒤 DB 담당자가 백업하고 지운다.
-- 절차: [release-and-patch.md §8](../operations/release-and-patch.md#8-020-배포--사람이-할-일) · 서버 확인 refactor.md C-74.
+- 절차: [upgrade-guide.md](../operations/upgrade-guide.md) §7 (나)(새 스키마에 전부 다시) · 0.2.0 때 절차 [history/deploy_0_2_0.md](../history/deploy_0_2_0.md) · 서버 확인 refactor.md C-74.
 - Status: todo
 
 <a id="pl-24"></a>
@@ -54,11 +54,11 @@
   2. 게시 성공 → 원본(staging `.bin`·`_docflow/<seq>/_source_files`) 삭제(`drop_original()` — 원본을 지우는 곳은 여기 하나, 파싱 끝 `candidate_ready.finish()`는 처리 기록·sha256만 남김) → 구조화 대기열(`ops.run_pipeline.structure.structure_workers` 스레드 — gold_bundle·pgvector_load) → `_docflow/<seq>` 삭제(`--no-cleanup`이면 남김).
   3. 파싱 실패·게시 실패 → 원본을 남기고 로그에만(gold로 안 감, EDW에 안 씀). 파싱 실패면 그 문서 표지(`RUN_PIPELINE_DOC`)가 붙은 컨테이너 안 프로세스를 끈다.
   4. 받기가 뺀 문서(`_docflow/<seq>/parse/_source/only.txt`가 빔 — 중복·DRM·암호, pl-02) → 파싱 없이 건너뜀(`parse_one`이 `SKIP`) → 게시(중복은 ParsingMeta `skipped_dup`, DRM·암호는 보고서로만) → 원본 삭제 → `_docflow/<seq>` 삭제. gold로 안 간다. 실패가 아니다 — 끝 요약에 `건너뜀`으로 따로 세고 종료 코드를 1로 만들지 않는다(pl-18).
-  5. 미리 받기(`stage_one`)는 앞 실행의 `_docflow/<seq>`를 그 폴더 `parse/_source/manifest.jsonl`의 원본 키가 이 문서일 때만 다시 쓴다(seq는 실행마다 바뀜) — 다른 문서 것이면 지우고 새로 받는다.
+  5. 미리 받기(`stage_one`)는 문서마다 늘 컨테이너 `candidate_ready stage`를 부른다 — ETag 확인·같은 밤 중복 표시는 stage 안에 있고, staging 원본의 ETag가 같으면 stage가 다시 받지 않는다. 앞 실행의 `_docflow/<seq>`는 지우고 새로 만든다(seq는 실행마다 바뀜). 게시 뒤 원본 삭제(`drop_original`)는 staging `<sha1>.bin`과 그 ETag 파일 `<sha1>.etag`를 함께 지운다.
   6. gold 실패 → 게시한 silver·ParsingMeta 행은 그대로, 로그에만. `gold_version`이 비어 다음 `--skip-done`이 다시 고른다(파싱·게시부터 다시).
 - 파일: `deploy/host/scripts/run_pipeline.py`(`stage_one`, `parse_one`, `drop_original`, `drop_temp`, `main`) · `pipeline/extract/candidate_ready.py`(`finish`).
 - 비고: PC에서 `pipeline.cli parse --source rdb:csv:…`로 돌리면 `drop_original`이 없어 받은 원본(`_source_files`·`prepared`·staging `.bin`)이 남는다 — 지금은 손으로 지운다. DRM·암호로 건너뛴 문서는 게시가 EDW 행을 쓰지 않아(보고서로만) 다음 실행이 다시 고른다(다시 받고 다시 건너뜀).
-- QA: `tests/general/deploy/test_docs_flow.py`(`test_doc_order_and_exit_code` 표 — 건너뜀 → 게시·원본 삭제·gold 없음·종료 0) · `tests/general/deploy/test_run_pipeline.py`(`test_parse_one_skips_stage_dropped`·`test_stage_reuse_same_doc_only` 표) · 통과.
+- QA: `tests/general/deploy/test_docs_flow.py`(`test_doc_order_and_exit_code` 표 — 건너뜀 → 게시·원본 삭제·gold 없음·종료 0) · `tests/general/deploy/test_run_pipeline.py`(`test_parse_one_skips_stage_dropped`·`test_stage_always_calls_stage`·`test_drop_original_removes_etag` 표) · 통과.
 - Status: done
 
 <a id="pl-55"></a>
@@ -229,7 +229,7 @@
 - 규칙 — DB(`applog` 스키마, Alembic 갈래 `applog` — `common/store/db/migrations/versions/0001_applog_base.py`):
   1. 표: `mcp_log`(월 파티션, 키 `requested_at`) · `pipe_event`(월 파티션, 키 `ts_start`) · `pipe_run`(`run_id` PK, 시작 running → 종료 UPSERT).
   2. `common/store/logsink.py` `emit(table,row)` → 제한 큐(`tuning.ops.log.log_queue_size` 10000, 차면 즉시 버리고 `dropped`) → 배치 INSERT(`log_batch_size` 200 · `log_flush_sec` 1 · `log_db_timeout_sec` 2). DB 실패면 `ops.log.log_fallback_dir`(기본 `output/logs`) jsonl, 프로세스당 경고 한 번. 파일 로그는 이 예비 한 곳뿐이다 — 실행 출력은 컨테이너 로그(서버 stdout), 실행 기록 파일(`RUNLOG.md`·`runlog.jsonl`·`logs/<시각>_<도구>.log`)·질의 기록 파일은 없다(op-13). 종료 flush는 `log_shutdown_sec` 5초 안.
-  3. 켜기 `ops.log.log_db_enabled` — 서버(두 이미지) 기본 true, PC 기본 false(op-13). 서버는 새 코드를 띄우기 전에 `migrate up --target all`(applog 포함). 보존 `log_retention_days` 90. `dbtool up --target applog`(현재 달 + 2개월 준비), 매일 `dbtool maintain --target applog`(다음 달 준비·만료 파티션 DROP·`pipe_run` DELETE). sink는 DDL을 하지 않는다.
+  3. 켜기 `ops.log.log_db_enabled` — 서버(두 이미지) 기본 true, PC 기본 false(op-13). 서버는 새 코드를 띄우기 전에 `migrate up --target all`(applog 포함). 보존 `log_retention_days` 90. `dbtool up --target applog`(현재 달 + 2개월 준비), 매일 `dbtool maintain --target applog`(다음 달 준비·만료 파티션 DROP·`pipe_run` DELETE — 서버는 새벽 배치가 run_pipeline 앞에 부름, [pl-23](#pl-23)). sink는 DDL을 하지 않는다.
 - 규칙 — MCP 감사(`mcp_server/services/call_log.py`):
   1. 도구 호출마다 `applog.mcp_log` 한 행 — 성공·도구 오류·busy·timeout·HTTP 인증 거부(rpc_method NULL), initialize(rpc_method=initialize, clientInfo 뺌). 칸은 [db_schema.md §6](../architecture/db_schema.md). sink 실패가 도구 응답을 바꾸지 않는다.
   2. 본문: 마스킹 뒤 앞부분만 — 입력 `tuning.search.audit.audit_max_input_bytes` 16384 · 출력 `audit_max_output_bytes` 65536. `*_bytes`·`result_sha256`은 자르기 전 전체 기준. `parse_document`의 `content_b64`는 디코딩한 파일 sha256·바이트 수로 바꿈.
@@ -262,12 +262,13 @@
 5. 레인 분류는 받기 단계 안에서 한다(문서마다 따로 `docker exec` 없음). 분류 캐시는 줄을 덧붙여 쓴다(문서마다 파일 전체를 다시 쓰지 않음).
 
 ### 비고(지금 코드와 다른 점)
-- `parse_cmd`에 `PYTHONPATH`가 없다. 시간 초과 때 끄는 것(`sweep_cmd`)은 파싱만이다.
+- 규칙 1·2는 반영했다(컨테이너 명령 = `run_pipeline.pexec` 한 곳 · 파싱·게시·구조화가 실패·시간 초과면 `doc_sh`가 그 문서의 `sweep_cmd`). 남은 것은 규칙 3~5(아래).
 - 스캔 회전 값이 run_pipeline → `stage --no-scan-rotate` → `stage_batch(scan_rotate)` → `filter_and_rotate --no-scan-rotate` 네 겹으로 전달된다.
 - 분류는 문서마다 `docker exec`(`classify_doc`), 캐시(`docflow_class.json`)는 문서마다 통째로 다시 쓴다.
 
 ### QA
-- 정할 것: 명령 줄 표(`tests/general/deploy/test_run_pipeline.py`)에서 모든 명령의 env가 같음 · 게시 시간 초과 사례 → 정리 명령이 불림(`test_docs_flow`).
+- 규칙 1·2: `tests/general/deploy/test_run_pipeline.py` — 명령 줄 표에서 모든 명령의 앞부분(env)이 같음(`test_one_env_for_every_command`) · 파싱·게시·구조화 실패·시간 초과 사례 → 정리 명령이 불림(`test_failed_stage_sweeps_doc`) · 통과.
+- 정할 것(규칙 3~5): 벌 이름 검사 한 곳 · 스캔 회전 설정 칸 하나 · 받기 안 분류·덧붙이는 캐시.
 - Status: todo
 
 <a id="rn-10"></a>
@@ -283,9 +284,29 @@
 4. `--set` 처리(`setarg.apply`)는 무거운 import 전에 한다.
 
 ### 비고(지금 코드와 다른 점)
-- sha256을 중복 제외·거르기(`_record_skip`·회전 기록)·구조화가 각자 다시 구한다. `pgvector_load`가 원천 스키마마다 따로 묻는다.
+- sha256은 받기가 한 번 구해 manifest에 두고 중복 제외·거르기·파싱(`parse_engines` 조각·작업 열쇠)·구조화(`gold_bundle`)·게시가 그 값을 쓴다(`pipeline/shared/srcsha.py` — 같은 파일일 때만). 대표 결과(`contract.source_record`)만 아직 프로세스에서 한 번 다시 구한다 — 핸드오프 파일(`contract.py`)이라 고치려면 사람 검토. `pgvector_load`가 원천 스키마마다 따로 묻는다.
 - 아직 재지 않았다 — 줄일 크기는 `python -m pipeline.tools.perf_report`로 먼저 잰다.
 
 ### QA
 - 정할 것: 같은 문서 1건 실행의 `pipe_event` 단계 시간 비교(`perf_report --compare`).
 - Status: todo
+
+<a id="op-16"></a>
+## op-16 · 개발 작업 공간 — 이미지의 개발 도구·opencode(선택)
+
+### 무엇·왜
+개발 서버 컨테이너 안에서 바로 코드를 고치고 시험한다(사용자 11-05). opencode는 파이프라인이 부르는 프로그램이 아니라 개발자가 쓰는 선택 도구다.
+
+### 규칙
+1. 개발 도구는 Dockerfile `base` 단계에 있어 네 이미지(`data-pipeline-runtime`·`mcp-server-runtime`·`data-pipeline`·`mcp-server`)가 모두 담는다 — apt(openssh-server·git·curl·ripgrep·sqlite3·tini·tmux·vim 등) + pip `uv` + `requirements-dev.txt`(PC 개발 도구와 같은 판). 의존성 지문(`DEPS_HASH`)은 requirements-core·image만 본다(그대로).
+2. opencode 실행 파일은 `assets/opencode/opencode`(git 밖 — `assets.py pack`이 `<ASSET_SRC>/dl/opencode`에서 채움). 없으면 opencode 없이 빌드(`ALLOW_NO_ASSETS=1`). 이미지 env로 외부 모델 목록 받기·자동 업데이트를 끄고, 설정 틀(`deploy/docker/devbox/opencode.json`)은 내부망 모델만(자리 표시만 — 주소·키 없음).
+3. 이미지 ENTRYPOINT는 `tini -s -- dev_entry.sh`: `devbox`면 sshd(컨테이너 사용자 UID 10001, 열쇠 로그인만, 호스트 열쇠는 홈), 그 밖의 명령은 인자 그대로 이미지의 시작 스크립트(`APP_ENTRY` — 실행 이미지 `runtime_entry.sh`, 코드가 든 이미지 `entrypoint.sh`)로.
+4. 설정은 settings.yaml 맨 아래 선택 절 `option.devbox` — `ssh_port`(비우면 끔)·`opencode_config`(opencode 설정 파일의 호스트 경로, 비우면 이미지의 틀). `host_ctl.sh`는 `ssh_port`가 있을 때만 `compose.dev.yml`(+ `opencode_config`면 `compose.opencode.yml`)을 더한다. prd·코드가 든 이미지면 종료 2.
+5. `compose.dev.yml`: `data-pipeline` 명령 `devbox`, 코드 폴더를 `compose.code.yml`과 같은 자리에 쓰기 가능으로, `<루트>/home` → `/home/rag`(`host_ctl.sh init`이 만듦 — 10001, 700). 컨테이너 env에는 비밀이 없다(설정은 붙인 settings.yaml에서만) — SSH 접속 셸이 그 env를 홈에 저장해 다시 읽기 때문.
+
+### 비고
+- 운영용 굽기(`Dockerfile.bake`)는 ENTRYPOINT를 `entrypoint.sh` 그대로 둔다 — 운영은 작업 공간을 쓰지 않고, 굽는 바탕이 개발 도구가 없는 옛 실행 이미지일 수도 있어서.
+
+### QA
+- `tests/general/deploy/test_dc.py`(포트를 적으면 `compose.dev.yml`, opencode 설정이면 `compose.opencode.yml`, prd·코드가 든 이미지 종료 2) · `test_devbox.py`(`dev_entry.sh` 인자 넘김 표 · `compose.dev.yml` 마운트 자리) · `test_dc_init.py`(`<루트>/home`) · 이미지 시험(`pipeline-runtime` 빌드 → 도구 확인·`selftest` `[판정] 통과`·`devbox` sshd) · 통과.
+- Status: done

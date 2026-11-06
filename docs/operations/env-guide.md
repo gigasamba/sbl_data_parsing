@@ -1,6 +1,6 @@
 # 설정 작성 가이드 — `settings.yaml`(서버·PC)
 
-↑ [server-guide.md](server-guide.md) · [release-and-patch.md](release-and-patch.md)
+↑ [server-guide.md](server-guide.md) · [release-and-patch.md](release-and-patch.md) · [upgrade-guide.md](upgrade-guide.md)
 
 **원칙**
 - 서버에서 손대는 것은 **설정 파일 하나**(`settings.yaml`)뿐이다. 값은 문서·채팅·로그에 쓰지 않는다 — 이 문서는 **이름만** 적는다.
@@ -34,15 +34,15 @@
 | `tuning.ops.log.log_shutdown_sec` | 5 | 종료 때 남은 기록을 쓰는 상한(초) |
 | `tuning.search.audit.audit_max_input_bytes` · `audit_max_output_bytes` | 16384 · 65536 | MCP 감사 원문 저장 상한(바이트) |
 
-- `applog.skip_doc_info`(영구 건너뜀 문서 — pl-58)는 `ops.log.log_db_enabled`와 관계없이 쓰고 읽는다(대상 목록이 그 키를 뺌). 서버는 `migrate up --target applog`(판 `0002_applog`)가 먼저다 — 없으면 대상 목록·받기가 멈춘다. PG 접속 칸을 채운 PC도 파싱 전에 `dbtool up --target applog`. 보존 정리 대상이 아니다.
+- `applog.skip_doc_info`(영구 건너뜀 문서)는 `ops.log.log_db_enabled`와 관계없이 쓰고 읽는다(대상 목록이 그 키를 뺌). 서버는 `migrate up --target applog`(판 `0002_applog`)가 먼저다 — 없으면 대상 목록·받기가 멈춘다. PG 접속 칸을 채운 PC도 파싱 전에 `dbtool up --target applog`. 보존 정리 대상이 아니다.
 - **영구 건너뜀 풀기(기한 없음 — 사람이 지움).** 한 번 들어간 키는 `candidate_pick list --skip-done`이 계속 뺀다. 다시 고르게 할 때 — 새 엔진이 확장자를 받게 됐을 때(그 이유 전체), DRM 오탐·고친 파일이 같은 `s3_key`로 다시 올라왔을 때(그 키만) — DB 담당자 승인을 받고 행을 지운다. 지운 키는 다음 실행이 다시 고른다(다시 못 읽으면 다시 들어감):
   ```sql
   SELECT reason, count(*) FROM applog.skip_doc_info GROUP BY reason;          -- 먼저 대상 확인
   DELETE FROM applog.skip_doc_info WHERE reason = 'unsupported_format';      -- 이유 단위(새 엔진이 받는 확장자 — 필요하면 AND file_name LIKE '%.hwpx')
   DELETE FROM applog.skip_doc_info WHERE source_key = '<s3_key>';            -- 키 단위(DRM 오탐·고친 파일)
   ```
-- 서버는 매일 `bash deploy/host/scripts/pipe_exec.sh migrate maintain --target applog`(PC: `python -m common.store.db.dbtool maintain --target applog`)를 예약한다 — 앞으로 2개월 파티션 준비, 보존 기한이 지난 파티션 삭제.
-- ⚠️ MCP 감사 행(`applog.mcp_log`)과 대체 파일에는 문서 원문이 들어간다(`get_doc_fulltext` 결과는 파일당 `audit_max_output_bytes`까지). `applog` DB·표와 `ops.log.log_fallback_dir`은 원본 문서와 같은 수준으로 접근을 제한한다(C-79). 대체 파일은 지우지 않으므로 디스크 회수도 운영에서 정한다.
+- 서버는 매일 `bash deploy/host/scripts/pipe_exec.sh migrate maintain --target applog`(PC: `python -m common.store.db.dbtool maintain --target applog`)를 돌린다 — 앞으로 2개월 파티션 준비, 보존 기한이 지난 파티션 삭제. 새벽 배치(`nightly_batch.sh scheduled`)가 run_pipeline 앞에 부르고(실패하면 경고만), 새벽 배치를 켜지 않은 서버는 따로 예약한다.
+- ⚠️ MCP 감사 행(`applog.mcp_log`)과 대체 파일에는 문서 원문이 들어간다(`get_doc_fulltext` 결과는 파일당 `audit_max_output_bytes`까지). `applog` DB·표와 `ops.log.log_fallback_dir`은 원본 문서와 같은 수준으로 접근을 제한한다. 대체 파일은 지우지 않으므로 디스크 회수도 운영에서 정한다.
 - 서버(dev·prd)는 값이 있는 비밀 칸이 8자 미만이면 시작을 거부한다(종료 2, 칸 경로만 찍음).
 - 파이프라인 성능 분석: `python -m pipeline.tools.perf_report [<run_id>]`(`--runs` 목록, `--compare` 비교, DB가 꺼져 있으면 `--file output/logs/*.jsonl`).
 
@@ -149,7 +149,7 @@
 | `RDB_WRITE_USER`·`RDB_WRITE_PASSWORD`(`required.edw.edw_write_user`·`edw_write_password`) | 쓰기 계정 — ParsingMeta 게시(INSERT·UPDATE)만, 파이프라인 이미지에만. 서버(dev·prd) 필수 — 비우면 게시 접속이 빠진 칸으로 거부되고 `run_pipeline`이 시작하지 않는다(검색 MCP는 늘 읽기 계정만) · PC는 무시 |
 | `PM_BUCKET`·`PM_PREFIX`(`required.publish.publish_bucket`·`publish_prefix`) | silver 게시 위치 — 서버: 버킷 이름(원천 원본 버킷과 달라야 함) · PC(local): 이 칸은 무시하고 `dev.local.local_publish_dir`(`LOCAL_PM_DIR` — 폴더 경로, 기본 `valid_env/object_storage/Parsing_Result`, 처음 게시할 때 만듦)에 쓴다. `publish_prefix`는 버킷(폴더) 안 경로 접두(비우면 맨 위). ⚠ **첫 게시 전 EDW 표를 DBA가 한 번 만든다**: [`parsing_meta_mssql.sql`](parsing_meta_mssql.sql)(코드는 표를 만들지 않음 — 없으면 첫 INSERT에서 실패) |
 | `PM_TABLE`(`required.edw.parsing_meta_table`) | 게시할 EDW 표(비우면 `AI.ParsingMeta`) — PC 가짜 EDW는 표 이름 `ParsingMeta` 고정(이 칸 안 봄) |
-| `EDW_CHAIN_FILE`(`ops.paths.edw_chain_file`) | EDW 조인 사슬 파일 — 적재와 검색 MCP가 같은 칸을 읽는다. 비우면 코드의 `resources/config/edw_chain.yaml`, 서버 사본을 쓰려면 `/etc/rag/edw_chain.yaml`. 쓰는 법: [release-and-patch §8-6](release-and-patch.md#8-6-edw-조인-사슬-파일-고쳐-쓰기서버--pl-29) |
+| `EDW_CHAIN_FILE`(`ops.paths.edw_chain_file`) | EDW 조인 사슬 파일 — 적재와 검색 MCP가 같은 칸을 읽는다. 비우면 코드의 `resources/config/edw_chain.yaml`, 서버 사본을 쓰려면 `/etc/rag/edw_chain.yaml`. 쓰는 법: [release-and-patch §8](release-and-patch.md#8-edw-조인-사슬-파일-고쳐-쓰기서버) |
 
 ### 새벽 배치 (systemd `data-pipeline-nightly`)
 코드 주석의 "env-guide 1-3"이 이 절이다. **세 칸이 모두 있어야 돈다**(하나라도 비면 없음).
@@ -159,6 +159,14 @@
 | `NIGHTLY_TIME`(`ops.nightly.nightly_start_time`) | 시작 시각 HH:MM(서버 시간) — 타이머는 5분마다 깨우고 그 시각부터 5분 안에 `run_pipeline.py --start-offset 0 --skip-done` |
 | `NIGHTLY_MAX_DOCS`(`ops.nightly.nightly_max_docs`) | 한 번에 처리할 새 문서 수 상한(1 이상) |
 | `NIGHTLY_DEADLINE`(`ops.nightly.nightly_stop_time`) | 마감 HH:MM(시작보다 이르면 다음 날, 시작보다 5분 넘게 뒤) — 지나면 새 문서를 받지 않고 받은 문서는 끝까지 |
+
+### 선택 기능 — 개발 작업 공간 (`option`, 파일 맨 아래)
+앱은 이 절을 읽지 않는다 — 호스트 스크립트(`host_ctl.sh`)만 쓴다. 비우면 끔. 쓰는 법: README §5-0 "개발 작업 공간".
+
+| 이름 | 기본 | 뜻 |
+|---|---|---|
+| `DEVBOX_SSH_PORT`(`option.devbox.ssh_port`) | 비움(끔) | 적으면 `data-pipeline`을 SSH 작업 공간(`devbox`)으로 띄움 — 그 포트에서 sshd(호스트 네트워크 그대로, 개발자마다 다르게) · 코드 폴더 쓰기 가능 · 홈 `<루트>/home`. 개발 서버(dev)의 실행 이미지에서만 — prd·코드가 든 이미지면 `host_ctl.sh` 종료 2 |
+| `DEVBOX_OPENCODE_CONFIG`(`option.devbox.opencode_config`) | 비움(이미지의 틀) | opencode 설정 파일의 호스트 경로 — 읽기 전용으로 붙이고 `OPENCODE_CONFIG`로 가리킴. 비우면 홈의 `~/.config/opencode/opencode.json`(첫 시작에 틀 복사 — 내부망 모델만) |
 
 ## 2. 자원·병렬 (보통 안 건드림)
 
@@ -191,23 +199,10 @@ python -m common.check.checker ping   # LLM·VLM·EMBED 실호출 — 실패 있
 ls -l ../settings.yaml                # 서버(코드 폴더에서): 주인 10001·권한 640
 ```
 
-## 5. 0.1.0 → 0.2.0에서 바꿀 설정
+## 5. 서버 경로 칸 — 컨테이너 안 절대 경로
 
-운영 서버(0.1.0)를 0.2.0으로 올릴 때 settings.yaml에서 할 일이다. 순서는 [release-and-patch §8-3 4](release-and-patch.md#8-3-실행-순서--복사해-붙이는-명령dev-먼저-그다음-prd).
-
-| 바뀐 것 | 할 일 |
-|---|---|
-| 칸 배치 — 맨 위 `required` → 역할 절 → `tuning`. 옛 배치·옛 자리·지운 칸·모르는 칸은 시작 거부(칸 이름만 알림) | `init`이 놓은 새 settings.yaml에 옛 값을 칸마다 옮겨 적는다(§8-3 4) |
-| `required.pg` 접속 다섯 칸 필수(자동 탐지 없음) | 모두 채운다. `pg_schema`는 비우면 `data_parsing` — 운영은 **새 이름**(판 0002가 옛 표를 지움) |
-| env로 준 값은 효과 없음(엔진·핸드오프 칸 포함) | 컨테이너에 `-e VLM_BASE_URL=…`·`OCR_DPI=…`처럼 주던 값은 settings.yaml 칸으로(`--where <이름>`으로 자리 확인) |
-| 이미지 칸 `required.deploy.pipeline_image`·`mcp_image` | dev `data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0` · prd `data-pipeline:0.2.0`·`mcp-server:0.2.0` |
-| 새 칸 `required.deploy.pg_container_name`·`required.tokens.fulltext_sign_key` · 토큰은 `required.tokens.mcp_token` 하나(작업 서비스도 같은 값) | 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)) |
-| 새벽 배치 `ops.nightly.nightly_start_time`·`nightly_max_docs`·`nightly_stop_time` — 셋 다 있어야 돎 | 배포 때는 비워 두고 배포 뒤 켠다(§8-4 3) |
-| 거의 안 바꾸는 칸 53개가 `tuning` 절로(청크·순위 가중치·그림 고르기·로그 대기열·EDW 원천 열 이름 등) | 값을 적어 둔 칸만 `tuning.<옛 자리>`로 옮긴다(옛 자리는 시작 거부 — C-95) |
-| 합친 칸 `extract.prefetch_workers` → `extract.source.source_fetch_threads` · `tuning.ops.nightly_run.workers` → `ops.runtime.vlm_parallel_docs` | 옛 칸 값을 새 칸에 적고 옛 칸은 지운다(남으면 시작 거부) |
-| `parse_document` 크기 상한 칸이 `ops.services.data_parsing.mcp_parse_max_file_mb`(기본 100) | 옛 `ops.services.data_parsing.max_mb`가 있으면 지우고, 100이 아닌 값은 새 칸에. 리버스 프록시 본문 상한도 늘린다(C-85) |
-| `query_edw` 행 상한 기본 1000(`search.edw_query.edw_query_max_rows`) | 다른 값을 쓰려면 적는다 |
-| 용어집·고객 명부는 PG 마스터 표 | `migrate master load`(§8-3 5) · CSV를 고치면 다시 하고 검색 MCP 재시작 |
-| 사슬 파일 칸 `ops.paths.edw_chain_file`(새 — 비우면 기본 파일) | 서버 EDW 이름이 다를 때만 §8-6 |
-| 지운 칸(예 `ops.paths.glossary_dir`·`client_roster`·`mcp_bundle`, `common.models.transport.transport`, `required.env.run_mode`, `search.server.warmup`, `required.tokens.data_parsing`·`parse_proxy`, `ops.mcp_host.jobs_dir` — C-95) | 지운다 — 남으면 시작 거부(칸 이름만 알림) |
-| run_pipeline이 `--set`으로 넘기던 값(VLM 동시 수·후처리 목록·CPU 문턱·임베딩 동시 수 등) → `ops.run_pipeline.*` | 비우면 지금 값 그대로 — 바꿀 때만 적는다 |
+- 컨테이너 안에서 **상대 경로는 `/app` 기준**이다(`/app/deploy`가 아님 — 작업 자리가 `/app`이고 코드는 `/app/deploy`). `file://` 꼴도 같다: `file://output/x` → `/app/output/x`.
+- 컨테이너 사용자(UID 10001)가 **쓸 수 있는 곳은 붙인 폴더뿐**이다 — 결과 폴더 `/app/output`(호스트 `<루트>/output` 또는 `ops.host.host_output_dir`). 그 밖(`/app`·`/app/deploy`·`/etc/rag`)은 쓰기가 안 된다. 예: `file://x` → `/app/x`는 권한 오류로 멈춘다.
+- 그래서 서버 settings.yaml의 경로 칸(`ops.paths.*`·`ops.log.log_fallback_dir`·`search.edw_meta.edw_meta_catalog_dir` 등)은 **컨테이너 안 절대 경로**로 적고, 무엇이든 쓰는 자리는 `/app/output/…` 아래로 둔다(예 `/app/output/edw_meta`). 비워 두면 기본값이 이미 `/app/output` 아래다.
+- 호스트 쪽 칸(`ops.host.host_output_dir`·`required.deploy.host_docs_dir`·`ops.run_pipeline.run_pipeline_work_dir`·`option.devbox.opencode_config`)은 **호스트 절대 경로**다.
+- PC에서 Docker로 시험할 때 `valid_env`의 자료를 쓰려면 `/app/valid_env/…`에 붙이고, 시험 설정의 경로도 그 자리(절대 경로)로 적는다.

@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md) 카테고리. [extract.md](extract.md) 다음, [load.md](load.md) 앞: 엔진 구성 파싱(pl-03·pl-22·pl-43·pl-42·pl-45) → represent(pl-04·pl-36·pl-37) → 그림(pl-05) → 구조화(pl-06) → 분류(pl-33). 지문이 바뀌는 정리 묶음은 [transform-cleanup.md](transform-cleanup.md).
 
-순서: pl-03 · pl-22 · pl-43 · pl-42 · pl-45 · pl-04 · pl-36 · pl-37 · pl-05 · pl-06 · pl-33 · pl-60.
+순서: pl-03 · pl-22 · pl-43 · pl-42 · pl-45 · pl-04 · pl-36 · pl-37 · pl-05 · pl-06 · pl-33 · pl-60 · pl-62.
 
 <a id="pl-03"></a>
 ## pl-03 · 엔진 구성 파싱
@@ -18,6 +18,7 @@
 5. 지원 형식 = 구성의 `parse` 키 43개: `.pptx` `.doc` `.docx` `.hwpx` `.png` `.jpg` `.jpeg` `.tif` `.tiff` `.bmp` `.eml` `.mht` `.mhtml` `.txt` `.html` `.htm` `.pdf_image` `.pdf_text` `.xls` `.xlsm` `.xlsx` `.ppt` `.msg` `.docm` `.pptm` `.rtf` `.csv` `.tsv` `.md` `.odt` `.ods` `.odp` `.xlsb` `.dotx` `.xltx` `.potx` `.ppsx` `.dot` `.xlt` `.pot` `.json` `.xml` `.log`. `.hwp`는 아직 아니다([pl-45](#pl-45)), 압축 파일은 지원하지 않는다.
 6. 구성의 엔진이 등록부(`pipeline/transform/parse/engines`)에 없거나 설치되지 않았으면 → 시작하지 않는다(종료 2).
 7. 파싱(`parse_engines`)은 입력 폴더의 파일을 그대로 문서로 본다 — 같은 내용 사본을 한 번만 돌려 복사하는 일과 확장자 거르기를 하지 않는다(중복 제외·미지원 거르기는 [pl-02](extract.md#pl-02)). 처리 엔진 없는 확장자 파일이 들어오면 엔진 후보가 없어 그 문서는 작업 0건이다. `--shard i/k`는 내용 sha256으로 문서를 나눈다.
+8. `.pptx`(anydoc)·`.txt`(plaintext)·`.csv`(markitdown)는 엔진 하나만 돈다 — 0.3.0 엔진 비교(`valid_env` 86건, 11-06)에서 보조 엔진(kreuzberg·markitdown)이 대표 결과에 더한 것이 없었다(사용자 11-06).
 
 ### QA
 - `tests/server/pipeline/test_engine_check.py` · `tests/server/pipeline/test_engine_run.py`.
@@ -34,7 +35,7 @@
 2. 문서×엔진 제한 시간(초) = round(max(max(1, 쪽 수) × 쪽당 초, 첫 문서면 `tuning.extract.first_doc_min_timeout_sec`(60)) + `tuning.extract.engine_isolate_startup_sec`(10), 2). 쪽당 초 = VLM 엔진은 VLM 호출 1건 제한 `common.models.vlm.vlm_timeout_sec`(180), 그 밖 `tuning.extract.text_engine_page_timeout_sec`(10).
 3. 시간을 넘기면 제한을 두 배로 한 번 더 돌리고, 그래도 넘으면 실패로 기록한다.
 4. OCR 엔진 `rapidocr_ko`는 파싱 엔진으로 돌지 않는다 — 이미지·스캔 문서는 VLM 엔진 `qwen_vlm`만.
-5. 글자 PDF 속 스캔 쪽은 represent가 쪽 전체를 VLM으로 읽어 채운다(`vlm_page`) — 회전된 쪽(`tuning.extract.max_rotated_pages` 20)·숨은 글자가 그림과 겹친 쪽(`tuning.extract.max_hidden_overlap_pages` 20) 각각 최대 20쪽. 쪽 VLM은 `PARSE_POST`에 `vlm_page`가 있을 때만, 문서당 한 번(실패한 쪽은 다시 부르지 않음).
+5. 글자 PDF 속 스캔 쪽은 represent가 쪽 전체를 VLM으로 읽어 채운다(`vlm_page`) — 회전된 쪽(`tuning.extract.max_rotated_pages` 20)·숨은 글자가 그림과 겹친 쪽(`tuning.extract.max_hidden_overlap_pages` 20) 각각 최대 20쪽. 쪽 VLM은 `PARSE_POST`에 `vlm_page`가 있을 때만, 문서당 한 번(실패한 쪽은 다시 부르지 않음). 쪽 VLM 글에 같은 줄이 연달아 50번 넘게 나오면(되풀이 고장 — `scan_page_vlm.LOOP_LINES_MAX`) 그 쪽 글을 버리고 원래 글자층을 둔다.
 6. 대표 결과가 이미지·스캔 형식(`.pdf_image`·png·jpg 등)의 VLM 엔진이고 글이 비어 있지 않으면 → 쪽 VLM을 건너뛰고 쪽 그림은 처리된 것으로 표시한다(그림 VLM 없음).
 7. VLM 엔진·쪽 VLM·그림 VLM의 호출 1건 제한은 모두 `common.models.vlm.vlm_timeout_sec` 하나다([pl-43](#pl-43)).
 8. 일괄 엔진 자식은 낮은 우선순위로 돈다(`tuning.extract.low_priority_engines` — POSIX nice +10). 컨테이너끼리의 CPU 순위는 [ops.md#rn-03](ops.md#rn-03).
@@ -45,7 +46,7 @@
 - 글자 엔진, 5쪽, 엔진의 첫 문서 아님 → 5 × 10 + 10 = 60초. 같은 문서가 엔진의 첫 문서 → max(50, 60) + 10 = 70초. 넘으면 140초로 한 번 더.
 
 ### QA
-- `tests/server/pipeline/test_engine_run.py`(page_timeout·OCR 끔) · `tests/server/pipeline/test_vlm_page.py`(`pick_pages`) · `tests/general/pipeline/test_represent.py`(쪽 VLM 채우기).
+- `tests/server/pipeline/test_engine_run.py`(page_timeout·OCR 끔) · `tests/server/pipeline/test_vlm_page.py`(`pick_pages`·되풀이 쪽 버림) · `tests/general/pipeline/test_represent.py`(쪽 VLM 채우기).
 - Status: done
 
 <a id="pl-43"></a>
@@ -91,7 +92,7 @@
 
 ### 규칙
 1. 엔진 `parser.py`의 `FORMATS`는 두고, 등록부 `pipeline/transform/parse/engines/registry.py`의 `EXTRA_FORMATS`(엔진별 추가 확장자)에 더한다 — `formats(엔진)` = `FORMATS` + `EXTRA_FORMATS`, `engines_for()`·`parse_engines --one --list`가 이것을 읽는다.
-2. 구성(우선순위 순): `.docm`·`.pptm`(kreuzberg, anydoc) · `.rtf`·`.odt`·`.ods`(anydoc, kreuzberg) · `.odp`(anydoc) · `.csv`(markitdown, kreuzberg) · `.tsv`(plaintext, kreuzberg) · `.md`(plaintext, markitdown) · `.xlsb`·`.dotx`·`.xltx`·`.potx`·`.ppsx`·`.dot`·`.xlt`·`.pot`(kreuzberg) · `.json`·`.xml`·`.log`(plaintext 하나 — 글 그대로).
+2. 구성(우선순위 순): `.docm`·`.pptm`(kreuzberg, anydoc) · `.rtf`·`.odt`·`.ods`(anydoc, kreuzberg) · `.odp`(anydoc) · `.csv`(markitdown — 보조 엔진 기여 0이라 뺌, 사용자 11-06) · `.tsv`(plaintext, kreuzberg) · `.md`(plaintext, markitdown) · `.xlsb`·`.dotx`·`.xltx`·`.potx`·`.ppsx`·`.dot`·`.xlt`·`.pot`(kreuzberg) · `.json`·`.xml`·`.log`(plaintext 하나 — 글 그대로).
 3. `.docm`·`.pptm`은 `office` 엔진에 주지 않는다(`office_stdlib`는 `.docx`가 아니면 xlsx로 다룸).
 4. 파싱 서비스가 받는 확장자(`pipeline.transform.parse.engine_check.allowed_exts()`) = 구성의 `parse` 키(`.pdf_*` → `.pdf`) − 이미지 확장자.
 
@@ -113,7 +114,7 @@
 1. 대표 엔진은 정확도 + 풍부함으로 고른다(`transform.represent.engine_pick`, 기본 best).
 2. 줄 단위 투표로 합치고(`fragment_vote.py`), 엔진 사이 라벨·값을 서로 확인한다(`crosscheck.py`).
 3. 후보정 `PARSE_POST`(일괄 파싱 기본 `all` = `vlm_page,supsub,charts,figures,context,attachments`, 파싱 서비스 기본 `supsub`): 쪽 VLM 채우기([pl-22](#pl-22)), 윗첨자 `^`·아래첨자 `_`, 차트·그림([pl-05](#pl-05)), 그림 근처 맥락([pl-37](#pl-37)), 메일 첨부([pl-36](#pl-36)).
-4. 여러 엔진의 표를 본문 제자리에 넣고(`table_inline.py`), 표준 표(`tables_std`)를 만든다.
+4. 여러 엔진의 표를 본문 제자리에 넣고(`table_inline.py`), 표준 표(`tables_std`)를 만든다. 바꾼 자리 안 칸 사이 글은 표 뒤에 남기되, 표 칸(하나 또는 공백으로 나뉜 여럿 — 고른 표와 본문 엔진 표의 칸 모두)으로만 된 글은 버린다.
 5. 파싱 QA(`parse_scoring.py`): 교차 정확도가 `resources/config/criteria.json` `run.cross_acc_full`(0.95) 미만이면 상태 `partial`, 아니면 `ok`.
 6. 대표 결과는 마스터(용어집·고객 명부)를 읽지 않는다.
 
@@ -238,4 +239,26 @@
 
 ### QA
 - 정할 것: 같은 문서 표(PDF·pptx·이미지)에서 두 자리가 같은 쪽 수.
+- Status: todo
+
+<a id="pl-62"></a>
+## pl-62 · 엔진 비교에서 찾은 대표 결과 빈틈
+
+### 무엇·왜
+0.3.0 엔진 비교(`valid_env` 86건, VLM 켬 — 11-06)에서 대표 결과가 검색 조각을 흐리거나 엔진이 더 읽은 글을 버리는 곳을 찾았다. 큰 두 건(쪽 VLM 되풀이 고장·한글 xlsx 표 칸 중복)은 0.3.0에서 고쳤다([pl-22](#pl-22) 규칙 5 · [pl-04](#pl-04) 규칙 4). 남은 것을 여기 둔다.
+
+### 규칙
+1. 표 자리 찾기(`table_inline.find_span`)는 칸 글자를 다른 칸 글자 안(예: 칸 "1"을 "100"의 앞 글자)에서 찾지 않는다 — 표 뒤에 "00 100 1 정상" 같은 조각이 남지 않는다.
+2. 쪽 VLM이 맡은 쪽(그림 VLM을 건너뛴 쪽)의 쪽 VLM 글이 없으면(실패·되풀이 버림) 그 쪽 그림은 그림 VLM으로 읽거나, 요약·그림 글자가 빈 그림 블록을 본문에 넣지 않는다.
+3. docx에서 대표가 아닌 엔진(anydoc)만 읽은 글(글상자·병합 칸 등)도 대표 본문에 합친다.
+4. 되풀이 고장은 공용 옮기기(`pipeline/shared/vlmcall.py` `transcribe`)에서 한 번 거른다 — VLM 엔진(`qwen_vlm`)도 함께, 두세 줄이 번갈아 되풀이되는 것도, 되풀이 앞의 좋은 글은 살리고. `vlmcall.py`는 엔진 지문 파일이라 사람 검토(등급 A) 뒤 지문 배치에서.
+
+### 비고(지금 코드와 다른 점)
+- 1: `arg_abx101_stability_trend_ko.xlsx`에 이런 조각 30줄이 남음.
+- 2: `arg_abx101_tt_workflow_en.pdf` 1쪽 그림 5개가 빈 그림 블록으로 붙음.
+- 3: 글상자 문서 office 248자 / anydoc 304자, 병합 칸 표 207자 / 357자 — 문단 교체 0.
+- 4: 쪽 VLM 후보정만, 같은 줄 연속만 거르고 그 쪽 글을 통째로 버린다(`scan_page_vlm.page_text_pages`) — 글자층 없는 스캔 쪽이면 그 쪽 글이 비고 그림 VLM도 건너뛴 채 남는다(규칙 2).
+
+### QA
+- 정할 것: 규칙마다 `valid_env` 해당 문서의 대표 결과 전후 비교 + 단위 시험 표 한 줄.
 - Status: todo

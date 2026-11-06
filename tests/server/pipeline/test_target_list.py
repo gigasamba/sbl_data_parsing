@@ -1,5 +1,5 @@
 """rn-05 — 대상 목록 `python -m pipeline.extract.candidate_pick list`(run_pipeline이 컨테이너 안에서 한 번 부름): EDW FileStorageMap에서
-이름 키워드로 고르고(파일 크기 오름차순, 크기 없는 행 뺌) → 시작 자리·시험 개수·골라 돌리기 → 끝난 문서 빼기(ok·partial은 gold_version도,
+이름 키워드로 고르고(--filter — 없으면 모든 문서, 파일 크기 오름차순, 크기 없는 행 뺌) → 시작 자리·시험 개수·골라 돌리기 → 끝난 문서 빼기(ok·partial은 gold_version도,
 skipped_dup) → FAQ 먼저(새 FAQ면 교체 + 전체, 아니면 gold에 없는 것만, 결과 없으면 전체) → 앞 max-docs개. 임시 SQLite EDW 대역만 — 외부 접속 없음."""
 
 import json
@@ -41,34 +41,37 @@ K = {
     "nogold": "SFDC/g/rfp_nogold.pdf",
     "big": "SFDC/a/rfp_big.pdf",
     "faq1": "FAQ/u1/q.xlsx",
+    "x": "SFDC/c/x.pdf",
 }
 BOTH = [K["faq1"], K["faq2"]]
+KW = ["--filter", "RFP,proposal"]  # 이름 키워드로 좁힘(기본은 모든 문서)
 # (인자, 교체를 마친 FAQ 키(None이면 --faq-seen 없음), faq-sync 결과, 기대 키 순서, 실행 뒤 교체를 마친 키, 기대 faq-sync reset)
 CASES = [
-    ([], None, None, ["faq2", "prop", "ok", "dup", "nogold", "big"], None, None),  # 키워드(대소문자 무시) · 크기순 · 크기 없음 뺌
-    (["--start-offset", "2", "--limit", "2"], [], None, ["ok", "dup"], [], None),  # 시험 개수 — FAQ 교체 건너뜀
-    (["--seqs", "5,1"], [], None, ["prop", "big"], [], None),  # 골라 돌리기(자리 정렬) — FAQ 건너뜀
-    (["--start-offset", "9"], None, None, [], None, None),  # 시작 자리가 목록 밖 — 빈 목록
-    (["--skip-done"], None, None, ["prop", "nogold", "big"], None, None),  # ok+gold·skipped_dup 뺌, gold 없는 ok는 남음
-    (["--skip-done"], [], {"faq_reset": 1, "gold": []}, ["faq1", "faq2", "prop", "nogold", "big"], BOTH, True),  # 새 FAQ — 교체+전체
+    ([], None, None, ["faq1", "faq2", "x", "prop", "ok", "dup", "nogold", "big"], None, None),  # 기본 = 모든 문서(크기순 · 크기 없음 뺌)
+    (KW, None, None, ["faq2", "prop", "ok", "dup", "nogold", "big"], None, None),  # 키워드(대소문자 무시) · 크기순 · 크기 없음 뺌
+    ([*KW, "--start-offset", "2", "--limit", "2"], [], None, ["ok", "dup"], [], None),  # 시험 개수 — FAQ 교체 건너뜀
+    ([*KW, "--seqs", "5,1"], [], None, ["prop", "big"], [], None),  # 골라 돌리기(자리 정렬) — FAQ 건너뜀
+    ([*KW, "--start-offset", "9"], None, None, [], None, None),  # 시작 자리가 목록 밖 — 빈 목록
+    ([*KW, "--skip-done"], None, None, ["prop", "nogold", "big"], None, None),  # ok+gold·skipped_dup 뺌, gold 없는 ok는 남음
+    ([*KW, "--skip-done"], [], {"faq_reset": 1, "gold": []}, ["faq1", "faq2", "prop", "nogold", "big"], BOTH, True),  # 새 FAQ — 교체+전체
     (
-        ["--skip-done"],
+        [*KW, "--skip-done"],
         BOTH,
         {"faq_reset": 0, "gold": [K["faq2"]]},
         ["prop", "nogold", "big"],
         BOTH,
         False,
     ),  # gold에 없는 q는 skipped_dup — 안 채움
-    (["--skip-done"], BOTH, {"faq_reset": 0, "gold": []}, ["faq2", "prop", "nogold", "big"], BOTH, False),  # gold에 없는 FAQ만 채움
+    ([*KW, "--skip-done"], BOTH, {"faq_reset": 0, "gold": []}, ["faq2", "prop", "nogold", "big"], BOTH, False),  # gold에 없는 FAQ만 채움
     (
-        ["--skip-done"],
+        [*KW, "--skip-done"],
         [K["faq2"]],
         None,
         ["faq1", "faq2", "prop", "nogold", "big"],
         [K["faq2"]],
         True,
     ),  # 교체 결과 없음 — 전체, 기록 그대로
-    (["--skip-done", "--max-docs", "2"], None, None, ["prop", "nogold"], None, None),  # 앞 max-docs개
+    ([*KW, "--skip-done", "--max-docs", "2"], None, None, ["prop", "nogold"], None, None),  # 앞 max-docs개
 ]
 
 
@@ -108,7 +111,9 @@ def test_target_list():
                 assert CP._list_cmd(argv) == 0
             got = json.loads(out.read_text(encoding="utf-8"))
             assert [d["s3_key"] for d in got["docs"]] == [K[w] for w in want], (args, seen, got["docs"])
-            assert got["total"] == 6 and all(set(d) == {"seq", "id", "s3_key", "original_filename", "file_size"} for d in got["docs"])
+            assert got["total"] == (6 if "--filter" in args else 8) and all(
+                set(d) == {"seq", "id", "s3_key", "original_filename", "file_size"} for d in got["docs"]
+            )
             if seen_after is not None:
                 assert sorted(seen_f.read_text(encoding="utf-8").split()) == sorted(seen_after), args
             assert resets == ([] if reset is None else [reset]), (args, resets)

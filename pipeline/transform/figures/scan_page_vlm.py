@@ -226,6 +226,27 @@ def pick_pages(n_pages, whole_scan, scan, cap):
     return set(targets if cap is None else targets[:cap])
 
 
+LOOP_LINES_MAX = 50  # 같은 줄이 연달아 이보다 많으면 VLM 되풀이 고장(예: 빈 표 줄 수천 개)으로 본다 — 빈 서식 표(20~30줄)는 남게
+# ponytail: 연속 같은 줄만 본다 — 두세 줄이 번갈아 되풀이되는 고장은 못 잡음(pl-62)
+
+
+def _looped(text):
+    """빈 줄을 빼고 같은 줄이 LOOP_LINES_MAX번 넘게 연달아 나오는지."""
+    run, prev = 0, None
+    for line in text.splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        run = run + 1 if s == prev else 1
+        prev = s
+        if run > LOOP_LINES_MAX:
+            return True
+    return False
+
+
 def page_text_pages(doc_path):
-    """page_targets() 쪽을 쪽 VLM으로 옮김 → [(쪽 번호, 글, provenance), ...](scan_fill이 그 쪽만 채우게 쪽 번호와 함께)."""
-    return transcribe(doc_path, page_targets(doc_path))
+    """page_targets() 쪽을 쪽 VLM으로 옮김 → [(쪽 번호, 글, provenance), ...](scan_fill이 그 쪽만 채우게 쪽 번호와 함께).
+    되풀이 고장(_looped) 쪽은 글을 비운다 — 빈 글은 scan_fill·apply_post 둘 다 안 쓰므로 원래 글자층이 남는다."""
+    return [
+        (i, "", {**pv, "looped": True}) if _looped(t or "") else (i, t, pv) for i, t, pv in transcribe(doc_path, page_targets(doc_path))
+    ]

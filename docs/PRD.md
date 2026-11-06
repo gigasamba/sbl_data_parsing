@@ -5,9 +5,9 @@
 
 ## 지금 진행 중
 - pl-25 DB 스키마 명세 — dev: 검색 DB(gold)·마스터·applog는 구현됨, EDW 쪽 DDL(ParsingMeta 칸 정리)은 DB 담당자 승인·실행 대기(refactor.md C-76).
-- 열린 요건(todo): run_pipeline 지휘만 [rn-05](prd/ops.md#rn-05) · 원본 zip [pl-57](prd/extract.md#pl-57) · 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 확장자 `.hwp` [pl-45](prd/transform.md#pl-45) · 그림 부가 기능 줄이기 [pl-05](prd/transform.md#pl-05) · 전체 e2e [pl-54](prd/ops.md#pl-54) · `gold_status` 칸 쓰기 [pl-55](prd/ops.md#pl-55) · 첫 이관 도구·안 쓰는 패키지 [pl-53](prd/transform-cleanup.md#pl-53) · prd 이미지에 settings.yaml 굽기 [op-12](prd/doc.md#op-12) · 판 묶기(잠재 문제) [pl-56](prd/load.md#pl-56).
+- 열린 요건(todo): run_pipeline 지휘만 [rn-05](prd/ops.md#rn-05) · 원본 zip [pl-57](prd/extract.md#pl-57) · 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 확장자 `.hwp` [pl-45](prd/transform.md#pl-45) · 그림 부가 기능 줄이기 [pl-05](prd/transform.md#pl-05) · 전체 e2e [pl-54](prd/ops.md#pl-54) · `gold_status` 칸 쓰기 [pl-55](prd/ops.md#pl-55) · prd 이미지에 settings.yaml 굽기 [op-12](prd/doc.md#op-12) · 판 묶기(잠재 문제) [pl-56](prd/load.md#pl-56).
 - 서버 확인만 남음(dev): parse_document CPU 우선 [rn-03](prd/ops.md#rn-03).
-- 시험 정리(todo): [e2-13](prd/test.md#e2-13) · [e2-15](prd/test.md#e2-15) · [e2-20](prd/test.md#e2-20) · [e2-21](prd/test.md#e2-21).
+- 시험 정리(todo): [e2-13](prd/test.md#e2-13) · [e2-20](prd/test.md#e2-20).
 
 ## 수집 (extract) — 서버에서 문서 목록을 정하고 받아 오기까지
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -21,11 +21,11 @@
 | 레인 나누기 — 받은 직후 셋으로. **vlm**: 스캔 PDF(첫 3쪽 글자 평균 300자 미만)·그림 많은 오피스(내장 그림 8개 이상 또는 800 KB 이상)·pptx·ppt·내용 검사 실패·검사 목록 밖 형식(mht·mhtml·이미지 등). **medium**: 검사한 pdf·오피스 중 가벼운데 큰 파일(docx·doc 300 KB, xlsx·xls·xlsm 500 KB, pdf 1 MB 이상). **light**: 글자형(txt·hwp·hwpx·csv·eml·msg·html)과 나머지 | 그림 읽는 모델(VLM)이 필요한 무거운 문서가 가벼운 문서를 막지 않게 — 레인마다 전담·공유 워커, vlm은 동시 2개(GPU), light는 CPU 부하 대기를 건너뜀(규칙은 `doc_lane_group.py` `doc_lane_group()` 하나 — `run_pipeline.py` `classify_doc`이 컨테이너 안에서 부름) | done | [rn-01](prd/ops.md#rn-01) |  |
 | 받기 → 중복 제외 → 거르기 순서로 한 번씩(`candidate_ready.stage_batch`). 중복 = 받은 파일 sha256이 같은 묶음 안 다른 파일, 또는 ParsingMeta에 파싱된(`ok`·`partial`) 다른 원본 키와 같음 — 하나만 파싱하고 나머지는 `skipped_dup`(서버 러너는 건너뜀으로 세고 게시가 씀). 건너뛴 문서(중복·DRM·암호·미지원)는 문서마다 `pipe_event` 한 행(`extract.skip`) | 비싼 파싱을 중복하지 않는다(S3 키가 달라도 내용이 같으면 중복). 키마다 메타(고객 등)가 달라 문서는 따로. 남길 사본: 사본 표시 없는 이름 → 최신 → 큰 파일(`deduplication.py` `run_folder()`) | done | [pl-02](prd/extract.md#pl-02) |  |
 | 회전 바로잡기 — 켜면(`extract.prepare.rotate_pages`, 기본 꺼짐) 이미지·스캔 PDF 쪽마다 4방향(0·90·180·270도) OCR 점수를 스레드 4개로 동시에 재 가장 높은 방향으로 돌린다(같으면 0도). 기록 `rotation.csv` | 돌아간 스캔은 엔진이 읽지 못한다. 꺼져 있으면 회전용 OCR을 하지 않는다 | done | [pl-02](prd/extract.md#pl-02) |  |
-| 다시 받아도 파싱할 수 없는 원본(지원 안 하는 확장자·확장자 없음·DRM·암호)은 `applog.skip_doc_info`에 원본 키당 한 행(이유·`level` `error`·처음·마지막 시각·횟수)을 남기고, 대상 목록 `candidate_pick list --skip-done`이 그 키를 뺀다 — 받기 전(`rdb_pick`)·받은 뒤(`filter_and_rotate`) 두 곳에서 쓴다. 중복·파싱 실패는 쓰지 않는다 | 같은 문서를 밤마다 다시 받지 않고 `--max-docs`가 새 문서를 고르게(사용자 11-05). DB 스키마 — 사람 검토 | dev | [pl-58](prd/extract.md#pl-58) | 서버 `migrate up --target applog`·DB 담당 승인 대기(refactor.md C-96) |
+| 다시 받아도 파싱할 수 없는 원본(지원 안 하는 확장자·확장자 없음·DRM·암호)은 `applog.skip_doc_info`에 원본 키당 한 행(이유·`level` `error`·처음·마지막 시각·횟수)을 남기고, 대상 목록 `candidate_pick list --skip-done`이 그 키를 뺀다 — 받기 전(`rdb_pick`)·받은 뒤(`filter_and_rotate`) 두 곳에서 쓴다. 같은 밤 다른 원본과 같은 내용이면 `duplicate_sha256`으로(pl-59). 그 밖의 중복·파싱 실패는 쓰지 않는다 | 같은 문서를 밤마다 다시 받지 않고 `--max-docs`가 새 문서를 고르게(사용자 11-05). DB 스키마 — 사람 검토 | dev | [pl-58](prd/extract.md#pl-58) | 서버 `migrate up --target applog`·DB 담당 승인 대기(refactor.md C-96) |
 | DRM·암호 파일 감지 — 감지해서 표시만(`skipped_drm`) | 복호화는 흐름 안에서 하지 않고 수동 명령(`python -m pipeline.extract.protected_docs decrypt`)으로 | done | [pl-02](prd/extract.md#pl-02) |  |
 | 원본 zip은 받은 뒤 풀어서 안의 문서를 파싱한다(`candidate_ready`) — 메일 첨부 zip과 같게(pl-36) | zip 안의 문서도 검색되어야 한다(사용자 11-05) | todo | [pl-57](prd/extract.md#pl-57) | 지금은 '지원하지 않음' 표시만(pl-02) |
 | FAQ 원천 — 질의응답 엑셀을 행 단위로(시트 = FAQ 묶음, 행 하나 = 청크 하나). `FAQ/<uuid>/<파일>`을 FileStorageMap에 등록 | 질의응답을 문서 통째가 아니라 질문 하나 단위로 찾는다 | done | [pl-39](prd/extract.md#pl-39) |  |
-| 같은 밤에 받은 같은 내용 문서는 하나만 파싱한다 — 문서마다 따로 받는(stage) 서버 흐름에서도 이번 실행이 이미 받은 sha256과 같으면 `skipped_dup` · staging 재사용은 내용이 같을 때만(ETag 또는 sha256) | 같은 파일을 두 번 파싱·적재하지 않는다. 크기만 같은 새 판을 옛 파일로 파싱하지 않는다 | todo | [pl-59](prd/extract.md#pl-59) | 같은 내용 거르기는 문서 1건 묶음 안과 ParsingMeta에 끝난 문서만 본다(같은 밤 다른 문서와 같으면 둘 다 파싱). staging 재사용(`download`·`stage_one`)은 크기만 비교한다 |
+| 같은 밤에 받은 같은 내용 문서는 하나만 파싱한다 — 문서마다 따로 받는(stage) 서버 흐름에서도 이번 실행이 이미 받은 sha256과 같으면 `skipped_dup` + `applog.skip_doc_info` `duplicate_sha256`(먼저 받은 원본 키는 `pipe_event` `dup_of`) · staging 재사용은 내용이 같을 때만(ETag) | 같은 파일을 두 번 파싱·적재하지 않는다. 크기만 같은 새 판을 옛 파일로 파싱하지 않는다 | dev | [pl-59](prd/extract.md#pl-59) | 러너 `stage_one`이 앞 실행 문서 폴더를 원본 키만 보고 다시 씀(ETag 비교·이번 실행 표지 없음) · 원본 삭제가 `.etag` 옆 파일을 남김 |
 | 고르기·받기(extract)는 변환(transform)을 import하지 않는다 — 지원 확장자 목록은 `pipeline/shared`에 · 원본 키 → 원천 이름 규칙은 함수 하나 | ETL 방향을 지킨다(rn-08). 원천 이름이 자리마다 다르면 게시·구조화·건너뜀 기록의 원천이 어긋난다 | todo | [pl-59](prd/extract.md#pl-59) | `candidate_pick`·`filter_and_rotate`가 `transform.parse.engines.registry`를 import. 원천 규칙이 `candidate_pick.source_of`·`_known_source`, `candidate_ready._derive_source_from_key`, 구조화의 키 첫 마디 판정으로 여럿 |
 
 ## 변환 (transform) — 파싱·대표 결과 고르기·그림·구조화
@@ -58,8 +58,9 @@
 | 엔진 지문(p0) 범위 = 엔진 폴더의 모든 `.py` + 엔진 실행 파일 + 엔진이 import하는 pipeline 파일 | 이름과 폴더가 다른 엔진(html_stdlib·msg_extract·rapidocr_ko·office)을 고쳐도 지문이 바뀌게. 등급 A | done | [pl-47](prd/transform-cleanup.md#pl-47) |  |
 | 명부·사전·원본 해시·매니페스트·엔진 지문은 프로세스마다 한 번만 읽고, 엔진 결과는 자식이 한 번에 쓰고, 1건 중복 확인은 자식 없이 | 결과는 바이트 그대로. 등급 A | done | [pl-49](prd/transform-cleanup.md#pl-49) |  |
 | 결과를 바꾸는 파일은 층 지문 목록에 들고, 기록·DB 표 정의는 지문 계산에서 빠진다. extract → transform → load 방향은 자동 점검(`check_modules` ⑫, 예외 없음) | 빠지면 고쳐도 옛 결과를 다시 쓰고, 넘치면 상관없는 수정에도 재처리 경보가 남. 등급 A | done | [pl-50](prd/transform-cleanup.md#pl-50) |  |
-| `dbtool`에 첫 이관 도구(`dbcompare`·`stamp`)가 없고(0.2.0 배포 뒤), 이미지 의존성에는 앱 코드가 쓰는 패키지만 | 첫 이관 도구와 안 쓰는 패키지는 이미지와 점검 범위만 키운다. 패키지를 빼면 새 이미지 버전 | todo | [pl-53](prd/transform-cleanup.md#pl-53) | `dbcompare`·`stamp`가 있음(0.2.0 배포 대기), `requirements*`에 `google-adk`·`litellm` — 지시서 `agent.py`만 import, 뺄지 미정 |
+| `dbtool`에 첫 이관 도구(`dbcompare`·`stamp`)가 없고(0.2.0 배포 뒤), 이미지 의존성에는 앱 코드가 쓰는 패키지만 | 첫 이관 도구와 안 쓰는 패키지는 이미지와 점검 범위만 키운다. 패키지를 빼면 새 이미지 버전 | done | [pl-53](prd/transform-cleanup.md#pl-53) |  |
 | 쪽 수 세기는 함수 하나 — `pdf_kind.doc_pages`와 `vlmcall.page_count`가 같은 규칙 | 쪽 수가 자리마다 다르면 제한 시간·쪽 VLM 상한이 어긋난다. `vlmcall.py`는 엔진 지문에 들어가 사람 검토(등급 A) | todo | [pl-60](prd/transform.md#pl-60) | 두 함수가 따로 있음 |
+| 대표 결과가 엔진이 읽은 글을 흐리거나 버리지 않는다 — 표 칸을 다른 칸 글자 안에서 찾지 않음 · 쪽 VLM 글이 없는 쪽의 그림은 빈 블록으로 넣지 않음 · docx에서 anydoc만 읽은 글을 합침 · VLM 엔진 쪽 글도 되풀이 고장을 거름 | 검색 조각에 쓰레기 줄이 섞이거나 글상자·병합 칸 글이 빠진다(0.3.0 엔진 비교 11-06) | todo | [pl-62](prd/transform.md#pl-62) | 표 조각 30줄(stability_trend_ko) · 빈 그림 블록 5개(tt_workflow_en) · anydoc 글 합침 0 · VLM 엔진 되풀이 거름 없음(vlmcall — 사람 검토) |
 
 ## 적재 (load) — 검색 DB(pgvector)·게시·저장 구조·DB 스키마
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -93,7 +94,7 @@
 | 문서 키는 원본 경로 하나 — 검색 DB `doc.file_path` = Object Storage 원본 경로 = EDW `s3_key`(청크는 `doc_id`만), ParsingMeta와 이 값으로 잇는다 | sha256 `doc_key`는 검색 DB에 안 둔다(ParsingMeta `sha256`만) | dev | [pl-25](prd/load-schema.md#pl-25) |  |
 | 원천 시스템별 PG 스키마 5벌(`<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`), 각자 `doc`·`chunk`·BM25 표, `doc_id` 시퀀스는 기준 스키마 하나를 함께 | 원천마다 메타가 다르고 BM25 점수를 섞지 않는다. MCP `source_system` 필수(등급 A) | done | [pl-28](prd/load-schema.md#pl-28) |  |
 | 원천 = 원본 경로(`s3_key`) 첫 마디 — `SFDC`·`CRMS`·`LAS`·`FAQ`(대소문자 무관)이거나 `SFDC-`·`SFDC_`·`CRMS-`·`CRMS_`·`las_`·`LAS_`로 시작하면 그 원천, 아니면 `other`(`gold_bundle`). `faq` 스키마만 `chunk.faq_group` 칸 | `AI.FileStorageMap.source_system` 칸은 읽지 않는다 — 경로만으로 정함 | done | [pl-28](prd/load-schema.md#pl-28) |  |
-| 게시는 EDW 키(`source_system`, `source_key`)가 이미 있는지 먼저 보고, 있으면 올리지 않는다(`--reparse` 목록만 예외) | Object Storage에 EDW 행 없는 고아 객체를 남기지 않는다 | todo | [pl-61](prd/load.md#pl-61) | `apply()`가 올린 뒤 `insert_new`가 키를 본다 — 이미 있는 키면 올린 객체가 고아로 남음 |
+| 게시는 EDW 키(`source_system`, `source_key`)가 이미 있는지 먼저 보고, 있으면 올리지 않는다(`--reparse` 목록만 예외) | Object Storage에 EDW 행 없는 고아 객체를 남기지 않는다 | done | [pl-61](prd/load.md#pl-61) |  |
 
 ## 검색 MCP (mcp) — AI 클라이언트가 부르는 도구 서버(이미지 `mcp-server`)
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -121,7 +122,7 @@
 | 서버는 `/mcp`(기본 127.0.0.1:8765) 또는 `--stdio`로 뜬다. 내부망 주소만, 0.0.0.0 거부, 루프백이 아니면 `MCP_TOKEN` 필수 + DNS 리바인딩 막기. 서버에서 PG 접속 칸이 비면 시작 거부 | 공용 내부 서비스라 위험한 노출을 거부 | done | [mc-09](prd/mcp.md#mc-09) |  |
 | 과부하 보호 — 동시 8개, 대기 32개(동시 × 4) 넘으면 바로 `busy`, 도구당 30초(`parse_document`는 자기 시간 + 10초) | 늘 떠 있게. `/health`는 예열 중 503, 새 적재는 30초마다 확인 | done | [mc-09](prd/mcp.md#mc-09) |  |
 | 요청 권한 관리 — 머리글(`Authorization`)로 신원을 확인(agent별 토큰 또는 사내 로그인이 서명한 사용자 증표)한 뒤, DB 권한 표로 그 신원이 볼 수 있는 범위만 돌려준다(`search`·원문·`query_edw` 결과 거르기). 도구 계약은 그대로, 감사 기록에 확인된 신원 | 요청에 적힌 user id·agent id는 꾸밀 수 있어 신원 확인이 먼저다. 부서·고객 담당에 따라 볼 문서가 다르다 | todo | [mc-20](prd/mcp.md#mc-20) | 코드에 없다 — 지금은 공용 토큰 하나로 허용 클라이언트인지만 본다. 방식(agent 토큰·사내 로그인)·권한 단위·검색 DB 거르기 칸은 미정 |
-| 질문 유형 표(`question_type.TYPE_TABLE`)는 쓰는 값만 가진다 | 쓰지 않는 칸(첫 도구·검색 설정)은 고칠 때 헷갈리게 한다 | todo | [mc-21](prd/mcp.md#mc-21) | 쓰는 곳은 `rank_rules.weights()`의 `aggregate` 판정 하나뿐(`first_tool`·`search` 칸은 아무도 안 읽음) |
+| 질문 유형 표(`question_type.TYPE_TABLE`)는 쓰는 값만 가진다 | 쓰지 않는 칸(첫 도구·검색 설정)은 고칠 때 헷갈리게 한다 | done | [mc-21](prd/mcp.md#mc-21) |  |
 
 ## 운영 (ops) — 서버 러너(run_pipeline)·실행 관리·종료 정리·계정·모델 가드·설정
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -133,7 +134,7 @@
 | 같은 일은 한 곳(파싱 단계 사슬·프로세스 묶음 실행 = `parse_steps.py`, 날짜 조건 `_when` 한 벌), 서버·릴리스 스크립트 이름은 하는 일로, 같은 파일 이름 두 번 없음(보호 파일·공용 모듈 제외) | 같은 일이 여러 곳이면 한쪽만 고쳐진다(사용자 11-04) | done | [rn-06](prd/ops.md#rn-06) |  |
 | `ops.host.instance_name` 하나로 스키마·EDW 표·게시 경로·포트가 갈림, 파싱 MCP `mcp-data-parsing`·칸 `data_parsing`, 늘 같은 스위치·옛 칸 표 없음, 주석은 목적 한 줄 | 여러 벌이 서로 덮지 않고 설정을 읽기 쉽게(사용자 11-05) | done | [rn-07](prd/ops.md#rn-07) |  |
 | 파이프라인 폴더는 ETL 뜻대로 — extract는 고르기·받기·준비만, 엔진 파싱은 `transform/parse/`(엔진 실행 한 파일), 파일 이름은 하는 일로, 요건에 닿지 않는 코드·두 번째 같은 코드는 없음 | 폴더만 보고 단계의 일을 안다(사용자 11-05) | done | [rn-08](prd/ops.md#rn-08) |  |
-| run_pipeline 대상 고르기 — 파일 이름 키워드(`--filter RFP,proposal`)·`--start-offset` 뒤 `--skip-done`이 ParsingMeta 끝난 행(ok·partial — gold_version도, skipped_dup)을 뺀다 | 새벽 배치는 이름에 RFP·proposal이 든 문서만 처리한다(키워드가 정기 운영에 맞는지는 C-72 ③) | done | [pl-23](prd/ops.md#pl-23) |  |
+| run_pipeline 대상 고르기 — 기본은 모든 문서·시작 자리 0(`--filter <키워드>`로 이름을 좁힐 수 있음)·`--start-offset` 뒤 `--skip-done`이 ParsingMeta 끝난 행(ok·partial — gold_version도, skipped_dup)을 뺀다 | 새벽 배치는 FileStorageMap의 모든 새 문서를 처리한다(사용자 11-05) | done | [pl-23](prd/ops.md#pl-23) |  |
 | 새벽 배치는 `ops.nightly.nightly_start_time`·`nightly_max_docs`·`nightly_stop_time` 셋이 모두 있을 때만 돈다(하나라도 비면 안 돎 — 사용자 11-02) — systemd 타이머가 5분마다 `nightly_batch.sh scheduled` → `run_pipeline.py --start-offset 0 --skip-done --max-docs --deadline` | 지금 서버는 비워 둠(꺼짐) — 켜는 것은 사람(C-72) | done | [pl-23](prd/ops.md#pl-23) |  |
 | 전체 e2e는 local·dev·prd 셋에서 — 전체 문서 실행은 prd에서만 새 원천별 스키마 이름(새 `PG_SCHEMA`)으로, 옛 gold·`struct` 스키마는 2주 뒤 DB 담당자가 백업하고 지움 | 판 0002가 기준 스키마의 옛 표를 지운다. 사용자 11-02 | todo | [pl-54](prd/ops.md#pl-54) |  |
 | 새벽 배치 칸은 `ops.nightly.nightly_start_time`·`max_docs`·`stop_time`(시작 시각·문서 수 상한·마감 시각) 한 벌 — 하나라도 비면 안 돎 | 사용자 11-02 | done | [pl-23](prd/ops.md#pl-23) |  |
@@ -159,6 +160,7 @@
 | 서버(`dev`·`prd`)는 가짜 LLM(`dev.fake_llm`)이 켜져 있거나 설정 파일을 못 읽으면 시작 거부 | 서버에서 가짜 답이 도는 것을 막는다 | done | [op-02](prd/ops-settings.md#op-02) |  |
 | PC(`local`)는 가짜 대상만 — `dev.local`의 가짜 EDW·게시 폴더·원본 폴더·새 문서 상한을 쓰고, 서버 전용 칸(EDW·Object Storage·서버 게시 버킷)은 비우고 경고, 경로는 저장소 루트 기준 상대 경로 | PC 시험에 EDW·Object Storage·토큰·배포 값이 필요 없게. 사용자 11-04·11-05 | done | [op-14](prd/ops-settings.md#op-14) |  |
 | 한 서버에 여러 벌(개발자별) — `ops.host.instance_name`가 컨테이너·compose 묶음·타이머 이름 끝에 붙고, 포트·스키마는 벌마다 설정으로 | 개발 서버에 개발자마다 컨테이너를 띄움. 사용자 11-04 | done | [op-15](prd/ops-settings.md#op-15) |  |
+| 네 이미지에 개발 도구(sshd·git·uv·ruff·mypy·pytest 등)와 opencode(선택)가 들어 있고, 개발 서버에서 `option.devbox.ssh_port`를 적으면 `data-pipeline`이 SSH 작업 공간(코드 폴더 쓰기 가능·홈 `<루트>/home`)으로 뜬다 — 비우면 지금과 같고, prd는 거부 | 개발 서버 컨테이너 안에서 바로 고치고 시험한다. opencode는 내부망 모델만. 사용자 11-05 | done | [op-16](prd/ops.md#op-16) |  |
 | 설정은 settings.yaml 하나 — `settings.sample.yaml`에 모든 키가 기본값과 함께(`python -m common.config.sample`로 생성) | — | done | [op-05](prd/ops-settings.md#op-05) |  |
 | 배치 — 맨 위 `required`(필수·비밀) → 역할 절 7개(환경마다 정하는 값) → `tuning`(거의 안 바꾸는 값 — 분류 제목, 11-04). 옛 배치·옛 자리·모르는 칸은 시작 거부(칸 이름만 알림 — rn-07) | sample과 실제 파일의 차이를 줄였다 | done | [op-08](prd/ops-settings.md#op-08) |  |
 | 설정 이관은 옛 배치 settings.yaml → 새 배치만 | 운영 서버는 0.1.0(settings.yaml 하나). 사용자 11-02 | done | [op-08](prd/ops-settings.md#op-08) |  |
@@ -166,8 +168,8 @@
 | 환경마다 다른 경로·접속은 settings.yaml 필수(코드 기본값 없음) — 컨테이너 안 경로는 이미지 기본값 표 하나만, 호스트 `PATCH_CODE` 기본값 없음 | 사용자 11-02 | done | [op-09](prd/ops-settings.md#op-09) |  |
 | 은퇴한 설정(`common.paths.korean_font`·`eval_sets_dir` 등)은 없다 — 남아 있으면 시작 거부 | 쓰지 않는 칸 | done | [pl-21](prd/ops-settings.md#pl-21) |  |
 | run_pipeline 명령은 아무도 안 읽는 env(`FIG_OCR_BUDGET`·`SERVICE_MASTER_CSV`·`DIVISION_MASTER_CSV`·`PROD_MASTER_CSV`)를 넘기지 않는다 | C-51 | done | [pl-30](prd/ops-settings.md#pl-30) |  |
-| 서버 러너의 컨테이너 명령은 한 도우미가 만든다(`docker exec` · `PYTHONPATH` · 라이브러리 env 같게) · 게시·구조화가 시간 초과면 그 문서의 컨테이너 안 프로세스도 끈다 · 벌 이름 검사는 한 곳 · 스캔 회전 정책은 설정 칸 하나를 컨테이너가 직접 읽는다 · 레인 분류는 받기 단계 안에서(문서마다 따로 `docker exec` 없음) · 분류 캐시는 덧붙여 쓴다 | 명령마다 env가 다르면 같은 코드가 다르게 돈다. 끄지 않은 프로세스는 다음 문서와 CPU·메모리를 다툰다 | todo | [rn-09](prd/ops.md#rn-09) | `parse_cmd`에 `PYTHONPATH`가 없음. 시간 초과 때 끄는 것(`sweep_cmd`)은 파싱만. 스캔 회전 값이 run_pipeline → `stage --no-scan-rotate` → `stage_batch(scan_rotate)` → `filter_and_rotate --no-scan-rotate` 네 겹으로 전달. 분류는 문서마다 `docker exec`, 캐시는 문서마다 파일 전체를 다시 씀 |
-| 문서 1건의 반복 비용을 줄인다 — 원본 sha256은 한 번만 구하고 넘겨 씀 · 적재의 스키마 확인 질의는 하나(UNION) · 설정 파일은 프로세스마다 한 번 읽음 · `--set` 처리(`setarg.apply`)는 무거운 import 전에 | 문서 수천 건에서 같은 일을 되풀이하지 않는다 | todo | [rn-10](prd/ops.md#rn-10) | sha256을 중복 제외·거르기(`_record_skip`·회전 기록)·구조화가 각자 다시 구함. `pgvector_load`가 원천 스키마마다 따로 묻는다. 측정 전 — 줄일 크기는 `perf_report`로 먼저 잰다 |
+| 서버 러너의 컨테이너 명령은 한 도우미가 만든다(`docker exec` · `PYTHONPATH` · 라이브러리 env 같게) · 게시·구조화가 시간 초과면 그 문서의 컨테이너 안 프로세스도 끈다 · 벌 이름 검사는 한 곳 · 스캔 회전 정책은 설정 칸 하나를 컨테이너가 직접 읽는다 · 레인 분류는 받기 단계 안에서(문서마다 따로 `docker exec` 없음) · 분류 캐시는 덧붙여 쓴다 | 명령마다 env가 다르면 같은 코드가 다르게 돈다. 끄지 않은 프로세스는 다음 문서와 CPU·메모리를 다툰다 | todo | [rn-09](prd/ops.md#rn-09) | 한 도우미·시간 초과 정리는 반영. 스캔 회전 값이 run_pipeline → `stage --no-scan-rotate` → `stage_batch(scan_rotate)` → `filter_and_rotate --no-scan-rotate` 네 겹으로 전달. 분류는 문서마다 `docker exec`, 캐시는 문서마다 파일 전체를 다시 씀 |
+| 문서 1건의 반복 비용을 줄인다 — 원본 sha256은 한 번만 구하고 넘겨 씀 · 적재의 스키마 확인 질의는 하나(UNION) · 설정 파일은 프로세스마다 한 번 읽음 · `--set` 처리(`setarg.apply`)는 무거운 import 전에 | 문서 수천 건에서 같은 일을 되풀이하지 않는다 | todo | [rn-10](prd/ops.md#rn-10) | sha256은 받기가 한 번 구해 manifest로 넘기고 중복 제외·거르기·파싱·구조화·게시가 씀 — 대표 결과(`contract.source_record`, 핸드오프 파일)만 다시 구함. `pgvector_load`가 원천 스키마마다 따로 묻는다. 측정 전 — 줄일 크기는 `perf_report`로 먼저 잰다 |
 
 ## 테스트·평가 (test) — 변경을 어떻게 증명하나
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -179,8 +181,8 @@
 | 이미지 반입 관문 — `build_ship.sh`로 빌드하고 `selftest_gate.sh`가 종료 코드가 아니라 `[판정]` 줄로 판단(알려진 실패 밖 FAIL 0) | 서버는 반입 시험을 통과한 이미지만 받는다 | done | [e2-08](prd/test.md#e2-08) |  |
 | 코드만 바뀌면 코드 폴더 바꾸기(이미지는 그대로) | 이미지를 다시 만들지 않는다 | done | [e2-08](prd/test.md#e2-08) |  |
 | PC 일반 시험의 알려진 실패 0(`GENERAL_KNOWN_FAIL = {}`, `known_fail.txt` 빔) — 시험은 공용 PG를 읽지 않고, 지운 모듈의 시험은 없다 | 리팩토링 전부터 있던 실패를 없앴다 | done | [e2-11](prd/test.md#e2-11) |  |
-| 옛 오버레이 패치 흔적이 없다 — 버전 읽기(`common/core/fingerprint.py`)에 `common/PATCH_VERSION` 후보 없음, 읽는 곳 없는 `deploy/docker/IMAGE_BASE` 없음(지울지는 사용자가 정함) | `fingerprint.py`는 레이어 지문 파일이라 고치면 서버 문서가 모두 다시 처리된다 — 지문 배치에 | todo | [e2-21](prd/test.md#e2-21) | `fingerprint.py`가 `PATCH_VERSION`을 후보로 읽고, `IMAGE_BASE`가 읽는 곳 없이 남아 있다 |
-| 지시서 폴더 찾기(`paths.resolve_agent_dir`)는 있는 폴더 갈래만 본다 | `paths.py`를 고치면 레이어 지문이 모두 바뀌어 다음 지문 배치에 | todo | [e2-15](prd/test.md#e2-15) | 없는 갈래 셋(`resources/prompts/mcp`·`validation/e2e`·`dev_tools/unit_test/fixtures`)과 설명 주석이 남아 있다 |
+| 옛 오버레이 패치 흔적이 없다 — 버전 읽기(`common/core/fingerprint.py`)에 `common/PATCH_VERSION` 후보 없음, 읽는 곳 없는 `deploy/docker/IMAGE_BASE` 없음 | 없어진 길만 읽던 것이 남으면 헷갈린다 | done | [e2-21](prd/test.md#e2-21) |  |
+| 지시서 폴더 찾기(`paths.resolve_agent_dir`)는 있는 폴더 갈래만 본다 | 없는 폴더를 찾는 갈래는 헷갈린다 | done | [e2-15](prd/test.md#e2-15) |  |
 | PC 스모크 — 문서 2~3건으로 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색(README §4-4) | 릴리스 전에 사슬 전체를 증명 | done | [e2-01](prd/test.md#e2-01) |  |
 | PC Docker 스모크(`valid_env/docker/smoke_test.sh`)가 검색까지 통과한다 | 이미지 사슬 전체를 PC에서 증명 | todo | [e2-13](prd/test.md#e2-13) | mc-10을 고친 뒤 다시 돌리지 않았다 |
 | 시험 자료 `valid_env/` — 문서 `object_storage/{SFDC,CRMS}/<uuid>/<파일>`, 합성 EDW `edw/` | 서버와 같은 배치. 서버 반입 시험은 자료를 임시 폴더에 만들어 쓴다 | done | [e2-09](prd/test.md#e2-09) |  |
@@ -206,7 +208,7 @@
 | 개발 → 운영 굽기 `bake_prod_image.sh` — 개발에서 쓴 실행 이미지 + 시험한 코드 폴더로 `Dockerfile.bake`(네트워크 없이), 반입 판정 뒤 저장·분할 | 운영에는 개발에서 시험한 그대로 올라간다 | done | [op-07](prd/doc.md#op-07) |  |
 | 운영(prd) 이미지에 settings.yaml(비밀 포함)도 굽는다 — 🔒 검토 등급 A(비밀 처리) | 이미지 파일 = 비밀(반입 경로만), 키를 바꿀 때마다 다시 굽기. 사용자 11-02 | todo | [op-12](prd/doc.md#op-12) |  |
 | 서버 설치 길은 하나(README §5-0·§5-3). 컨테이너 도구는 셸 env > `ops.host.container_cli` > podman > docker. 이미지는 `load.sh`로(45 MB 조각) | 문서마다 절차가 달랐다. 서버 기본 도구는 podman | done | [op-10](prd/doc.md#op-10) |  |
-| 0.2.0 올리기·되돌리기(release-and-patch §8-3·§8-5) — DB 백업 → `migrate check` → `up`, 되돌릴 땐 `settings.yaml.0.1.0` 복원, 재처리 동안 밤 타이머 멈춤 | DB·EDW·전체 재처리가 함께 바뀐다 | done | [op-10](prd/doc.md#op-10) |  |
+| 판 올리기·되돌리기는 upgrade-guide 하나 — 밤 타이머 멈춤 → DB·설정 백업 → 새 루트 → `migrate up` → 점검, 되돌릴 땐 앞 루트 + 백업 복원 | DB·EDW·전체 재처리가 함께 바뀐다 | done | [op-10](prd/doc.md#op-10) |  |
 | 일회성 작업 컨테이너 없음 — 운영 작업·`dbtool`·`migrate`는 상주 `data-pipeline`에 `exec`, 이미지 점검(`docker run --rm … selftest`)만 일회성 | 사용자 11-02 | done | [op-10](prd/doc.md#op-10) |  |
 | 사람 정답 폴더 칸(`GOLD_DIR`·이미지 `gold_mount`) 없음 — 점검기 정답 폴더 점검도 없음 | 사용자 11-04 — 상주 컨테이너에 붙지 않아 점검이 늘 건너뛰어짐 | done | [op-11](prd/doc.md#op-11) |  |
-| 서버 루트 폴더 하나(예 `/home/dev/`) — `settings.yaml`·`edw_chain.yaml`·코드·이미지·`output/`가 그 아래, 판마다 새 루트(검색 PG는 공유), `/srv/rag`·`env/`·`code/live` 없음 | 사용자 11-04 | done | [op-13](prd/doc.md#op-13) |  |
+| 서버 루트 폴더 하나(예 `/home/sbl/dev/`) — `settings.yaml`·`edw_chain.yaml`·코드·이미지·`output/`가 그 아래, 판마다 새 루트(검색 PG는 공유), `/srv/rag`·`env/`·`code/live` 없음 | 사용자 11-04 | done | [op-13](prd/doc.md#op-13) |  |

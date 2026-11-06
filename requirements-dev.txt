@@ -1,4 +1,4 @@
-# PC 개발 도구(서버 이미지에는 들어가지 않음) — 설치: uv pip install --python .venv/bin/python -r requirements-dev.txt
+# 개발 도구 — PC 개발 환경과 이미지(deploy/docker/Dockerfile base 단계 — 개발 작업 공간)가 함께 쓴다. 의존성 지문(DEPS_HASH)에는 안 듦. 설치(PC): uv pip install --python .venv/bin/python -r requirements-dev.txt
 # 판을 올릴 때는 pyproject.toml 규칙이 그대로인지(새 규칙·기본값 변화) 확인하고 함께 커밋한다.
 ruff==0.17.3
 mypy==2.4.1

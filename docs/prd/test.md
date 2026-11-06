@@ -11,7 +11,7 @@
   1. `tests/server/`(이미지 반입 관문 — `python -m pipeline.cli selftest`가 `tests/runner.py`로 실행, 외부 접속 없음) · `tests/general/`(PC 전용: PG, Docker, 느린 것 — pytest).
   2. 알려진 실패 목록: 반입 `deploy/release/known_fail.txt`, PC `tests/conftest.py` `GENERAL_KNOWN_FAIL`. 목록에 있는 시험이 통과하면 XPASS 경고(목록에서 지움).
   3. PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕(`run_env: local`만, 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `_PC_SETTINGS_CASES`(지금 빔).
-- 기준선(11-05, feature/readme-multi — cfg-blank 병합 뒤: 영구 건너뜀 표 `applog.skip_doc_info`(pl-58) + 모드별 설정(local은 서버 칸 무시·S3 접속 거부 — op-14), 받기 → 중복 제외 → 거르기, settings 칸 이름 정리, 건너뛴 문서 게시, PG 없는 PC, EDW 쓰기 계정 필수(읽기 계정 대체 없음 — op-03)): `selftest` 107개 모두 통과 · `pytest tests/` 166 통과 · 알려진 실패 0(두 목록 모두 빔) · FINGERPRINT `18142592accca442` · code_fp p0 `d4c15328b7e7` · p1 `b6290830d245` · r `b2d0bb6e97d6` · s `80609e6547fa`(기록용 — 재처리 없음) · 엔진 지문(`engine_code_fp`, 기록용): anydoc `01d0d7813c77` · docx2python `9ba622227470` · html_stdlib·mhtml·msg_extract `6b86d3b876c3` · hwpx `1ce4058a3a0a` · kreuzberg `f8cf85542789` · markitdown `00fa7c1d36fc` · office `c18d228eb2e6` · plaintext `e61fe9d86b40` · pymupdf `8611e97ce9ec` · qwen_vlm `a0fd63c5062a`(엔진 폴더는 그대로 — 함께 셈하는 `pipeline/shared/vlmcall.py`의 설정 이름이 바뀜) · rapidocr_ko `1e08f27b5ddd`.
+- 기준선(11-06, feature/release-030 — 0.3.0 묶음: 같은 밤 중복 건너뜀·게시 키 확인·실행 이미지 정리·인계 문서·시험 문서 9건, 엔진 비교 수정(쪽 VLM 되풀이 버림·표 칸 간격 글), pptx·txt·csv 엔진 하나): `selftest` 107개 모두 통과 · `pytest tests/` 168 통과 · 3 건너뜀 · 알려진 실패 0(두 목록 모두 빔) · FINGERPRINT `18142592accca442` · code_fp p0 `a77ec57b603f` · p1 `cf41a50c4b7c` · r `b17e21147380` · s `a908c922f031`(기록용 — 재처리 없음) · 엔진 지문(`engine_code_fp`, 기록용): anydoc `01d0d7813c77` · docx2python `9ba622227470` · html_stdlib·mhtml·msg_extract `6b86d3b876c3` · hwpx `1ce4058a3a0a` · kreuzberg `f8cf85542789` · markitdown `00fa7c1d36fc` · office `c18d228eb2e6` · plaintext `e61fe9d86b40` · pymupdf `8611e97ce9ec` · qwen_vlm `a0fd63c5062a`(엔진 폴더는 그대로 — 함께 셈하는 `pipeline/shared/vlmcall.py`의 설정 이름이 바뀜) · rapidocr_ko `1e08f27b5ddd`.
 - 지문 확인 명령: [CLAUDE.md](../../CLAUDE.md) §4. 공용·레이어 파일을 고친 커밋은 전후 값을 커밋 메시지에 적는다.
 - QA: `python -m pipeline.cli selftest` · `[판정]` 통과, 기준선보다 나빠지지 않음.
 - Status: done
@@ -31,16 +31,19 @@
 - Status: done
 
 <a id="e2-15"></a>
-## e2-15 · 에이전트 시험 패키지 경로가 없는 갈래를 본다
-- 이유: `common/core/paths.py` `resolve_agent_dir`가 폴더가 없는 갈래 셋(`resources/prompts/mcp`·`validation/e2e`·`dev_tools/unit_test/fixtures`)도 보고, `tests/server/common/test_paths.py`가 그 경로를 단언한다.
-- 할 일: 죽은 갈래와 그 단언을 지운다. `paths.py`는 모든 레이어 code_fp에 들어가므로 다음 지문 배치에서.
+## e2-15 · 에이전트 지시서 폴더는 있는 갈래만 찾는다
+- 이유: 없는 폴더를 찾는 갈래는 읽는 사람만 헷갈리게 한다.
+- 요건: `common/core/paths.py` `resolve_agent_dir`는 `resources/prompts/common` → `resources/prompts/pipeline` → `valid_env/answer_test` 셋만 본다(`tests/server/common/test_paths.py`).
+- 반영: 0.3.0(11-05).
 - Status: todo
 
 <a id="e2-21"></a>
 ## e2-21 · 옛 오버레이 패치 흔적 정리
 - 이유: 오버레이 패치 길은 없어졌는데 그 길만 읽던 것이 남았다.
-- 할 일: ① `common/core/fingerprint.py` `pipeline_version()`의 `common/PATCH_VERSION` 후보(와 `tests/server/common/test_fingerprint.py`의 그 사례·`keyscan.py` `PIPELINE_VERSION` 설명) — code_fp 파일이라 릴리스 지문 배치에서. ② `deploy/docker/IMAGE_BASE`(+ `.gitattributes` 줄) — 읽는 곳 없음, 지울지 사용자가 정한다.
-- Status: todo
+- 요건: ① 버전 표기 `common/core/fingerprint.py` `pipeline_version()`은 저장소 루트 `VERSION` 하나만 읽는다(`common/PATCH_VERSION` 후보 없음 — `tests/server/common/test_fingerprint.py` 사례 표). ② `deploy/docker/IMAGE_BASE`(읽는 곳 없음)와 그 `.gitattributes` 줄은 없다.
+- 반영: 0.3.0(11-05) — 레이어 지문은 그대로(`fingerprint.py`는 레이어 지문에 들지 않음).
+- 비고: `pipeline/load/publish_parse_result.py`의 설명·`--version` 도움말에 `PATCH_VERSION` 글자가 남아 있다(동작 무관).
+- Status: done
 
 <a id="e2-01"></a>
 ## e2-01 · PC 스모크 — 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색
@@ -113,4 +116,3 @@
 ### 요건과 다르게 동작
 | 요건 | 코드가 하는 일 | 위치 | ID |
 |---|---|---|---|
-| 에이전트 지시서 폴더는 있는 갈래만 찾음 | 없는 갈래 셋도 봄(시험이 단언) | `common/core/paths.py` | e2-15 |

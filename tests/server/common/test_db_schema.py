@@ -1,5 +1,5 @@
 """pl-25 — DB 스키마 명세(docs/architecture/db_schema.md)와 실제 정의가 같은지.
-지금 상태(결정 칸 유지+삭제)가 gold(원천 스키마 5벌의 칸 합집합 — pl-28)는 Alembic 판(모델 common/store/db/models — 판과 같은지는 기존 dbcompare 시험이 봄)과,
+지금 상태(결정 칸 유지+삭제)가 gold(원천 스키마 5벌의 칸 합집합 — pl-28)는 Alembic 판(모델 common/store/db/models — 판 파일과 같은지는 test_dbtool이 봄)과,
 ParsingMeta는 docs/operations/parsing_meta_mssql.sql과 같아야 한다(다르면 실패). 목표 상태와의 차이(새로·삭제)는 일부러 다른 것이라
 목록으로 찍기만 한다. 문서가 없는 이미지(docs/ 미포함)에서는 건너뜀."""
 
@@ -7,7 +7,6 @@ import re
 
 from common.core.paths import DEPLOY_ROOT
 from common.store import parsing_meta_db as PM
-from common.store.db import dbcompare
 
 ROOT = DEPLOY_ROOT  # 저장소 루트(PC) · 이미지 /app/deploy — paths 상수
 DOC = ROOT / "docs" / "architecture" / "db_schema.md"
@@ -40,12 +39,12 @@ def _pm_columns():
 
 
 def _actual():
-    """gold = dbcompare.expected(판 비교 시험과 같은 모델 — 차원은 칸 이름과 무관) · ParsingMeta = DDL 파일."""
+    """gold = 표 정의 모델(search_metadata — 차원은 칸 이름과 무관) · ParsingMeta = DDL 파일."""
     from common.store.db.models import search_tables as ST
 
     cols = {}
     for src in ST.SOURCES:  # 원천 스키마 5벌의 같은 표 이름은 칸을 합쳐서(원천 전용 칸은 문서의 "원천" 칸에 적음)
-        for t in dbcompare.expected("search", ST.src_schema("ai", src), 1024)[0].tables.values():
+        for t in ST.search_metadata(ST.src_schema("ai", src), 1024).tables.values():
             cols.setdefault(f"gold.{t.name}", set()).update(c.name for c in t.columns)
     cols["edw.ParsingMeta"] = _pm_columns()
     return cols

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from common.config.settings import COMMON
 from pipeline import config as pc
-from pipeline.load.publish_parse_result import run
+from pipeline.load.publish_parse_result import rep_md_key, run
 
 
 class A:
@@ -116,6 +116,7 @@ def selftest():
         assert r1["result"] == {
             "uploaded": 1,
             "upload_excluded": 3,
+            "upload_skip_existing": 0,
             "inserted": 2,
             "edw_skip_existing": 0,
             "edw_excluded_drm_failed": 2,
@@ -142,12 +143,11 @@ def selftest():
         excluded_md = Path(r1["excluded_report"]).read_text(encoding="utf-8")
         assert "failed" in excluded_md and "skipped_drm" in excluded_md and "docs/b.pdf" in excluded_md, excluded_md
 
-        r2 = run(
-            a
-        )  # 같은 걸 재실행 — a·c의 (source_system, 원본 키)가 이미 있음 → EDW 건너뜀(업로드는 시각 이름이라 새로 — source.json 방어선은 11-02에 지움, C-54 ②)
-        assert r2["result"]["inserted"] == 0 and r2["result"]["edw_skip_existing"] == 2, (
-            r2
-        )  # SI39 — INSERT만, UPDATE 없음(a·c 둘 다 KEY 존재)
+        r2 = run(a)  # 같은 걸 재실행 — a·c의 (source_system, 원본 키)가 이미 있음 → EDW 건너뜀
+        assert r2["result"]["inserted"] == 0 and r2["result"]["edw_skip_existing"] == 2, r2  # SI39 — INSERT만, UPDATE 없음
+        # pl-61 — KEY가 이미 있는 a는 올리기 전에 걸러 업로드 0(EDW 행 없는 고아 객체 없음)
+        assert r2["result"]["uploaded"] == 0 and r2["result"]["upload_skip_existing"] == 1, r2["result"]
+        assert len(list(os_dir.rglob("*.md"))) == 1, list(os_dir.rglob("*.md"))
 
         a.version = "v2"  # 판이 달라도 KEY(출처+원본 키)가 같으면 EDW는 그대로 건너뜀
         r3 = run(a)
@@ -157,9 +157,7 @@ def selftest():
         reparse_f = d / "reparse.txt"
         reparse_f.write_text("docs/a.pdf\n", encoding="utf-8")
         a.reparse = str(reparse_f)
-        old_md = next(
-            os_dir.rglob("a_2026-10-08.md")
-        )  # 처음 올린 결과(S9b 리뷰 — r2·r3이 -2·-3 사본을 올려 a_*.md의 첫 것이 사본일 수 있음)
+        old_md = next(os_dir.rglob("a_2026-10-08.md"))  # 처음 올린 결과
         old_content = old_md.read_text(encoding="utf-8")
         r4 = run(a)
         assert r4["result"]["uploaded"] == 1 and r4["result"]["inserted"] == 1, r4["result"]  # 재파싱 1건만 새로 올라감·새 행
@@ -205,6 +203,21 @@ def selftest():
 
 def test_main():  # 옛 `if a.selftest:` 갈래(main() 안)
     selftest()
+
+
+# (원천 이름, 원본 키, 기대 결과 키) — 원본 키가 이미 원천 이름으로 시작하면 원천 이름을 한 번만(PC 폴더 원천 · 대소문자 무시)
+KEY_CASES = [
+    ("CRMS", "CRMS/u1/a.pdf", "P/CRMS/u1/a_D.md"),
+    ("CRMS", "crms/u1/a.pdf", "P/crms/u1/a_D.md"),
+    ("FileStorageMap", "SFDC/u1/a.pdf", "P/FileStorageMap/SFDC/u1/a_D.md"),  # 서버 — 원천 이름이 키 첫 마디가 아님
+    ("FileStorageMap", "docs/a.pdf", "P/FileStorageMap/docs/a_D.md"),
+    ("CRMS", "CRMS.pdf", "P/CRMS/CRMS_D.md"),  # 첫 마디가 파일 이름뿐 — 폴더로 안 봄
+]
+
+
+def test_rep_md_key_prefix_once():
+    for system, key, want in KEY_CASES:
+        assert rep_md_key("P", system, key, "D") == want, (system, key)
 
 
 def test_stage_dropped_docs():

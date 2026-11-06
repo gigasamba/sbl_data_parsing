@@ -41,6 +41,17 @@
 # 폐쇄망: 기반 이미지(BASE)·시스템 패키지·휠을 미리 준비 — docs/specs/docker-collect.md 「빌드」.
 # requirements 분할은 안 함(10-16 코디네이터 결정) — 두 이미지가 같은 base 층(requirements-core.txt)을 공유해 캐시로 한 번만 설치된다.
 ARG BASE=python:3.12-slim-bookworm
+
+# 소스(복사 원본, .dockerignore 허용 목록이라 코드 폴더 3개 + resources/ + deploy/{docker,release} + assets/ + requirements-dev.txt 뿐 — 이미지마다 필요한 폴더만 골라 COPY --from=src)
+# /src/appdocker = 이미지 /app/docker 내용(이미지 안에서 쓰는 것만 — entrypoint·반입 판정·자산 설치, S6b)
+# /src/opencode = assets/opencode/(opencode 실행 파일 — base가 /usr/local/bin에 넣음). /app/assets에 두 벌 들지 않게 assets/ 밖으로 옮긴다.
+FROM ${BASE} AS src
+COPY . /src
+# assets/(git 밖 반입 자산)가 없는 체크아웃에서도 COPY가 멈추지 않게 빈 폴더를 만든다(없으면 build_ship.sh가 ALLOW_NO_ASSETS=1을 요구 — S6b).
+RUN mkdir -p /src/appdocker /src/assets/opencode && cp /src/deploy/docker/entrypoint.sh \
+      /src/deploy/release/selftest_gate.sh /src/deploy/release/known_fail.txt /src/deploy/release/assets.py /src/appdocker/ \
+    && mv /src/assets/opencode /src/opencode && chmod -R 755 /src/opencode
+
 FROM ${BASE} AS base
 
 # APT=1: 시스템 패키지를 apt로(인터넷·사내 미러 필요). 폐쇄망이면 이미 넣어 둔 기반 이미지를 BASE로 주고 APT=0.
@@ -60,13 +71,23 @@ RUN set -e; n=$(ls /tmp/wheels | grep -c '\.whl$' || true); \
     if [ "$PIP_OFFLINE" = "1" ] || { [ "$PIP_OFFLINE" = "auto" ] && [ "$n" -gt 0 ]; }; then echo "--no-index --find-links /tmp/wheels" > /tmp/pipopt; else : > /tmp/pipopt; fi; \
     pip install --no-cache-dir $(cat /tmp/pipopt) -r /tmp/requirements-core.txt
 
-# 소스(복사 원본, .dockerignore 허용 목록이라 코드 폴더 3개 + resources/ + deploy/{docker,release} + assets/ 뿐 — 이미지마다 필요한 폴더만 골라 COPY --from=src)
-# /src/appdocker = 이미지 /app/docker 내용(이미지 안에서 쓰는 것만 — entrypoint·반입 판정·자산 설치, S6b)
-FROM base AS src
-COPY . /src
-# assets/(git 밖 반입 자산)가 없는 체크아웃에서도 COPY가 멈추지 않게 빈 폴더를 만든다(없으면 build_ship.sh가 ALLOW_NO_ASSETS=1을 요구 — S6b).
-RUN mkdir -p /src/appdocker /src/assets && cp /src/deploy/docker/entrypoint.sh \
-      /src/deploy/release/selftest_gate.sh /src/deploy/release/known_fail.txt /src/deploy/release/assets.py /src/appdocker/
+# 개발 도구(네 이미지 모두 — 개발 서버 SSH 작업 공간 `devbox`와 컨테이너 안 점검용). 앱은 이 도구를 부르지 않는다.
+#   APT=0(사내 기반 이미지)이면 아래 패키지(특히 tini·openssh-server)가 BASE에 이미 있어야 한다 — ENTRYPOINT가 tini를 부름.
+#   pip 판은 requirements-dev.txt(PC 개발 도구와 같은 파일 — 의존성 지문 DEPS_HASH에는 안 듦) + uv. 오프라인(휠) 빌드면 wheels/에 이 휠도 둔다.
+#   opencode(선택 — assets/opencode/opencode, 없으면 빼고 빌드): 내부망 모델만(외부 모델 목록 받기·자동 업데이트 끔 — devbox/opencode.json).
+RUN if [ "$APT" = "1" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends \
+        openssh-server openssh-client telnet git curl wget iputils-ping dnsutils netcat-openbsd net-tools procps lsof \
+        vim nano zip unzip tree file ripgrep sqlite3 tini tmux \
+      && rm -rf /var/lib/apt/lists/*; fi \
+    && mkdir -p /run/sshd && chmod 755 /run/sshd
+ARG UV_VERSION=0.11.26
+COPY requirements-dev.txt /tmp/
+RUN pip install --no-cache-dir $(cat /tmp/pipopt) uv==${UV_VERSION} -r /tmp/requirements-dev.txt
+COPY --from=src /src/opencode/ /usr/local/bin/
+COPY deploy/docker/devbox/ /etc/devbox/
+RUN sed -i 's/\r$//' /etc/devbox/* && chmod 755 /etc/devbox/dev_entry.sh && ln -s /etc/devbox/profile.sh /etc/profile.d/zz-devbox.sh
+ENV OPENCODE_DISABLE_MODELS_FETCH=1 OPENCODE_DISABLE_AUTOUPDATE=1
 
 # 파싱 엔진·OCR 의존성(무거움) — 코드 바뀌어도 다시 설치 안 되게 코드 복사 전에
 FROM base AS parse-deps
@@ -102,7 +123,9 @@ RUN echo "mcp-server-runtime ${APP_VERSION:-?} ${VCS_REF:-?}" > /app/docker/imag
 LABEL org.opencontainers.image.version=$APP_VERSION org.opencontainers.image.revision=$VCS_REF org.opencontainers.image.title=mcp-server-runtime
 USER rag
 VOLUME ["/app/output"]
-ENTRYPOINT ["/app/docker/runtime_entry.sh"]
+# dev_entry.sh: `devbox`면 SSH 작업 공간, 그 밖은 APP_ENTRY(이 이미지의 시작 스크립트)로 그대로. tini -s — --init 없이 띄워도 고아 프로세스를 거둠
+ENV APP_ENTRY=/app/docker/runtime_entry.sh
+ENTRYPOINT ["/usr/bin/tini", "-s", "--", "/etc/devbox/dev_entry.sh"]
 CMD ["help"]
 
 # ── 검색 MCP(mcp-server, S6b — 옛 data-retrieval·타깃 retrieval) — mcp_server + common만(파싱·구조화·적재 없음 — 명령용 pipeline/cli.py만, S4) ──
@@ -127,7 +150,8 @@ RUN [ -z "$APP_VERSION" ] || [ "$APP_VERSION" = "$(tr -d ' \r\n' < /app/deploy/V
     || { echo "APP_VERSION($APP_VERSION) ≠ VERSION 파일" >&2; exit 1; }
 LABEL org.opencontainers.image.version=$APP_VERSION org.opencontainers.image.revision=$VCS_REF org.opencontainers.image.title=mcp-server
 USER rag
-ENTRYPOINT ["/app/docker/entrypoint.sh"]
+ENV APP_ENTRY=/app/docker/entrypoint.sh
+ENTRYPOINT ["/usr/bin/tini", "-s", "--", "/etc/devbox/dev_entry.sh"]
 CMD ["help"]
 
 # ── 파이프라인 실행 이미지(data-pipeline-runtime — op-06, 코드 없음) — RapidOCR 모델·LibreOffice는 이 단계에 ──
@@ -167,7 +191,9 @@ RUN echo "data-pipeline-runtime ${APP_VERSION:-?} ${VCS_REF:-?}" > /app/docker/i
 LABEL org.opencontainers.image.version=$APP_VERSION org.opencontainers.image.revision=$VCS_REF org.opencontainers.image.title=data-pipeline-runtime
 USER rag
 VOLUME ["/app/output"]
-ENTRYPOINT ["/app/docker/runtime_entry.sh"]
+# dev_entry.sh: `devbox`면 SSH 작업 공간, 그 밖은 APP_ENTRY(이 이미지의 시작 스크립트)로 그대로. tini -s — --init 없이 띄워도 고아 프로세스를 거둠
+ENV APP_ENTRY=/app/docker/runtime_entry.sh
+ENTRYPOINT ["/usr/bin/tini", "-s", "--", "/etc/devbox/dev_entry.sh"]
 CMD ["help"]
 
 # ── 파이프라인(data-pipeline, S6b D-020 — 옛 data-parsing+data-structure) — pipeline 전체(엔진·검토 루프·구조화·적재·게시) + common ──
@@ -193,5 +219,6 @@ RUN [ -z "$APP_VERSION" ] || [ "$APP_VERSION" = "$(tr -d ' \r\n' < /app/deploy/V
     || { echo "APP_VERSION($APP_VERSION) ≠ VERSION 파일" >&2; exit 1; }
 LABEL org.opencontainers.image.version=$APP_VERSION org.opencontainers.image.revision=$VCS_REF org.opencontainers.image.title=data-pipeline
 USER rag
-ENTRYPOINT ["/app/docker/entrypoint.sh"]
+ENV APP_ENTRY=/app/docker/entrypoint.sh
+ENTRYPOINT ["/usr/bin/tini", "-s", "--", "/etc/devbox/dev_entry.sh"]
 CMD ["help"]

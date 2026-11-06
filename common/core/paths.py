@@ -44,7 +44,6 @@ PKG_ROOT = DEPLOY_ROOT / "common"  # 공용 패키지 루트 — 하위 프로�
 PARSING_ROOT = (
     DEPLOY_ROOT / "pipeline" / "transform" / "parse"
 )  # 엔진 폴더(engines/)의 부모 — parse_engines.engine_code_fp가 이 기준 상대 경로('engines/…')로 해시(바꾸면 엔진 지문이 바뀜)
-E2E_ROOT = DEPLOY_ROOT / "validation" / "e2e"  # PC 전용 평가 도구·triple_extract 지시서(이미지에는 없음)
 # 코드가 읽는 데이터(지시서·설정 기본값·원천 표·어휘) — 패키지들과 같은 자리(PC=저장소 루트/resources,
 # 이미지=/app/deploy/resources), 모든 이미지에 폴더째 들어간다.
 RES_ROOT = DEPLOY_ROOT / "resources"
@@ -90,28 +89,21 @@ def resolve_agent_dir(agent_id):
     """agent 지시서 패키지 폴더를 이름으로 찾는 한 곳 — agent 실행·지시서 읽기가 모두 여기를 거쳐, 새 agent_id를
     추가할 때 여기만 고치면 된다.
 
-    검색 순서는 고정: ① resources/prompts/common ② resources/prompts/pipeline ③ resources/prompts/mcp
-    ④ validation/e2e(PC 전용 — triple_extract) ⑤ valid_env/answer_test(PC 전용 답변 점검 agent rag_qa)
-    ⑥ dev_tools/unit_test/fixtures(시험 고정물 example_agentic* — 운영 agent_id와 이름이 겹치지 않음).
+    검색 순서는 고정: ① resources/prompts/common ② resources/prompts/pipeline
+    ③ valid_env/answer_test(PC 전용 답변 점검 agent rag_qa).
     이름 충돌이 없어 순서가 결과를 바꾸지는 않지만, 결정적이어야 캐시·로그가 재현된다. 패키지를 import하지 않고
     Path만 보므로 이미지에 없는 폴더는 `cand.is_dir()`이 False가 되어 저절로 건너뛴다.
     다 없으면 FileNotFoundError."""
     for base in (
         RES_ROOT / "prompts" / "common",
         RES_ROOT / "prompts" / "pipeline",
-        RES_ROOT / "prompts" / "mcp",
-        E2E_ROOT,
         PROJ_ROOT / "valid_env" / "answer_test",
-        PROJ_ROOT / "dev_tools" / "unit_test" / "fixtures",
     ):
         cand = base / agent_id
         # __pycache__만 남은 폴더(배포 덧씌우기 뒤 등)는 건너뛰고, 실제 파일이 하나라도 있는 폴더만 후보로
         if cand.is_dir() and any(f.name != "__pycache__" for f in cand.iterdir()):
             return cand
-    raise FileNotFoundError(
-        f"agent 패키지를 못 찾음: {agent_id!r} (resources/prompts/{{common,pipeline,mcp}}·validation/e2e·"
-        "dev_tools/unit_test/fixtures 다 없음)"
-    )
+    raise FileNotFoundError(f"agent 패키지를 못 찾음: {agent_id!r} (resources/prompts/{{common,pipeline}}·valid_env/answer_test 다 없음)")
 
 
 def resolve_run_dir(run_root, run_dir=None, *, new=True, label=None, rel_hint=None):

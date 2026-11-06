@@ -309,5 +309,20 @@ def test_pick_pages():
     assert pick_pages(0, False, [], None) == set()  # 스캔 쪽 없음 — 쪽 VLM 호출 없음
 
 
+def test_page_text_looped():
+    """0.3.0 엔진 비교 — 쪽 VLM이 같은 줄을 되풀이하면(흐름도 PDF에 빈 표 줄 4,061줄) 그 쪽 글을 비워 글자층을 지킨다."""
+    from unittest import mock
+
+    from pipeline.transform.figures import scan_page_vlm as vp
+
+    loop = "| a | b |\n" + "| | |\n" * (vp.LOOP_LINES_MAX + 1)
+    ok = "| a | b |\n" + "| | |\n" * vp.LOOP_LINES_MAX + "\n\n끝"
+    with (
+        mock.patch.object(vp, "page_targets", return_value={1, 2}),
+        mock.patch.object(vp, "transcribe", return_value=[(1, loop, {}), (2, ok, {})]),
+    ):
+        assert vp.page_text_pages("x.pdf") == [(1, "", {"looped": True}), (2, ok, {})]
+
+
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통
     selftest()

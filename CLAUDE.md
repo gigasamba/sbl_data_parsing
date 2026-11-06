@@ -27,7 +27,7 @@
 **모듈 경계(자동 점검 — `python -m common.check.check_modules`):**
 - `pipeline`과 `mcp_server`는 서로 import하지 않는다. 함께 쓸 코드는 `common`으로 올린다.
 - 앱(`common`, `pipeline`, `mcp_server`)은 `validation`과 `tests`를 import하지 않는다. PC에서만 쓰는 기능은 `importlib`에 모듈 이름 문자열을 넘겨 불러온다.
-- `pipeline` 안에서는 extract → transform → load 방향을 지킨다. 거꾸로 import하지 않는다(아직 자동 점검은 없고 코드 리뷰에서 확인한다).
+- `pipeline` 안에서는 extract → transform → load 방향을 지킨다. 거꾸로 import하지 않는다(⑫ "단계 방향" — 함수 안 늦은 import도 센다).
 - 설정 값을 환경변수에서 직접 읽지 않는다(⑩ "os.environ 0", ⑪ "자식 프로세스 env에 설정 이름 0" — §3).
 - `mcp_server/routers`에는 도구 등록만 두고 로직은 `services`에, 출력 구조는 `schemas`에 둔다.
 
@@ -142,7 +142,7 @@ export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자�
 .venv/bin/python -m common.config.sample --check            # sample이 설정 모델과 같은지
 .venv/bin/python -m pipeline.cli selftest                   # 서버 배포 테스트(tests/server) — 일부만: --only <이름 일부>
 .venv/bin/python -m pytest -q tests/                         # 서버 배포 테스트 + 일반 테스트(tests/general만도 가능)
-.venv/bin/python -m common.store.db.dbtool check --target all   # 테이블 정의 ↔ 실제 DB(차이가 있거나 최신 버전이 아니면 종료 코드 1)
+.venv/bin/python -m common.store.db.dbtool check --target all   # DB 판 상태(최신 버전이 아니면 종료 코드 1)
 ```
 
 ### 6-3. 테스트 기준선과 알려진 실패
@@ -164,7 +164,7 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 - 검증 페이지: `validation/search_ui/start_mcp.sh`와 `start_ui.sh`로 띄운다(설정은 루트 `settings.yaml` 하나 — `search.server`, `dev.search_ui`, PG 접속 `required.pg`, 외부 임베딩 `dev.models.embed.embed_allow_external` — README §4-2 예시). 주소는 http://127.0.0.1:8791 이다. 자세한 내용은 README §4-6.
 - 서버에 올릴 이미지를 빌드하기 전에 `assets/`를 채운다(`PYTHONPATH=. python deploy/release/assets.py pack` — [release-and-patch §5-6](docs/operations/release-and-patch.md#5-6-반입-자산assets-준비--이미지-빌드-전)).
 - 이미지: `ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh` → `bash deploy/release/selftest_gate.sh docker run --rm data-pipeline:<태그> selftest`(판정은 종료 코드가 아니라 `[판정]` 줄로 한다). PC 시험 빌드는 태그를 작업마다 새로 붙인다(TAG를 빼면 `data-pipeline:<VERSION>` — 배포용 버전 태그이고, 이미 있으면 `build_ship.sh`가 멈춘다). push와 서버 배포는 사람이 한다.
-- **배포 단계마다 이미지와 코드의 구성이 다르다**(README §5-0). ① PC(local) → 개발 서버(dev): 코드가 없는 실행 이미지(`IMAGE_TARGET=pipeline-runtime|mcp-runtime`) + PC 커밋의 코드 묶음을 개발 서버 코드 폴더(`CODE_DIR`/`live`)로 마운트한다. ② 개발 서버 → 운영 서버(prd): 개발 서버에서 `deploy/release/bake_prod_image.sh`로 같은 실행 이미지 + 시험한 코드 폴더를 묶어 코드가 든 이미지를 만든다(코드 폴더 없이 실행). Dockerfile의 코드 포함 타깃(`pipeline`·`mcp`)은 PC 시험과 비상용이다.
+- **배포 단계마다 이미지와 코드의 구성이 다르다**(README §5-0). ① PC(local) → 개발 서버(dev): 코드가 없는 실행 이미지(`IMAGE_TARGET=pipeline-runtime|mcp-runtime`) + PC 커밋의 코드 묶음을 개발 서버 루트에 푼 코드 폴더를 `/app/deploy`에 읽기 전용으로 마운트한다(`host_ctl.sh`가 자기 코드 폴더를 `CODE_DIR`로 잡음). ② 개발 서버 → 운영 서버(prd): 개발 서버에서 `deploy/release/bake_prod_image.sh`로 같은 실행 이미지 + 시험한 코드 폴더를 묶어 코드가 든 이미지를 만든다(코드 폴더 없이 실행). Dockerfile의 코드 포함 타깃(`pipeline`·`mcp`)은 PC 시험과 비상용이다.
 
 ---
 
@@ -182,7 +182,7 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 
 - 기능 요건·미개발 항목은 [docs/PRD.md](docs/PRD.md)와 `docs/prd/<카테고리>.md`에 있다(§10).
 - 문서 지도는 [docs/INDEX.md](docs/INDEX.md)다. 문서를 추가하거나 옮기면 같은 커밋에서 이 지도를 고친다. 새 문서는 꼭 필요할 때만 만들고, 먼저 기존 문서의 섹션으로 넣을 수 있는지 본다.
-- 서버나 사람이 확인해야 하는 일(저장소 안에서 끝낼 수 없는 것)은 [refactor.md](docs/refactoring/refactor.md)에 `C-xx`로 추가하고, 배포 순서는 [release-and-patch.md](docs/operations/release-and-patch.md) §8(0.2.0 배포 — 사람이 할 일)에 둔다.
+- 서버나 사람이 확인해야 하는 일(저장소 안에서 끝낼 수 없는 것)은 [refactor.md](docs/refactoring/refactor.md)에 `C-xx`로 추가하고, 운영 중인 서버를 새 판으로 올리는 순서는 [upgrade-guide.md](docs/operations/upgrade-guide.md)에 둔다.
 - 결정 사항(`D-xxx`)·미정 사항은 PRD 행과 refactor.md에 둔다(옛 결정 장부는 [docs/history/refactor_plan.md](docs/history/refactor_plan.md) 7·8절). 지난 기록은 `docs/history/`에 둔다. 운영 절차는 `docs/operations/`(서버 가이드, 릴리스, 설정 가이드)에 있다.
 
 ## 9. Claude로 작업할 때

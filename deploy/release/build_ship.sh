@@ -59,6 +59,10 @@ if [ "${IMAGE_TARGET%-runtime}" = pipeline ] && ! ls assets/rapidocr/*.onnx >/de
   [ "${ALLOW_NO_ASSETS:-0}" = 1 ] && echo "[경고] assets/rapidocr 없음 — ALLOW_NO_ASSETS=1로 계속(rapidocr_ko가 첫 실행에 모델을 받으려다 실패·폐쇄망이면 그대로 실패)" \
     || { echo "[오류] assets/rapidocr/*.onnx 없음 — Git worktree에서 빌드할 때 메인 체크아웃의 assets/를 먼저 복사하세요(Git 제외 자산, image-patch-process.md §4). 계속하려면 ALLOW_NO_ASSETS=1"; exit 2; }
 fi
+if [ ! -f assets/opencode/opencode ]; then   # 개발 작업 공간의 opencode(선택 — 네 이미지 모두 base 단계에서 넣음)
+  [ "${ALLOW_NO_ASSETS:-0}" = 1 ] && echo "[경고] assets/opencode/opencode 없음 — ALLOW_NO_ASSETS=1로 opencode 없이 빌드" \
+    || { echo "[오류] assets/opencode/opencode 없음 — assets.py pack으로 채우거나(release-and-patch §5-6) opencode 없이 빌드하려면 ALLOW_NO_ASSETS=1"; exit 2; }
+fi
 
 if [ "$TAG_DEFAULT" = 1 ] && [ "${FORCE_TAG:-0}" != 1 ] && $DOCKER image inspect "$TAG" >/dev/null 2>&1; then
   echo "[오류] 이미 있는 태그 $TAG — VERSION을 올리거나(D-036) TAG=<다른 태그>로 빌드(다시 만들 때만 FORCE_TAG=1)" >&2; exit 2

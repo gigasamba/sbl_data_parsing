@@ -1,4 +1,4 @@
-"""청킹(구조화 모듈) — 대표 결과 본문 → 청크(구조·고정·문장·쪽 단위) + 위치(쪽·줄·문자 범위·절) · 그래프용 개체 정규식."""
+"""청킹(구조화 모듈) — 대표 결과 본문 → 청크(구조·고정·문장·쪽 단위) + 위치(쪽·줄·문자 범위·절)."""
 
 import json
 import re
@@ -7,12 +7,6 @@ from pathlib import Path
 from common.core.meaning import strip_page_numbers
 from common.core.repfmt import _SECTION, locate  # noqa: F401 — 쪽·줄 위치 규칙(파싱 결과 형식)
 from pipeline import config as pc  # pipeline 칸 CHUNK_*
-
-RE_ID = re.compile(r"\b[A-Z]{1,4}-\d{2,}(?:-\d+)?\b")
-
-RE_EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
-
-RE_DATE = re.compile(r"\b\d{4}[-./]\d{1,2}[-./]\d{1,2}\b")
 
 
 def load_parse_doc(parse_dir, engine, doc):

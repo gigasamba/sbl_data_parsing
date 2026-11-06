@@ -115,6 +115,24 @@
 |---|---|---|---|---|---|---|
 | `FAQ/74e7751a-97c6-4e17-a73e-85bbd890188f/CDO questionnarie library.xlsx` | xlsx | - | 시험용 FAQ 묶음(사용자 11-01 — 실제 회사 자료 아님) — FAQ 스키마(`faq`, `faq_group`)·FAQ 통째 교체(pl-41) 확인용 | - | ok | pl-28·pl-41 |
 
+## 어려운 경우·빠진 형식 보강 (9건 — 11-05 추가)
+
+위 문서에 없던 형식(옛 오피스 `.doc`·`.xls`·`.ppt`, `.jpg`, `.csv`)과 어려운 경우(특수문자, 그림 위 글자, 그림으로만 있는 흐름도, 한글·괄호·공백이 든 파일 이름)를 채운 합성 문서다. 내용은 모두 가상이다(한빛 바이오솔루션·Argen·Luminexis). gold는 아직 없다.
+
+| 파일 (s3_key) | 형식 | 왜 있나 | 예상 결과 |
+|---|---|---|---|
+| `CRMS/2822b5f4-2ff4-5770-8245-b2669b04198c/special_chars_ko.docx` | docx | 특수문자 — 단위(㎎·㎖·℃·µ), 부등호(≤·≥·±), 원문자(①·㉠), 전각·반각, 한자, 그리스 문자, 이모지, 줄바꿈 없는 공백·폭 없는 공백, 위·아래 첨자, 표 칸 안 특수문자 | partial |
+| `CRMS/99db9330-3721-5eeb-9163-8a16fd1142dc/diagram_image_only.docx` | docx | 도식도가 그림으로만 있음 — 흐름도 글자(단계·SOP 번호·온도)는 그림 안에만 있고 본문에는 캡션뿐. 그림 VLM 없이는 흐름 내용이 안 나옴 | partial |
+| `CRMS/a2586335-7157-5715-8839-828161b6de38/overlay_text_slide.pptx` | pptx | 이미지 위 글자 — 1쪽: 사진 전체를 덮은 그림 위에 글상자, 사진 속 글자는 그림에만 있음, 발표자 메모. 2쪽: 흐름도 그림 + 기본 차트(선) + 표 | partial |
+| `CRMS/c8c67ad5-f790-5d9d-98d6-2916e3e1c123/whiteboard_photo.jpg` | jpg | 사진 속 글자 — 화이트보드 사진(기울어짐·흐림·줄무늬 배경), 한글·원문자·부등호 | partial |
+| `CRMS/705137f5-28a5-5e8d-b531-fd4b1fa8c6e7/qc_export_cp949.csv` | csv | 한글 깨짐 — cp949로 저장된 CSV(CRLF, 따옴표·쉼표가 든 칸). UTF-8로만 읽으면 깨짐 | partial |
+| `CRMS/ecc49815-5f6c-5dbd-94e1-cedf58b8bf39/legacy_report.doc` | doc | 암호 없는 옛 Word 문서(표 포함) — `encrypted_ole.doc`의 정상 대조군 | ok |
+| `CRMS/702afbc7-4ac8-518a-b48a-6f6685f1321f/legacy_sheet.xls` | xls | 옛 Excel — 수식 칸(AVERAGE)과 숨긴 시트 | partial |
+| `CRMS/d951c578-98b3-5021-bf1b-e3b7bdfdb202/legacy_deck.ppt` | ppt | 옛 PowerPoint — 제목·글머리 목록 | ok |
+| `SFDC/55a0c399-b862-556c-bed2-7873a128b7a2/견적서(최종)_v2 [검토].pdf` | pdf | 파일 이름에 한글·괄호·대괄호·공백 + 글자 위에 겹친 직인 그림, 흐름도 그림 위에 쓴 글자 | partial |
+
+아직 없는 형식: `.msg`·`.hwpx`·`.html`·`.mht`(PC에서 합성 도구로 만들기 어려움 — 실제 견본이 생기면 더한다), `.hwp`(지원 전).
+
 ## 알려진 이슈 요약 (백로그 기준, 이 문서들에 닿는 것만)
 
 | ID | 증상 | 해당 문서 | 상태 |

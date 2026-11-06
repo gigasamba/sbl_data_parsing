@@ -5,7 +5,7 @@
   --source <서버 폴더>               같은 서버 폴더(샘플 데이터) — 그대로 씀
   --source rdb:csv:<경로>            문서 위치 표(csv — run_pipeline이 목록 파일에서 만든 batch.csv)의 키만 Object Storage에서 staging으로 받음
 
-Object Storage 원본 처리: 받은 파일의 sha256은 중복 제외가 manifest에, 대표 결과가 나온 문서는 parse 뒤 처리 기록만 남김(finish). 원본 삭제는 게시가 끝난 뒤 run_pipeline drop_original 한 곳.
+Object Storage 원본 처리: 받은 파일의 sha256은 받기(resolve)가 한 번 구해 manifest에, 대표 결과가 나온 문서는 parse 뒤 처리 기록만 남김(finish). 원본 삭제는 게시가 끝난 뒤 run_pipeline drop_original 한 곳.
 처리한 객체(ETag 또는 (key, 증분값))는 output/parse/_source/processed.jsonl에 기록 → 다음 실행에서 다시 받지 않음. 실패한 문서는 남겨 다음 실행이 다시 시도.
 검색 결과의 원본 위치(source_uri) = s3://버킷/키(SOURCE_MANIFEST로 common.core.ids.source_uri가 읽음).
 접속: OS_ENDPOINT · OS_ACCESS_KEY · OS_SECRET_KEY · OS_REGION(기본 us-east-1) · OS_VERIFY_TLS(기본 1, 사내 CA면 경로) — 비밀값은 settings.yaml에만.
@@ -24,13 +24,14 @@ from pathlib import Path
 from common.config import settings as C
 from common.core import span as SP  # 성능 span
 from common.core.console import utf8_stdout
-from common.core.contract import jl
+from common.core.contract import file_hash, jl
 from common.core.contract import safe_path_join as _safe_join  # 경로 잇기(load 단계와 같은 함수)
-from common.core.paths import atomic_write_text
+from common.core.paths import atomic_write_text, tmp_path_for
 from common.store import objectstore
 from pipeline import config as pc
 from pipeline.extract import candidate_pick as CP
 from pipeline.shared.runtrace import skip_event
+from pipeline.shared.srcsha import sha_of, stat_of
 
 
 def _read_manifest(state):
@@ -44,8 +45,14 @@ def _write_manifest(state, rows):
     return atomic_write_text(state / "manifest.jsonl", "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
 
 
+def _hashed(f):
+    """받은 파일의 sha256(문서마다 여기서 한 번) + 해시한 파일의 [크기, 고친 시각 ns] — manifest 칸. 뒤 단계·프로세스는
+    srcsha.sha_of로 이 값을 다시 쓴다(같은 파일일 때만)."""
+    return {"sha256": file_hash(f), "sha256_stat": stat_of(f)}
+
+
 # ── staging(미리 받기) — 원본을 받는 유일한 자리 ─────────────────────────────
-# Object Storage 원본은 SOURCE_STAGING/<sha1(버킷|키)>.bin으로 한 번만 받는다(같은 크기 파일이 이미 있으면 다시 받지 않음 — 완성된 파일만 그 이름으로 보임).
+# Object Storage 원본은 SOURCE_STAGING/<sha1(버킷|키)>.bin으로 한 번만 받는다(ETag가 같은 판이 이미 있으면 다시 받지 않음 — 완성된 파일만 그 이름으로 보임).
 # 파싱 입력 폴더(_source_files/<이름>)에는 하드 링크로 놓는다(같은 볼륨 — 사본·두 번째 다운로드 없음). staging 파일은 게시가 끝난 뒤
 # run_pipeline이 지운다(파싱·게시 실패면 남아 다음 실행이 다시 받지 않음).
 
@@ -63,8 +70,8 @@ def _staging_path(wd, bucket, key):
 
 
 def download(rows, state, workers=1):
-    """고른 행(candidate_pick.rdb_pick 값)의 원본을 staging에 받는다 — 같은 크기(ContentLength) 파일이 이미 있으면 건너뜀(크기가 다르면
-    새 판으로 보고 다시 받음). RDB 크기와의 불일치는 state/size_mismatch.log에 참고 기록만. 파일(=문서) 1건 = extract.download span 1행.
+    """고른 행(candidate_pick.rdb_pick 값)의 원본을 staging에 받는다 — 받아 둔 파일의 ETag(옆 `<이름>.etag`)가 지금
+    ETag와 같을 때만 다시 쓰고, 다르거나 ETag가 없으면 다시 받음(크기만 같은 새 판을 옛 파일로 파싱하지 않게). RDB 크기와의 불일치는 state/size_mismatch.log에 참고 기록만. 파일(=문서) 1건 = extract.download span 1행.
     반환: 받지 못한 행 수."""
     wd = _staging_dir()
     wd.mkdir(parents=True, exist_ok=True)
@@ -85,8 +92,10 @@ def download(rows, state, workers=1):
         on_wire = True  # head·전송 중의 실패는 원인이 외부(스토리지·네트워크)라 err_kind=external — botocore 예외는 이름으로 못 가림
         try:
             t_head = time.monotonic()
-            actual = cli.head_object(Bucket=o["bucket"], Key=o["key"]).get("ContentLength")
+            head = cli.head_object(Bucket=o["bucket"], Key=o["key"])
+            actual, etag = head.get("ContentLength"), head.get("ETag")
             head_ms = (time.monotonic() - t_head) * 1000
+            tag = p.with_suffix(".etag")  # 받은 판의 ETag — 다시 쓸지는 이 값으로만(크기만 같은 새 판을 옛 파일로 파싱하지 않게)
             if o["size"] is not None and actual is not None and int(actual) != int(o["size"]):
                 # RDB file_size가 Object Storage와 어긋날 수 있어 필수 비교에서 뺀다 — 문서 식별은 키, 내용은 sha256. 크기는 참고 기록만.
                 rec = {"doc_id": o["doc_id"], "bucket": o["bucket"], "key": o["key"], "size_rdb": o["size"], "size_store": actual}
@@ -96,7 +105,8 @@ def download(rows, state, workers=1):
                     f"[source] 크기 불일치(참고만 — 받기 진행) — RDB({o['size']}) ≠ Object Storage({actual}): {o['bucket']}/{o['key']}",
                     flush=True,
                 )
-            if p.exists() and actual is not None and p.stat().st_size == int(actual):  # 이미 받아 둠(앞선 실행이 게시 전에 멈춤)
+            # 같은 판을 받아 둠(앞선 실행이 게시 전에 멈춤)
+            if etag and p.exists() and tag.is_file() and tag.read_text(encoding="utf-8") == etag:
                 sp.add(head_ms=round(head_ms), reused=1)
                 return True
             t_dl = time.monotonic()
@@ -104,6 +114,10 @@ def download(rows, state, workers=1):
             download_ms = (time.monotonic() - t_dl) * 1000
             on_wire = False
             os.replace(tmp, p)  # 그 이름으로 보이는 파일은 항상 완전한 내용
+            if etag:
+                atomic_write_text(tag, etag)
+            else:
+                tag.unlink(missing_ok=True)
             size = int(actual) if actual is not None else o["size"]
             if size is not None:
                 sp.set(file_bytes=size)
@@ -162,6 +176,7 @@ def _rdb_plan(table, state, limit=0, done=frozenset()):
             "content_version_id": o.get("content_version"),  # FileStorageMap 고유 칸
             "created_at": o.get("created_at"),  # 원천 등록 시각 → gold_bundle → gold doc.created_at
             "source_system": _derive_source_from_key(o["key"]),
+            **_hashed(f),
         }  # publish_parse_result가 문서별로 이 값 사용(없으면 --source-system 폴백)
 
     print(f"[source] rdb:{table} · 대상 {len(names)}개(끝난 문서·처리 기록·지원 안 함 {n_seen}개 제외)", flush=True)
@@ -206,7 +221,8 @@ def _folder_tree(src, files, out, state):
     man = []
     for r in rows:
         name = name_of[r["key"]]
-        shutil.copy2(r["path"], _safe_join(local, name))
+        f = _safe_join(local, name)
+        shutil.copy2(r["path"], f)
         man.append(
             {
                 "file_name": name,
@@ -214,6 +230,7 @@ def _folder_tree(src, files, out, state):
                 "key": r["key"],
                 "original_filename": r["filename"],
                 "source_system": _derive_source_from_key(r["key"]) or CP._known_source(r["key"].split("/", 1)[0]),
+                **_hashed(f),
             }
         )
     C.put(SOURCE_MANIFEST=str(_write_manifest(state, man)))  # rdb 배치와 같은 인계(원본 위치 주소 — contract.make_source_uri)
@@ -223,7 +240,7 @@ def _folder_tree(src, files, out, state):
 
 
 def finish(state, rep_index):
-    """Object Storage에서 받은 원본: 대표 결과가 나온 문서를 처리 완료로 기록한다(processed.jsonl). sha256은 중복 제외(`_dedup`)가
+    """Object Storage에서 받은 원본: 대표 결과가 나온 문서를 처리 완료로 기록한다(processed.jsonl). sha256은 받기(`_hashed`)가
     manifest에 이미 남겼다(publish_parse_result `plan()`이 로컬 원본 없이도 그 값으로 EDW 행을 씀).
     파일은 지우지 않는다 — 원본 삭제는 게시가 끝난 뒤 run_pipeline `drop_original()` 한 곳."""
     man = _read_manifest(state)
@@ -241,11 +258,13 @@ def finish(state, rep_index):
     print(f"[source] 처리 완료 {len(done)}개 기록(원본은 게시 뒤 drop_original이 지움)", flush=True)
 
 
-def stage_batch(source, out, prepared, limit, run_step, done=frozenset(), scan_rotate=True):
+def stage_batch(source, out, prepared, limit, run_step, done=frozenset(), scan_rotate=True, seen=None):
     """파싱 전 extract 한 번 — 세 단계를 이 순서로 한 번씩:
     1. 받기 — `resolve`: 고르기(처리 기록·지원 안 함·done) → rdb:csv는 staging에 받아(`download`) 파싱 원본 폴더에 놓음.
+       받은 파일의 sha256은 여기서 한 번 구해 manifest에 둔다(뒤 단계는 그 값을 씀).
     2. 중복 제외 — `_dedup`: 받은 파일의 sha256으로 같은 묶음 안 같은 내용은 대표 하나만, 남은 것 중 ParsingMeta에 끝난 다른 원본과
-       sha256이 같으면 뺀다. <out>/dedup/keep.txt = 남은 이름(게시가 빠진 문서를 skipped_dup로 씀).
+       sha256이 같으면 뺀다. seen(이번 실행의 받은 sha256 표지 폴더 — 문서마다 stage를 부르는 서버 흐름)을 주면 이번 실행에서 다른 원본이
+       먼저 받은 sha256도 뺀다(`skip_doc_info`에도 `duplicate_sha256`). <out>/dedup/keep.txt = 남은 이름(게시가 빠진 문서를 skipped_dup로 씀).
     3. 거르기 — filter_and_rotate(only.txt의 이름만 → prepared/): DRM·암호·지원 안 함은 건너뜀 기록만(처리하지 않음), 방향 보정.
     건너뛴 문서는 문서마다 `skip_event` 1행(applog.pipe_event — status=skip, err_kind=doc). 거르기가 뺀 영구 이유(지원 안 함·DRM·암호)는
     applog.skip_doc_info에도(`_record_filtered` — 다음 대상 목록이 뺌, pl-58).
@@ -256,7 +275,7 @@ def stage_batch(source, out, prepared, limit, run_step, done=frozenset(), scan_r
     if not CP.is_remote(source):
         C.put(DOC_DIR=str(Path(local).resolve()))  # 원본 위치 주소 = 이 폴더의 file:///
     (state / "selected.txt").write_text("\n".join(names) + "\n", encoding="utf-8")
-    keep_names = _dedup(local, names, out / "dedup", state)  # 2. 중복 제외
+    keep_names = _dedup(local, names, out / "dedup", state, seen)  # 2. 중복 제외
     only = state / "only.txt"
     only.write_text("\n".join(keep_names) + "\n", encoding="utf-8")
     extra = [] if scan_rotate else ["--no-scan-rotate"]
@@ -265,19 +284,24 @@ def stage_batch(source, out, prepared, limit, run_step, done=frozenset(), scan_r
         raise SystemExit(rc)
     _record_filtered(prepared, state)
     left = [n for n in keep_names if (Path(prepared) / n).exists()]  # 거르기를 지난 것만 파싱
-    only.write_text("\n".join(left) + "\n", encoding="utf-8")
+    if left != keep_names:  # 거르기가 뺀 것이 있을 때만 다시 씀
+        only.write_text("\n".join(left) + "\n", encoding="utf-8")
     return local, left, state, only
 
 
-def _dedup(local, names, dedup_dir, state):
-    """받은 파일의 sha256으로 중복 제외 → 남은 이름(names 순서). 같은 묶음 안(이번 names만 해시 — 폴더에 남은 앞 실행 파일은 안 봄)은
-    deduplication.run_folder(대표 하나), 그다음 ParsingMeta에 파싱된 원본 행(ok·partial — candidate_pick.done_by_sha)이 같은 sha256을 다른 원본 키로
-    가지면 뺀다(같은 키면 그 문서의 재처리라 남김). 원본 키 = manifest의 "key"(없으면 이름 — 게시와 같은 규칙).
+def _dedup(local, names, dedup_dir, state, seen=None):
+    """받은 파일의 sha256으로 중복 제외 → 남은 이름(names 순서). 같은 묶음 안(이번 names만 — 폴더에 남은 앞 실행 파일은 안 봄)은
+    deduplication.run_folder(대표 하나 — 1건 이하면 해시만), 그다음 ParsingMeta에 파싱된 원본 행(ok·partial —
+    candidate_pick.done_by_sha)이 같은 sha256을 다른 원본 키로 가지면 뺀다(같은 키면 그 문서의 재처리라 남김), seen이 있으면 이번 실행에서
+    다른 원본이 먼저 받은 sha256이면 뺀다(`_claim` — skip_doc_info에도). 원본 키 = manifest의 "key"(없으면 이름 — 게시와 같은 규칙).
+    sha256은 받기가 manifest에 남긴 값(srcsha.sha_of — 없으면 한 번 구함).
     keep.txt = 폴더 파일 중 이번에 중복으로 뺀 것만 없는 목록(게시가 빠진 것만 skipped_dup로 쓰고, 앞 실행의 남은 문서는 그대로 둠)."""
     from pipeline.extract import deduplication as dedup
 
-    batch = set(names)
-    keep, rows, _ = dedup.run_folder(local, dedup_dir, batch, write_keep=False)  # keep.txt는 아래에서 한 번
+    if len(names) <= 1:  # 묶을 것이 없음(서버 stage는 문서 하나씩) — 해시만, 지문 캐시·groups.csv 안 씀
+        keep, rows = {n: sha_of(Path(local) / n) for n in names}, []
+    else:
+        keep, rows, _ = dedup.run_folder(local, dedup_dir, set(names), write_keep=False)  # keep.txt는 아래에서 한 번
     rep = {r["group"]: r["file"] for r in rows if r["representative"]}
     dropped = set()
     for r in rows:
@@ -285,27 +309,57 @@ def _dedup(local, names, dedup_dir, state):
             skip_event(r["file"], "dup_batch", dup_of=rep[r["group"]])
             dropped.add(r["file"])
     man = _read_manifest(state)
-    key_of = {n: r.get("key") for n, r in man.items()}
+    key_of = {n: r.get("key") or n for n, r in man.items()}
     picked = [n for n in names if n in keep]
-    seen = CP.done_by_sha({keep[n] for n in picked})
-    left = []
+    done = CP.done_by_sha({keep[n] for n in picked})
+    left, run_dup = [], []
     for n in picked:
-        hit = seen.get(keep[n])
-        if hit and hit[0] != (key_of.get(n) or n):
+        key, hit = key_of.get(n, n), done.get(keep[n])
+        if hit and hit[0] != key:
             skip_event(n, "dup_done", dup_of=hit[0])
             dropped.add(n)
+            continue
+        first = _claim(seen, keep[n], key) if seen is not None else None
+        if first:
+            skip_event(n, "dup_run", dup_of=first)
+            dropped.add(n)
+            run_dup.append((n, key))
         else:
             left.append(n)
-    if man:  # 남긴 문서의 sha256(방금 구함) — 원본이 지워진 뒤 게시가 이 값으로 EDW 행을 씀(finish·publish)
-        for n in left:
-            if n in man:
-                man[n] = {**man[n], "sha256": keep[n]}
-        _write_manifest(state, man.values())
+    if run_dup:  # 같은 내용을 이미 파싱하는 원본이 있음 — 다음 대상 목록에서도 뺌
+        from pipeline.extract import skip_docs
+
+        skip_docs.record([_skip_row(k, n, "duplicate_sha256") for n, k in run_dup])
+    Path(dedup_dir).mkdir(parents=True, exist_ok=True)
     rest = sorted(
         f.name for f in Path(local).iterdir() if f.is_file() and not CP._hidden(f) and f.name != ".gitkeep" and f.name not in dropped
     )
     (Path(dedup_dir) / "keep.txt").write_text("\n".join(rest) + "\n", encoding="utf-8")
     return left
+
+
+def _claim(seen, sha, key):
+    """이번 실행에서 이 sha256을 처음 받은 원본이면 표지 `<seen>/<sha256>`(내용 = 원본 키)를 만들고 None, 다른 원본이 먼저 받았으면 그 원본 키.
+    표지는 다 쓴 임시 파일을 os.link로 붙여 만든다 — 동시에 받는 stage 둘 중 하나만 이기고, 읽는 쪽은 늘 다 쓴 내용을 본다.
+    같은 원본(받기 다시 시도)이면 None."""
+    seen = Path(seen)
+    seen.mkdir(parents=True, exist_ok=True)
+    f = seen / sha
+    tmp = tmp_path_for(f)
+    tmp.write_text(key, encoding="utf-8")
+    try:
+        os.link(tmp, f)
+        return None
+    except FileExistsError:
+        first = f.read_text(encoding="utf-8")
+        return None if first == key else first
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _skip_row(key, name, reason):
+    """skip_docs.record 행 하나 — 원본 키에서 원천 이름을 얻는다."""
+    return {"source_key": key, "source_system": CP.source_of(key), "file_name": name, "reason": reason}
 
 
 def _record_filtered(prepared, state):
@@ -322,17 +376,13 @@ def _record_filtered(prepared, state):
         rows = list(csv.DictReader(fh))
     man = _read_manifest(state)
     keys = {r["file"]: (man.get(r["file"]) or {}).get("key") or r["file"] for r in rows}
-    skip_docs.record(
-        [
-            {"source_key": keys[r["file"]], "source_system": CP.source_of(keys[r["file"]]), "file_name": r["file"], "reason": r["reason"]}
-            for r in rows
-        ]
-    )
+    skip_docs.record([_skip_row(keys[r["file"]], r["file"], r["reason"]) for r in rows])
 
 
 def _stage_cmd(argv):
     """`python -m pipeline.extract.candidate_ready stage --csv <문서 위치 표> --out <결과 폴더> --prepared <준비 폴더>` — run_pipeline이
-    문서마다 부른다: 받기(staging) → 중복 → 거르기 → <out>/parse/_source/only.txt(파싱할 이름). 파싱은 `pipeline.cli parse --staged`."""
+    문서마다 부른다: 받기(staging) → 중복(이번 실행의 다른 문서와 같은 내용도 — `<out>/../_seen_sha`) → 거르기 →
+    <out>/parse/_source/only.txt(파싱할 이름). 파싱은 `pipeline.cli parse --staged`."""
     import argparse
 
     from common.core.paths import child_env
@@ -345,7 +395,13 @@ def _stage_cmd(argv):
     ap.add_argument("--no-scan-rotate", action="store_true", help="이미지 PDF는 방향 보정 안 함(스캔 문서 정책)")
     a = ap.parse_args(argv)
     _, left, _, only = stage_batch(
-        f"rdb:csv:{a.csv}", a.out, a.prepared, 0, lambda args: run_step(args, child_env()).returncode, scan_rotate=not a.no_scan_rotate
+        f"rdb:csv:{a.csv}",
+        a.out,
+        a.prepared,
+        0,
+        lambda args: run_step(args, child_env()).returncode,
+        scan_rotate=not a.no_scan_rotate,
+        seen=Path(a.out).parent / CP.RUN_SEEN,  # 문서 폴더 _docflow/<순번>의 위 = 이번 실행 목록 파일 자리(list가 비움)
     )
     print(f"[source] stage: 파싱할 문서 {len(left)}건 → {only}", flush=True)
     return 0
