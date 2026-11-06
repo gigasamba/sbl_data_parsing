@@ -1,7 +1,8 @@
 """rn-05 — 대상 목록 `python -m pipeline.extract.candidate_pick list`(run_pipeline이 컨테이너 안에서 한 번 부름): EDW FileStorageMap에서
 이름 키워드로 고르고(--filter — 없으면 모든 문서, 파일 크기 오름차순, 크기 없는 행 뺌) → 시작 자리·시험 개수·골라 돌리기 → 끝난 문서(gold doc)·영구 뺌(except_doc_info skip)
 빼기 → FAQ 먼저(새 FAQ면 교체 + 전체, 아니면 gold에 없는 것만, 결과 없으면 전체) → 앞 max-docs개. 임시 SQLite EDW·gold 대역만 — 외부 접속 없음.
-op-17 — 원천 목록(required.source.source_systems)이 있으면 그 원천 행만(대소문자 무관 — FAQ가 없으면 FAQ 교체도 안 함), 목록 파일 docs는
+op-17 — 원천 목록(required.source.source_systems)이 있으면 그 원천 행만(대소문자 무관 — FAQ가 없으면 FAQ 교체도 안 함), 비우면 운영 5개 원천
+(DEV-<n> 행 뺌), 목록 파일 docs는
 FileStorageMap.source_system 값을 그대로 든다(키 첫 마디와 달라도)."""
 
 import json
@@ -51,10 +52,10 @@ CASES = [
         [],
         None,
         None,
-        ["faq1", "faq2", "dev", "x", "prop", "ok", "dup", "nogold", "big"],
+        ["faq1", "faq2", "x", "prop", "ok", "dup", "nogold", "big"],
         None,
         None,
-    ),  # 기본 = 모든 문서(크기순 · 크기 없음 뺌)
+    ),  # 기본(원천 목록 비움) = 운영 5개 원천 — DEV-<n> 행은 뺌(op-17 규칙 8) · 크기순 · 크기 없음 뺌
     ([], [], None, ["dev"], [], None, "dev-1"),  # 원천 DEV-1만(대소문자 무관) — FAQ가 목록에 없어 교체 확인도 안 함
     (
         [],
@@ -128,7 +129,11 @@ def test_target_list():
             got = json.loads(out.read_text(encoding="utf-8"))
             assert [d["s3_key"] for d in got["docs"]] == [K[w] for w in want], (args, seen, got["docs"])
             allowed = {x.upper() for x in systems[0].split(",")} if systems else None
-            total = sum(1 for src in SRC.values() if allowed is None or src in allowed) if "--filter" not in args else 6
+            total = (
+                sum(1 for src in SRC.values() if (src in allowed if allowed else not src.startswith("DEV-")))
+                if "--filter" not in args
+                else 6
+            )
             assert got["total"] == total and all(set(d) == {"seq", *CP.DOC_COLS} for d in got["docs"]), (args, got["total"])
             assert all(d["source_system"] == SRC[d["s3_key"]] for d in got["docs"])  # 칸 값을 대문자로(키에서 구하지 않음)
             if seen_after is not None:
@@ -139,7 +144,7 @@ def test_target_list():
 # required.edw.edw_file_table(RDB_FILE_TABLE) → 기대 키 순서(None = 설정 거부 — <스키마>.<표> 식별자만, SQL에 그대로 들어감)
 TABLES = [
     ("SFDC.DocFiles", ["x", "prop"]),
-    ("AI.FileStorageMap", ["faq1", "faq2", "dev", "x", "prop", "ok", "dup", "nogold", "big"]),
+    ("AI.FileStorageMap", ["faq1", "faq2", "x", "prop", "ok", "dup", "nogold", "big"]),  # 원천 목록 비움 — DEV 행 뺌
     ("AI.FileStorageMap WHERE 1=1 --", None),
     ("FileStorageMap", None),
 ]

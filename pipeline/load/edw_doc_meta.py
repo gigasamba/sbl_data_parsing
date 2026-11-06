@@ -30,8 +30,12 @@ def load_chain(path=None):
 
 def fetch(docs, edw=None, chain=None):
     """docs = [(source_system, file_path)] → ({file_path: {"created_at", "client_edw", "attrs": {키: 값}}}, 메타를 못 구한 문서 수).
-    EDW를 못 열면 ({}, len(docs)) + 경고. chain — 사슬 설정(기본 load_chain() — 틀리면 ValueError로 멈춤). attrs에는 값이 있는 키만."""
+    EDW를 못 열면 ({}, len(docs)) + 경고. chain — 사슬 설정(기본 load_chain() — 틀리면 ValueError로 멈춤). attrs에는 값이 있는 키만.
+    DEV 원천(DEV-<n>) 문서는 사슬 없이 빼고(메타 없음 — 못 구한 수에도 안 셈), 남은 문서가 없으면 EDW를 열지 않는다."""
     chain = chain or load_chain()
+    docs = [(s, p) for s, p in docs if not ST.is_dev(ST.source_of(s))]  # DEV 원천은 메타 없음(EDW 사슬 없음 — op-17)
+    if not docs:
+        return {}, 0
     own = edw is None
     try:
         edw = edw or _Edw()

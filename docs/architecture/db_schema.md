@@ -18,11 +18,12 @@
 - **근거 `file_name`** = `doc.file_path`의 끝 조각.
 - **원천별 EDW 사슬:** 적재가 `client_edw`·`created_at`·`attrs`를 채우는 표·칸은 사슬 파일 [`resources/config/edw_chain.yaml`](../../resources/config/edw_chain.yaml)이 정한다. 칸 이름이 실제 EDW와 같은지는 D-1·D-2.
 
-## 2. gold — 검색 스키마 (pgvector — 원천별 스키마 5벌)
+## 2. gold — 검색 스키마 (pgvector — 원천별 스키마 5벌 + 개발 서버의 DEV 원천 스키마)
 
 판: `common/store/db/migrations/versions/0001_search_base.py` … `0006_doc_record.py` · 모델: `common/store/db/models/search_tables.py`(`SOURCES`·`DOC_META`·`ATTRS`·`DOC_RECORD`·`LOAD_ATTRS`·`CHUNK_EXTRA`) · 적재: `pipeline/load/pgvector_load.py`(`load`·`_load_src`·`deploy`) · 값 만드는 곳: `pipeline/transform/structure/gold_bundle.py`(`main`)·EDW 조인 `pipeline/load/edw_doc_meta.py`·게시 처리 기록 `pipeline/load/publish_parse_result.py`(`apply` → `publish/silver.jsonl`).
 
 - **스키마 배치:** 기준 스키마 `<PG_SCHEMA>`(예 `ai`)에는 판 표 `alembic_version`과 공용 시퀀스 `doc_id_seq`만. 원천 스키마 `<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`에 아래 표 다섯 개와 뷰 `v_chunk_source`가 같은 꼴로 있다(원천 전용 칸은 `faq.chunk.faq_group`뿐 — 그 밖의 원천 메타는 `doc.attrs` 키).
+- **DEV 원천 스키마(개발 서버·PC만 — [op-17](../prd/ops.md#op-17)):** 원천 `DEV-<1~99>`(대소문자 무관)는 `<PG_SCHEMA>_dev_<숫자>`에 들어간다 — 표·뷰는 `_other`와 같고 메타가 없다(EDW 사슬 없음). 판 기록 표는 그 스키마 안(`<PG_SCHEMA>_dev_<숫자>.alembic_version`), `doc_id`는 기준 스키마의 `doc_id_seq`를 함께 쓴다. `dbtool up --target search`가 settings.yaml `required.source.source_systems`의 DEV 원천 스키마를 만들고, DB에 이미 있는 `_dev_*` 스키마도 끝 판까지 올린다(`dbtool check`도 함께 봄). 운영(prd)에는 없다.
 - 검색 MCP는 실행 중에 묶음 파일(`meta.json`·`docs.jsonl`·`chunks.jsonl`)을 읽지 않는다 — 임베딩 모델·문서 날짜는 `doc` 칸, 차원은 `chunk.embedding`의 `vector(n)`에서 읽는다.
 
 ### gold.doc

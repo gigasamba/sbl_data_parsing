@@ -2,9 +2,12 @@
 기준 스키마(PG_SCHEMA, 예 `ai`)에는 Alembic 판 표와 공용 doc_id 시퀀스만 남기고, `<기준>_sfdc`·`_crms`·`_las`·`_faq`·`_other`마다 같은 표
 doc·chunk·chunk_term·term_stat·corpus_stat + 뷰 v_chunk_source(원천 전용 칸만 다름)를 만든다. 0001이 기준 스키마에 만든 한 벌 표(load_run 포함)는
 지운다 — 0.2.0은 전체 다시 적재(사용자 10-31, D-6 — DB 담당자 승인·백업 뒤). 칸은 common/store/db/models/search_tables.py와 같은 글자로 굳혀 둔다
-(한 번 배포한 판은 고치지 않음 — 그 뒤 칸이 바뀌면 새 판). 되돌리기 없음."""
+(한 번 배포한 판은 고치지 않음 — 그 뒤 칸이 바뀌면 새 판). 되돌리기 없음.
+DEV 원천 스키마(op-17): attributes sources = (dev_<n>,)이면 그 스키마만 만든다(Other와 같은 칸 — 기준 스키마의 옛 표 지우기·시퀀스는 건너뜀)."""
 
 from alembic import context, op
+
+from common.store.db.migrations import search_parts
 
 revision = "0002_search"
 down_revision = "0001_search"
@@ -63,7 +66,7 @@ CREATE VIEW {S}.v_chunk_source AS {VIEW};
 
 
 def view(src):
-    doc = ["summary", "created_at", "client_edw", "clients_doc", *DOC_EXTRA_COLS[src]]
+    doc = ["summary", "created_at", "client_edw", "clients_doc", *DOC_EXTRA_COLS.get(src, [])]
     sel = (
         ["c.chunk_id", "c.doc_id", "d.file_path", "regexp_replace(d.file_path, '^.*/', '') AS file_name"]
         + [f"c.{c}" for c in ("page", "line_start", "line_end", "bbox", "section", "seq", "chunk_text")]
@@ -77,12 +80,14 @@ def upgrade():
     a = context.config.attributes
     b, d = a["schema"], int(a["dim"])
     bind = op.get_bind()
-    bind.exec_driver_sql(DROP_OLD.replace("{B}", b))
-    for src in SOURCES:
+    if not search_parts.dev_run():
+        bind.exec_driver_sql(DROP_OLD.replace("{B}", b))
+    for src in search_parts.sources(SOURCES):
         s = f"{b}_{src}"
+        extra = DOC_EXTRA.get(src, "")
         sql = (
             SRC_SQL.replace("{VIEW}", view(src))
-            .replace("{DOC_EXTRA}", (",\n    " + DOC_EXTRA[src].replace(", ", ",\n    ")) if DOC_EXTRA[src] else "")
+            .replace("{DOC_EXTRA}", (",\n    " + extra.replace(", ", ",\n    ")) if extra else "")
             .replace("{CHUNK_EXTRA}", (",\n    " + CHUNK_EXTRA[src]) if src in CHUNK_EXTRA else "")
             .replace("{S}", s)
             .replace("{B}", b)

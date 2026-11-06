@@ -80,7 +80,7 @@
 | 이름 | 뜻 | 필수? |
 |---|---|---|
 | `RUN_ENV`(`required.env.run_env`) | `local`(PC) · `dev`·`prd`(서버 — 내부망 전용 · 가짜 LLM 거부) | **필수** — 없으면 compose가 멈추고 앱 명령이 종료 2. `selftest`·`check`·`help`·`tool check_env`는 없어도 돎 |
-| `SOURCE_SYSTEMS`(`required.source.source_systems`) | 파싱할 원천 목록 — EDW `AI.FileStorageMap.source_system` 값(대소문자 무관). `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`·`DEV-<1~99>`. 목록에 `FAQ`가 없으면 FAQ 교체 확인도 하지 않는다 | 선택 — 비우면 모든 원천. `DEV-…`는 dev·local만(prd면 종료 2), 모르는 값이면 종료 2 |
+| `SOURCE_SYSTEMS`(`required.source.source_systems`) | 파싱할 원천 목록 — EDW `AI.FileStorageMap.source_system` 값(대소문자 무관). `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`·`DEV-<1~99>`. 목록에 `FAQ`가 없으면 FAQ 교체 확인도 하지 않는다 | 선택 — 비우면 운영 5개 원천(`SFDC`·`CRMS`·`LAS`·`FAQ`·`Other` — `DEV-<숫자>` 행은 뺌). `DEV-…`는 dev·local만(prd면 종료 2), 모르는 값이면 종료 2. `DEV-<숫자>`를 새로 넣으면 `migrate up --target search`로 검색 스키마 `<기준>_dev_<숫자>`를 먼저 만든다(없으면 적재가 멈춤) |
 
 ### 사내망 판정
 | 이름 | 뜻 | 기본 | 언제 채우나 |

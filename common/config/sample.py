@@ -90,7 +90,7 @@ NOTE_COL = 46  # 칸 주석이 시작하는 열(값 자리와 주석을 떼어 �
 NOTES = {
     # required
     "common.run_env": "실행 환경 · local(PC)·dev(개발 서버)·prd(운영 서버)",
-    "pipeline.extract.source.systems": "파싱할 원천 목록(FileStorageMap.source_system, 대소문자 무관) · SFDC·CRMS·LAS·FAQ·Other·DEV-<1~99> · 예 [DEV-1] (null = 모든 원천)",
+    "pipeline.extract.source.systems": "파싱할 원천 목록(FileStorageMap.source_system, 대소문자 무관) · SFDC·CRMS·LAS·FAQ·Other·DEV-<1~99> · 예 [DEV-1] (null = 운영 5개 원천 SFDC·CRMS·LAS·FAQ·Other — DEV-<n> 행은 뺌)",
     "common.connections.pg.host": "PG 주소 · 예 127.0.0.1",
     "common.connections.pg.port": "PG 포트 · 예 55433",
     "common.connections.pg.db": "PG 데이터베이스 이름 · 예 rag",

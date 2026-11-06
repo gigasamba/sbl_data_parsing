@@ -4,6 +4,8 @@
 
 from alembic import context, op
 
+from common.store.db.migrations import search_parts
+
 revision = "0001_search"
 down_revision = None
 branch_labels = ("search",)
@@ -93,6 +95,8 @@ FROM {S}.chunk c JOIN {S}.doc d ON d.doc_id = c.doc_id;
 
 def upgrade():
     a = context.config.attributes
+    if search_parts.dev_run():  # DEV 원천 스키마 하나만 올리는 실행(op-17) — 기준 스키마의 옛 한 벌은 만들지 않음(0002가 지우는 표)
+        return
     s, d = a["schema"], int(a["dim"])
     bind = op.get_bind()
     bind.exec_driver_sql(SCHEMA_SQL.replace("{S}", s).replace("{DIM}", str(d)))  # 옛 deploy: cur.execute(schema.sql) — 여러 문장 한 번에

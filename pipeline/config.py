@@ -103,7 +103,7 @@ class PipelineExtractSource(Section):
     systems: CsvList | None = F(
         None,
         "SOURCE_SYSTEMS",
-        "파싱할 원천 목록(FileStorageMap.source_system — 대소문자 무관): SFDC·CRMS·LAS·FAQ·Other·DEV-<1~99>(dev·local만) — 비우면 모든 행",
+        "파싱할 원천 목록(FileStorageMap.source_system — 대소문자 무관): SFDC·CRMS·LAS·FAQ·Other·DEV-<1~99>(dev·local만) — 비우면 운영 원천 5개(DEV 행 뺌)",
     )
     fetch_workers: int | None = F(1, "SOURCE_FETCH_WORKERS", "원본 문서 병렬 다운로드 스레드 수(개) — 미리 받기(candidate_ready stage)")
     staging: str | None = F(None, "SOURCE_STAGING", "미리 받기(staging) 폴더 — 원본을 받는 유일한 자리, 비면 rdb:csv 원본을 받지 못함")

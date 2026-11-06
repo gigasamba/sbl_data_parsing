@@ -357,16 +357,24 @@ def test_classify_cache_skips_probe():
             ), name
 
 
+# (DB에 있는 스키마 목록 — psql 출력, 더해 세는 DEV 원천) — op-17: 5벌 + 있는 `<스키마>_dev_<n>`
+PG_DEV = [("", []), ("rag_dev_2\nrag_dev_10\nrag_dev_1\n", ["dev_1", "dev_2", "dev_10"]), ("ragx_dev_1\nrag_dev_x\n", [])]
+
+
 def test_pg_count_sums_source_schemas():
-    """문서·청크 수는 원천 스키마(<스키마>_<원천>) 5벌의 합 — 원천 목록은 검색 표 정의와 같다."""
+    """문서·청크 수는 원천 스키마(<스키마>_<원천>) 5벌 + DB에 있는 DEV 원천 스키마의 합 — 원천 목록은 검색 표 정의와 같다."""
     from common.store.db.models.search_tables import SOURCES
 
     assert RD.PG_SOURCES == SOURCES
-    seen = []
-    with mock.patch.object(RD, "sh", lambda cmd, timeout=0: seen.append(cmd) or (0, "3|7\n", "")):
-        with mock.patch.object(RD, "PG_SCHEMA", "rag"):
-            assert RD.pg_count() == (3, 7)
-    assert all(f"rag_{s}.doc" in seen[0] and f"rag_{s}.chunk" in seen[0] for s in SOURCES) and "rag.doc" not in seen[0], seen
+    for listed, dev in PG_DEV:
+        seen = []
+        out = iter([listed, "3|7\n"])
+        with mock.patch.object(RD, "sh", lambda cmd, timeout=0, seen=seen, out=out: seen.append(cmd) or (0, next(out), "")):
+            with mock.patch.object(RD, "PG_SCHEMA", "rag"):
+                assert RD.pg_count() == (3, 7)
+        cnt = seen[-1]
+        assert all(f"rag_{s}.doc" in cnt and f"rag_{s}.chunk" in cnt for s in (*SOURCES, *dev)) and "rag.doc" not in cnt, seen
+        assert cnt.count("rag_dev_") == 2 * len(dev), (listed, cnt)
 
 
 def test_stage_always_calls_stage(tmp_path):

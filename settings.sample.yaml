@@ -15,7 +15,7 @@ required:
     run_env:                                  # [필수 · 모두(local·dev·prd)] 실행 환경 · local(PC)·dev(개발 서버)·prd(운영 서버)
   # ---- 파싱할 원천 ----
   source:
-    source_systems: null                      # [선택 — DEV-<숫자>는 dev·local만(prd면 시작 거부)] 파싱할 원천 목록(FileStorageMap.source_system, 대소문자 무관) · SFDC·CRMS·LAS·FAQ·Other·DEV-<1~99> · 예 [DEV-1] (null = 모든 원천)
+    source_systems: null                      # [선택 — DEV-<숫자>는 dev·local만(prd면 시작 거부)] 파싱할 원천 목록(FileStorageMap.source_system, 대소문자 무관) · SFDC·CRMS·LAS·FAQ·Other·DEV-<1~99> · 예 [DEV-1] (null = 운영 5개 원천 SFDC·CRMS·LAS·FAQ·Other — DEV-<n> 행은 뺌)
   # ---- PostgreSQL(pgvector) — local은 접속 5칸을 모두 비우면 sqlite 대역(일부만 적으면 거부) ----
   pg:
     pg_host:                                  # [필수 · dev·prd(pipeline·mcp) — local은 비우면 sqlite 대역] PG 주소 · 예 127.0.0.1

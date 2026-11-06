@@ -9,6 +9,9 @@
   이미지: `migrate up --target all --bundle …`(entrypoint — pipeline 이미지, load와 같은 잠금).
 · 갈래 search = 기준 스키마(PG_SCHEMA — --schema로 바꿈) 하나 + 원천 스키마 5벌 `<기준>_sfdc|crms|las|faq|other`(판 0002가 만듦).
   판 기록 표·공용 doc_id 시퀀스는 기준 스키마에(<기준>.alembic_version).
+· DEV 원천 스키마 `<기준>_dev_<n>`(op-17 — 개발 서버·PC만): up --target search가 기준 스키마 다음에 설정(required.source.source_systems)의
+  DEV 원천과 DB에 이미 있는 `_dev_*` 스키마를 하나씩 끝 판까지 올린다(판 기록 표는 그 스키마에 — `<기준>_dev_<n>`.alembic_version, doc_id는
+  기준 스키마의 공용 시퀀스). prd에서 설정에 DEV 원천이 있으면 거부. current·check도 있는 `_dev_*` 스키마를 함께 본다.
 · up: 판 기록이 없는데 표가 있는 스키마(판 관리 전에 만든 DB)는 거부 — 새 스키마로 올려 전체를 다시 적재한다. 적재 앞 자동 길
   (pgvector_load deploy)은 판 기록 없는 기존 스키마면 DDL 없이 경고만. 검색 스키마는 지금 deploy와 같은 확인을 먼저 —
   vector 확장(없으면 멈춤, --create-extension이면 직접 생성 — PC·단독 시험만)·남의 스키마 거부(판 표 alembic_version 없음)·차원(DB와 다르면 새 PG_SCHEMA).
@@ -118,7 +121,23 @@ def status(q, target, schema):
 
 
 def require_current(q, target, schema):
-    """적재·쓰기 전 판 확인 — 판 기록 없음: 경고 뒤 계속 · 끝보다 낮거나 모르는 판: DbToolError(종료 2)."""
+    """적재·쓰기 전 판 확인 — 판 기록 없음: 경고 뒤 계속 · 끝보다 낮거나 모르는 판: DbToolError(종료 2).
+    search는 DB에 있는 DEV 원천 스키마(`<기준>_dev_<n>` — op-17)도 끝 판이어야 한다(판 기록이 없어도 거부 — dbtool up이 늘 남김)."""
+    from common.store.db.models import search_tables as ST
+
+    st = _require_one(q, target, schema)
+    for src in ST.dev_sources(schema, q) if target == "search" else ():
+        vs = ST.src_schema(schema, src)
+        dst, have = status(q, target, vs)
+        if dst != "끝":
+            raise DbToolError(
+                f"{vs} 판 {dst} {have} — DEV 원천 스키마가 코드의 끝 판 {head(target)}이 아님: 적재 전에 `migrate up --target {target}`"
+                f"(PC: python -m common.store.db.dbtool up --target {target})"
+            )
+    return st
+
+
+def _require_one(q, target, schema):
     st, have = status(q, target, schema)
     if st == "끝":
         return st
@@ -226,26 +245,70 @@ def index_kind(dim):
 
 
 # ── 판 올리기·기록 ─────────────────────────────────────────────────────
-def upgrade(target, schema, dim=None, conn=None):
-    """판을 끝까지(한 트랜잭션). 판 기록 없는 기존 스키마는 거부(위 설명)."""
+def upgrade(target, schema, dim=None, conn=None, src=None):
+    """판을 끝까지(한 트랜잭션). 판 기록 없는 기존 스키마는 거부(위 설명). src = DEV 원천(dev_<n>) — 그 원천 스키마 하나만(판 기록 표도 그 스키마에)."""
     from alembic import command
 
     if conn is None:
         with engine().begin() as c:
-            return upgrade(target, schema, dim, c)
+            return upgrade(target, schema, dim, c, src)
     q = _q(conn)
     if target == "search":
         dim = check_dim(q, schema, dim) or dim
         if dim is None:
             raise DbToolError(f"{schema}: 차원을 모름 — --dim N 또는 --bundle <묶음>(meta.json dim)")
-    st, have = status(q, target, schema)
+    vs = _version_schema(schema, src)
+    st, have = status(q, target, vs)
     if st == "모름":
-        raise DbToolError(f"{schema} 판 {have} — 이 코드가 모르는 판(코드보다 새 판?) — 올리지 않음")
-    if st == "없음" and has_tables(q, schema):
-        raise DbToolError(f"{schema}: 표는 있는데 판 기록이 없음 — 올리지 않음. 새 스키마로 올려 전체를 다시 적재(DB 담당 협의)")
-    command.upgrade(_config(conn, target=target, schema=schema, dim=dim, create_schema=True), f"{target}@head")
+        raise DbToolError(f"{vs} 판 {have} — 이 코드가 모르는 판(코드보다 새 판?) — 올리지 않음")
+    if st == "없음" and has_tables(q, vs):
+        raise DbToolError(f"{vs}: 표는 있는데 판 기록이 없음 — 올리지 않음. 새 스키마로 올려 전체를 다시 적재(DB 담당 협의)")
+    command.upgrade(_config(conn, target=target, schema=schema, dim=dim, create_schema=True, **_dev_attrs(schema, src)), f"{target}@head")
     if target == "applog":
         maintain_applog(schema, conn=conn, prune=False)
+
+
+def _version_schema(schema, src):
+    """판 기록 표가 있는 스키마 — 기준 실행은 기준 스키마, DEV 원천 실행은 그 원천 스키마."""
+    from common.store.db.models import search_tables as ST
+
+    return ST.src_schema(schema, src) if src else schema
+
+
+def _dev_attrs(schema, src):
+    """DEV 원천 하나만 올리는 실행의 판 파일 attributes(sources·version_schema — migrations/env.py) — 기준 실행은 빈 사전."""
+    return {"sources": (src,), "version_schema": _version_schema(schema, src)} if src else {}
+
+
+def dev_from_settings():
+    """설정의 DEV 원천(required.source.source_systems — pipeline 절) → 원천 이름 ['dev_1', …]. pipeline 절이 없는 이미지는 빈 목록.
+    prd에서 DEV 원천이면 거부(시작 관문 require_run_env와 같은 규칙). 앱 절은 설정 객체로 읽는다(설정 도구 길 — common은 앱을 import하지 않음)."""
+    from common.config import settings as S
+    from common.store.db.models import search_tables as ST
+
+    st = S.load(S.section_class(("common", "pipeline"))[0], strict=False, require_file=False, lenient_run_env=True)
+    pipe = getattr(st, "pipeline", None)
+    systems = (pipe.extract.source.systems or []) if pipe is not None else []
+    devs = ST.dev_order({ST.source_of(s) for s in systems} - set(ST.SOURCES))
+    if devs and S.guard_run_env() == "prd":
+        raise DbToolError(f"RUN_ENV=prd — DEV 원천 {devs}는 개발 서버·PC만(required.source.source_systems에서 빼기)")
+    return devs
+
+
+def upgrade_search(schema, dim=None, conn=None):
+    """검색 갈래 판 올리기 하나(dbtool up·적재 deploy가 함께 씀): 기준 스키마 → DEV 원천 스키마(설정의 DEV 원천 + DB에 이미 있는
+    `<기준>_dev_*` — 뒤 판이 그 스키마에도 가게) 하나씩, 한 트랜잭션. prd는 DEV를 찾지 않는다. 반환: 올린 DEV 원천."""
+    from common.store.db.models import search_tables as ST
+
+    wanted = dev_from_settings()  # prd 거부는 접속 전에
+    if conn is None:
+        with engine().begin() as c:
+            return upgrade_search(schema, dim, c)
+    upgrade("search", schema, dim, conn)
+    devs = ST.dev_order(set(wanted) | set(ST.dev_sources(schema, _q(conn))))
+    for src in devs:
+        upgrade("search", schema, dim, conn, src)
+    return devs
 
 
 # DB를 읽어야 하는 up의 확인 — --sql 파일에는 사람이 할 일로 적는다(글자 안 {S}·{dim}은 채움)
@@ -254,6 +317,10 @@ MANUAL = {
         "vector 확장이 있어야 함 — 없으면 DB 관리자가 CREATE EXTENSION vector",
         "스키마 {S}·{S}_<원천>에 판 표(alembic_version) 없이 표가 있으면 남의 스키마 — 실행하지 말 것(up은 거부)",
         "있는 chunk 표의 embedding 차원이 {dim}인지(다르면 임베딩 모델이 바뀜 — 새 스키마로)",
+    ),
+    "dev": (
+        "{S}가 이미 있으면(SELECT version_num FROM {S}.alembic_version) 아래 부분은 빈 스키마부터라 실행하지 말 것 — DB에 붙는 dbtool up으로",
+        "DB에 이미 있는 다른 {B}_dev_* 스키마는 이 파일에 없음(DB를 읽어야 앎) — 뒤 판은 DB에 붙는 dbtool up이 그 스키마에도 올림",
     ),
     "applog": ("월 파티션 — 판 0001은 이 SQL을 만든 달 기준, 실행 뒤 dbtool maintain --target applog(매일 예약)가 현재+2개월을 맞춘다",),
     "master": (),
@@ -300,6 +367,14 @@ def up_sql(a, out):
         buf.writelines(f"-- 수동: {m.format(S=schema, dim=dim)}\n" for m in MANUAL[target] if dim is not None or "{dim}" not in m)
         rng = f"{start}:{target}@head" if start else f"{target}@head"
         command.upgrade(_config(target=target, schema=schema, dim=dim, create_schema=True, out=buf), rng, sql=True)
+        for src in dev_from_settings() if target == "search" else ():  # DEV 원천 스키마 — 늘 빈 스키마부터(판 0002가 차원을 읽음)
+            vs = _version_schema(schema, src)
+            if dim is None:
+                raise DbToolError(f"DEV 원천 스키마 {vs}는 빈 스키마부터 — --dim N 또는 --bundle <묶음>")
+            buf.write(f"-- {target} {vs}: DEV 원천(op-17) — 판 처음(빈 스키마) → {head(target)}\n")
+            buf.writelines(f"-- 수동: {m.format(S=vs, B=schema)}\n" for m in MANUAL["dev"])
+            cfg_dev = _config(target=target, schema=schema, dim=dim, create_schema=True, out=buf, **_dev_attrs(schema, src))
+            command.upgrade(cfg_dev, f"{target}@head", sql=True)
     atomic_write_bytes(out, buf.getvalue().encode("utf-8"))  # 같은 폴더 임시 파일 → 이름 바꾸기(LF 그대로)
     print(f"[migrate] SQL → {out} (DB에 붙지 않음 — 실행은 DB 담당이 직접)")
     return 0
@@ -431,22 +506,37 @@ def main(argv=None):
         if a.cmd == "maintain":
             print(maintain_applog(schema))
         elif a.cmd == "up":
+            devs = []
             if target == "search":
+                dev_from_settings()  # prd 거부는 접속 전에
                 with engine().begin() as conn:
                     precheck_search(_q(conn), schema, dim, a.create_extension)
-                    upgrade(target, schema, dim, conn)
+                    devs = upgrade_search(schema, dim, conn)
             else:
                 upgrade(target, schema, dim)
-            print(f"[migrate] {target} {schema}: 판 {check(target, schema)[1]} (끝 {head(target)})")
+            for vs in (schema, *(_version_schema(schema, s) for s in devs)):
+                print(f"[migrate] {target} {vs}: 판 {check(target, vs)[1]} (끝 {head(target)})")
         else:
-            st, have = check(target, schema)
-            print(
-                f"[migrate] {target} {schema}: 판 {st} {have or ''} · 코드의 끝 판 {head(target)}"
-                + (" · 판 기록 없음(새 스키마면 up으로 만듦)" if st == "없음" else "")
-            )
-            if a.cmd == "check":
-                rc = max(rc, 0 if st == "끝" else 1)
+            for vs in (schema, *(_version_schema(schema, s) for s in (_dev_in_db(schema) if target == "search" else ()))):
+                st, have = check(target, vs)
+                print(
+                    f"[migrate] {target} {vs}: 판 {st} {have or ''} · 코드의 끝 판 {head(target)}"
+                    + (" · 판 기록 없음(새 스키마면 up으로 만듦)" if st == "없음" else "")
+                )
+                if a.cmd == "check":
+                    rc = max(rc, 0 if st == "끝" else 1)
     return rc
+
+
+def _dev_in_db(schema):
+    """DB에 있는 DEV 원천 스키마(current·check — 읽기만)."""
+    from common.store.db.models import search_tables as ST
+
+    with engine().connect() as c:
+        try:
+            return ST.dev_sources(schema, _q(c))
+        finally:
+            c.rollback()
 
 
 if __name__ == "__main__":

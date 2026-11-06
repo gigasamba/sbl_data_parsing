@@ -153,7 +153,7 @@ def test_rdb_stage_once():
         writes = []
         real_write = CR._write_manifest
         with (
-            pc.PIPE.env(RDB_BUCKET="b", SOURCE_STAGING=str(root / "staging")),
+            pc.PIPE.env(RDB_BUCKET="b", SOURCE_STAGING=str(root / "staging"), SOURCE_SYSTEMS="DEV-1"),  # 비우면 DEV 행은 뺌(op-17 규칙 8)
             mock.patch.object(CR.objectstore, "client", lambda: s3),
             mock.patch.object(CR.CP, "done_by_sha", lambda shas: {}),
             mock.patch.object(CR, "_write_manifest", lambda st, rows: writes.append(1) or real_write(st, rows)),

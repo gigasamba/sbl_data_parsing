@@ -65,22 +65,37 @@ class _Src:
         self.cn, self.q = db.cn, db.q
 
 
-def src_dbs(db):
-    """원천 이름 → 그 원천 스키마를 가리키는 연결. SQLite 대역은 스키마마다 파일 하나라 원천마다 대역을 따로 연다."""
+def src_dbs(db, need=(), dim=None):
+    """원천 이름 → 그 원천 스키마를 가리키는 연결 — 5벌 + 있는 DEV 원천 스키마(op-17). SQLite 대역은 스키마마다 파일 하나라 원천마다 대역을 따로 연다.
+    need = 이번 묶음의 DEV 원천: 실 PG에 그 스키마가 없으면 멈춤(적재는 DDL을 하지 않음 — dbtool up이 만듦), 대역은 표 정의에서 만듦(dim 차원)."""
     from common.store.db.models import search_tables as ST
 
-    if getattr(db, "is_standin", False):
-        from common.store.pg_standin import StandinPG
+    standin = getattr(db, "is_standin", False)
+    srcs = ST.all_sources(db.schema, None if standin else db.q)
+    missing = sorted(set(need) - set(srcs))
+    if missing and not standin:
+        names = ", ".join(ST.src_schema(db.schema, s) for s in missing)
+        raise SystemExit(
+            f"[load] DEV 원천 스키마 없음: {names} — 적재는 표를 만들지 않음. settings.yaml required.source.source_systems에 그 원천을 넣고 "
+            "`migrate up --target search`(PC: python -m common.store.db.dbtool up --target search) 뒤 다시"
+        )
+    if not standin:
+        return {src: _Src(db, ST.src_schema(db.schema, src)) for src in srcs}
+    from common.store.db import dbtool
+    from common.store.pg_standin import StandinPG
 
-        return {src: StandinPG(ST.src_schema(db.schema, src)) for src in ST.SOURCES}
-    return {src: _Src(db, ST.src_schema(db.schema, src)) for src in ST.SOURCES}
+    out = {src: StandinPG(ST.src_schema(db.schema, src)) for src in [*srcs, *missing]}
+    for src in missing:  # 대역은 판 관리 밖 — 새 DEV 원천 파일은 표 정의에서 바로
+        with out[src].cn.cursor() as cur:
+            cur.execute(dbtool.standin_script(out[src].schema, int(dim or 0)))
+    return out
 
 
 def _upgrade(schema, dim):
-    """검색 스키마 판 올리기(migrate up). selftest가 가짜로 바꿔 끼운다."""
+    """검색 스키마 판 올리기(migrate up — 기준 + DEV 원천 스키마, dbtool.upgrade_search). selftest가 가짜로 바꿔 끼운다."""
     from common.store.db import dbtool
 
-    dbtool.upgrade("search", schema, dim)
+    dbtool.upgrade_search(schema, dim)
 
 
 def deploy(db, dim):
@@ -199,7 +214,7 @@ def require_same_model(dbs, meta, bundle):
 
 
 def load(db, bundle, replace=False, rep_dir=None, silver=None):
-    """묶음 → 원천 스키마별로(문서의 source_system으로 고름: SFDC·CRMS·LAS·FAQ, 그 밖은 other) 적재. 실 PG는 기준 연결 한 트랜잭션
+    """묶음 → 원천 스키마별로(문서의 source_system으로 고름: SFDC·CRMS·LAS·FAQ·DEV-<n>(`<기준>_dev_<n>` — 없으면 멈춤), 그 밖은 other) 적재. 실 PG는 기준 연결 한 트랜잭션
     (실패하면 5벌 모두 되돌림), 대역은 원천마다 따로. 저장된 문서(file_path 같음)는 건너뜀(replace면 지우고 다시 넣음 — 고치기). 묶음에 없는
     저장 문서는 그대로 둠. 실행 정보(묶음 meta·건수·시간)는 실행 기록에 남긴다.
     silver = 게시 처리 기록 파일(silver.jsonl — 원본 키 source_key = 묶음 문서 file_path로 이음). 그 문서 줄이 있으면 새로 넣는 행에 쓰고
@@ -213,9 +228,10 @@ def load(db, bundle, replace=False, rep_dir=None, silver=None):
     B = Path(bundle)
     meta = json.loads((B / "meta.json").read_text(encoding="utf-8"))
     require_vectors(meta)
-    dbs = src_dbs(db)
-    require_same_model(dbs, meta, B)  # EDW 조인·분류·쓰기 전에
     docs, chunks = _nonul(jl(B / "docs.jsonl")), _nonul(jl(B / "chunks.jsonl"))
+    need = {s for s in (ST.source_of(d.get("source_system")) for d in docs) if ST.is_dev(s)}  # DEV 원천 스키마 — 없으면 멈춤(op-17)
+    dbs = src_dbs(db, need, meta.get("dim"))
+    require_same_model(dbs, meta, B)  # EDW 조인·분류·쓰기 전에
     rec = {r["source_key"]: r for r in jl(Path(silver))} if silver and Path(silver).is_file() else {}
     for d in docs:  # 게시 처리 기록 → doc 칸(op-17) — 이 묶음에서 줄이 있었는지는 _silver
         r = rec.get(d["file_path"])

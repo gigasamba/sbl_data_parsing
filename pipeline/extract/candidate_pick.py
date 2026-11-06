@@ -159,6 +159,14 @@ def src_name(v):
     return (str(v).strip().upper() or None) if v is not None else None
 
 
+def picked(system, systems):
+    """원천 칸 값(대문자)이 파싱할 원천인가 — 원천 목록(extract.source.systems)이 있으면 그 안, 비면 운영 5개 원천(DEV-<n>이 아닌 모든 값 —
+    op-17 규칙 8)."""
+    from common.store.db.models import search_tables as ST
+
+    return system in systems if systems else not ST.is_dev(ST.source_of(system))
+
+
 def _filter_unsupported_rows(rows, name_of):
     """압축(ARCHIVE_EXT)·처리 엔진 없는 확장자(registry.engines_for)는 받기 전에 걸러낸다(name_of
     계산 뒤 sample() 호출 전 — 다운로드 자체를 안 함). 사유 말은 filter_and_rotate의 skipped.jsonl과 같다
@@ -211,10 +219,11 @@ def _hidden(p):
 
 
 def _known_source(seg):
-    """PC 폴더 원천의 맨 위 폴더 이름이 원천 이름(SFDC·CRMS·LAS·FAQ — 검색 스키마 원천 목록, other 빼고)이면 대문자 이름, 아니면 None."""
-    from common.store.db.models.search_tables import SOURCES
+    """PC 폴더 원천의 맨 위 폴더 이름이 원천 이름(SFDC·CRMS·LAS·FAQ — 검색 스키마 원천 목록, other 빼고 · DEV-<n> — op-17)이면 대문자 이름,
+    아니면 None."""
+    from common.store.db.models import search_tables as ST
 
-    return seg.upper() if seg.lower() in set(SOURCES) - {"other"} else None
+    return seg.upper() if seg.lower() in set(ST.SOURCES) - {"other"} or ST.DEV_SYSTEM.fullmatch(seg) else None
 
 
 def _publish_dirs():
@@ -231,7 +240,9 @@ def _tree_files(src):
     """폴더가 원천별 하위 폴더 모양(`<원천>/<id>/<파일>`)이면 그 아래 파일 목록, 아니면 None(평평한 폴더로).
     모양 = 맨 위에 파일이 없고(숨김 파일 빼고), 맨 위 폴더가 모두 원천 이름(_known_source)이며 그 아래 파일이 있음.
     숨김(점으로 시작)·__MACOSX는 어디서나 뺀다 — 흘린 sub/.DS_Store 하나로 평평한 폴더가 바뀌지 않게.
-    맨 위의 설명 파일(*.md)과 게시 폴더(file:// 게시 버킷 — PC valid_env/object_storage/Parsing_Result)는 원본이 아니라 뺀다(op-14)."""
+    맨 위의 설명 파일(*.md)과 게시 폴더(file:// 게시 버킷 — PC valid_env/object_storage/Parsing_Result)는 원본이 아니라 뺀다(op-14).
+    원천 목록(extract.source.systems — required.source.source_systems)에 드는 원천 폴더의 파일만(비면 운영 5개 원천 — DEV-<n> 폴더 뺌, picked) —
+    모양 판정은 모든 폴더로(다 빠지면 빈 목록)."""
     out = _publish_dirs()
     top = [
         p
@@ -247,7 +258,10 @@ def _tree_files(src):
         for p in d.rglob("*")
         if p.is_file() and not any(_hidden(q) for q in p.relative_to(src).parents if q.name) and not _hidden(p)
     )
-    return files or None
+    if not files:
+        return None
+    systems = pc.cfg().extract.source.systems
+    return [p for p in files if picked(_known_source(p.relative_to(src).parts[0]), systems)]
 
 
 def pick_new(src, out, max_new, only=None):
@@ -304,11 +318,11 @@ def unparsed(names, out):
 
 def rdb_pick(table, state, limit=0, done=frozenset()):
     """문서 위치 표(csv:)에서 이번에 받을 행 → {문서 이름: 행}(받기 전 — 다운로드 없음). 처리 기록(processed.jsonl)에 있는 판·
-    gold에 끝난 원본 키(done — done_keys())·압축·엔진 없는 확장자를 뺀다. 원천 목록(extract.source.systems)이 있으면 그 원천 행만.
+    gold에 끝난 원본 키(done — done_keys())·압축·엔진 없는 확장자를 뺀다. 원천 목록(extract.source.systems)의 원천 행만(비면 운영 5개 원천 — picked).
     반환: (by_name, 이번에 뺀 행 수 — 원천 목록 밖 행은 세지 않음)."""
     seen = _load_done(state)
     systems = pc.cfg().extract.source.systems
-    every = [r for r in _rdb_rows(table) if not systems or r["source_system"] in systems]  # 원천 목록 밖 행은 고르지 않음(건너뜀 기록 없음)
+    every = [r for r in _rdb_rows(table) if picked(r["source_system"], systems)]  # 원천 목록 밖 행은 고르지 않음(건너뜀 기록 없음)
     rows = [r for r in every if not _rdb_is_done(seen, r["key"], r["etag"], r["updated_at"]) and r["key"] not in done]
     name_of = _rdb_names(rows)  # original_filename(또는 doc_id) — 충돌하면 doc_id 접두로 구분
     rows, skipped = _filter_unsupported_rows(rows, name_of)  # 압축·엔진 없는 확장자는 받기 전에 걸러냄
@@ -325,7 +339,8 @@ def rdb_pick(table, state, limit=0, done=frozenset()):
 #  끝난 문서 빼기(--skip-done) →
 # FAQ 먼저(--faq-seen, --seqs·--limit 실행은 건너뜀) → 앞 --max-docs개. 목록 파일(JSON): {"total": 목록 행 수, "start": 시작 자리,
 # "docs": [{"seq", "id", "s3_key", "original_filename", "file_size", "source_system"}, …]} — 처리 순서대로, seq = 목록 안 자리(FAQ 덧붙임 포함).
-# 원천 목록(extract.source.systems — required.source.source_systems)이 있으면 그 원천 행만(UPPER(source_system) — 대소문자 무관).
+# 원천 목록(extract.source.systems — required.source.source_systems)이 있으면 그 원천 행만(UPPER(source_system) — 대소문자 무관),
+# 비면 운영 5개 원천(DEV-<n> 행 뺌 — picked, op-17 규칙 8).
 FSM_SQL = (
     "SELECT id, s3_key, original_filename, file_size, source_system FROM {table} "
     "WHERE ({cond}){src} AND file_size IS NOT NULL ORDER BY file_size ASC"
@@ -336,7 +351,7 @@ DOC_COLS = ("id", "s3_key", "original_filename", "file_size", "source_system")  
 
 def edw_rows(edw, keywords=(), faq=False, systems=()):
     """FileStorageMap 행(파일 크기 오름차순) — 이름 키워드(대소문자 무시, 하나라도 들면 — 없으면 모든 행) 또는 faq=True면 FAQ 전체
-    (원천 칸 FAQ). systems(대문자 원천 목록)가 있으면 그 원천 행만. 원천 칸은 대문자로 바꿔 돌려준다."""
+    (원천 칸 FAQ). systems(대문자 원천 목록)가 있으면 그 원천 행만, 비면 DEV-<n> 행을 뺀다(picked). 원천 칸은 대문자로 바꿔 돌려준다."""
     src = f" AND UPPER(source_system) IN ({', '.join('?' * len(systems))})" if systems else ""
     if faq:
         cond, args = "UPPER(source_system) = ?", ["FAQ"]
@@ -348,7 +363,8 @@ def edw_rows(edw, keywords=(), faq=False, systems=()):
     # 설정 모델이 <스키마>.<표> 식별자만 받음(SQL 삽입 막기) — [스키마].[표]로 감쌈(MSSQL·SQLite 대역 둘 다)
     table = ".".join(f"[{p}]" for p in pc.cfg().connections.rdb.file_table.split("."))
     rows = edw.q(FSM_SQL.format(table=table, cond=cond, src=src), [*args, *systems])
-    return [{**r, "source_system": src_name(r["source_system"])} for r in rows]
+    rows = [{**r, "source_system": src_name(r["source_system"])} for r in rows]
+    return [r for r in rows if picked(r["source_system"], systems)]  # 목록이 비면 DEV 행 빼기는 파이썬에서(MSSQL·대역 같은 SQL)
 
 
 def faq_sync(reset, out):

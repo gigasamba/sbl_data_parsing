@@ -844,13 +844,28 @@ PG_SOURCES = (
 )  # 원천 스키마 <스키마>_<원천>(search_tables.SOURCES와 같음 — 호스트 python은 common을 못 읽음)
 
 
-def pg_count():
-    """(문서 수, 청크 수) — 원천 스키마 5벌의 합. 못 세면 (0, 0)."""
-    doc, chunk = (" + ".join(f"(SELECT count(*) FROM {PG_SCHEMA}_{s}.{t})" for s in PG_SOURCES) for t in ("doc", "chunk"))
-    rc, out, _ = sh(
-        f"{DOCKER} exec {PG_CONTAINER} psql -U {PG_USER} -d {PG_DB} -Atc 'SELECT {doc}, {chunk}'",
-        timeout=60,
+def _psql(sql):
+    return sh(
+        f"{DOCKER} exec {PG_CONTAINER} psql -U {PG_USER} -d {PG_DB} -Atc {shlex.quote(sql)}", timeout=60
     )  # 설정 칸(PG 컨테이너·DB·스키마)
+
+
+def pg_sources():
+    """원천 이름 — 5벌 + DB에 있는 DEV 원천 스키마 `<스키마>_dev_<n>`(op-17 — 설정에 넣은 DEV 원천은 dbtool up이 만든 뒤 여기 잡힘). 못 읽으면 5벌만."""
+    rc, out, _ = _psql(f"SELECT schema_name FROM information_schema.schemata WHERE schema_name ~ '^{PG_SCHEMA}_dev_[1-9][0-9]?$'")
+    dev = (
+        [n[len(PG_SCHEMA) + 1 :] for n in (out or "").split() if re.fullmatch(rf"{re.escape(PG_SCHEMA)}_dev_[1-9][0-9]?", n)]
+        if rc == 0
+        else []
+    )
+    return (*PG_SOURCES, *sorted(dev, key=lambda s: int(s[len("dev_") :])))
+
+
+def pg_count():
+    """(문서 수, 청크 수) — 원천 스키마(5벌 + 있는 DEV 원천)의 합. 못 세면 (0, 0)."""
+    srcs = pg_sources()
+    doc, chunk = (" + ".join(f"(SELECT count(*) FROM {PG_SCHEMA}_{s}.{t})" for s in srcs) for t in ("doc", "chunk"))
+    rc, out, _ = _psql(f"SELECT {doc}, {chunk}")
     try:
         parts = out.replace("|", " ").split()
         return int(parts[0]), int(parts[1])

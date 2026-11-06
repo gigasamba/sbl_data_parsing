@@ -110,9 +110,33 @@ def _rep_files(s3, bucket, folder):
     return (max(dates) if dates else None), {k: (best[k][1] if k in best else None) for k in ("md", "json")}
 
 
+_DEV_STANDIN: dict = {}  # PC 대역 (대역 폴더, DEV 원천 스키마) → 연결(파일 하나 — 부를 때마다 열지 않게, 폴더가 바뀌면 새로)
+
+
 def _pg(src):
-    """원천 스키마 하나의 gold 연결(검색과 같은 연결 — 못 열거나 질의가 실패하면 예외, 호출부가 registry_unavailable로)."""
-    return _retriever(src).pg
+    """원천 스키마 하나의 gold 연결(검색과 같은 연결 — 못 열거나 질의가 실패하면 예외, 호출부가 registry_unavailable로).
+    DEV 원천(dev_<n> — op-17)은 검색기가 없어 other의 연결로 스키마 이름만 바꿔 읽는다."""
+    if src in ST.SOURCES:
+        return _retriever(src).pg
+    other = _retriever("other").pg
+    schema = ST.src_schema(ST.split_schema(other.schema)[0], src)
+    if not getattr(other, "is_standin", False):
+        from mcp_server.services.search.server_state import SchemaView
+
+        return SchemaView(other.pool_obj, schema)
+    from common.store.pg_standin import StandinPG, standin_dir
+
+    key = (str(standin_dir()), schema)
+    if key not in _DEV_STANDIN:
+        _DEV_STANDIN[key] = StandinPG(schema)
+    return _DEV_STANDIN[key]
+
+
+def _sources():
+    """원천 스키마 전부 — 5벌 + DB(PC는 대역 폴더)에 있는 DEV 원천 스키마 `<기준>_dev_<n>`(op-17). 요청마다 한 번(카탈로그 질의 1번)."""
+    other = _pg("other")
+    standin = getattr(other, "is_standin", False)
+    return ST.all_sources(ST.split_schema(other.schema)[0], None if standin else other.q)
 
 
 def _folder(key):
@@ -153,7 +177,7 @@ def do_list(
                 vals.append(t.isoformat())
         if source_system and str(source_system).upper().removesuffix("-TEST") not in {s.upper() for s in ST.SOURCES}:
             raise BadRequest("source_system은 SFDC·CRMS·LAS·FAQ·Other 중 하나(-test 붙어도 됨)")
-        srcs = [ST.source_of(source_system)] if source_system else list(ST.SOURCES)  # 원천 스키마 고르기 — 안 주면 5벌 모두
+        srcs = [ST.source_of(source_system)] if source_system else None  # 원천 스키마 고르기 — 안 주면 모두(5벌 + DEV)
         for col, v in (("doc_class", doc_class), ("sf_op_id", sf_op_id)):  # doc.attrs 키(없는 원천은 0건)
             if v:
                 conds.append("attrs @> %s::jsonb")  # 담김 — GIN 색인을 탐
@@ -186,7 +210,7 @@ def do_list(
     try:
         rows, matched = [], 0
         for src in (
-            srcs
+            srcs or _sources()
         ):  # 원천 스키마마다 같은 조건 — doc_id는 5벌 공용 시퀀스라 합쳐서 한 줄로 정렬·쪽 넘김(대역은 스키마마다 파일이라 SQL로 못 합침)
             rs, m = _select(_pg(src), src, conds, vals, cursor not in (None, ""), lim)
             rows += rs
@@ -252,9 +276,6 @@ def _esc(x):
     return x.replace("!", "!!").replace("%", "!%").replace("_", "!_")
 
 
-_SYS_LABEL = {s: "Other" if s == "other" else s.upper() for s in ST.SOURCES}
-
-
 def _select(pg, src, conds, vals, has_cursor, lim):
     """원천 스키마 하나 — (이 쪽 행 lim+1개, 쪽과 무관한 matched). cursor 조건·값은 늘 맨 끝. doc_class·sf_op_id는 doc.attrs 키 —
     그 키가 없는 원천은 거르면 0건, 출력은 NULL. source_system 출력 = 스키마의 원천 이름(저장값)."""
@@ -268,7 +289,7 @@ def _select(pg, src, conds, vals, has_cursor, lim):
         f"SELECT doc_id, file_path, {sel}, created_at, sha256, silver_bucket, silver_key FROM {s}.doc{where} ORDER BY doc_id LIMIT %s",
         (*vals, lim + 1),
     )
-    return [{**r, "source_system": _SYS_LABEL[src]} for r in rows], matched
+    return [{**r, "source_system": ST.label(src)} for r in rows], matched
 
 
 def _created_ok(bucket, key, lo, hi, cache):
@@ -277,7 +298,9 @@ def _created_ok(bucket, key, lo, hi, cache):
     md = key[: -len(".json")] + ".md" if key.endswith(".json") else key
     if (bucket, md) not in cache:
         ts = []
-        for src in ST.SOURCES:
+        if "srcs" not in cache:  # cache = 이 요청의 확인 결과 — 원천 목록도 요청마다 한 번
+            cache["srcs"] = _sources()
+        for src in cache["srcs"]:
             pg = _pg(src)
             rows = pg.q(f"SELECT created_at FROM {pg.schema}.doc WHERE silver_bucket = %s AND silver_key = %s", (bucket, md))
             ts += [t for t in (_aware(r["created_at"]) for r in rows) if t]
