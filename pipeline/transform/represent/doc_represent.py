@@ -541,7 +541,7 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
     if "attachments" in feats:
         from pipeline.transform.represent import mail_attachments as att_mod
 
-        att_blocks, att_stats = att_mod.mail_blocks(doc_path, base)
+        base, att_blocks, att_stats = att_mod.mail_blocks(doc_path, base)  # base — 오피스 개체 자리 표시만 더함(pl-63)
         blocks += att_blocks
         info["attachments_parsed"] = att_stats["parsed"]
         info["attachments_cached"] = att_stats["cached"]

@@ -1,4 +1,4 @@
-"""압축 원본 풀기(pl-57) — pipeline.extract.archive(거르기·안 파일) + 압축 엔진 + 첨부 단계의 `[파일 …]` 절."""
+"""압축 원본 풀기(pl-57) — pipeline.extract.archive(거르기) + 꺼내기(unpack — 안 파일 `_parts/`) + 압축 엔진 + 첨부 단계의 `[파일 …]` 절."""
 
 import gzip
 import io
@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from pipeline import config as pc
-from pipeline.extract import archive
+from pipeline.extract import archive, unpack
 from pipeline.extract.filter_and_rotate import _unsupported_reason
 from pipeline.transform.parse.engines import registry
 from pipeline.transform.represent import mail_attachments
@@ -85,7 +85,7 @@ def test_archive_cases():
             assert _unsupported_reason(p) is None, label  # 압축 엔진이 있음 — 받기 전 거르기에서 빠지지 않음
             assert archive.check(p) == reason, (label, archive.check(p))
             if names is not None:
-                assert [e["name"] for e in archive.entries(p)] == names, label
+                assert [it["name"] for it in unpack.unpack(p, p.parent / "_parts")] == names, label
 
 
 def test_too_big_total():
@@ -117,7 +117,9 @@ def test_engine_and_blocks():
         def fake(entry, store=None):
             return f"본문 {entry['bytes'].decode()} 입니다 열다섯 글자 넘게", False, "plaintext"
 
+        unpack.unpack(p, p.parent / "_parts")
         with patch.object(mail_attachments, "parse_attachment", fake):
-            blocks, stats = mail_attachments.mail_blocks(p, out["text"])
+            text, blocks, stats = mail_attachments.mail_blocks(p, out["text"])
+        assert text == out["text"]  # 압축은 위치 표시 없음
         assert blocks == ["[파일 a.txt]\n본문 alpha 입니다 열다섯 글자 넘게", "[파일 sub/b.txt]\n본문 beta 입니다 열다섯 글자 넘게"], blocks
         assert stats["parsed"] == 2 and stats["sources"] == ["pack.tar.gz#a.txt", "pack.tar.gz#sub/b.txt"], stats

@@ -89,10 +89,28 @@ def check(p):
     return None
 
 
-def entries(p):
-    """첨부 단계 — 글을 뽑을 안 파일을 하나씩 {name, bytes, depth}로(메일 첨부 항목과 같은 모양). 그림 파일은 풀지 않고 뺀다
-    (글자만 — pl-57, 메일의 image/* 첨부와 같음). 거르기(check)를 지난 압축 원본만 온다."""
+def members(p):
+    """한 단계 안 파일을 하나씩 (이름, 바이트)로 내는 반복자 — 꺼내기(unpack, pl-63)가 쓴다. 폴더·링크·암호 항목은 빼고,
+    그림 파일은 풀지 않고 뺀다(글자만). 합계·개수 상한에 닿으면 거기서 멈춘다(맨 바깥 원본은 check가 이미 봄 — 메일에 붙은
+    압축 등). 열기·목록은 여기서 바로 해서 못 열면 BROKEN을 낸다(읽는 도중 깨짐은 반복 중에 BROKEN)."""
     p = Path(p)
-    for name, _size, _enc, read in _walk(p, kind_of(p.name)):
-        if Path(name).suffix.lower() not in IMG_EXTS:
-            yield {"name": name, "bytes": read(), "depth": 0}
+    kind = kind_of(p.name)
+    a = _open(p, kind)
+    try:
+        items = _members(a, kind)
+    except BROKEN:
+        a.close()
+        raise
+    max_files, cap = pc.cfg().extract.archive.max_files, _cap_bytes()
+
+    def read_all():
+        total = 0
+        with a:
+            for i, (name, size, enc, item) in enumerate(items):
+                total += size
+                if i >= max_files or total > cap:
+                    return
+                if not enc and Path(name).suffix.lower() not in IMG_EXTS:
+                    yield name, _read(a, kind, item)
+
+    return read_all()

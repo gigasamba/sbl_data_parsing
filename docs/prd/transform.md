@@ -135,7 +135,7 @@
 
 ### QA
 - `tests/general/pipeline/test_attachments.py` · `tests/server/pipeline/test_unpack.py`(pl-63).
-- Status: todo(깊이 2·메일 안 메일·받기 단계 꺼내기 — pl-63과 함께)
+- Status: done
 
 <a id="pl-37"></a>
 ## pl-37 · 그림 근처 맥락

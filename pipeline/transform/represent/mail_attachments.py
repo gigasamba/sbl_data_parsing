@@ -1,22 +1,16 @@
-"""메일(.eml·.msg)·압축 원본(.zip·.tar·.tgz·.tar.gz — pl-57) 후보정 — 첨부(압축은 안 파일) 다시 파싱 + 인용 스레드 단락화.
-원본(doc_path)에서 첨부를 꺼내 형식별 구성 엔진 순서로 파싱하고, 결과는 P0 원본 층(raw_cache.raw_engine_path —
-첨부 sha256 + 엔진@버전)에 캐시해 다시 안 돈다. 대표 본문에는 `[첨부 <파일명>]` 절로만 덧붙인다(base 본문은 그대로).
-인라인 그림(cid)은 figure_extract가 맡아 image/* 첨부는 건너뛴다.
-zip 첨부는 ATTACH_MAX_DEPTH(기본 1)만큼만 풀고, 크기(ATTACH_MAX_MB 기본 20)·개수(ATTACH_MAX_N 기본 10) 상한을 넘으면 건너뜀.
+"""문서 안 문서 후보정(pl-63·pl-36·pl-57) — 받기 단계가 준비 폴더 `_parts/<원본 이름>/`에 꺼내 둔 안 파일
+(`parts.json` — pipeline.extract.unpack)을 형식별 구성 엔진 순서로 파싱하고, 결과는 P0 원본 층(raw_cache.raw_engine_path —
+안 파일 sha256 + 엔진@버전)에 캐시해 다시 안 돈다. 대표 본문 끝에 `[파일 …]`(압축)·`[첨부 …]`(메일)·`[개체 …]`(오피스) 절로
+덧붙이고, 오피스 개체는 있던 자리에 위치 표시 한 줄을 넣는다(못 찾으면 끝 절만). 메일은 인용 스레드도 단락화.
 """
 
-import email
-import io
 import json
 import re
 import time
-import zipfile
-from email import policy
 from pathlib import Path
 
 from common.core.paths import APP_ROOT  # output/ 경계(attach_dir)
 from pipeline import config as pc
-from pipeline.extract import archive
 from pipeline.shared.raw_cache import raw_engine_path, raw_root
 from pipeline.shared.vlmcall import sha
 from pipeline.transform.parse.parse_engines import engine_version
@@ -37,77 +31,41 @@ def attach_dir():
     return rp
 
 
-def _max_n():
-    return pc.cfg().extract.attach.max_n
-
-
-# ── 첨부 꺼내기(형식별) ───────────────────────────────────────────────────
-def _eml_attachments(path):
-    """.eml — 이름이 있는 비-이미지 부분만(이미지는 인라인 그림 — figure_extract가 담당)."""
-    msg = email.message_from_bytes(Path(path).read_bytes(), policy=policy.default)
-    out = []
-    for part in msg.walk():
-        if part.is_multipart() or part.get_content_maintype() == "image":
-            continue
-        name = part.get_filename()
-        if not name:
-            continue  # 본문(text/plain·text/html) — 첨부 아님
-        out.append({"name": str(name), "bytes": part.get_payload(decode=True) or b"", "depth": 0})
-    return out
-
-
-def _msg_attachments(path):
-    """.msg — extract_msg(서버에만 설치, 개발 PC에 없으면 빈 목록으로 조용히 건너뜀)."""
+def parts_of(doc_path):
+    """받기 단계가 꺼내 둔 안 파일 목록(parts.json)과 그 폴더 — 없으면 빈 목록(상자가 아님·받기 단계를 안 거침)."""
+    d = Path(doc_path).parent / "_parts" / Path(doc_path).name
     try:
-        import extract_msg
-    except ImportError:
-        return []
-    m = extract_msg.openMsg(str(path))
-    try:
-        out = []
-        for a in m.attachments:
-            name = a.longFilename or a.shortFilename
-            data = getattr(a, "data", None)
-            if name and isinstance(data, bytes):
-                out.append({"name": str(name), "bytes": data, "depth": 0})
-        return out
-    finally:
-        m.close()
+        return d, json.loads((d / "parts.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return d, []
 
 
-def _expand_zip(entry, cap):
-    """zip 첨부를 cap단(기본 1)까지만 풀기 — 그 밑은 손 안 댐(opaque로 둠, 맞는 엔진 없으면 parse_attachment가 자연히 건너뜀)."""
-    if Path(entry["name"]).suffix.lower() != ".zip" or entry["depth"] >= cap:
-        return [entry]
-    try:
-        zf = zipfile.ZipFile(io.BytesIO(entry["bytes"]))
-        infos = [zi for zi in zf.infolist() if not zi.is_dir()][: _max_n()]  # 읽기 전에 개수·풀린 크기 확인(zip 폭탄)
-        cap_b, total = pc.cfg().extract.attach.max_mb * 1024 * 1024, 0
-        inner = []
-        for zi in infos:
-            total += zi.file_size
-            if zi.file_size > cap_b or total > cap_b:
-                break  # 상한 넘으면 그 뒤는 안 풂(읽은 것까지만)
-            inner.append({"name": f"{entry['name']}#{zi.filename}", "bytes": zf.read(zi), "depth": entry["depth"] + 1})
-    except (zipfile.BadZipFile, OSError):
-        return [entry]
-    if not inner:
-        return [entry]
-    return [e for ie in inner for e in _expand_zip(ie, cap)]
-
-
-def extract(doc_path):
-    """doc_path(.eml·.msg) → 꺼낸 첨부 목록(개수 상한 적용 후 zip 전개) — 다른 형식·오류는 빈 목록."""
-    ext = Path(doc_path).suffix.lower()
-    try:
-        atts = _eml_attachments(doc_path) if ext == ".eml" else _msg_attachments(doc_path) if ext == ".msg" else []
-    except Exception:
-        return []
-    cap = pc.cfg().extract.attach.max_depth
-    out = []
-    for e in atts[: _max_n()]:
-        out += _expand_zip(e, cap)
-    return out
+def place_marks(text, items):
+    """오피스 개체가 있던 자리에 `[개체 <이름>]` 한 줄 — 파워포인트는 그 슬라이드 끝(쪽 나눔 \f 수가 슬라이드 수와 맞을 때만),
+    엑셀은 그 시트 끝(다음 시트 이름표 앞), 워드는 개체 앞 문단 글이 든 줄 뒤. 자리를 못 찾으면 그대로(끝 절만)."""
+    for it in items:
+        w, mark = it["where"], f"[개체 {it['name']}]"
+        if "slide" in w:
+            segs = text.split("\f")
+            if len(segs) == w["slides"]:
+                segs[w["slide"] - 1] = segs[w["slide"] - 1].rstrip("\n") + "\n" + mark + "\n"
+                text = "\f".join(segs)
+        elif "sheet" in w:
+            lines = text.split("\n")
+            names = (w["sheet"], f"[숨김 시트] {w['sheet']}")
+            heads = [i for i, ln in enumerate(lines) if ln.strip() in names]
+            if heads:
+                nexts = (w["next"], f"[숨김 시트] {w['next']}") if w["next"] else ()
+                nxt = [i for i, ln in enumerate(lines) if i > heads[0] and ln.strip() in nexts]
+                lines.insert(nxt[0] if nxt else len(lines), mark)
+                text = "\n".join(lines)
+        elif "after" in w:
+            j = text.find(w["after"])
+            if j >= 0:
+                k = text.find("\n", j + len(w["after"]))
+                k = len(text) if k < 0 else k
+                text = text[:k] + "\n" + mark + text[k:]
+    return text
 
 
 # ── 첨부 1건 파싱(+ P0 캐시) ─────────────────────────────────────────────
@@ -209,31 +167,29 @@ def thread_paragraphs(text):
 
 # ── doc_represent.apply_post가 부르는 진입점 ─────────────────────────────────────────
 def mail_blocks(doc_path, base_text):
-    """.eml·.msg: 인용 스레드 단락 + 첨부별 `[첨부 <파일명>]` 절 · 압축 원본: 안 파일별 `[파일 <안 경로>]` 절(크기·개수 상한은
-    받기의 거르기가 이미 봄 — archive.check) → (덧붙일 블록 목록, 통계{n, parsed, cached, sources}). 다른 형식·오류는 (빈 목록, 0 통계)."""
+    """→ (위치 표시를 넣은 본문, 덧붙일 블록 목록, 통계{n, parsed, cached, sources}). 메일은 인용 스레드 단락을 먼저.
+    안 파일은 받기 단계가 꺼낸 것만(크기·개수·깊이 상한도 거기서 — unpack). 꺼낸 것이 없으면 (본문 그대로, 빈 목록, 0 통계)."""
     stats = {"n": 0, "parsed": 0, "cached": 0, "sources": []}
     blocks = []
-    ext = Path(doc_path).suffix.lower()
-    if ext in archive.EXTS:
-        items, label = archive.entries(doc_path), "파일"
-    elif ext in (".eml", ".msg"):
+    if Path(doc_path).suffix.lower() in (".eml", ".msg"):
         th = thread_paragraphs(base_text)
         if th:
             blocks.append(th)
-        cap = pc.cfg().extract.attach.max_mb * 1024 * 1024
-        items, label = (
-            (e for e in extract(doc_path) if len(e["bytes"]) <= cap),
-            "첨부",
-        )  # 크기 상한 초과는 시도하지 않음(통계 n에도 안 넣음)
-    else:
-        return blocks, stats
-    for entry in items:
+    d, items = parts_of(doc_path)
+    marks = []
+    for it in items:
         stats["n"] += 1
-        text, cached, eng = parse_attachment(entry)
+        try:
+            data = (d / it["file"]).read_bytes()
+        except OSError:
+            continue
+        text, cached, _eng = parse_attachment({"name": it["name"], "bytes": data})
         if not text:
             continue
         stats["parsed"] += 1
         stats["cached"] += int(cached)
-        stats["sources"].append(f"{Path(doc_path).name}#{entry['name']}")  # 원본 위치 = 메일#첨부명
-        blocks.append(f"[{label} {entry['name']}]\n{text}")
-    return blocks, stats
+        stats["sources"].append(f"{Path(doc_path).name}#{it['name']}")  # 원본 위치 = 원본#안 경로
+        blocks.append(f"[{it['kind']} {it['name']}]\n{text}")
+        if it["depth"] == 1 and it.get("where"):  # 이 문서에 바로 든 개체만(더 깊은 것의 위치는 그 안 문서 기준)
+            marks.append(it)
+    return place_marks(base_text, marks), blocks, stats

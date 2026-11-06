@@ -57,9 +57,13 @@ class PipelineConnectionsSecureDoc(Section):
 
 
 class PipelineExtractAttach(Section):
-    max_depth: int | None = F(1, "ATTACH_MAX_DEPTH", "메일 등 첨부 안의 첨부를 따라갈 최대 깊이(단계)")
-    max_mb: float | None = F(20.0, "ATTACH_MAX_MB", "첨부 1개당 크기 상한(MB, 넘으면 건너뜀)")
-    max_n: int | None = F(10, "ATTACH_MAX_N", "문서 하나에서 처리할 첨부 개수 상한(개)")
+    max_depth: int | None = F(
+        2,
+        "ATTACH_MAX_DEPTH",
+        "문서 안 문서(압축 안 파일·메일 첨부·오피스 개체)를 꺼낼 최대 깊이 — 원본에서 종류가 섞여도 같이 셈(단계, pl-63)",
+    )
+    max_mb: float | None = F(20.0, "ATTACH_MAX_MB", "메일 첨부·오피스 개체 1개당 크기 상한(MB, 넘으면 건너뜀)")
+    max_n: int | None = F(10, "ATTACH_MAX_N", "메일·오피스 문서 하나에서 꺼낼 첨부·개체 개수 상한(개)")
     timeout: float | None = F(120.0, "ATTACH_TIMEOUT", "첨부 1개를 별도 프로세스로 파싱할 때 제한 시간(초)")
 
 
