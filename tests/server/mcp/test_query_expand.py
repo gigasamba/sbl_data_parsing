@@ -147,16 +147,16 @@ def _selftest_alias_roster():
         w.writerows(rows)
     g = load_glossary(d)
 
+    from types import SimpleNamespace
     from unittest import mock
 
     from common.store import master
 
-    fake = master.Master(
-        {
-            "domain_terms": list(csv.DictReader((d / "domain_terms.csv").read_text(encoding="utf-8-sig").splitlines())),
-            "client_roster": [{"canonical_name": "Celltrion", "aliases": "CT Inc"}],
-        }
-    )  # pl-38 — 명부·용어 사전은 마스터 표(시험은 가짜 마스터)
+    tables = {
+        "domain_terms": list(csv.DictReader((d / "domain_terms.csv").read_text(encoding="utf-8-sig").splitlines())),
+        "client_roster": [{"canonical_name": "Celltrion", "aliases": "CT Inc"}],
+    }
+    fake = SimpleNamespace(hash="test-alias-roster", rows=lambda n: tables.get(n, []))  # pl-38 — 옛 행 모양을 바로 주는 가짜 마스터
     _env = mock.patch.object(master, "get", lambda: fake)
     _env.start()
     try:
@@ -180,11 +180,9 @@ def _selftest_case_insensitive_glossary():
     캐파/capa(사업, 생산능력)는 **대소문자로** 분리(독립 검토②③ — context_required로 분리하면 "CAPA 절차서의
     기록 보관 기간은?"처럼 문맥어가 없는 흔한 질문에서 QUAL.CAPA 확장이 빠져 synth-terms-hard evid_hit1·
     gold_top1 회귀(HQ-T011) — QUAL.CAPA는 그대로 case_sensitive=Y·context_required 없음(이 작업 전과 바이트
-    동일), BIZ.CAPACITY만 소문자+문맥). 실제 기본 사전(glossary/domain_terms.csv)으로 검증 — 코드뿐 아니라 그
+    동일), BIZ.CAPACITY만 소문자+문맥). 실제 기본 사전(마스터 glossary — PC는 git glossary.csv로 채운 대역)으로 검증 — 코드뿐 아니라 그
     CSV 데이터가 실제로 반영되는지까지 본다."""
-    from common.core.paths import GLOSSARY_ROOT
-
-    g = load_glossary(GLOSSARY_ROOT)
+    g = load_glossary()
 
     # 전체 영문명·한/영 동의어 — 대소문자 섞여도(소문자·전체 대문자·한글) 잡힘
     for q in ("Drug substance 공정", "DRUG SUBSTANCE 생산", "원료의약품 생산"):

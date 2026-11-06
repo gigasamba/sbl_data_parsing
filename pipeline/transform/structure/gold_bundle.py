@@ -244,7 +244,7 @@ def infer_clients(docs, head=400, roster=None):
 
 
 def warn_if_no_client_roster(docs):
-    """명부(마스터 client_roster·용어 사전 org_client + stack.json client_aliases)가 비어 있어 infer_clients가
+    """명부(마스터 glossary의 고객·용어 org_client + stack.json client_aliases)가 비어 있어 infer_clients가
     아무것도 못 채운 채(묶음에 문서가 있는데도 client가 전부 빈 채) 끝났으면 경고 한 줄만(동작은 안 바꿈 — 이
     묶음을 쓰는 검색 쪽 clientscope·엔티티 분해가 조용히 무동작이 되는 원인을 빌드 시점에 알린다)."""
     if not docs or any(d.get("client") for d in docs):
@@ -253,7 +253,7 @@ def warn_if_no_client_roster(docs):
         return  # 명부는 있는데 이 묶음 문서들이 그냥 다 안 걸렸을 뿐 — 경고 대상 아님
     print(
         "WARNING: 고객 명부 없음 — client 메타가 비어 고객 필터·비교 분할이 동작 안 함"
-        " (마스터 표 확인: `dbtool master load` — resources/vocab/glossary/client_roster.csv·domain_terms.csv)",
+        " (마스터 표 확인: `dbtool master load` — resources/vocab/glossary/glossary.csv)",
         file=sys.stderr,
         flush=True,
     )

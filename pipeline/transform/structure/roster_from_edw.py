@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""EDW 고객·제품 마스터(추출본) → CLIENT_ROSTER CSV(고객)·용어집 draft(제품) 자동 생성. 열 매핑만 바꾸는
+"""EDW 고객·제품 마스터(추출본) → glossary.csv 고객 줄(고객)·용어집 draft(제품) 자동 생성. 열 매핑만 바꾸는
 식(candidate_pick과 같은 틀 — 표 이름·열 이름은 사람이 적는 매핑 파일 하나, 코드는 안 바뀜) — 실제
 EDW 접속 정보·열 이름(기밀)은 서버 settings.yaml에서만 채우고, 이 코드는 어떤 매핑이든 그대로 돈다.
 
@@ -8,16 +8,16 @@ EDW 접속 정보·열 이름(기밀)은 서버 settings.yaml에서만 채우고
 없어 시험 대상이 아니다(selftest는 csv:만).
 
 mapping.json(필수 name, 선택 aliases·category): {"name": "<열 이름>", "aliases": "<열 이름>", "category": "<열 이름>"}
-  --kind client는 명부 양식(ROSTER_COLS)으로 쓴다. 매핑에 그 칸 이름을
+  --kind client는 glossary.csv의 고객(kind=client) 줄로 쓴다(--out이 있으면 고객 줄만 바꿈). 명부 칸(ROSTER_COLS) 이름을
   키로 더 적으면(client_id·name_ko·client_type·segment·country·parent_client_id·status·description·updated) 마스터의
   그 열을 옮겨 적고, 안 적은 칸은 빈칸. source 칸은 --source 값. 예시 resources/vocab/glossary/client_master_map.example.json.
 
 사용:
-  python -m pipeline.transform.structure.roster_from_edw --kind client  --source csv:client_master.csv  --mapping map.json --out CLIENT_ROSTER.csv
+  python -m pipeline.transform.structure.roster_from_edw --kind client  --source csv:client_master.csv  --mapping map.json --out glossary.csv
   python -m pipeline.transform.structure.roster_from_edw --kind product --source csv:product_master.csv --mapping map.json --out output/glossary_draft/domain_terms_draft_product.csv
 
 --kind product의 --out은 **GLOSSARY_DIR이 아니라 draft CSV 파일**(terms.write_draft_terms — GLOSSARY_DIR에 바로 쓰면
-서버에서 이미지 밖 실 운영 사전 폴더라 권한 오류가 날 수 있다). 사람이 검토해 domain_terms.csv로 옮겨야 검색에
+서버에서 이미지 밖 실 운영 사전 폴더라 권한 오류가 날 수 있다). 사람이 검토해 glossary.csv(구분 term 줄)로 옮겨야 검색에
 반영된다(glossary_suggest와 같은 관례)."""
 
 import common  # noqa: F401 — 설정 파일 검사(settings.pin_env)를 첫 줄에서
@@ -31,23 +31,11 @@ import re
 from pathlib import Path
 
 from common.core import terms as T
+from common.store import master as M
 
 TABLE_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")  # discover_columns.TABLE_ID_RE와 같은 화이트리스트
 COL_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-ROSTER_COLS = [
-    "client_id",
-    "canonical_name",
-    "name_ko",
-    "aliases",
-    "client_type",
-    "segment",
-    "country",
-    "parent_client_id",
-    "status",
-    "description",
-    "source",
-    "updated",
-]  # common.core.terms 명부 양식
+ROSTER_COLS = M.SHAPES["client_roster"]  # 명부 칸(마스터 glossary client 줄로 되돌린 모양 — common.store.master)
 EXTRA_KEYS = [c for c in ROSTER_COLS if c not in ("canonical_name", "aliases", "source")]  # optional mapping keys
 
 
@@ -115,29 +103,33 @@ def build_client_extra(rows, mapping):
 
 
 def write_client_roster(roster, out_path, extra=None, source=""):
-    """CLIENT_ROSTER CSV in the new roster format (ROSTER_COLS — the same header as resources/vocab/glossary/client_roster.csv,
-    aliases joined with |). extra = build_client_extra() result; source = where it came from (--source)."""
+    """명부 → glossary.csv의 고객(kind=client) 줄(common.store.master.melt — `master load`가 그대로 읽음). extra = build_client_extra() 결과,
+    source = 출처(--source). out_path가 이미 있으면(glossary 꼴이어야 함 — 아니면 SystemExit) 고객 줄만 바꾸고 다른 줄(용어·ID 꼴)은 그대로."""
     extra = extra or {}
-    with open(out_path, "w", encoding="utf-8", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(ROSTER_COLS)
-        for name, al in roster.items():
-            row = {**extra.get(name, {}), "canonical_name": name, "aliases": "|".join(al), "source": source}
-            w.writerow([row.get(c, "") for c in ROSTER_COLS])
+    rows = [{**extra.get(n, {}), "canonical_name": n, "aliases": "|".join(al), "source": source} for n, al in roster.items()]
+    keep = [r for r in M.read_csv(out_path) if r["kind"] != "client"] if Path(out_path).exists() else []
+    M.write_csv(M.melt({"client_roster": rows}) + keep, out_path)
+
+
+def _client_rows(path):
+    """명부 파일 → ([(정식 이름, [별칭…])], 인코딩) — glossary.csv(고객 줄)와 옛 명부 꼴(SFDC 내보내기 등) 둘 다."""
+    if M.is_glossary(path):  # 첫 칸 kind — 옛 꼴로 읽으면 'kind'·'client'가 고객 이름이 됨. 머리글이 어긋나면 read_csv가 거부
+        return T._roster_dicts(M.to_tables(M.read_csv(path))["client_roster"]), T._read_text(path)[1]
+    return T._roster_rows(path)
 
 
 def check_roster(path):
-    """E15 — 서버에서 내보낸 CLIENT_ROSTER 파일 점검(적용 전에 사람이 돌림) → (오류 목록, 경고 목록, 고객 수).
+    """E15 — 명부 파일(glossary.csv 또는 옛 명부 꼴 내보내기) 점검(적용 전에 사람이 돌림) → (오류 목록, 경고 목록, 고객 수).
     오류 = 적용하면 안 됨(읽기 실패·고객 0건) · 경고 = 적용은 되지만 확인할 것(cp949·같은 이름 여러 줄·무시될 짧은
     영문 별칭·여러 고객이 같이 쓰는 별칭·다른 고객의 정식 이름과 같은 별칭)."""
     errs, warns = [], []
     try:
-        rows, enc = T._roster_rows(path)
-    except Exception as e:  # 어떤 읽기 실패든 '적용 불가'로 보고
+        rows, enc = _client_rows(path)
+    except (Exception, SystemExit) as e:  # 어떤 읽기 실패든 '적용 불가'로 보고(glossary 꼴 거부는 SystemExit)
         return [f"읽기 실패: {type(e).__name__}: {e}"], [], 0
     if enc != "utf-8":
         warns.append(f"인코딩 {enc}로 읽음 — 읽히긴 하지만 UTF-8로 다시 저장 권장")
-    roster = T.read_roster(path)
+    roster = T._merge_roster(rows)
     if not roster:
         errs.append("고객 0건(머리글만 있거나 1열이 비어 있음)")
     names = [n for n, _ in rows]
@@ -167,10 +159,10 @@ def main(argv=None):
     ap.add_argument("--mapping", help="매핑 JSON 경로({name, aliases?, category?})")
     ap.add_argument(
         "--out",
-        help="--kind client — CLIENT_ROSTER CSV 출력 경로 · --kind product — draft CSV 출력 경로"
+        help="--kind client — glossary.csv 경로(있으면 고객 줄만 바꿈) · --kind product — draft CSV 출력 경로"
         "(GLOSSARY_DIR 아님, 독립 검토 BLOCK 1 — output/ 아래에 쓸 것)",
     )
-    ap.add_argument("--check", metavar="CLIENT_ROSTER", help="E15 — 내보낸 고객 명부 파일 점검만(오류 있으면 종료 코드 1)")
+    ap.add_argument("--check", metavar="CSV", help="E15 — 명부 파일(glossary.csv·옛 명부 꼴) 점검만(오류 있으면 종료 코드 1)")
     a = ap.parse_args(argv)
     if a.check:
         errs, warns, n = check_roster(a.check)
@@ -193,9 +185,9 @@ def main(argv=None):
     roster = build_roster(rows, mapping)
     if a.kind == "client":
         if not a.out:
-            ap.error("--kind client는 --out(CLIENT_ROSTER 경로) 필요")
+            ap.error("--kind client는 --out(glossary.csv 경로) 필요")
         write_client_roster(roster, a.out, build_client_extra(rows, mapping), source=a.source)
-        print(f"[gen_roster] CLIENT_ROSTER {len(roster)}건 → {a.out}", flush=True)
+        print(f"[gen_roster] 고객 {len(roster)}건 → {a.out}(glossary 고객 줄)", flush=True)
     else:
         if not a.out:
             ap.error("--kind product는 --out(draft CSV 경로) 필요")
