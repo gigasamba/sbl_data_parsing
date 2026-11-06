@@ -158,6 +158,9 @@ def _rdb_plan(table, state, limit=0, done=frozenset()):
     """문서 위치 표(csv:)의 대상 행 → (names, fetch_one(name, dest) → manifest 행). 고르고(rdb_pick) staging에 받은 뒤(download)
     fetch_one이 staging 파일을 dest/name으로 하드 링크한다(받지 못한 문서가 있으면 멈춤). 다른 원천의 같은 내용 파일도 따로 받는다."""
     by_name, n_seen = CP.rdb_pick(table, state, limit, done)
+    rows = list(by_name.values())
+    name_of = _rerun_names({r["key"]: n for n, r in by_name.items()}, rows, _read_manifest(state))  # 앞 실행 이름과 겹치지 않게
+    by_name = {name_of[r["key"]]: r for r in rows}
     names = sorted(by_name)
     failed = download(list(by_name.values()), state, max(1, int(pc.cfg().extract.source.fetch_workers)))
     if failed:
@@ -216,6 +219,28 @@ def resolve(source, out, limit=0, done=frozenset()):
     return _folder_tree(src, files[: limit or None], Path(out), state)
 
 
+def _rerun_names(name_of, rows, man):
+    """이번 행의 문서 이름(name_of = 이번 실행 안에서 고른 원본 키 → 이름) → 앞 실행 manifest 행과도 겹치지 않는 이름(rdb·PC 폴더 같음).
+    같은 키면 그 문서라 앞 이름 그대로, 다른 키가 쓴 이름이면 `_rdb_names`와 같은 꼴(`<상위 폴더>__<이름>`, 그래도 겹치면 키 전체를 `__`로 이음)."""
+    by_key = {r["key"]: r for r in rows}
+    out = {r.get("key"): n for n, r in man.items() if r.get("key") in by_key}  # 같은 문서 다시 — 앞 이름 그대로
+    taken = set(man)
+    for k, n in name_of.items():
+        if k not in out:
+            r = by_key[k]
+            out[k] = next(
+                c
+                for c in (
+                    n,
+                    CP._safe_name(f"{r['doc_id']}__{r.get('filename') or r['doc_id']}", ""),
+                    CP._safe_name(k.replace("/", "__"), ""),
+                )
+                if c not in taken
+            )
+            taken.add(out[k])
+    return out
+
+
 def _folder_tree(src, files, out, state):
     """PC 폴더 원천이 원천별 하위 폴더(`SFDC/<uuid>/<파일>` — Object Storage 키 모양)면: rdb 배치와 같게
     평평한 폴더(`<out>/_source_files`)에 복사하고 manifest.jsonl에 상대 키(`key`)·원본 주소(`uri`)·원천(맨 위 폴더 이름)을 적는다 —
@@ -232,24 +257,22 @@ def _folder_tree(src, files, out, state):
         }
         for p in files
     ]
-    name_of = CP._rdb_names(rows)
-    man = []
+    man, names = _read_manifest(state), []  # 앞 실행 행은 남김(rdb와 같음) — 같은 결과 폴더의 앞 문서도 구조화·적재가 원천·키를 찾음
+    name_of = _rerun_names(CP._rdb_names(rows), rows, man)
     for r in rows:
         name = name_of[r["key"]]
         f = _safe_join(local, name)
         shutil.copy2(r["path"], f)
-        man.append(
-            {
-                "file_name": name,
-                "uri": r["path"].resolve().as_uri(),
-                "key": r["key"],
-                "original_filename": r["filename"],
-                "source_system": CP._known_source(r["source"]),  # 맨 위 폴더 = 원천(_tree_files가 확인함)
-                **_hashed(f),
-            }
-        )
-    C.put(SOURCE_MANIFEST=str(_write_manifest(state, man)))  # rdb 배치와 같은 인계(원본 위치 주소 — contract.make_source_uri)
-    names = [m["file_name"] for m in man]
+        names.append(name)
+        man[name] = {
+            "file_name": name,
+            "uri": r["path"].resolve().as_uri(),
+            "key": r["key"],
+            "original_filename": r["filename"],
+            "source_system": CP._known_source(r["source"]),  # 맨 위 폴더 = 원천(_tree_files가 확인함)
+            **_hashed(f),
+        }
+    C.put(SOURCE_MANIFEST=str(_write_manifest(state, man.values())))  # rdb 배치와 같은 인계(원본 위치 주소 — contract.make_source_uri)
     print(f"[source] 폴더 {src}(하위 폴더 {len(names)}개 파일 — 상대 키로 manifest) · 대상 {len(names)}개", flush=True)
     return local, names, state
 

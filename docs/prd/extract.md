@@ -114,13 +114,13 @@ A: `, 절 `DS`. 5행 = `divider`만 → 건너뜀. 머리글 없는 시트 `memo
    - 이번 실행의 표지: 문서 폴더(`_docflow/<순번>`) 위의 `_seen_sha/<sha256>`(내용 = 먼저 받은 원본 키). 대상 목록(`candidate_pick list`)이 실행을 시작할 때 비우고, `stage`가 중복 제외에서 만든다(임시 파일을 `os.link`로 붙여 — 동시에 받는 둘 중 하나만 이김). 같은 원본 키면(받기 다시 시도) 중복이 아니다.
 2. staging 파일을 다시 쓸 때는 내용이 같을 때만이다 — Object Storage ETag(받은 판 옆 `<이름>.etag`)가 지금과 같아야 한다. 크기만 같거나 ETag가 없으면 다시 받는다.
 3. `pipeline/extract`는 `pipeline/transform`을 import하지 않는다. 지원 확장자 목록(엔진이 있는 확장자)은 `pipeline/shared`의 한 곳에서 읽는다.
-4. 원천 이름은 FileStorageMap `source_system` 칸 값 하나다(PC 폴더는 맨 위 폴더 이름 — [load-schema.md#pl-28](load-schema.md#pl-28) 규칙 3). 게시·구조화·건너뜀 기록이 모두 manifest로 넘어온 그 값을 쓰고, 원본 키에서 다시 구하지 않는다.
+4. 원천 이름은 FileStorageMap `source_system` 칸 값 하나다(PC 폴더는 맨 위 폴더 이름 — [load-schema.md#pl-28](load-schema.md#pl-28) 규칙 3). 게시·구조화·건너뜀 기록이 모두 manifest로 넘어온 그 값을 쓰고, 원본 키에서 다시 구하지 않는다. manifest는 받기마다 앞 실행 행을 남기고 이번 문서 행만 고쳐 쓴다(rdb·PC 폴더 같음) — 같은 결과 폴더를 다시 쓰면 구조화가 앞 문서의 원천·원본 키도 그대로 찾는다. 문서 이름(rdb·PC 폴더)은 앞 실행 행과도 겹치지 않는다(`candidate_ready._rerun_names`) — 같은 원본 키면 앞 이름 그대로, 다른 키가 쓴 이름이면 `<상위 폴더>__<이름>`(그래도 겹치면 원본 키의 `/`를 `__`로).
 
 ### 비고(지금 코드와 다른 점)
 - 러너 `run_pipeline.stage_one`은 앞 실행의 문서 폴더를 원본 키만 보고 다시 쓴다(`stage`를 부르지 않음 — ETag 비교 없음, 이번 실행 표지도 만들지 않아 같은 밤 같은 내용 문서가 뒤에 오면 둘 다 파싱). 원본을 지울 때 `.etag` 옆 파일은 남는다(`drop_original`이 `.bin`만 지움).
 - `candidate_pick._filter_unsupported_rows`·`filter_and_rotate`가 `transform.parse.engines.registry`를 import한다.
 
 ### QA
-- `tests/server/pipeline/test_stage_batch.py` `test_same_night_dup`(문서마다 stage 사례 표: 같은 밤 같은 내용 → `dup_run`·`except_doc_info` `skip` `duplicate_sha256`, 같은 원본 다시 받기·다른 내용 → 남음, 1건 중복 제외는 `keep.txt`만) · `test_rdb_stage_once`(크기 같고 ETag 다름 → 다시 받음, 같은 ETag → 다시 씀, manifest 한 번·sha256 담음) · `test_skip_docs.py`(`list`가 표지 폴더를 비움).
+- `tests/server/pipeline/test_stage_batch.py` `test_same_night_dup`(문서마다 stage 사례 표: 같은 밤 같은 내용 → `dup_run`·`except_doc_info` `skip` `duplicate_sha256`, 같은 원본 다시 받기·다른 내용 → 남음, 1건 중복 제외는 `keep.txt`만) · `test_rdb_stage_once`(크기 같고 ETag 다름 → 다시 받음, 같은 ETag → 다시 씀, manifest 한 번·sha256 담음) · `test_skip_docs.py`(`list`가 표지 폴더를 비움) · `test_candidate.py` `test_rerun_keeps_source`(같은 결과 폴더 다시 실행 사례 표: 이번 목록은 이번 문서만, 묶음의 앞 문서는 원천·원본 키 그대로 — other로 안 감, 실행 사이 같은 파일 이름·같은 키 다시).
 - 정할 것: `check_modules`에 extract → transform import 거부 규칙.
 - Status: todo

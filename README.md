@@ -389,6 +389,32 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 > 이미 돌고 있는 서버를 새 판으로 올리는 법(판 확인·백업·새 이미지·DB 판·되돌리기 — 복사해 붙이는 명령과 기대 출력)은 [upgrade-guide.md](docs/operations/upgrade-guide.md)다. **0.1.0이 만든 DB에 `migrate up`을 그냥 하지 않는다**(검색 판 `0002_search`가 옛 표를 지움 — 그 문서 §0). 아래는 새 서버 설치다.
 
+> 개발 서버를 처음 맡았다면 [handover-guide.md](docs/operations/handover-guide.md)를 먼저 따라 한다 — 자기 벌 하나를 만들어 `DEV-<숫자>` 문서를 처리하고 검색까지, 단계마다 `cd`할 폴더·명령·성공 출력을 차례로 적었다.
+
+<a id="핵심-명령"></a>
+**핵심 명령**(root 셸 · 셸을 열면 먼저 `export DOCKER=podman` · `<루트>` = 벌 폴더 = 코드 폴더, 예 `/home/sbl/sbl_data_parsing-main-1`)
+
+서버에서는 `docker run`·`docker start`·`docker compose`를 직접 치지 않는다. 이미지 불러오기는 `load.sh`, 컨테이너 띄우기·멈추기·로그는 `host_ctl.sh`가 맡는다 — `host_ctl.sh`는 compose를 감싸 settings.yaml에서 컨테이너 이름·포트·볼륨을 채우고, 컨테이너 도구는 `$DOCKER`(podman 또는 docker — 없으면 `ops.host.container_cli`)를 쓴다. 아래 `host_ctl.sh`·`pipe_exec.sh`는 `deploy/host/scripts/`에 있다.
+
+| 하고 싶은 일 | 들어갈 폴더(`cd`) | 명령 | 성공하면 보이는 것 |
+|---|---|---|---|
+| 이미지 불러오기(서버에 한 번) | 공용 폴더(`/home/sbl`) | `bash sbl_images-main/load.sh <이미지 판>` | `== <이미지> — load` 줄들 → `BUILD.txt` 내용 → `== 끝 — settings.yaml 이미지 칸(…)을 위 태그로` |
+| 벌 폴더 처음 채우기 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>` | `[host_ctl init] 루트: …` → `만듦 …settings.yaml` 등 → 빈 필수 칸 **이름** 목록 |
+| 설정 확인(값은 안 찍음) | `<루트>` | `bash deploy/host/scripts/host_ctl.sh config --quiet && echo 설정 OK` | `설정 OK` |
+| 띄우기 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp`(서비스 하나만도 됨) | 아래 `ps`에 세 줄 `Up` |
+| 상태 · 로그 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh ps` · `… logs --tail 100 mcp`(서비스 이름 `data-pipeline`·`mcp-data-parsing`·`mcp`) | 이 벌의 컨테이너만 · 그 컨테이너 로그 |
+| 전체 점검 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh check` | 마지막 줄 `[host_ctl check] 통과 — 6개` |
+| DB 표 만들기(처음 한 번 — 공용 DB) | `<루트>`(`data-pipeline`이 떠 있어야 함) | `bash deploy/host/scripts/pipe_exec.sh migrate up --target all --dim <임베딩 차원>` → `… migrate master load` | `[migrate] <갈래> <스키마>: 판 [...] (끝 …)` · `[pipe_exec] … 끝 (종료 코드 0)` |
+| DB 담당 검토용 SQL(DB에 붙지 않음) | `<루트>` | 위 `migrate up` 명령 끝에 `--sql /app/output/up.sql` | `[migrate] SQL → /app/output/up.sql (DB에 붙지 않음 — …)` — 호스트에서는 `<루트>/output/up.sql` |
+| 파이프라인 한 번(시험 2건) | `<루트>` | `nohup python3 deploy/host/scripts/run_pipeline.py --limit 2 > run_first.out 2>&1 &` | `deploy/host/scripts/test_space/batch_progress/progress.log` 끝 줄 `=== 문서별 flow 끝: 2건(완료 2 · …) · … · 종료 코드 0 ===` |
+| 설정을 바꾼 뒤 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline mcp-data-parsing mcp`(그냥 `up -d`는 다시 만들지 않음) | `ps`에 세 줄 `Up`(방금 시작) |
+| 멈추기 · 지우기 | `<루트>` | **타이머부터** `systemctl stop mcp-server-keepalive.timer data-pipeline-nightly.timer` → `bash deploy/host/scripts/host_ctl.sh stop`(지우기는 `down`) | `ps`에 세 줄 `Exited`(`down`이면 줄 없음) |
+| 자동 실행 타이머 켜기 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh timers` → 확인 `systemctl list-timers 'mcp-server-keepalive*' 'data-pipeline-nightly*'` | `  씀  /etc/systemd/system/<단위>` 네 줄 · 목록에 두 타이머의 다음 실행 시각 |
+| 새 판 올리기 | `<루트>` | [§5-8](#5-8-새-판-올리기--덮어쓰기) · 전체 순서 [upgrade-guide.md](docs/operations/upgrade-guide.md) | `host_ctl.sh check` 통과 |
+| 두 번째 벌 | 공용 폴더 → 새 `<루트>` | [handover-guide §13](docs/operations/handover-guide.md#13-두-번째-벌-만들기) | 그 벌 폴더의 `host_ctl.sh ps`에 `-2` 컨테이너만 |
+
+번호가 붙은 벌(`…-main-2`)이면 컨테이너·타이머 이름 끝에 `-<번호>`가 붙는다(예 `mcp-server-keepalive-2.timer`).
+
 ### 5-0. 배포 단계와 개발 서버 설치
 
 모드마다 이미지를 따로 빌드한다(이미지·코드·띄우는 법은 [§1-3 실행 모드 표](#실행-모드)). 순서는 셋이다.
@@ -439,7 +465,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 4. 설정을 채운다 — `<루트>/settings.yaml` 맨 위 `required`의 빈 값(§5-3 ② "꼭 채울 값"). 이미지 칸에는 2에서 불러온 실행 이미지 태그(`data-pipeline-runtime:<이미지 판>`·`mcp-server-runtime:<이미지 판>`). 자원 상한도 본다(아래).
    - EDW 표 설명 자료(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료, 받는 곳은 refactor.md C-91)를 루트 아래 결과 폴더에 복사하고(`<루트>/output/edw_meta/`, UID 10001이 읽을 수 있게) `search.edw_meta.edw_meta_catalog_dir: /app/output/edw_meta`를 적는다. 없으면 `edw_meta` 도구만 `not_configured`로 답한다(나머지 도구는 그대로).
 5. `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline`(코드 폴더에서 — DB 도구가 그 안에서 돈다).
-6. DB(§5-3 ③): `bash deploy/host/scripts/pipe_exec.sh migrate check --target all` → `… migrate up --target all --dim <임베딩 차원>`(차원 = 임베딩 모델 출력 크기, 모델 담당 확인 · DB 담당이 SQL을 먼저 보려면 같은 명령에 `--sql /app/output/up.sql` — DB에 붙지 않고 `<루트>/output/up.sql`만 씀) → `… migrate master load` → `… migrate check --target all`(기대: 갈래마다 판 끝).
+6. DB 표를 만든다 — [§5-3 ③](#5-3-서버--처음-설치-자세히)의 명령(검토용 SQL → `migrate up` → `migrate master load` → `migrate check`).
 7. `bash deploy/host/scripts/host_ctl.sh up -d mcp-data-parsing mcp`(검색 MCP는 시작할 때 마스터 표를 읽으므로 6 뒤).
 8. `bash deploy/host/scripts/host_ctl.sh check` — check_env → ping_models → migrate check → 두 이미지 selftest → 검색 MCP `/health`, 처음 실패에서 멈춘다. 기대 마지막 줄: `[host_ctl check] 통과 — 6개`. 실행 이미지(`*-runtime`)면 스크립트가 자기 코드 폴더를 `/app/deploy`에 붙인다(셸·systemd에 `CODE_DIR`가 있으면 그 값).
 9. 시작 로그 첫 줄 `[image] 이미지 … · 코드 <커밋> · 의존성 …`으로 판을 확인하고, 첫 게시는 §5-3 ④의 미리보기부터, 첫 문서를 넣은 뒤 `mcp_smoke --source <원천>`으로 검색 근거를 확인한다(§4-5).
@@ -469,77 +495,19 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 | `sbl_data_parsing-main` | `data-pipeline` · `mcp-data-parsing` · `mcp-server` | `compose` | `data-pipeline-nightly.timer` · `mcp-server-keepalive.timer` |
 | `sbl_data_parsing-main-2` | `data-pipeline-2` · `mcp-data-parsing-2` · `mcp-server-2` | `compose-2` | `data-pipeline-nightly-2.timer` · `mcp-server-keepalive-2.timer` |
 
-- 포트는 벌마다 그 벌의 `settings.yaml`에 다르게 적는다 — `search.server.mcp_port`(검색 MCP, 기본 8765) · `ops.services.data_parsing.data_parsing_port`(작업 서비스, 기본 8766) · (작업 공간을 켜면) `option.devbox.ssh_port`. 번호가 붙은 벌인데 앞 두 포트가 기본값 그대로면 시작 거부(다른 벌과 겹침).
+- 포트는 벌마다 그 벌의 `settings.yaml`에 다르게 적는다 — `search.server.mcp_port`(검색 MCP, 기본 8765) · `ops.services.data_parsing.data_parsing_port`(작업 서비스, 기본 8766) · (작업 공간을 켜면) `option.devbox.ssh_port`. **번호가 붙은 벌은 `-1`이라도 앞 두 포트가 기본값 그대로면 시작 거부**(다른 벌과 겹침).
 - 운영 서버(`prd`)에서 번호가 붙은 폴더면 시작 거부(종료 2 — 운영은 한 벌, 폴더 이름에서 번호를 뗀다).
-- PG 스키마·EDW 기록 표·게시 경로는 벌마다 나뉘지 않는다 — 모든 벌이 같은 기준 스키마를 함께 쓴다. 그래서 **모든 벌이 같은 코드 판**이어야 한다(DB 표 판이 하나).
+- PG 스키마·EDW 기록 표·게시 경로는 벌마다 나뉘지 않는다 — 모든 벌이 같은 기준 스키마를 함께 쓴다. 그래서 **모든 벌이 같은 코드 판**이어야 한다(DB 표 판이 하나). `migrate up --target all`·`migrate master load`는 공용 DB에 아무 벌 하나에서 한 번.
+- 벌마다 문서를 나누는 것은 원천이다 — 그 벌의 settings.yaml `required.source.source_systems`에 자기 원천 `DEV-<숫자>`(예 `[DEV-2]`)를 적으면 그 문서만 파싱해 원천 스키마 `<기준>_dev_<숫자>`에 적재하고 `DEV-<숫자>/…`에 게시한다. **비우면 운영 5개 원천 전부를 파싱한다.** 벌 번호와 `DEV-<숫자>`는 따로 정해지므로 같은 숫자로 맞춰 쓴다.
+- 새 `DEV-<숫자>`를 넣은 벌은 `migrate up --target search`를 한 번 해 원천 스키마를 만든다(없으면 적재가 멈춤). ⚠️ 이 명령은 어느 벌에서 부르든 **DB에 있는 모든 `<기준>_dev_*` 스키마(다른 벌 것 포함)를 함께 끝 판으로 올린다.** 검토용 SQL·순서는 [handover-guide §5](docs/operations/handover-guide.md#5-db-판--검토용-sql-뽑기--migrate-up).
 - compose를 직접 부르지 않는다 — `host_ctl.sh`가 폴더 이름과 settings.yaml로 이름·포트를 채운다. 컨테이너 명령은 셸 `DOCKER`가 있으면 그 값, 없으면 `ops.host.container_cli`.
-
-```yaml
-# /home/sbl/sbl_data_parsing-main-2/settings.yaml — 벌마다 다른 칸(나머지 접속·모델·이미지 칸은 다른 벌과 같게)
-ops:
-  services:
-    data_parsing:
-      data_parsing_port: 8776       # parse_document 작업 서비스 포트(기본 8766 — 검색 MCP도 이 값으로 부름)
-search:
-  server:
-    mcp_port: 8775                # 검색 MCP 포트(기본 8765)
-option:
-  devbox:
-    ssh_port: 2223                # 선택 — 개발 작업 공간(아래)
-    opencode_config: /home/sbl/opencode.json   # 선택 — 공용 opencode 설정
-```
-- 명령(root 셸 — 벌 폴더 안에서):
-```bash
-cd /home/sbl && unzip -q <코드 zip> && mv sbl_data_parsing-<판> sbl_data_parsing-main-2   # 새 벌 폴더
-cd sbl_data_parsing-main-2
-bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>                    # settings.yaml·edw_chain.yaml·output/ 생김 → 위 칸을 채움
-bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>                    # ssh_port를 적었으면 한 번 더 — home/ 생김(없으면 up이 종료 2)
-bash deploy/host/scripts/host_ctl.sh up -d data-pipeline                         # → data-pipeline-2
-bash deploy/host/scripts/pipe_exec.sh migrate up --target all --dim <차원>        # 공용 DB에 한 번만(아무 벌 하나에서) — 이미 했으면 건너뜀
-bash deploy/host/scripts/pipe_exec.sh migrate master load                        # 공용 DB에 한 번만 — 기준 표(고객 명부·용어), 검색 MCP가 시작할 때 읽음
-bash deploy/host/scripts/host_ctl.sh up -d mcp-data-parsing mcp                  # → mcp-data-parsing-2 · mcp-server-2(포트 8776 · 8775)
-bash deploy/host/scripts/host_ctl.sh check                                       # 마지막 줄 [host_ctl check] 통과 — 6개
-bash deploy/host/scripts/host_ctl.sh ps                                          # 이 벌의 컨테이너만 보임
-```
-- 모든 벌을 한 번에(스크립트는 자기 벌 폴더로 들어가 그 폴더의 설정을 읽는다):
-```bash
-for d in /home/sbl/sbl_data_parsing-main-*; do bash $d/deploy/host/scripts/host_ctl.sh up -d; done
-```
-- 칸 값 찾기:
-
-| 칸 | 넣을 값 | 어디서 |
-|---|---|---|
-| `<코드 zip>` | 코드 저장소의 그 판 zip(예 태그 `v0.3.0` → 풀면 `sbl_data_parsing-0.3.0/`) | GitHub `gigasamba/sbl_data_parsing` 태그 — 다른 벌과 같은 판 |
-| `<운영 그룹>` | 컨테이너(UID 10001)와 사람 계정이 함께 쓰는 리눅스 그룹 | `id -gn <운영 계정>` — 모르면 서버 관리자. 첫 벌과 같은 그룹 |
-| `<차원>` | 임베딩 모델이 내는 벡터 길이(숫자, 예 1024) | `required.models.embed_model` 담당. 표를 처음 만들 때만 씀(벡터 칸 길이가 그때 정해짐) |
-
-- `migrate up`이 필요한 때(공용 DB라 아무 벌 하나에서 한 번):
-
-| 상황 | `migrate up` |
-|---|---|
-| 공용 DB에 표가 아직 없음(서버의 첫 벌) | 처음 한 번 `--dim`과 함께, 이어서 `migrate master load` — 다른 벌은 건너뜀 |
-| 새 판에 표 변경(마이그레이션)이 있음 | 모든 벌을 새 판으로 덮어쓴 뒤 한 번(`--dim` 없이 — 있는 표는 DB의 차원을 씀) |
-
-- 확인: `bash deploy/host/scripts/host_ctl.sh ps` — 그 벌의 컨테이너만 보인다. 자세한 것은 [server-guide §1-3](docs/operations/server-guide.md#1-3-한-서버에-여러-벌-띄우기개발자별).
+- 만드는 명령(벌 폴더 → init → 칸 채우기 → 띄우기 → 점검)과 벌마다 다른 칸의 예는 [handover-guide §13](docs/operations/handover-guide.md#13-두-번째-벌-만들기), 칸 정리는 [server-guide §1-3](docs/operations/server-guide.md#1-3-한-서버에-여러-벌-띄우기개발자별).
 
 **컨테이너 이름·볼륨 바꾸기**
 - 이름은 settings.yaml의 밑 이름 + 벌 번호다 — `ops.containers.<pipeline|data_parsing|mcp>.<…>_container_name`(기본 `data-pipeline`·`mcp-data-parsing`·`mcp-server`) · `ops.host.compose_project`(기본 `compose`). 바꾸기 전에 옛 이름의 컨테이너를 `host_ctl.sh down`으로 내린다(새 이름으로 하나 더 뜨지 않게).
 - 볼륨·env를 더하려면 compose 파일을 하나 더 만들고(틀: `deploy/host/compose/extra.example.yml` — 호스트 경로는 절대 경로나 `${RAG_ROOT}`로, 끝에 `:z`) `ops.host.extra_compose`에 적는다(상대 경로는 루트 기준 — 예 `compose.extra.yml` = `<루트>/compose.extra.yml`, 없는 파일이면 `host_ctl.sh` 종료 2). `host_ctl.sh`와 MCP 살리기 타이머(`mcp_keepalive.sh`)가 늘 맨 뒤에 붙인다.
 - 사슬 사본·작업 공간 홈의 호스트 자리: `ops.host.host_edw_chain_file`(기본 `<루트>/edw_chain.yaml`) · `option.devbox.home_dir`(기본 `<루트>/home`) — 상대 경로는 루트 기준.
-```bash
-# 벌 폴더 안에서(root 셸) — settings.yaml에 적고
-#   ops:
-#     host: {compose_project: rag, extra_compose: [compose.extra.yml]}
-#     containers:
-#       pipeline: {pipeline_container_name: rag-pipeline}
-#       data_parsing: {data_parsing_container_name: rag-parsing}
-#       mcp: {mcp_container_name: rag-mcp}
-cd /home/sbl/sbl_data_parsing-main-2
-bash deploy/host/scripts/host_ctl.sh down                                        # 옛 이름 내리기(이름을 바꾸기 전에)
-cp deploy/host/compose/extra.example.yml compose.extra.yml               # <루트>/compose.extra.yml — 고쳐 씀(볼륨·env)
-bash deploy/host/scripts/host_ctl.sh config --quiet                              # 문법만 확인(값은 안 찍음)
-bash deploy/host/scripts/host_ctl.sh up -d                                       # → rag-pipeline-2 · rag-parsing-2 · rag-mcp-2 (묶음 rag-2)
-```
+- 순서(옛 이름 `down` → 칸 적기 → `config --quiet` → `up -d`)는 [handover-guide §12](docs/operations/handover-guide.md#12-컨테이너-이름볼륨-바꾸기).
 
 **개발 작업 공간(SSH·opencode — 개발 서버만, 선택)**
 - 네 이미지 모두 개발 도구(sshd·git·uv·ruff·mypy·pytest·ripgrep·sqlite3·tmux·vim 등)와 opencode(이미지를 만들 때 `assets/opencode/opencode`가 있으면)를 담고 있다. 앱은 이 도구를 쓰지 않는다 — 켜지 않으면 이미지는 지금처럼 돈다.
@@ -596,11 +564,7 @@ bash deploy/release/stage_images.sh pipeline-runtime mcp-runtime                
 
 **① 컨테이너 — `host_ctl.sh`**
 
-상주 컨테이너 3개(서비스 이름 `data-pipeline`·`mcp-data-parsing`·`mcp`)는 `deploy/host/scripts/host_ctl.sh`로 다룬다 — settings.yaml을 읽어 셸 변수로 넘기고, 실행 이미지면 코드 폴더를 붙여(`compose.code*.yml`) compose 파일을 함께 부른다. compose 하위 명령을 그대로 넘긴다.
-
-```bash
-bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp   # 서비스 하나만도 됨 · ps·logs·stop·down도 같은 방법
-```
+상주 컨테이너 3개(서비스 이름 `data-pipeline`·`mcp-data-parsing`·`mcp`)는 `deploy/host/scripts/host_ctl.sh`로 다룬다 — settings.yaml을 읽어 셸 변수로 넘기고, 실행 이미지면 코드 폴더를 붙여(`compose.code*.yml`) compose 파일을 함께 부른다. compose 하위 명령을 그대로 넘긴다(`up -d`·`ps`·`logs`·`stop`·`down`·`config` — [핵심 명령](#핵심-명령)).
 
 <a id="compose-파일-읽는-법"></a>
 **compose 파일 읽는 법**(`deploy/host/compose/*.yml`)
@@ -643,7 +607,8 @@ bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp   
 # 0. (DB마다 처음 한 번 — DB 관리자) vector 확장 — 없으면 migrate·적재가 "vector 확장 없음"으로 멈춘다
 #    $DOCKER exec <pg 컨테이너> psql -U <관리자 계정> -d <DB> -c 'CREATE EXTENSION IF NOT EXISTS vector'
 bash deploy/host/scripts/pipe_exec.sh migrate check --target all                # 지금 판(읽기만)
-bash deploy/host/scripts/pipe_exec.sh migrate up --target all --dim <임베딩 차원>   # 새 스키마는 차원 필요(이미 표가 있으면 DB 차원)
+bash deploy/host/scripts/pipe_exec.sh migrate up --target all --dim <임베딩 차원> --sql /app/output/up.sql   # DB 담당 검토용 SQL만 <루트>/output/up.sql에(DB에 붙지 않음)
+bash deploy/host/scripts/pipe_exec.sh migrate up --target all --dim <임베딩 차원>   # 담당 승인 뒤. 차원 = 임베딩 모델 출력 길이(모델 담당 확인 — 새 스키마만, 이미 표가 있으면 DB 차원)
 bash deploy/host/scripts/pipe_exec.sh migrate master load
 bash deploy/host/scripts/pipe_exec.sh migrate check --target all                # 기대: 갈래마다 판 끝
 bash deploy/host/scripts/pipe_exec.sh show-stack                                # 엔진 구성 파일(이름·sha·경로)이 보이면 정상
@@ -721,18 +686,11 @@ sudo systemctl enable --now podman-restart
 
 새벽 배치 타이머는 켜져 있어도 `ops.nightly` 세 칸을 채우기 전에는 아무것도 하지 않는다.
 
-**상태 보기 · 로그 · 끄기 · 켜기**(코드 폴더에서, root 셸)
-
-| 하고 싶은 것 | 명령 |
-|---|---|
-| 서버의 모든 컨테이너 | `podman ps` 또는 `docker ps`(root로 띄웠으면 `sudo podman ps`) |
-| 우리 컨테이너만 | `bash deploy/host/scripts/host_ctl.sh ps` |
-| 컨테이너 로그 | `bash deploy/host/scripts/host_ctl.sh logs --tail 100 mcp`(서비스 이름 `data-pipeline` · `mcp-data-parsing` · `mcp`) |
-| 검색 MCP가 응답하나 | `curl -s http://127.0.0.1:<search.server.mcp_port>/health` |
-| 타이머 상태 | `systemctl list-timers 'mcp-server-keepalive*' 'data-pipeline-nightly*'` · `journalctl -u mcp-server-keepalive.service -n 50` |
-| 끄기 | **타이머부터** — `systemctl stop mcp-server-keepalive.timer data-pipeline-nightly.timer` → `bash deploy/host/scripts/host_ctl.sh stop` |
-| 켜기 | `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp` → `systemctl start mcp-server-keepalive.timer data-pipeline-nightly.timer` |
-| 설정을 바꾼 뒤 | `bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline mcp-data-parsing mcp`(그냥 `up -d`로는 다시 만들지 않음) |
+띄우기·멈추기·로그·설정 바꾼 뒤 다시 만들기는 [핵심 명령](#핵심-명령). 그 밖:
+- 서버의 모든 컨테이너: `podman ps`(root로 띄웠으면 `sudo podman ps`) — 우리 벌만은 `host_ctl.sh ps`.
+- 검색 MCP가 응답하나: `curl -s http://127.0.0.1:<search.server.mcp_port>/health`.
+- 타이머 기록: `journalctl -u mcp-server-keepalive.service -n 50`.
+- 다시 켜기: `host_ctl.sh up -d data-pipeline mcp-data-parsing mcp` → `systemctl start mcp-server-keepalive.timer data-pipeline-nightly.timer`(끌 때는 타이머부터 — 안 그러면 2분 안에 검색 MCP를 다시 띄운다).
 
 ### 5-6. 서버 — 생기는 파일
 
@@ -758,9 +716,9 @@ sudo systemctl enable --now podman-restart
 
 벌 폴더(코드 폴더)에 새 코드를 덮어쓴다. 백업·새 이미지·DB 판·되돌리기까지 전체 순서는 [upgrade-guide.md](docs/operations/upgrade-guide.md) — 아래는 줄인 것이다.
 1. 옛 벌 폴더를 각자 벌 폴더 밖에 백업한다(서버에서 고친 코드는 gitea에도 올린다).
-2. 벌 폴더에서 옛 코드만 지우고(설정·결과·홈은 남김) 새 코드 zip을 그 위에 푼다 — `cd /home/sbl && unzip -q <코드 zip> && find sbl_data_parsing-main-1 -mindepth 1 -maxdepth 1 ! -name .git ! -name output ! -name home ! -name edw_chain.yaml ! -name "settings*" -exec rm -rf {} + && cp -a sbl_data_parsing-<판>/. sbl_data_parsing-main-1/ && rm -rf sbl_data_parsing-<판>`(이미지가 바뀌었으면 이미지 zip도 — §5-0 2번).
+2. 벌 폴더에서 옛 코드만 지우고(설정·결과·홈은 남김) 새 코드 zip을 그 위에 푼다 — `cd /home/sbl && unzip -q <코드 zip> && B=sbl_data_parsing-main-1 T=deploy/host/scripts/test_space && { [ ! -e $B.test_space ] || { echo "[멈춤] $B.test_space가 이미 있음 — upgrade-guide §4 '중간에 끊겼을 때'대로 먼저 되돌림" >&2; false; }; } && { [ ! -d $B/$T ] || mv $B/$T $B.test_space; } && find $B -mindepth 1 -maxdepth 1 ! -name .git ! -name output ! -name home ! -name edw_chain.yaml ! -name "settings*" -exec rm -rf {} + && cp -a sbl_data_parsing-<판>/. $B/ && rm -rf sbl_data_parsing-<판> && { [ ! -d $B.test_space ] || mv $B.test_space $B/$T; }`(run_pipeline 작업 폴더 `test_space/`는 `deploy/`와 함께 지워지지 않게 잠시 밖으로 옮겼다 되돌린다)(이미지가 바뀌었으면 이미지 zip도 — §5-0 2번).
 3. 벌 폴더에서 `host_ctl.sh init --group <운영 그룹>` → `host_ctl.sh up -d --force-recreate data-pipeline mcp-data-parsing mcp` → `host_ctl.sh check` → `host_ctl.sh timers`.
-- 덮어써도 남는 것 — 지우거나 옮기지 않는다: `settings.yaml`·`edw_chain.yaml`·`output/`(파싱 캐시·임베딩 캐시·FAQ 교체 기록 — 잃으면 전부 다시 처리)·`home/`.
+- 덮어써도 남는 것 — 지우거나 옮기지 않는다: `settings.yaml`·`edw_chain.yaml`·`output/`(파싱 캐시·임베딩 캐시·FAQ 교체 기록 — 잃으면 전부 다시 처리)·`home/`·`deploy/host/scripts/test_space/`(run_pipeline 진행 기록·잠금 — 위 명령이 옮겼다 되돌림).
 - 옛 코드를 먼저 지우는 까닭: 새 판에서 지운 파일(옛 시험 등)이 남으면 `host_ctl.sh check`의 selftest가 그 파일 때문에 실패한다.
 - 검색 DB는 같은 PG를 그대로 본다. 벌이 여럿이면 모두 같은 판으로 올린다(같은 기준 스키마).
 - 되돌리기: 1의 백업을 벌 폴더 위에 다시 덮어쓰고 `host_ctl.sh up -d --force-recreate …`.

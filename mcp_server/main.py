@@ -266,6 +266,7 @@ if __name__ == "__main__":
             mc.token_text(mc.common_cfg().tokens.mcp),
         )  # 공백뿐인 토큰 = 토큰 없음(사용자 결정 10-27)
         if host == "auto":  # 브리지 네트워크 컨테이너: 자기 사설 IP(포트 게시로 밖에서 부름) — 토큰 필수
+            # 같은 풀이: compose.mcp-server.yml healthcheck 한 줄·mcp_keepalive.sh(컨테이너 안 exec) — 바꾸면 함께
             import socket
 
             host = socket.gethostbyname(socket.gethostname())

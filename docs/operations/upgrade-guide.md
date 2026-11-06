@@ -79,13 +79,18 @@ cat sbl_data_parsing-<새 판>/deploy/docker/DEPS_HASH                          
 
 ```bash
 cd <공용 폴더> && unzip -q <코드 zip>                                        # 기대: <공용 폴더>/sbl_data_parsing-<새 판>/
-find "$B" -mindepth 1 -maxdepth 1 ! -name .git ! -name output ! -name home ! -name edw_chain.yaml ! -name "settings*" -exec rm -rf {} +   # 옛 코드만 지움
-cp -a sbl_data_parsing-<새 판>/. "$B/" && rm -rf sbl_data_parsing-<새 판>    # 벌 폴더 위에 새 코드
+T=deploy/host/scripts/test_space
+[ ! -e "$B.test_space" ] || { echo "[멈춤] $B.test_space가 이미 있음 — 아래 '중간에 끊겼을 때'대로 먼저 되돌린다" >&2; false; } &&
+  { [ ! -d "$B/$T" ] || mv "$B/$T" "$B.test_space"; } &&   # run_pipeline 작업 폴더(진행 기록·잠금)를 잠시 밖으로 — 아래 find가 deploy/를 지움
+  find "$B" -mindepth 1 -maxdepth 1 ! -name .git ! -name output ! -name home ! -name edw_chain.yaml ! -name "settings*" -exec rm -rf {} + &&   # 옛 코드만 지움
+  cp -a sbl_data_parsing-<새 판>/. "$B/" && rm -rf sbl_data_parsing-<새 판> &&   # 벌 폴더 위에 새 코드
+  { [ ! -d "$B.test_space" ] || mv "$B.test_space" "$B/$T"; }   # 작업 폴더 되돌려 놓기
 cd "$B"
 bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>                # 기대: "[host_ctl init] 루트: $B" — 있는 설정 파일은 덮지 않음
 cat CODE_COMMIT                                                               # 기대: 그 판의 커밋
 ```
-- `settings.yaml`·`edw_chain.yaml`·`output/`(파싱 캐시·임베딩 캐시·FAQ 교체 기록 — 잃으면 전부 다시 처리)·`home/`은 zip에 없어 덮어써도 남는다. 지우거나 옮기지 않는다.
+- `settings.yaml`·`edw_chain.yaml`·`output/`(파싱 캐시·임베딩 캐시·FAQ 교체 기록 — 잃으면 전부 다시 처리)·`home/`은 zip에 없어 덮어써도 남는다. 지우거나 옮기지 않는다. `deploy/host/scripts/test_space/`(run_pipeline 진행 기록·잠금)는 `deploy/` 안이라 그대로 두면 find가 지운다 — 위 명령이 옮겼다 되돌려서 남는다(`ops.run_pipeline.run_pipeline_work_dir`를 코드 폴더 밖에 두었으면 그 단계는 아무것도 안 함).
+- **중간에 끊겼을 때**(`[멈춤] … 이미 있음`): 지난 덮어쓰기가 되돌리기 전에 끊겼다는 뜻이다. `$B/$T`가 없으면 `mkdir -p "$B/deploy/host/scripts" && mv "$B.test_space" "$B/$T"`로 먼저 되돌린 뒤 위 명령을 다시 친다. `$B/$T`도 있으면 두 폴더의 `batch_progress/progress.log`를 보고 하나만 남긴다.
 - 옛 코드를 먼저 지우는 까닭: 새 판에서 지운 파일(옛 시험 등)이 남으면 selftest(`host_ctl.sh check`)가 그 파일 때문에 실패한다.
 - **0.2.0 서버에서 처음 올릴 때만**(설정·결과가 코드 폴더의 부모 `<옛 루트>`에 있음): 덮어쓰지 않고 새 벌 폴더를 만들어 옛 루트에서 옮긴 뒤 위 `init`부터 한다. 옛 루트는 되돌리기용으로 그대로 둔다.
 ```bash
@@ -182,7 +187,7 @@ $DOCKER exec $PIPELINE_CNAME python -m pipeline.load.pgvector_load --set PIPE_OU
 
 - 코드를 내부망 gitea에서 받는 법: [gitea-guide.md](gitea-guide.md).
 - 개발자마다 벌 폴더 하나(`<공용 폴더>/sbl_data_parsing-main-<번호>`): 폴더 이름 끝 번호로 컨테이너·compose 묶음·타이머 이름이 나뉘고, 그 벌의 settings.yaml에 포트 두 칸(`search.server.mcp_port`·`ops.services.data_parsing.data_parsing_port`)을 벌마다 다르게 적는다 — [server-guide §1-3](server-guide.md#1-3-한-서버에-여러-벌-띄우기개발자별). PG 스키마·EDW 기록 표는 모든 벌이 함께 쓴다.
-- DB 표는 공용이라 새 벌에서 `migrate`를 다시 하지 않는다(서버의 첫 벌만 `migrate up --target all --dim <임베딩 차원>` → `migrate master load`).
+- DB 표는 공용이라 새 벌에서 `migrate`를 다시 하지 않는다(서버의 첫 벌만 `migrate up --target all --dim <임베딩 차원>` → `migrate master load`). 다만 새 벌의 `required.source.source_systems`에 새 `DEV-<숫자>`를 넣었으면 그 벌에서 `migrate up --target search` 한 번 — 원천 스키마 `<기준>_dev_<숫자>`를 만든다. 차례: [handover-guide.md](handover-guide.md).
 
 ## 10. 올린 뒤 점검
 
@@ -235,4 +240,4 @@ bash deploy/host/scripts/pipe_exec.sh migrate check --target applog           # 
 - 권한(GRANT)은 DB 담당이 원래대로 맞춘다. 비켜 둔 스키마는 확인 뒤 DB 담당이 지운다.
 - 그 사이 새 판이 쓴 applog 행·검색 적재는 되살린 스키마에 없다(비켜 둔 스키마에 남음).
 
-**작업 폴더·잠금·진행 기록:** `run_pipeline.py`의 작업 폴더(`ops.run_pipeline.run_pipeline_work_dir`, 비우면 코드 폴더 안 `deploy/host/scripts/test_space/`)에 진행 기록 `batch_progress/progress.log`와 잠금 `batch_progress/run_pipeline.lock`이 있다. 작업 폴더를 비워 두었으면 코드 폴더 안이라 덮어써도 남지만, 되돌리기(위)는 백업할 때의 것으로 돌아간다 — 바꾸기 전에 `pgrep -af run_pipeline.py`로 도는 실행이 없는지 꼭 본다([server-guide §3](server-guide.md#3-실패한-문서-찾기와-다시-돌리기)).
+**작업 폴더·잠금·진행 기록:** `run_pipeline.py`의 작업 폴더(`ops.run_pipeline.run_pipeline_work_dir`, 비우면 코드 폴더 안 `deploy/host/scripts/test_space/`)에 진행 기록 `batch_progress/progress.log`와 잠금 `batch_progress/run_pipeline.lock`이 있다. 작업 폴더를 비워 두었으면 코드 폴더 안이라 §4 명령이 잠시 밖으로 옮겼다 되돌려서 남지만(그대로 지우면 함께 지워짐), 되돌리기(위)는 백업할 때의 것으로 돌아간다 — 바꾸기 전에 `pgrep -af run_pipeline.py`로 도는 실행이 없는지 꼭 본다([server-guide §3](server-guide.md#3-실패한-문서-찾기와-다시-돌리기)).

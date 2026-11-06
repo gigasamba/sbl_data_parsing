@@ -13,6 +13,7 @@
 | [operations/env-guide.md](operations/env-guide.md) | 설정 작성 가이드 — 서버·PC `settings.yaml`의 자리·권한·키·기본값 | 설정 값을 채우거나 바꿀 때 |
 | [operations/release-and-patch.md](operations/release-and-patch.md) | 릴리스 — 실행 이미지 + 코드 폴더(개발 서버)·운영 굽기(`bake_prod_image.sh`)·selftest 반입 판정, EDW 사슬 파일 고치기(§8)·서버에서 만드는 파일(§9) | 새 판을 만들거나 서버에 넣을 때 |
 | [operations/upgrade-guide.md](operations/upgrade-guide.md) | 운영 중인 서버를 새 판으로 올리기 — 판 확인·백업·새 이미지·새 코드 덮어쓰기·`migrate up`·다시 처리·점검·되돌리기 | 돌고 있는 서버의 판을 바꿀 때 |
+| [operations/handover-guide.md](operations/handover-guide.md) | 개발 서버 인수인계 — 벌 폴더 만들기·settings.yaml·컨테이너 띄우기·점검·DB 판·`DEV-<숫자>` 문서 한 번 처리·검색 확인·로그·이름 바꾸기·두 번째 벌·정리를 차례로(명령과 성공 출력) | 개발 서버를 처음 맡았을 때, 자기 벌을 새로 만들 때 |
 | [operations/gitea-guide.md](operations/gitea-guide.md) | 내부망 코드 관리(gitea) — 개발자별 clone·벌 | 내부망 gitea를 쓰거나 서버 코드 변경을 합칠 때 |
 | [architecture/db_schema.md](architecture/db_schema.md) | DB 스키마 명세 — gold(원천별 5벌 — 처리 기록 칸 포함)·EDW(`AI.FileStorageMap` — 읽기만)·마스터(`<스키마>_master`)·`applog`. 시험 `tests/server/common/test_db_schema.py`가 판·SQL과 대조 | DB 표·칸을 바꾸거나 DB 담당자와 협의할 때 |
 | [architecture/resources.md](architecture/resources.md) | 코드가 읽는 자료 — §1 엔진 구성 파일(`resources/config/pipeline_stack.json` — 모양 검사·바꾸기·되돌리기·엔진 거부) · §2 AI 지시서 패키지(`resources/prompts/` + 답변 점검 `rag_qa` — 찾는 순서·구성·캐시 열쇠·입출력·호출부) | 엔진 구성을 바꾸거나 지시서·LLM·VLM 호출부를 볼 때 |

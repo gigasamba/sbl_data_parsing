@@ -234,8 +234,8 @@ def _posix(p):
 
 
 def test_keepalive_extra_compose():
-    """mcp_keepalive.sh는 띄울 때 host_ctl.sh를 불러 같은 compose 파일 묶음(ops.host.extra_compose 포함)·묶음 이름을 쓴다(DOCKER=echo —
-    python3·sleep은 대역: /health 응답 없음, 기다리지 않음)."""
+    """mcp_keepalive.sh는 띄울 때 host_ctl.sh를 불러 같은 compose 파일 묶음(ops.host.extra_compose 포함)·묶음 이름을 쓴다(DOCKER·python3·sleep은
+    대역: /health 응답 없음, 기다리지 않음). MCP_HOST auto면 호스트에서 주소를 풀지 않고 컨테이너 안(exec)에서 묻는다."""
     bash = _bash()
     if not bash:
         print("[시험] bash 없음 — 건너뜀")
@@ -243,8 +243,12 @@ def test_keepalive_extra_compose():
     with tempfile.TemporaryDirectory() as d:
         stub = Path(d) / "bin"
         stub.mkdir()
-        for exe, rc in (("python3", 1), ("sleep", 0)):
-            (stub / exe).write_text(f"#!/bin/sh\nexit {rc}\n", encoding="utf-8", newline="\n")
+        calls = Path(d) / "py.log"  # 호스트 python3 대역이 받은 인자(/health 주소)
+        py = f'#!/bin/sh\necho "$*" >> "{_posix(calls)}"\nexit 1\n'
+        execs = Path(d) / "exec.log"  # 컨테이너 도구 대역 — 명령 줄만 찍고 exec(컨테이너 안 /health — 출력은 버려지므로 따로 남김)는 실패
+        dk = f'#!/bin/sh\necho "$*"\n[ "$1" != exec ] || {{ echo "$*" >> "{_posix(execs)}"; exit 1; }}\n'
+        for exe, body in (("python3", py), ("sleep", "#!/bin/sh\nexit 0\n"), ("dk", dk)):
+            (stub / exe).write_text(body, encoding="utf-8", newline="\n")
             (stub / exe).chmod(0o755)
         sf = Path(d) / "settings.yaml"
         sf.write_text(SETTINGS, encoding="utf-8")
@@ -253,7 +257,7 @@ def test_keepalive_extra_compose():
             "PATH": os.environ.get("PATH", ""),
             "SETTINGS_FILE": sp,
             "SETTINGS_LOADED": sp,
-            "DOCKER": "echo",
+            "DOCKER": "dk",
             "RAG_ROOT": _posix(Path(d) / "sbl_data_parsing-main-3"),
             **PORTS,
             "DATA_PIPELINE_IMAGE": "data-pipeline:0.2.0",
@@ -269,9 +273,18 @@ def test_keepalive_extra_compose():
         # 대역을 PATH 맨 앞에 — Git Bash(Windows) 입구는 시작 때 /usr/bin을 앞에 붙이므로 셸 안에서 붙이고 bash를 다시 부름
         script = _posix(SCRIPT.parent / "mcp_keepalive.sh")
         cmd = f'PATH="{_posix(stub)}:$PATH" exec bash "{script}"'
-        r = subprocess.run([bash, "-c", cmd], env=env, capture_output=True, text=True, encoding="utf-8", timeout=60)
-        ups = [w.split() for w in r.stdout.splitlines() if w.startswith("compose ")]
-        assert r.returncode == 1 and [u[-1] for u in ups] == ["mcp-data-parsing", "mcp"], (r.returncode, r.stdout, r.stderr)
-        for u in ups:
-            files = [w.rsplit("/", 1)[-1] for w in u if w.endswith(".yml")]
-            assert u[:3] == ["compose", "-p", "rag-3"] and files == BASE + CODE[2:] + ["extra.yml"], u
+        # (MCP_HOST, 호스트 python3가 부를 /health — None이면 호스트에서 안 부름, 컨테이너 안 exec로 묻나)
+        for host, probe, inside in (("", "http://127.0.0.1:8775/health", False), ("auto", None, True)):
+            calls.write_text("", encoding="utf-8")
+            execs.write_text("", encoding="utf-8")
+            run_env = {**env, "MCP_HOST": host}  # env 남김 — 시험(호스트 셸이 load_settings로 받는 MCP_HOST)
+            r = subprocess.run([bash, "-c", cmd], env=run_env, capture_output=True, text=True, encoding="utf-8", timeout=60)
+            ups = [w.split() for w in r.stdout.splitlines() if w.startswith("compose ")]
+            assert r.returncode == 1 and [u[-1] for u in ups] == ["mcp-data-parsing", "mcp"], (r.returncode, r.stdout, r.stderr)
+            for u in ups:
+                files = [w.rsplit("/", 1)[-1] for w in u if w.endswith(".yml")]
+                assert u[:3] == ["compose", "-p", "rag-3"] and files == BASE + CODE[2:] + ["extra.yml"], u
+            seen = calls.read_text(encoding="utf-8")
+            assert (probe in seen) if probe else not seen, (host, seen)
+            ex = [w for w in execs.read_text(encoding="utf-8").splitlines() if w.startswith("exec mcp-server-3 python -c ")]
+            assert bool(ex) == inside and all("gethostbyname(socket.gethostname())" in w and ":8775/health" in w for w in ex), host

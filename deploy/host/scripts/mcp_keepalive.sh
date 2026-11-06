@@ -19,9 +19,15 @@ if [ "$($DOCKER inspect -f '{{.State.Running}}' "$DATA_PARSING_CNAME" 2>/dev/nul
   $UP mcp-data-parsing ||
     echo "[mcp_keepalive] $DATA_PARSING_CNAME 띄우기 실패 — parse_document는 '연결 실패'를 돌려줌(검색은 그대로)" >&2
 fi
-URL="http://${MCP_HOST:-127.0.0.1}:${MCP_PORT:-8765}/health"
-
-alive() { python3 -c "import urllib.request as u; u.urlopen('$URL', timeout=5)" >/dev/null 2>&1; }
+if [ "${MCP_HOST:-}" = auto ]; then
+  # auto = 컨테이너 자기 사설 IP — 호스트에서 풀면 다를 수 있어(podman이 /etc/hosts를 따로 씀) 컨테이너 안에서
+  #   compose.mcp-server.yml healthcheck·mcp_server/main.py와 같은 풀이로 묻는다(풀이 실패 = 응답 없음)
+  URL="컨테이너 안 http://<자기 IP>:${MCP_PORT:-8765}/health"
+  alive() { $DOCKER exec "$MCP_CNAME" python -c "import socket, urllib.request as u; u.urlopen(f'http://{socket.gethostbyname(socket.gethostname())}:${MCP_PORT:-8765}/health', timeout=5)" >/dev/null 2>&1; }
+else
+  URL="http://${MCP_HOST:-127.0.0.1}:${MCP_PORT:-8765}/health"
+  alive() { python3 -c "import urllib.request as u; u.urlopen('$URL', timeout=5)" >/dev/null 2>&1; }
+fi
 
 if alive; then
   exit 0

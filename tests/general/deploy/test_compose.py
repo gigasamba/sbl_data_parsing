@@ -77,3 +77,20 @@ def test_edw_chain_mount():
             ), chain
         else:
             assert not chain, (name, chain)
+
+
+def test_mcp_healthcheck_host():
+    """healthcheck 주소 = MCP_HOST(기본 127.0.0.1) · auto면 mcp_server.main처럼 자기 IP(socket.gethostbyname(gethostname()))."""
+    import socket
+    import urllib.request
+    from unittest import mock
+
+    code = _services("compose.mcp-server.yml")["mcp"]["healthcheck"]["test"][-1]
+    for host, url in (
+        ("", "http://127.0.0.1:8765/health"),
+        ("10.1.1.5", "http://10.1.1.5:8765/health"),
+        ("auto", "http://10.9.8.7:8765/health"),
+    ):
+        with mock.patch.object(socket, "gethostbyname", return_value="10.9.8.7"), mock.patch.object(urllib.request, "urlopen") as op:
+            exec(render(code, {"MCP_HOST": host}))  # 저장소 compose 파일의 python 한 줄을 그대로 실행
+        assert op.call_args.args[0] == url, (host, op.call_args)

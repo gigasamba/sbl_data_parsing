@@ -266,6 +266,78 @@ def test_folder_tree():
     assert resolve(str(odd), root / "out3")[:2] == (odd, [])
 
 
+RERUN_CASES = [  # (실행마다 이번에 고르는 원본 키) — 같은 결과 폴더를 다시 씀, 앞 실행 문서는 다시 오지 않으면 끝난 문서(done)
+    [["SFDC/u1/a.txt", "CRMS/u2/b.txt"], ["CRMS/u3/c.txt"]],
+    [["SFDC/u1/a.txt"], [], ["CRMS/u2/b.txt"]],  # 가운데 실행은 새 문서 0건
+    [["SFDC/u1/a.txt"], ["CRMS/u3/a.txt"]],  # 다른 실행·다른 키·같은 파일 이름 — 앞 문서를 덮지 않음
+    [["SFDC/u1/a.txt"], ["SFDC/u1/a.txt"]],  # 같은 키 다시(재처리) — 같은 이름, 문서 하나
+]
+
+
+def test_rerun_keeps_source():
+    """E2E 11-06 — 같은 결과 폴더로 다시 돌리면 이번 실행 목록에는 이번 문서만 있다. 앞 문서도 manifest에 남아 구조화(gold_bundle)가
+    원천·원본 키를 그대로 쓴다(other로 떨어지거나 PC 절대 경로가 file_path가 되지 않음 — op-17 규칙 17). 이름이 겹치면 앞 문서를 덮지 않는다."""
+    import tempfile
+    from unittest import mock
+
+    from common.core.paths import STACK_FILE
+    from common.store.db.models import search_tables as ST
+    from pipeline.transform.structure import gold_bundle
+
+    s3 = _FakeS3({})
+    for mode, runs in [(m, r) for m in ("folder", "rdb") for r in RERUN_CASES]:  # PC 폴더 원천 · rdb:csv(실행마다 이번 키만 든 표)
+        root = Path(tempfile.mkdtemp())
+        src, out = root / "src", root / "out"
+        seen, rep = set(), {}
+        for i, keys in enumerate(runs):
+            for rel in keys:
+                (src / rel).parent.mkdir(parents=True, exist_ok=True)
+                (src / rel).write_text(rel, encoding="utf-8")
+                s3.objs[("b", rel)] = ("e", rel.encode("utf-8"))
+            csv_f = root / f"batch{i}.csv"
+            rows = "".join(f"{j},{k},{Path(k).name},{len(k)},{k.split('/', 1)[0]}\n" for j, k in enumerate(keys))
+            csv_f.write_text("id,s3_key,original_filename,file_size,source_system\n" + rows, encoding="utf-8")
+            with (
+                pc.PIPE.env(SOURCE_MANIFEST=None, RDB_BUCKET="b", SOURCE_STAGING=str(root / "staging")),
+                mock.patch.object(M.objectstore, "client", lambda: s3),
+            ):
+                source = str(src) if mode == "folder" else f"rdb:csv:{csv_f}"
+                local, names, state = resolve(source, out, done=frozenset(seen - set(keys)))
+            man = {r["file_name"]: r for r in jl(state / "manifest.jsonl")}
+            assert sorted(man[n]["key"] for n in names) == sorted(keys), (mode, runs, names)  # 이번 목록 = 이번 문서만
+            for n in names:  # 파싱 흉내 — 대표 결과만 남고 준비 폴더(prepared)에는 원본이 없음
+                rep[n] = {"doc": n, "engine": "pymupdf"}
+                src_rec = {"path": str(root / "gone" / n), "sha256": man[n]["sha256"], "uri": man[n]["uri"]}
+                body = {"text": f"{n} 본문 문장.", "rep": {"engine": "pymupdf", "format": ".txt", "source": src_rec}}
+                (out / "parse" / "_rep").mkdir(parents=True, exist_ok=True)
+                (out / "parse" / "_rep" / f"{n}.json").write_text(json.dumps(body, ensure_ascii=False), encoding="utf-8")
+            (out / "parse" / "_rep" / "index.json").write_text(json.dumps({"docs": list(rep.values())}), encoding="utf-8")
+            seen |= set(keys)
+        assert sorted(r["key"] for r in man.values()) == sorted(seen), (mode, runs, man)  # 문서마다 한 행 — 덮인 문서 없음
+        for n, r in man.items():
+            assert (local / n).read_text(encoding="utf-8") == r["key"], (mode, runs, n, r)  # 복사본 = 그 키의 원본
+        bundle = out / "bundle"
+        gold_bundle.main(
+            [
+                "--parse-dir",
+                str(out / "parse"),
+                "--src",
+                str(root / "gone"),
+                "--embed",
+                "none",
+                "--stack",
+                str(STACK_FILE),
+                "--out",
+                str(bundle),
+            ]
+        )
+        docs = {d["file_path"]: d for d in jl(bundle / "docs.jsonl")}
+        assert sorted(docs) == sorted(seen), (runs, sorted(docs))  # 원본 키 그대로(PC 절대 경로 아님)
+        for key, d in docs.items():
+            assert d["source_system"] == key.split("/", 1)[0], (runs, d)
+            assert ST.source_of(d["source_system"]) != "other", d  # 적재가 _other에 넣지 않음
+
+
 def test_stage_batch():
     """파싱 전 extract 한 번 — gold에 끝난 문서(done)는 고를 때(받기 전) 빠지고, 같은 내용은 하나만, 거르기(filter_and_rotate)를 지난 것만
     only.txt에 남음 · pick_new는 상한·목록 안에서만."""

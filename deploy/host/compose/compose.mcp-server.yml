@@ -28,7 +28,7 @@ services:
     pids_limit: 512
     healthcheck:                     # 이미지에 curl 없음 — python 한 줄(/health, 토큰 불필요)
       test: ["CMD", "python", "-c",
-             "import urllib.request as u; u.urlopen('http://${MCP_HOST:-127.0.0.1}:${MCP_PORT:-8765}/health', timeout=3)"]   # 주소·포트는 compose 치환(load_settings)
+             "import socket, urllib.request as u; h='${MCP_HOST:-127.0.0.1}'; h=socket.gethostbyname(socket.gethostname()) if h=='auto' else h; u.urlopen(f'http://{h}:${MCP_PORT:-8765}/health', timeout=3)"]   # 주소·포트는 compose 치환(load_settings) · auto 풀이는 mcp_server/main.py(바인드)·mcp_keepalive.sh와 같음
       interval: 15s
       timeout: 5s
       retries: 3

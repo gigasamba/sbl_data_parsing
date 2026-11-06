@@ -37,7 +37,7 @@ ops:
 search:
   server: {mcp_port: <다른 벌과 겹치지 않는 포트>}                    # 기본 8765 그대로면 시작 거부
 ```
-이어서 띄운다(README [§5-0 "한 서버에 여러 벌"](../../README.md#5-0-배포-단계와-개발-서버-설치)과 같다 — DB 표는 공용이라 이미 만든 서버면 `migrate` 두 줄은 건너뛴다):
+이어서 띄운다([handover-guide §13](handover-guide.md#13-두-번째-벌-만들기)과 같다 — DB 표는 공용이라 이미 만든 서버면 `migrate` 두 줄은 건너뛴다):
 ```bash
 bash deploy/host/scripts/host_ctl.sh up -d data-pipeline                     # → data-pipeline-<번호>
 bash deploy/host/scripts/pipe_exec.sh migrate up --target all --dim <임베딩 차원>   # 공용 DB에 처음 한 번만
@@ -45,6 +45,7 @@ bash deploy/host/scripts/pipe_exec.sh migrate master load                    # �
 bash deploy/host/scripts/host_ctl.sh up -d mcp-data-parsing mcp
 bash deploy/host/scripts/host_ctl.sh check                                   # 기대 마지막 줄: [host_ctl check] 통과 — 6개
 ```
+- 자기 원천 `DEV-<숫자>`만 파싱하려면 `required.source.source_systems: [DEV-<숫자>]`를 적고(비우면 운영 5개 원천 전부), 처음 한 번 `bash deploy/host/scripts/pipe_exec.sh migrate up --target search`로 원천 스키마를 만든다 — 차례와 확인 출력은 [handover-guide.md](handover-guide.md).
 - 새벽 배치가 필요 없는 벌은 `systemctl disable --now data-pipeline-nightly-<번호>.timer`.
 - **SSH 작업 공간(선택):** `option.devbox.ssh_port`에 자기 포트를 적고 `host_ctl.sh init`을 다시 부르면 `data-pipeline-<번호>`가 SSH로 들어가 코드 폴더를 고칠 수 있는 작업 공간으로 뜬다 — 열쇠 놓기·접속·끄기는 README [§5-0 "개발 작업 공간"](../../README.md#5-0-배포-단계와-개발-서버-설치).
 - **작업 공간의 gitea 계정(선택):** 작업 공간에서 바로 `git pull`·`push`하려면 그 벌의 settings.yaml 맨 아래 `option.devbox`에 적고 `host_ctl.sh up -d data-pipeline`으로 다시 띄운다 — 시작할 때 홈에 `~/.git-credentials`(권한 600)가 생긴다(토큰은 화면·로그·컨테이너 env에 나오지 않음). 토큰은 gitea 웹의 내 설정 > 응용 > 새 토큰(저장소 읽기·쓰기 권한)에서 만든다. `~/.git-credentials`의 다른 줄은 그대로 두고 그 gitea 호스트 줄만 바꾼다. 셋(`gitea_url`·`gitea_user`·`gitea_token`) 중 하나라도 비우면 전에 쓴 그 호스트 줄을 지운다. 주소 꼴은 `http(s)://호스트[:포트][/경로]` — 틀리면 경고만 남기고 아무것도 쓰지 않는다.

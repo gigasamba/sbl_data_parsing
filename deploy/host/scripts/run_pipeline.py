@@ -18,7 +18,7 @@
 
 사용: python3 run_pipeline.py [--start-offset N](기본 0) [--staging 20] [--struct-workers 2]
                   [--filter RFP,proposal](기본 모든 문서 — 이름 키워드로 좁힐 때만) [--limit N](시험: N건만) [--no-cleanup](임시 유지)
-로그: test_space/batch_progress/progress.log · 문서별 파싱 로그 progress/doc_<seq>.log
+로그: test_space/batch_progress/progress.log · 문서별 파싱 로그 test_space/batch_progress/doc_<seq>.log
 """
 
 import argparse
