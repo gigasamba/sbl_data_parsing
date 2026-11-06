@@ -8,6 +8,7 @@ import zlib
 from pathlib import Path
 
 from pipeline import config as pc
+from pipeline.shared.ext_groups import IMG_EXTS
 
 EXTS = (".zip", ".tar", ".tgz", ".gz")  # .tar.gz의 확장자는 .gz — tar가 아닌 .gz는 check가 unsupported_archive
 BROKEN = (zipfile.BadZipFile, zipfile.LargeZipFile, tarfile.TarError, EOFError, OSError, zlib.error)
@@ -25,41 +26,45 @@ def _open(src, kind):
     return tarfile.open(name=src, mode="r:*") if isinstance(src, Path) else tarfile.open(fileobj=src, mode="r:*")
 
 
+def _cap_bytes():
+    return pc.cfg().extract.archive.max_total_mb * 1024 * 1024
+
+
 def _members(a, kind):
-    """(이름, 풀린 크기, 암호?) — 폴더·링크는 뺌."""
+    """(이름, 풀린 크기, 암호?, 항목) — 폴더·링크는 뺌. 항목(ZipInfo·TarInfo)으로 읽는다(이름으로 다시 찾지 않음)."""
     if kind == "zip":
-        return [(i.filename, i.file_size, bool(i.flag_bits & 1)) for i in a.infolist() if not i.is_dir()]
-    return [(m.name, m.size, False) for m in a.getmembers() if m.isfile()]
+        return [(i.filename, i.file_size, bool(i.flag_bits & 1), i) for i in a.infolist() if not i.is_dir()]
+    return [(m.name, m.size, False, m) for m in a.getmembers() if m.isfile()]
 
 
-def _read(a, kind, name):
-    return a.read(name) if kind == "zip" else a.extractfile(name).read()  # isfile()인 항목만 오므로 extractfile은 None이 아님
-
-
-def _read_inner(data, kind, name):
-    with _open(io.BytesIO(data), kind) as b:
-        return _read(b, kind, name)
+def _read(a, kind, item):
+    return a.read(item) if kind == "zip" else a.extractfile(item).read()  # isfile()인 항목만 오므로 extractfile은 None이 아님
 
 
 def _walk(p, kind):
     """(안 경로, 풀린 크기, 암호?, 읽기 함수) — 안의 압축은 크기가 상한 안일 때만 한 단계 풀고, 풀리지 않으면(tar 아닌 .gz·깨짐)
-    보통 파일로 둔다(바깥 압축 전체를 버리지 않게). 읽기 함수는 다음 항목으로 넘어가기 전에만 쓴다."""
-    cap = pc.cfg().extract.archive.max_total_mb * 1024 * 1024
+    보통 파일로 둔다(바깥 압축 전체를 버리지 않게). 안의 압축은 남은 상한(합계 − 지금까지)보다 작을 때만 연다.
+    읽기 함수는 다음 항목으로 넘어가기 전에만 쓴다(안의 압축은 그 항목들을 다 내줄 때까지 열어 둠)."""
+    cap, seen = _cap_bytes(), 0
     with _open(p, kind) as a:
-        for name, size, enc in _members(a, kind):
-            inner, sub, data = kind_of(name), None, b""
-            if inner and not enc and size <= cap:
-                data = _read(a, kind, name)
+        for name, size, enc, item in _members(a, kind):
+            inner, b, sub = kind_of(name), None, []
+            if inner and not enc and size <= cap - seen:
                 try:
-                    with _open(io.BytesIO(data), inner) as b:
-                        sub = _members(b, inner)
+                    b = _open(io.BytesIO(_read(a, kind, item)), inner)
+                    sub = _members(b, inner)
                 except BROKEN:
-                    sub = None
-            if sub is None:
-                yield name, size, enc, lambda name=name: _read(a, kind, name)
-            else:
-                for n2, s2, e2 in sub:
-                    yield f"{name}/{n2}", s2, e2, lambda n2=n2, data=data, inner=inner: _read_inner(data, inner, n2)
+                    if b is not None:
+                        b.close()
+                    b = None
+            if b is None:
+                seen += size
+                yield name, size, enc, lambda item=item: _read(a, kind, item)
+                continue
+            with b:
+                for n2, s2, e2, it2 in sub:
+                    seen += s2
+                    yield f"{name}/{n2}", s2, e2, lambda b=b, inner=inner, it2=it2: _read(b, inner, it2)
 
 
 def check(p):
@@ -70,14 +75,14 @@ def check(p):
         return None
     if p.suffix.lower() == ".gz" and not tarfile.is_tarfile(p):
         return "unsupported_archive"
-    cap = pc.cfg().extract.archive
+    max_files, cap = pc.cfg().extract.archive.max_files, _cap_bytes()
     total = n = 0
     try:
         for _name, size, enc, _read_fn in _walk(p, kind):
             if enc:
                 return "encrypted_archive"
             n, total = n + 1, total + size
-            if n > cap.max_files or total > cap.max_total_mb * 1024 * 1024:
+            if n > max_files or total > cap:
                 return "archive_too_big"
     except BROKEN:
         return "broken_archive"
@@ -85,10 +90,9 @@ def check(p):
 
 
 def entries(p):
-    """첨부 단계 — 안 파일을 하나씩 {name, bytes, depth}로(메일 첨부 항목과 같은 모양). 거르기(check)를 지난 원본만 온다."""
+    """첨부 단계 — 글을 뽑을 안 파일을 하나씩 {name, bytes, depth}로(메일 첨부 항목과 같은 모양). 그림 파일은 풀지 않고 뺀다
+    (글자만 — pl-57, 메일의 image/* 첨부와 같음). 거르기(check)를 지난 압축 원본만 온다."""
     p = Path(p)
-    kind = kind_of(p.name)
-    if kind is None:
-        return
-    for name, _size, _enc, read in _walk(p, kind):
-        yield {"name": name, "bytes": read(), "depth": 0}
+    for name, _size, _enc, read in _walk(p, kind_of(p.name)):
+        if Path(name).suffix.lower() not in IMG_EXTS:
+            yield {"name": name, "bytes": read(), "depth": 0}

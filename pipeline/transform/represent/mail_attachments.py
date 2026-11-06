@@ -17,7 +17,6 @@ from pathlib import Path
 from common.core.paths import APP_ROOT  # output/ 경계(attach_dir)
 from pipeline import config as pc
 from pipeline.shared import archive
-from pipeline.shared.ext_groups import IMG_EXTS
 from pipeline.shared.raw_cache import raw_engine_path, raw_root
 from pipeline.shared.vlmcall import sha
 from pipeline.transform.parse.parse_engines import engine_version
@@ -215,17 +214,20 @@ def mail_blocks(doc_path, base_text):
     stats = {"n": 0, "parsed": 0, "cached": 0, "sources": []}
     blocks = []
     ext = Path(doc_path).suffix.lower()
-    packed = ext in archive.EXTS
-    if ext not in (".eml", ".msg") and not packed:
+    if ext in archive.EXTS:
+        items, label = archive.entries(doc_path), "파일"
+    elif ext in (".eml", ".msg"):
+        th = thread_paragraphs(base_text)
+        if th:
+            blocks.append(th)
+        cap = pc.cfg().extract.attach.max_mb * 1024 * 1024
+        items, label = (
+            (e for e in extract(doc_path) if len(e["bytes"]) <= cap),
+            "첨부",
+        )  # 크기 상한 초과는 시도하지 않음(통계 n에도 안 넣음)
+    else:
         return blocks, stats
-    th = "" if packed else thread_paragraphs(base_text)
-    if th:
-        blocks.append(th)
-    for entry in archive.entries(doc_path) if packed else extract(doc_path):
-        if not packed and len(entry["bytes"]) > pc.cfg().extract.attach.max_mb * 1024 * 1024:
-            continue  # 크기 상한 초과 — 건너뜀(통계 n에도 안 넣음, 시도 자체를 안 함)
-        if packed and Path(entry["name"]).suffix.lower() in IMG_EXTS:
-            continue  # 압축 안 그림은 OCR·VLM에 보내지 않음(글자만 — pl-57) · 메일의 image/* 첨부와 같음
+    for entry in items:
         stats["n"] += 1
         text, cached, eng = parse_attachment(entry)
         if not text:
@@ -233,5 +235,5 @@ def mail_blocks(doc_path, base_text):
         stats["parsed"] += 1
         stats["cached"] += int(cached)
         stats["sources"].append(f"{Path(doc_path).name}#{entry['name']}")  # 원본 위치 = 메일#첨부명
-        blocks.append(f"[{'파일' if packed else '첨부'} {entry['name']}]\n{text}")
+        blocks.append(f"[{label} {entry['name']}]\n{text}")
     return blocks, stats
