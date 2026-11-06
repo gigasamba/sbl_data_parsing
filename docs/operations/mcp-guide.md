@@ -31,10 +31,10 @@
 ## 3. 지원 확장자
 
 <!-- 시험이 대조하는 목록: 바꿀 때는 resources/config/pipeline_stack.json(parse)·pipeline/transform/parse/engines/registry.py(EXTRA_FORMATS)를 먼저 고친다 -->
-- **검색 대상(파이프라인이 파싱해 적재하는 형식)** — 엔진 구성 파일 `resources/config/pipeline_stack.json`의 `parse` 표: `.bmp` `.csv` `.doc` `.docm` `.docx` `.dot` `.dotx` `.eml` `.htm` `.html` `.hwpx` `.jpeg` `.jpg` `.json` `.log` `.md` `.mht` `.mhtml` `.msg` `.odp` `.ods` `.odt` `.pdf` `.png` `.pot` `.potx` `.ppsx` `.ppt` `.pptm` `.pptx` `.rtf` `.tif` `.tiff` `.tsv` `.txt` `.xls` `.xlsb` `.xlsm` `.xlsx` `.xlt` `.xltx` `.xml`
+- **검색 대상(파이프라인이 파싱해 적재하는 형식)** — 엔진 구성 파일 `resources/config/pipeline_stack.json`의 `parse` 표: `.bmp` `.csv` `.doc` `.docm` `.docx` `.dot` `.dotx` `.eml` `.gz` `.htm` `.html` `.hwpx` `.jpeg` `.jpg` `.json` `.log` `.md` `.mht` `.mhtml` `.msg` `.odp` `.ods` `.odt` `.pdf` `.png` `.pot` `.potx` `.ppsx` `.ppt` `.pptm` `.pptx` `.rtf` `.tar` `.tgz` `.tif` `.tiff` `.tsv` `.txt` `.xls` `.xlsb` `.xlsm` `.xlsx` `.xlt` `.xltx` `.xml` `.zip` — 압축 원본(`.tar.gz` 포함)은 안 파일 글이 그 문서 본문에 들어간다
   - `.json` `.xml` `.log`는 파일 글을 그대로 읽는다. `.hwp`는 지원하지 않는다.
-  - `.pdf`는 글자 PDF와 스캔(이미지) PDF를 따로 판정해 다른 엔진으로 읽는다. 압축 파일(`.zip` 등)과 위 목록 밖 형식은 파싱 대상이 아니다.
-- **`parse_document`가 받는 형식** — `pipeline/transform/parse/engine_check.py`의 `allowed_exts()`(검색 대상 − 이미지): `.csv` `.doc` `.docm` `.docx` `.dot` `.dotx` `.eml` `.htm` `.html` `.hwpx` `.json` `.log` `.md` `.mht` `.mhtml` `.msg` `.odp` `.ods` `.odt` `.pdf` `.pot` `.potx` `.ppsx` `.ppt` `.pptm` `.pptx` `.rtf` `.tsv` `.txt` `.xls` `.xlsb` `.xlsm` `.xlsx` `.xlt` `.xltx` `.xml`
+  - `.pdf`는 글자 PDF와 스캔(이미지) PDF를 따로 판정해 다른 엔진으로 읽는다. `.7z`·`.rar`·`.bz2`·`.xz`, tar가 아닌 `.gz`와 위 목록 밖 형식은 파싱 대상이 아니다. 압축 안의 그림 파일은 읽지 않는다.
+- **`parse_document`가 받는 형식** — `pipeline/transform/parse/engine_check.py`의 `allowed_exts()`(검색 대상 − 이미지 − 압축): `.csv` `.doc` `.docm` `.docx` `.dot` `.dotx` `.eml` `.htm` `.html` `.hwpx` `.json` `.log` `.md` `.mht` `.mhtml` `.msg` `.odp` `.ods` `.odt` `.pdf` `.pot` `.potx` `.ppsx` `.ppt` `.pptm` `.pptx` `.rtf` `.tsv` `.txt` `.xls` `.xlsb` `.xlsm` `.xlsx` `.xlt` `.xltx` `.xml`
   - 이미지 파일은 받지 않는다(그림 VLM 단계를 돌리지 않음). 스캔 PDF는 내부망 VLM으로 읽는다(쪽마다 VLM 호출이라 글자 PDF보다 오래 걸림 — 작업 제한 시간 하나). VLM 설정(주소·모델)이 없으면 text가 비고 "스캔 PDF — VLM 미설정", VLM이 실패하면 "스캔 PDF — VLM 파싱 실패"가 붙는다.
   - **⚠ 운영과 다름:** 운영은 매크로·서식·쇼 파일(`.docm` `.pptm` `.dotx` `.xltx` `.potx` `.ppsx` `.dot` `.xlt` `.pot` `.xlsb`), 오픈문서(`.odt` `.ods` `.odp`), `.rtf`, `.csv` `.tsv` `.md`, `.json` `.xml` `.log`를 받지 않고, 운영은 스캔 PDF를 VLM으로 읽지 않는다.
 

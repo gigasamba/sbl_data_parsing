@@ -35,7 +35,7 @@
 4. 회전 바로잡기는 `extract.prepare.rotate_pages`(기본 `false`)가 켜졌을 때만 한다. 꺼져 있으면 회전용 OCR을 하지 않고 파일을 그대로 놓는다. 서버 러너는 `ops.run_pipeline.parse.batch_rotate_scans`(기본 `false`)가 꺼져 있으면 `stage --no-scan-rotate`로 이미지 PDF(스캔)는 돌리지 않는다.
 5. 켜져 있으면 이미지·스캔 PDF 쪽마다 4방향(0·90·180·270도) RapidOCR 점수를 스레드 4개로 동시에 재고 가장 높은 방향으로 돌린다 — 같으면 0도, 모두 0이면 그대로. 기록은 `output/prepared/rotation.csv`(파일·쪽·각도·네 방향 점수·회전 전 원본 sha256 `orig_sha256`).
 6. DRM·암호 파일은 감지해서 표시하고 건너뛴다(상태 `skipped_drm`, `prepared/_records/skipped.jsonl`). 복호화는 흐름 안에서 하지 않고 수동 명령 `python -m pipeline.extract.protected_docs decrypt`로만 한다.
-7. 압축 파일(zip)은 지원하지 않는다고 표시한다. 처리 엔진 없는 확장자(`registry.engines_for`가 빈 것)는 두 곳에서만 거른다 — 받기 전 `candidate_pick.rdb_pick`(`_filter_unsupported_rows` — rdb:csv 대상 고르기), 받은 뒤 `filter_and_rotate`(`unsupported_*`). 파일 크기 상한(`extract.max_source_file_mb`)은 파싱(`parse_engines`)이 본다.
+7. 압축 원본 `.zip`·`.tar`·`.tgz`·`.tar.gz`는 풀어 파싱하고(암호·깨짐·안전 상한은 `pipeline.shared.archive.check`가 거름 — [pl-57](#pl-57)), `.7z`·`.rar`·`.bz2`·`.xz`는 지원하지 않는다고 표시한다(`unsupported_archive`). 처리 엔진 없는 확장자(`registry.engines_for`가 빈 것)는 두 곳에서만 거른다 — 받기 전 `candidate_pick.rdb_pick`(`_filter_unsupported_rows` — rdb:csv 대상 고르기), 받은 뒤 `filter_and_rotate`(`unsupported_*`). 파일 크기 상한(`extract.max_source_file_mb`)은 파싱(`parse_engines`)이 본다.
 8. 중복·DRM·암호·미지원으로 건너뛴 문서는 문서마다 `applog.pipe_event`에 한 행을 남긴다(`pipeline/shared/runtrace.py` `skip_event` — 단계 `extract.skip`, `doc_id` = 파일 이름, `status=skip`, `err_kind=doc`, `err`·`metrics.reason` = 이유 `dup_batch`·`dup_done`·`dup_run`·`drm_*`·`encrypted_*`·`unsupported_*`, 중복이면 `metrics.dup_of` = 남긴 문서 — 같은 묶음은 파일 이름, 끝난 문서·이번 실행은 원본 키). 받기 전(`rdb_pick`)에 뺀 지원 안 하는 확장자도 같은 행을 남긴다. 다시 받아도 같은 결과인 문서는 [pl-58](#pl-58).
 
 ### QA
@@ -97,23 +97,23 @@ A: `, 절 `DS`. 5행 = `divider`만 → 건너뜀. 머리글 없는 시트 `memo
 - Status: done
 
 <a id="pl-57"></a>
-## pl-57 · 원본 zip은 풀어서 안의 문서를 파싱
+## pl-57 · 압축 원본은 풀어서 안 파일의 글을 그 문서에
 - 이유(사용자 11-05): zip으로 올라온 원본 안의 문서도 검색되어야 한다. 메일 첨부 zip은 이미 풀어 파싱한다(pl-36).
 
 ### 규칙(사용자 11-06 결정)
-1. 압축 원본 하나 = 검색 문서 하나(메일 첨부와 같은 방식 — [transform.md#pl-36](transform.md#pl-36)). 안 파일은 형식별 엔진으로 글을 뽑아 대표 본문에 `[파일 <안 경로>]` 절로 덧붙인다(글자만 — 표 구조·그림 설명 없음). 문서 키·처리 기록은 압축 원본 하나(`s3_key` 그대로).
-2. 푸는 형식: `.zip`·`.tar`·`.tgz`·`.tar.gz`(표준 라이브러리). `.7z`·`.rar`·`.bz2`·`.xz`, tar가 아닌 `.gz`는 지금처럼 `unsupported_archive`.
-3. 압축 엔진 `archive`(엔진 폴더 `engines/archive` — 새 엔진이라 다른 엔진 지문은 그대로, 사람 검토 등급 A)는 안 파일 목록을 본문으로 내고, 안 파일 파싱은 대표 결과의 첨부 단계(`mail_attachments`, 후보정 `attachments`)가 한다(P0 캐시 같음).
-4. 안의 압축은 한 단계 더 푼다(그 밑은 풀지 않음).
-5. 안전 상한(평소엔 걸리지 않을 큰 값, 설정 칸): 풀린 크기 합계 `tuning.extract.archive.max_total_mb`(2048), 파일 수 `max_files`(1000). 안 파일 하나의 크기 상한은 없다.
-6. 받기의 거르기(pl-02 `_unsupported_reason`)가 머리만 읽어 판정하고, 걸리면 `applog.except_doc_info`에 `skip`으로 남겨 다음 실행도 건너뛴다: 암호 `encrypted_archive` · 깨짐 `broken_archive` · 상한 넘음 `archive_too_big`.
-7. 공용 읽기(목록·상한·암호 판정)는 `pipeline/shared/archive.py` 한 곳 — 받기(extract)와 첨부 단계(transform)가 같이 쓴다. 나중에 안 파일마다 문서 하나로 바꿀 때도 이 목록을 쓴다.
+1. 압축 원본 하나 = 검색 문서 하나(메일 첨부와 같은 방식 — [transform.md#pl-36](transform.md#pl-36)). 안 파일은 형식별 엔진으로 글을 뽑아 대표 본문에 `[파일 <안 경로>]` 절로 덧붙인다(글자만 — 표 구조·그림 설명 없음, 안의 그림 파일은 읽지 않음). 문서 키·처리 기록은 압축 원본 하나(`s3_key` 그대로).
+2. 푸는 형식: `.zip`·`.tar`·`.tgz`·`.tar.gz`(표준 라이브러리, 확장자로 고름). `.7z`·`.rar`·`.bz2`·`.xz`, tar가 아닌 `.gz`는 `unsupported_archive`.
+3. 압축 엔진 `archive`(엔진 폴더 `engines/archive` — 새 엔진이라 다른 엔진의 엔진 지문은 그대로, 사람 검토 등급 A)는 맨 바깥 파일 목록을 본문으로 내고, 안 파일 파싱은 대표 결과의 첨부 단계(`mail_attachments`, 후보정 `attachments`)가 한다(P0 캐시 같음). 엔진 구성 `parse`에 `.zip`·`.tar`·`.tgz`·`.gz` → `archive`.
+4. 안의 압축은 한 단계 더 푼다(그 밑은 풀지 않음). 안의 압축이 풀리지 않으면(tar 아닌 `.gz`·깨짐) 보통 파일로 두고 바깥 압축은 그대로 처리한다.
+5. 안전 상한(평소엔 걸리지 않을 큰 값, 설정 칸): 풀린 크기 합계 `tuning.extract.archive.archive_max_total_mb`(2048), 파일 수 `archive_max_files`(1000). 안의 압축은 크기가 합계 상한 안일 때만 열어 본다. 안 파일 하나의 크기 상한은 없다.
+6. 받기의 거르기(`filter_and_rotate` — `archive.check`)가 목록만 읽어 판정하고, 걸리면 `applog.except_doc_info`에 `skip`으로 남겨 다음 실행도 건너뛴다: 암호 `encrypted_archive` · 깨짐 `broken_archive` · 상한 넘음 `archive_too_big`. 상한을 올렸거나 원본을 다시 올렸으면 그 행을 지워야 다시 고른다.
+7. 압축 읽기(목록·상한·암호 판정)는 `pipeline/shared/archive.py` 한 곳 — 받기(extract)와 첨부 단계(transform)가 같이 쓴다(엔진은 엔진 지문을 지키려고 엔진 폴더 안에서 목록만 따로 읽음). 나중에 안 파일마다 문서 하나로 바꿀 때도 이 목록을 쓴다.
+8. 검색 MCP의 `parse_document`는 압축을 받지 않는다(첨부 단계를 돌리지 않음 — `engine_check.allowed_exts`).
 
 ### QA
-- `tests/server/pipeline/test_archive.py` 사례 표: zip·tar.gz 풀림 → `[파일 …]` 절 · 안 zip 한 단계 · 두 단계 밑은 안 풂 · 암호 → `encrypted_archive` · 깨짐 → `broken_archive` · 파일 수·합계 넘음 → `archive_too_big` · `.7z` → `unsupported_archive`.
+- `tests/server/pipeline/test_archive.py` 사례 표: zip·tar.gz 풀림 → `[파일 …]` 절 · 안 zip 한 단계 · 두 단계 밑은 안 풂 · 안 `.gz`·깨진 안 zip은 보통 파일 · 끝에 zip 든 tar · 안 그림 건너뜀 · 암호 → `encrypted_archive` · 깨짐 → `broken_archive` · 파일 수·합계 넘음 → `archive_too_big` · `.7z` → `unsupported_archive`.
 
-- 비고(현재와 다른 점): 원본 zip은 "지원하지 않음"(`skipped_unsupported`)으로 표시만 한다(`filter_and_rotate.ARCHIVE_EXT` — pl-02).
-- Status: todo
+- Status: done
 
 <a id="pl-59"></a>
 ## pl-59 · 같은 밤 중복·staging 재사용·extract 경계

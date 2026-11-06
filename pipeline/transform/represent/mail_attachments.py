@@ -1,4 +1,4 @@
-"""메일(.eml·.msg) 후보정 — 첨부 다시 파싱 + 인용 스레드 단락화.
+"""메일(.eml·.msg)·압축 원본(.zip·.tar·.tgz·.tar.gz — pl-57) 후보정 — 첨부(압축은 안 파일) 다시 파싱 + 인용 스레드 단락화.
 원본(doc_path)에서 첨부를 꺼내 형식별 구성 엔진 순서로 파싱하고, 결과는 P0 원본 층(raw_cache.raw_engine_path —
 첨부 sha256 + 엔진@버전)에 캐시해 다시 안 돈다. 대표 본문에는 `[첨부 <파일명>]` 절로만 덧붙인다(base 본문은 그대로).
 인라인 그림(cid)은 figure_extract가 맡아 image/* 첨부는 건너뛴다.
@@ -16,6 +16,8 @@ from pathlib import Path
 
 from common.core.paths import APP_ROOT  # output/ 경계(attach_dir)
 from pipeline import config as pc
+from pipeline.shared import archive
+from pipeline.shared.ext_groups import IMG_EXTS
 from pipeline.shared.raw_cache import raw_engine_path, raw_root
 from pipeline.shared.vlmcall import sha
 from pipeline.transform.parse.parse_engines import engine_version
@@ -208,19 +210,22 @@ def thread_paragraphs(text):
 
 # ── doc_represent.apply_post가 부르는 진입점 ─────────────────────────────────────────
 def mail_blocks(doc_path, base_text):
-    """.eml·.msg만: 인용 스레드 단락 + 첨부별 `[첨부 <파일명>]` 절 → (덧붙일 블록 목록, 통계{n, parsed, cached, sources}).
-    다른 형식·오류는 (빈 목록, 0 통계)."""
+    """.eml·.msg: 인용 스레드 단락 + 첨부별 `[첨부 <파일명>]` 절 · 압축 원본: 안 파일별 `[파일 <안 경로>]` 절(크기·개수 상한은
+    받기의 거르기가 이미 봄 — archive.check) → (덧붙일 블록 목록, 통계{n, parsed, cached, sources}). 다른 형식·오류는 (빈 목록, 0 통계)."""
     stats = {"n": 0, "parsed": 0, "cached": 0, "sources": []}
     blocks = []
     ext = Path(doc_path).suffix.lower()
-    if ext not in (".eml", ".msg"):
+    packed = ext in archive.EXTS
+    if ext not in (".eml", ".msg") and not packed:
         return blocks, stats
-    th = thread_paragraphs(base_text)
+    th = "" if packed else thread_paragraphs(base_text)
     if th:
         blocks.append(th)
-    for entry in extract(doc_path):
-        if len(entry["bytes"]) > pc.cfg().extract.attach.max_mb * 1024 * 1024:
+    for entry in archive.entries(doc_path) if packed else extract(doc_path):
+        if not packed and len(entry["bytes"]) > pc.cfg().extract.attach.max_mb * 1024 * 1024:
             continue  # 크기 상한 초과 — 건너뜀(통계 n에도 안 넣음, 시도 자체를 안 함)
+        if packed and Path(entry["name"]).suffix.lower() in IMG_EXTS:
+            continue  # 압축 안 그림은 OCR·VLM에 보내지 않음(글자만 — pl-57) · 메일의 image/* 첨부와 같음
         stats["n"] += 1
         text, cached, eng = parse_attachment(entry)
         if not text:
@@ -228,5 +233,5 @@ def mail_blocks(doc_path, base_text):
         stats["parsed"] += 1
         stats["cached"] += int(cached)
         stats["sources"].append(f"{Path(doc_path).name}#{entry['name']}")  # 원본 위치 = 메일#첨부명
-        blocks.append(f"[첨부 {entry['name']}]\n{text}")
+        blocks.append(f"[{'파일' if packed else '첨부'} {entry['name']}]\n{text}")
     return blocks, stats

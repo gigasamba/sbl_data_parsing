@@ -49,5 +49,8 @@ def resolve(refresh=False):
 
 def allowed_exts():
     """받는 확장자(MCP parse_document 작업 서비스) = 엔진 구성의 parse 키(.pdf_text·.pdf_image → .pdf) − 이미지(IMG_EXTS — "이미지 파싱은
-    수행 안하고 꺼줘" 요구사항에 따라 원천 거부). 부를 때마다 읽는다(작업마다 다시 읽는 엔진 구성과 같게, 시작 점검보다 먼저 읽지 않게)."""
-    return {".pdf" if e.startswith(".pdf_") else e for e in pc.stack()["parse"]} - IMG_EXTS
+    수행 안하고 꺼줘" 요구사항에 따라 원천 거부) − 압축(archive.EXTS — 이 서비스는 안 파일을 붙이는 첨부 단계를 돌리지 않음, pl-57).
+    부를 때마다 읽는다(작업마다 다시 읽는 엔진 구성과 같게, 시작 점검보다 먼저 읽지 않게)."""
+    from pipeline.shared.archive import EXTS
+
+    return {".pdf" if e.startswith(".pdf_") else e for e in pc.stack()["parse"]} - IMG_EXTS - set(EXTS)

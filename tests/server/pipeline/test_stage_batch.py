@@ -32,7 +32,7 @@ CASES = [
     ("a(1).txt", b"same", "dup_batch", "a.txt"),  # 같은 묶음 안 같은 내용
     ("old.txt", b"old", "dup_done", DONE_KEY),  # gold에 끝난 다른 원본과 같은 sha256
     ("drm.pdf", b"<## FASOO header", "drm_fasoo", None),  # DRM — 표시하고 건너뜀
-    ("z.zip", b"PK\x03\x04zip", "unsupported_archive", None),  # 지원 안 함(압축)
+    ("z.7z", b"7z\xbc\xaf\x27\x1c", "unsupported_archive", None),  # 지원 안 함(풀지 않는 압축 — zip은 pl-57)
     ("n.txt", b"normal", None, None),  # gold에 같은 원본 키(n.txt)로 끝남 — 그 문서의 재처리라 남음
 ]
 # gold doc 행 (원본 키, 내용)

@@ -95,7 +95,7 @@ def test_cli_traces_classify():
         mock.patch("sys.stdout", out),
         jsonlog.context(run_id=str(uuid.uuid4())),  # 부모가 run_id를 줬으면 새 실행 없이 span만
     ):
-        doc = Path(td, "a.zip")
+        doc = Path(td, "a.docx")  # 그림 많은 오피스 zip
         _zip(doc, [10] * 8)
         dpg.main([str(doc), "원본.docx", "2048"])
         dpg.main([str(Path(td, "none")), "없음.docx", "1"])

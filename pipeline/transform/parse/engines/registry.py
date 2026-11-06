@@ -35,6 +35,7 @@ def engines():
 CORE = {"pymupdf", "kreuzberg",                                                # 텍스트 PDF(+ kreuzberg는 doc·html·eml 등 폭넓게)
         "rapidocr_ko", "qwen_vlm",                                              # 이미지·스캔(ocr_vlm은 10-30 지움 — pl-31)
         "office", "plaintext", "mhtml", "html_stdlib", "msg_extract", "markitdown", "hwpx",   # 오피스·웹·메일
+        "archive",  # 압축 원본(pl-57 — 안 파일은 첨부 단계)
         "anydoc"}   # 올인원 내부 파서 단독 — OpenViking 오피스(anydoc)
 # 0.2.0(pl-46, 사용자 11-01) 엔진 지움: pdfplumber·pypdf·calamine·pptx(python_pptx)·pymupdf4llm — 한 번도 안 돈 엔진. docx2python은 비교용으로 남김.
 # 10-30(pl-31) 엔진 지움: docling·docling_ocr·docling_vlm·unstructured·unstructured_auto·unstructured_ocr·rapidocr(1.x)·kreuzberg_ocr·marker_llm(이름만 남아 있던 것).

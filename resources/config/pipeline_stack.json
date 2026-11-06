@@ -147,6 +147,18 @@
   ],
   ".log": [
    "plaintext"
+  ],
+  ".zip": [
+   "archive"
+  ],
+  ".tar": [
+   "archive"
+  ],
+  ".tgz": [
+   "archive"
+  ],
+  ".gz": [
+   "archive"
   ]
  },
  "source": "selection.json(단계 1 최종 엔진 조합)",

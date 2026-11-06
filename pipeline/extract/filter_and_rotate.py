@@ -35,6 +35,7 @@ from common.core.paths import (  # 폴더 재편 뒤 이 상수만 바뀌면 됨
     tmp_path_for,  # tmp+os.replace · place()가 하드링크한 dst를 그 자리에서 save()하면 원본 inode까지 덮어씀
 )
 from pipeline import config as pc
+from pipeline.shared import archive
 from pipeline.shared.ext_groups import IMG_EXTS, OOXML_EXTS
 from pipeline.shared.srcsha import sha_of
 from pipeline.transform.parse.engines import registry  # '처리 엔진 없는 확장자' 판정(engines_for)
@@ -55,8 +56,8 @@ DRM_MARKERS = (  # 머리 바이트에 섞여 있으면 그 제품 래핑으로 
 
 # 구형 OLE(복합 파일) 암호: OOXML(zip 컨테이너)과 다른 신호라 _drm_reason이 못 봄(.doc·.xls·.ppt는 OOXML_EXTS 밖).
 OLE_EXT = {".doc", ".xls", ".ppt"}
-# 압축·미지원 형식은 DRM·손상이 아니라 "파싱 대상이 아님"(사람이 다시 올리거나 풀어야 함).
-ARCHIVE_EXT = {".zip", ".7z", ".rar", ".tar", ".gz", ".tgz", ".bz2", ".xz"}
+# 풀지 않는 압축은 DRM·손상이 아니라 "파싱 대상이 아님"(사람이 다시 올리거나 풀어야 함). .zip·.tar·.tgz·.tar.gz는 푼다(pl-57 — pipeline.shared.archive).
+ARCHIVE_EXT = {".7z", ".rar", ".bz2", ".xz"}
 
 
 def _cfb_sectors(data):
@@ -382,6 +383,10 @@ def main():
         unsup = _unsupported_reason(p)  # 압축(zip 등)·처리 엔진 없는 확장자는 파싱 대상이 아님
         if unsup:
             _record_skip(p, unsup, skipped, skipped_log)
+            continue
+        bad = archive.check(p)  # 압축 원본 — 암호·깨짐·안전 상한(pl-57)
+        if bad:
+            _record_skip(p, bad, skipped, skipped_log)
             continue
         if ext in IMG_EXTS and rotate_on:
             osha = _sha256(p)  # 원본(회전 전) sha256 — post.vlm_page P0 열쇠가 렌더 바이트 대신 이걸 씀

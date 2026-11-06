@@ -5,7 +5,7 @@
 
 ## 지금 진행 중
 - pl-25 DB 스키마 명세 — dev: 검색 DB(gold — 처리 기록 `doc` 칸 판 0006 포함)·마스터·applog는 구현됨, 서버 판 올리기·ParsingMeta 기록 옮기기는 DB 담당자 승인·실행 대기(refactor.md C-107).
-- 열린 요건(todo): run_pipeline 지휘만 [rn-05](prd/ops.md#rn-05) · 원본 zip [pl-57](prd/extract.md#pl-57) · 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 확장자 `.hwp` [pl-45](prd/transform.md#pl-45) · 그림 부가 기능 줄이기 [pl-05](prd/transform.md#pl-05) · 전체 e2e [pl-54](prd/ops.md#pl-54) · prd 이미지에 settings.yaml 굽기 [op-12](prd/doc.md#op-12) · 판 묶기(잠재 문제) [pl-56](prd/load.md#pl-56).
+- 열린 요건(todo): run_pipeline 지휘만 [rn-05](prd/ops.md#rn-05) · 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 확장자 `.hwp` [pl-45](prd/transform.md#pl-45) · 그림 부가 기능 줄이기 [pl-05](prd/transform.md#pl-05) · 전체 e2e [pl-54](prd/ops.md#pl-54) · prd 이미지에 settings.yaml 굽기 [op-12](prd/doc.md#op-12) · 판 묶기(잠재 문제) [pl-56](prd/load.md#pl-56).
 - 서버 확인만 남음(dev): parse_document CPU 우선 [rn-03](prd/ops.md#rn-03).
 - 시험 정리(todo): [e2-13](prd/test.md#e2-13) · [e2-20](prd/test.md#e2-20).
 
@@ -23,7 +23,7 @@
 | 회전 바로잡기 — 켜면(`extract.prepare.rotate_pages`, 기본 꺼짐) 이미지·스캔 PDF 쪽마다 4방향(0·90·180·270도) OCR 점수를 스레드 4개로 동시에 재 가장 높은 방향으로 돌린다(같으면 0도). 기록 `rotation.csv` | 돌아간 스캔은 엔진이 읽지 못한다. 꺼져 있으면 회전용 OCR을 하지 않는다 | done | [pl-02](prd/extract.md#pl-02) |  |
 | 다시 받아도 파싱할 수 없는 원본(지원 안 하는 확장자·확장자 없음·DRM·암호)과 내용 중복(`duplicate_sha256` — 같은 묶음·같은 밤·끝난 문서)은 `applog.except_doc_info`에 원본 키당 `skip` 한 행(이유·`level` `error`·처음·마지막 시각·횟수)을 남기고, 대상 목록 `candidate_pick list --skip-done`이 그 키를 뺀다 — 받기 전(`rdb_pick`)·받은 뒤(`filter_and_rotate`·중복 제외) 쓴다. 파싱·적재 실패는 `error` 행(기록만 — 다음 실행이 다시 고름, op-17) | 같은 문서를 밤마다 다시 받지 않고 `--max-docs`가 새 문서를 고르게(사용자 11-05). DB 스키마 — 사람 검토 | dev | [pl-58](prd/extract.md#pl-58) | 서버 `migrate up --target applog`(판 0003)·DB 담당 승인 대기(refactor.md C-96) |
 | DRM·암호 파일 감지 — 감지해서 표시만(`skipped_drm`) | 복호화는 흐름 안에서 하지 않고 수동 명령(`python -m pipeline.extract.protected_docs decrypt`)으로 | done | [pl-02](prd/extract.md#pl-02) |  |
-| 원본 zip은 받은 뒤 풀어서 안의 문서를 파싱한다(`candidate_ready`) — 메일 첨부 zip과 같게(pl-36) | zip 안의 문서도 검색되어야 한다(사용자 11-05) | todo | [pl-57](prd/extract.md#pl-57) | 지금은 '지원하지 않음' 표시만(pl-02) |
+| 압축 원본(zip·tar·tar.gz)은 풀어서 안 파일의 글을 그 문서 본문에 `[파일 …]` 절로 넣는다 — 메일 첨부와 같게(pl-36), 암호·깨짐·안전 상한은 건너뛰고 기록 | zip 안의 문서도 검색되어야 한다(사용자 11-05·11-06) | done | [pl-57](prd/extract.md#pl-57) |  |
 | FAQ 원천 — 질의응답 엑셀을 행 단위로(시트 = FAQ 묶음, 행 하나 = 청크 하나). `FAQ/<uuid>/<파일>`을 FileStorageMap에 등록 | 질의응답을 문서 통째가 아니라 질문 하나 단위로 찾는다 | done | [pl-39](prd/extract.md#pl-39) |  |
 | 같은 밤에 받은 같은 내용 문서는 하나만 파싱한다 — 문서마다 따로 받는(stage) 서버 흐름에서도 이번 실행이 이미 받은 sha256과 같으면 건너뜀 + `applog.except_doc_info` `skip` `duplicate_sha256`(먼저 받은 원본 키는 `pipe_event` `dup_of`) · staging 재사용은 내용이 같을 때만(ETag) | 같은 파일을 두 번 파싱·적재하지 않는다. 크기만 같은 새 판을 옛 파일로 파싱하지 않는다 | dev | [pl-59](prd/extract.md#pl-59) | 러너 `stage_one`이 앞 실행 문서 폴더를 원본 키만 보고 다시 씀(ETag 비교·이번 실행 표지 없음) · 원본 삭제가 `.etag` 옆 파일을 남김 |
 | 고르기·받기(extract)는 변환(transform)을 import하지 않는다 — 지원 확장자 목록은 `pipeline/shared`에 · 원천 이름은 FileStorageMap `source_system` 값 하나 | ETL 방향을 지킨다(rn-08). 원천 이름이 자리마다 다르면 게시·구조화·건너뜀 기록의 원천이 어긋난다 | todo | [pl-59](prd/extract.md#pl-59) | `candidate_pick`·`filter_and_rotate`가 `transform.parse.engines.registry`를 import |

@@ -287,6 +287,8 @@ NOTES = {
     "pipeline.extract.text_page_sec": "글자 엔진 쪽당 제한(초)",
     "pipeline.extract.table_grid_max_rows": "표 격자 행 상한",
     "pipeline.extract.warmup_sec": "첫 문서 제한 시간 하한(초)",
+    "pipeline.extract.archive.max_files": "압축 원본 안 파일 수 상한",
+    "pipeline.extract.archive.max_total_mb": "압축 원본 풀린 크기 합계 상한(MB)",
     "pipeline.extract.attach.max_depth": "첨부 속 첨부 깊이",
     "pipeline.extract.attach.max_mb": "첨부 1개 상한(MB)",
     "pipeline.extract.attach.max_n": "문서당 첨부 수 상한",

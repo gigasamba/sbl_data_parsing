@@ -301,7 +301,7 @@ gold에 적재되지 않은 원본 1개·종류 1개당 1행(op-17). 기본 키 
 | except_type | TEXT PK | `skip` | 종류 — `skip`(영구 뺌: 지원 안 하는 확장자·확장자 없음·DRM·암호·내용 중복) · `error`(파싱·적재 실패 — 기록만) | 〃 | candidate_pick(`skip`만) | 새로 |
 | source_system | TEXT | `SFDC` | 원천(FileStorageMap `source_system`) | 〃 | 없음 | 새로 |
 | file_name | TEXT | `kvx_drm_copy.pdf` | 파일 이름 | 〃 | 없음 | 새로 |
-| reason | TEXT NOT NULL | `drm_fasoo` | 이유 — `skip`: `unsupported_archive`·`unsupported_format`·`no_extension`·`drm_*`·`encrypted_*`·`duplicate_sha256` · `error`: `parse_failed`·`publish_failed`·`load_failed`·`classify_failed` | 〃 | 없음 | 새로 |
+| reason | TEXT NOT NULL | `drm_fasoo` | 이유 — `skip`: `unsupported_archive`·`encrypted_archive`·`broken_archive`·`archive_too_big`·`unsupported_format`·`no_extension`·`drm_*`·`encrypted_*`·`duplicate_sha256` · `error`: `parse_failed`·`publish_failed`·`load_failed`·`classify_failed` | 〃 | 없음 | 새로 |
 | level | TEXT NOT NULL | `error` | 수준(기본 `error`) | 〃 | 없음 | 새로 |
 | first_seen | TIMESTAMPTZ NOT NULL | `2026-10-14 15:02:11+00` | 처음 기록한 시각(기본 now) | 〃 | 없음 | 새로 |
 | last_seen | TIMESTAMPTZ NOT NULL | `2026-10-15 15:01:47+00` | 마지막으로 기록한 시각(기본 now) | 〃 | 없음 | 새로 |

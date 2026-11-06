@@ -8,7 +8,26 @@ import os
 import sys
 import zipfile
 
-TEXT_EXTS = {".txt", ".hwpx", ".hwp", ".csv", ".eml", ".msg", ".html", ".htm", ".tsv", ".md", ".json", ".xml", ".log", ".rtf"}
+TEXT_EXTS = {
+    ".txt",
+    ".hwpx",
+    ".hwp",
+    ".csv",
+    ".eml",
+    ".msg",
+    ".html",
+    ".htm",
+    ".tsv",
+    ".md",
+    ".json",
+    ".xml",
+    ".log",
+    ".rtf",
+    ".zip",
+    ".tar",
+    ".tgz",
+    ".gz",
+}  # 압축은 안 파일을 첨부 단계가 글자만(pl-57)
 VLM_EXTS = {".pptx", ".ppt"}
 MEDIUM_KB = {
     ".docx": 300,

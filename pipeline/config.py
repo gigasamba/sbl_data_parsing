@@ -63,6 +63,15 @@ class PipelineExtractAttach(Section):
     timeout: float | None = F(120.0, "ATTACH_TIMEOUT", "첨부 1개를 별도 프로세스로 파싱할 때 제한 시간(초)")
 
 
+class PipelineExtractArchive(Section):
+    max_total_mb: float | None = F(
+        2048.0, "ARCHIVE_MAX_TOTAL_MB", "압축 원본 하나의 풀린 크기 합계 상한(MB, 넘으면 archive_too_big으로 건너뜀 — 안전 상한)"
+    )
+    max_files: int | None = F(
+        1000, "ARCHIVE_MAX_FILES", "압축 원본 하나의 안 파일 수 상한(개, 넘으면 archive_too_big으로 건너뜀 — 안전 상한)"
+    )
+
+
 class PipelineExtractCache(Section):
     parse_cache_max_gb: float | None = F(
         5.0, "PARSE_CACHE_MAX_GB", "재판독 중간 캐시 3종 합계 용량 상한(GB, 넘으면 오래된 것부터 삭제, 0=끔)"
@@ -269,6 +278,7 @@ class PipelineExtract(Section):
         2000, "TABLE_GRID_MAX_ROWS", "표 grid JSON에 담는 최대 행 수(개) — 넘으면 앞부분만 자르고 truncated 표시"
     )
     warmup_sec: float | None = F(60.0, "PARSE_WARMUP_SEC", "엔진 첫 문서의 제한 시간 하한(초) — import·모델 적재 여유")
+    archive: PipelineExtractArchive = Field(default_factory=PipelineExtractArchive)
     attach: PipelineExtractAttach = Field(default_factory=PipelineExtractAttach)
     cache: PipelineExtractCache = Field(default_factory=PipelineExtractCache)
     ocr: PipelineExtractOcr = Field(default_factory=PipelineExtractOcr)
