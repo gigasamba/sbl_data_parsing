@@ -16,7 +16,7 @@ from pathlib import Path
 
 from common.core.paths import APP_ROOT  # output/ 경계(attach_dir)
 from pipeline import config as pc
-from pipeline.shared import archive
+from pipeline.extract import archive
 from pipeline.shared.raw_cache import raw_engine_path, raw_root
 from pipeline.shared.vlmcall import sha
 from pipeline.transform.parse.parse_engines import engine_version

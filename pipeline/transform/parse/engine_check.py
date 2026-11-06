@@ -5,7 +5,7 @@ pipeline.config.stack()으로 같은 파일을 읽는다. 파일은 오버레이
 import sys
 
 from pipeline import config as pc
-from pipeline.shared.archive import EXTS as ARCHIVE_EXTS
+from pipeline.extract.archive import EXTS as ARCHIVE_EXTS
 from pipeline.shared.ext_groups import IMG_EXTS
 
 EXIT_BAD_ENGINE = 2

@@ -1,4 +1,4 @@
-"""압축 원본 풀기(pl-57) — pipeline.shared.archive(거르기·안 파일) + 압축 엔진 + 첨부 단계의 `[파일 …]` 절."""
+"""압축 원본 풀기(pl-57) — pipeline.extract.archive(거르기·안 파일) + 압축 엔진 + 첨부 단계의 `[파일 …]` 절."""
 
 import gzip
 import io
@@ -9,8 +9,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from pipeline import config as pc
+from pipeline.extract import archive
 from pipeline.extract.filter_and_rotate import _unsupported_reason
-from pipeline.shared import archive
 from pipeline.transform.parse.engines import registry
 from pipeline.transform.represent import mail_attachments
 
