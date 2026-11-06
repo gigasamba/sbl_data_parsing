@@ -896,38 +896,7 @@ def require_run_env(app="", environ=None, sections=None):
         if st.common.dev.llm_fake:  # 가짜 LLM 응답은 local에서만, 서버는 시작 거부
             print(f"{tag}서버(RUN_ENV={value}) — {L.to_yaml('common.dev.llm_fake')}가 켜져 있어 시작하지 않음(local 전용)", file=sys.stderr)
             raise SystemExit(2)
-        bad = instance_problems(st)
-        if bad:
-            print(f"{tag}서버(RUN_ENV={value}) — 여러 벌 설정이 맞지 않아 시작하지 않음: {'; '.join(bad)}", file=sys.stderr)
-            raise SystemExit(2)
     return value
-
-
-def instance_problems(st):
-    """여러 벌(ops.host.instance_name) 시작 거부 사유 — prd에 벌 이름, 벌 이름이 있는데 포트가 코드 기본값(다른 벌과 겹침)."""
-    c = st.common
-    if not c.host.instance:
-        return []
-    if c.run_env == "prd":
-        return [f"{L.to_yaml('common.host.instance')}는 개발 서버(dev)에서만 — 운영(prd)은 한 벌"]
-    ports = [("common.runtime.data_parsing_port", c.runtime, "data_parsing_port")]
-    mcp = getattr(st, "mcp", None)
-    if mcp is not None:
-        ports.append(("mcp.server.port", mcp.server, "port"))
-    return [
-        f"{L.to_yaml(p)}가 기본값 그대로 — 벌마다 다른 포트를 적음"
-        for p, sec, name in ports
-        if getattr(sec, name) == type(sec).model_fields[name].default
-    ]
-
-
-def publish_prefix(prefix):
-    """게시 경로 접두 — 개발 서버(dev)에 벌 이름이 있으면 `<접두>/<벌>`(벌마다 게시 자리가 갈림), 그 밖은 그대로."""
-    c = cfg()
-    inst = c.host.instance
-    if c.run_env != "dev" or not inst:
-        return prefix
-    return f"{prefix.rstrip('/')}/{inst}" if prefix else inst
 
 
 def section_class(names):
@@ -1537,13 +1506,6 @@ class CommonHost(Section):
     devbox: CommonHostDevbox = Field(default_factory=CommonHostDevbox)
     doc_src: str | None = F(None, "DOC_SRC", "호스트 원본 문서 폴더 — compose가 컨테이너 /data/docs에 읽기 전용으로 붙임")
     docker: str | None = F(None, "DOCKER", "호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등 — op-10)")
-    instance: str | None = F(
-        None,
-        "INSTANCE",
-        "한 서버에 여러 벌(개발자별 등) 띄울 때 이 루트의 이름(영소문자·숫자·-) — 컨테이너 이름·compose 묶음·systemd 타이머 이름 끝에 -<이름>으로 붙음."
-        " 비우면 이름 그대로(한 벌). 적으면 PG 스키마·EDW 기록 표 끝에 _<이름>(-는 _로), 개발 서버(dev) 게시 경로에 <접두>/<이름>."
-        " 포트(search.server.mcp_port · ops.services.data_parsing.data_parsing_port)는 벌마다 다르게(기본값 그대로면 시작 거부) · prd에서는 쓰지 않음(시작 거부)",
-    )
     image_stage_dir: str | None = F(None, "IMAGE_STAGE_DIR", "prune_images.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값)")
     output_root: str | None = F(
         None,
@@ -1694,18 +1656,6 @@ class CommonSettings(Section):
     runtime: CommonRuntime = Field(default_factory=CommonRuntime)
     text: CommonText = Field(default_factory=CommonText)
     tokens: CommonTokens = Field(default_factory=CommonTokens)
-
-    @model_validator(mode="after")
-    def _per_instance(self):
-        """여러 벌 — 벌 이름이 있으면 PG 스키마·EDW 기록 표 끝에 `_<벌>`(`-`는 `_`로 — 읽는 곳 모두 이 값을 씀). 이름 꼴은 load_settings.sh와 같음."""
-        inst = self.host.instance
-        if inst and not re.fullmatch(r"[a-z0-9][a-z0-9-]*", inst):
-            raise ValueError(f"{L.to_yaml('common.host.instance')}는 영소문자·숫자·-만(앞은 글자·숫자)")
-        if inst:
-            pg, pm = self.connections.pg, self.connections.parsing_meta
-            pg.db_schema = L.per_instance(pg.db_schema, inst)
-            pm.table = L.per_instance(pm.table, inst)
-        return self
 
 
 class CommonAppSettings(AppSettings):

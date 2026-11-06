@@ -40,13 +40,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 # 운영 접속 값·비밀·운영 고정값은 코드에 두지 않고 서버 settings.yaml에서 읽는다(configure() — 시작 때 한 번).
-#   파일: --settings 또는 SETTINGS_FILE, 없으면 <루트>/settings.yaml(루트 = 코드 폴더의 부모). 호스트 python에 PyYAML이 있어야 한다(pymssql처럼 —
+#   파일: --settings 또는 SETTINGS_FILE, 없으면 <루트>/settings.yaml(루트 = 코드 폴더 자체). 호스트 python에 PyYAML이 있어야 한다(pymssql처럼 —
 #   refactor.md C-09). 필요한 칸이 없으면 칸 경로만 찍고 종료 코드 2(값은 찍지 않음). required.env.run_env가 dev·prd가 아니면 거부(로컬 실행 금지 — CLAUDE.md 3절).
 #   docker exec로 부르는 상주 컨테이너(data-pipeline)는 같은 파일을 붙여 읽으므로(compose x-settings) 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
 #   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.run_pipeline.run_pipeline_work_dir(비우면 이 스크립트 옆 test_space/), 결과 공유 폴더는
 #   ops.host.host_output_dir(RAG_OUT — 컨테이너 /app/output의 원본 그대로), 비우면 <루트>/output(load_settings.sh와 같음).
 TEST = PROG = DOCSPACE = DOCFLOW = STAGING = None  # configure()가 채움
-PIPE_C = "data-pipeline"  # docker exec 대상 상주 컨테이너(목록·받기·파싱·게시·구조화·정리) — configure()가 ops.host.instance_name을 붙임
+PIPE_C = "data-pipeline"  # docker exec 대상 상주 컨테이너(목록·받기·파싱·게시·구조화·정리) — configure()가 벌 번호(코드 폴더 이름 끝 -<숫자>)를 붙임
 DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.container_cli(없으면 podman, 그것도 없으면 docker)로 채움
 CODE_DIR = None  # --code(설정 배치 모듈 layout.py·이미지 경로 표를 찾을 코드 폴더 — 운영자 폴더에서 돌릴 때, 기본 배치 경로 없음)
 SOURCE_BUCKET = PG_CONTAINER = PG_USER = PG_DB = PG_SCHEMA = None  # staging 파일 이름의 원천 버킷 · 문서 수 세기(psql)
@@ -79,9 +79,14 @@ def _code_root():
 
 
 def _root():
-    """서버 루트(settings.yaml·edw_chain.yaml·output/이 바로 아래): load_settings.sh load_settings가 낸 RAG_ROOT, 없으면 같은 규칙(코드 폴더의 부모)."""
-    r = os.environ.get("RAG_ROOT")  # env 남김 — 호스트 도구(load_settings.sh load_settings가 냄)
-    return Path(r) if r else _code_root().resolve().parent
+    """서버 루트(settings.yaml·edw_chain.yaml·output/이 바로 아래) = 코드 폴더 자체 — 셸에 남은 다른 벌의 RAG_ROOT는 보지 않는다."""
+    return _code_root().resolve()
+
+
+def instance_of(root):
+    """벌 번호 — 루트(코드 폴더) 이름 끝 -<1~99>(예 sbl_data_parsing-main-2 → "2"), 없으면 ""(한 벌 — 날짜 꼴 숫자도). load_settings.sh와 같은 규칙."""
+    m = re.search(r"-([1-9][0-9]?)$", Path(root).name)
+    return m.group(1) if m else ""
 
 
 def _inside(seq, sub=""):
@@ -177,11 +182,9 @@ def configure(settings_file=None):
         or _host().get(doc, "common.host.docker")
         or ("podman" if shutil.which("podman") else "docker")
     )
-    inst = _host().get(doc, "common.host.instance") or ""
-    if not re.fullmatch(r"([a-z0-9][a-z0-9-]*)?", str(inst)):
-        return [f"{_host().layout().to_yaml('common.host.instance')}는 영소문자·숫자·-만(앞은 글자·숫자)"]
+    inst = instance_of(_root())
     if inst and run_env == "prd":
-        return [f"{_host().layout().to_yaml('common.host.instance')}는 개발 서버(dev)에서만 — 운영(prd)은 한 벌"]
+        return [f"코드 폴더 이름 끝 -{inst}(벌 번호)는 개발 서버(dev)에서만 — 운영(prd)은 한 벌(폴더 이름을 바꿀 것)"]
     if inst:  # 여러 벌 — 포트가 코드 기본값 그대로면 다른 벌과 겹침(load_settings.sh·앱과 같은 거부)
         for p in ("mcp.server.port", "common.runtime.data_parsing_port"):
             d = _const(f"default.{p}")
@@ -193,8 +196,7 @@ def configure(settings_file=None):
     SOURCE_BUCKET = _host().get(doc, "pipeline.connections.rdb.bucket")
     PG_CONTAINER = _host().get(doc, "common.host.pg_container")
     PG_USER, PG_DB = _host().get(doc, "common.connections.pg.user"), _host().get(doc, "common.connections.pg.db")
-    schema = _host().get(doc, "common.connections.pg.db_schema") or "data_parsing"  # 앱 설정 모델 기본값과 같음
-    PG_SCHEMA = _host().layout().per_instance(schema, inst)  # 앱과 같은 규칙(settings 여러 벌)
+    PG_SCHEMA = _host().get(doc, "common.connections.pg.db_schema") or "data_parsing"  # 앱 설정 모델 기본값과 같음
     return []
 
 

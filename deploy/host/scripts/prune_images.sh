@@ -8,7 +8,7 @@
 # 설정 파일(SETTINGS_FILE 또는 <루트>/settings.yaml)이 있으면 ops.host.prune_stage_dir·prune_keep_versions·container_cli를 거기서 읽는다.
 set -uo pipefail
 # 부른 자리 그대로(cd 안 함 — 상대 --stage-dir·SETTINGS_FILE은 부른 자리 기준). 설정 파일을 못 읽어도 멈추지 않는다(기본값으로).
-. "$(dirname "$0")/load_settings.sh"   # 루트 RAG_ROOT(코드 폴더의 부모)·load_settings·docker_default
+. "$(dirname "$0")/load_settings.sh"   # 루트 RAG_ROOT(코드 폴더 자체)·load_settings·docker_default
 if [ -n "${SETTINGS_FILE:-}" ] || [ -f "$RAG_ROOT/settings.yaml" ]; then
   load_settings || echo "[prune_images] 설정 파일을 읽지 못함 — 기본값으로 계속" >&2
 fi

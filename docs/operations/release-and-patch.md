@@ -2,7 +2,7 @@
 
 ↑ [server-guide.md](server-guide.md) · [env-guide.md](env-guide.md) · 처음 설치: [README §5-0 서버 설치 순서](../../README.md#서버-설치-순서) · 운영 중인 서버 올리기: [upgrade-guide.md](upgrade-guide.md)
 
-**전제**: 모드마다 이미지를 따로 빌드한다(모드별 이미지·코드·띄우는 법은 [README §1-3 실행 모드 표](../../README.md#실행-모드)). ① PC가 개발 서버용 실행 이미지 2개(코드 없음)를 빌드·시험해 개인 이미지 저장소 `jehunlee302/sbl_images`에 올린다(README §5-2) ② 개발 서버(dev)는 그 이미지를 불러오고 코드 수정은 **새 루트에 새 코드 폴더를 풀어** 붙인다(§1-1) ③ 운영 서버(prd)는 개발 서버에서 시험한 코드를 구운 이미지를 쓴다(§1-2). 의존성이 바뀔 때만 새 실행 이미지 버전을 만든다(§5).
+**전제**: 모드마다 이미지를 따로 빌드한다(모드별 이미지·코드·띄우는 법은 [README §1-3 실행 모드 표](../../README.md#실행-모드)). ① PC가 개발 서버용 실행 이미지 2개(코드 없음)를 빌드·시험해 개인 이미지 저장소 `jehunlee302/sbl_images`에 올린다(README §5-2) ② 개발 서버(dev)는 그 이미지를 불러오고 코드 수정은 **새 코드를 벌 폴더에 덮어써** 붙인다(§1-1) ③ 운영 서버(prd)는 개발 서버에서 시험한 코드를 구운 이미지를 쓴다(§1-2). 의존성이 바뀔 때만 새 실행 이미지 버전을 만든다(§5).
 
 ## 1. 이미지와 코드 폴더
 
@@ -11,16 +11,16 @@
 | `data-pipeline` | `pipeline-runtime` → `data-pipeline-runtime:<판>` | `pipeline` | 의존성 + LibreOffice + `assets/`(OCR 모델) |
 | `mcp-server` | `mcp-runtime` → `mcp-server-runtime:<판>` | `mcp` | 의존성 |
 
-- **루트** = 서버 아무 자리의 폴더 하나(예 `/home/sbl/dev/`) — 판마다 새로 만든다. **코드 폴더** = 그 안에 코드 zip(또는 코드 묶음)을 푼 폴더(`sbl_data_parsing-<판>`, 저장소 트리 그대로). 호스트 스크립트는 자기 자리에서 루트(코드 폴더의 부모)를 구해 `<루트>/settings.yaml`·`<루트>/edw_chain.yaml`·`<루트>/output/`을 쓴다. 사람·systemd는 코드 폴더에서 `bash deploy/host/scripts/…`를 부른다.
+- **코드 폴더** = 코드 zip(또는 코드 묶음)을 푼 폴더(저장소 트리 그대로)를 벌 폴더 이름으로 바꾼 것(예 `/home/sbl/sbl_data_parsing-main-1` — 이름 끝 `-<숫자>`가 벌 번호, README §5-0). **루트** = 코드 폴더 자체 — 호스트 스크립트는 자기 자리에서 루트를 구해 `<루트>/settings.yaml`·`<루트>/edw_chain.yaml`·`<루트>/output/`을 쓴다. 사람·systemd는 코드 폴더에서 `bash deploy/host/scripts/…`를 부른다.
 - **코드 폴더만으로 못 바꾸는 것**(바꾸면 새 실행 이미지 버전 — §5): `deploy/docker/requirements*.txt`·`Dockerfile`·`wheels/`·시스템 패키지·`assets/` 모델 파일. 시작할 때 코드의 `deploy/docker/DEPS_HASH`(requirements 두 파일의 지문)가 이미지 지문과 다르면 컨테이너가 멈춘다. 휠·Dockerfile·assets만 바뀐 경우는 자동으로 막지 않으니 사람이 판을 올려 새로 빌드한다.
 
-### 1-1. 개발 서버 — 새 루트로 코드 바꾸기
+### 1-1. 개발 서버 — 코드 폴더 덮어쓰기
 
 1. 코드: 코드 git의 그 판 zip(README §5-0)이면 된다. 실행 이미지는 서버에 있는 판 중 `BUILD.txt`의 `DEPS_HASH`가 코드의 `deploy/docker/DEPS_HASH`와 같은 판을 그대로 쓴다(README [§1-3](../../README.md#실행-모드)) — 같은 판이 없을 때만 PC에서 새 실행 이미지를 만든다(README §5-2). PC의 `BUILD_ONLY=1 IMAGE_TARGET=pipeline-runtime bash deploy/release/build_ship.sh`는 코드 폴더 묶음 `output/ship/code-<버전>-<커밋>.tar.gz`(`CODE_OUT=`로 바꿈 — git 추적 파일 + `CODE_COMMIT`)도 만든다. 묶음을 이미지 저장소에 함께 둘 때: `CODE_BUNDLE=output/ship/code-<버전>-<커밋>.tar.gz bash deploy/release/stage_images.sh <판> pipeline-runtime mcp-runtime`.
-2. 서버: 새 루트를 만들고 코드 폴더로 풀기 — `mkdir -p <새 루트>/sbl_data_parsing-<버전> && tar -xzf code-….tar.gz --no-same-owner -C <새 루트>/sbl_data_parsing-<버전>`. 앞 루트의 `settings.yaml`·`edw_chain.yaml`을 `cp -p`로 새 루트에 복사한다.
-3. 바꾸기(새 코드 폴더에서): `bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>`(코드 폴더 a+rX · `output/` — 컨테이너 사용자 10001이 못 읽으면 "읽을 수 없음(권한)"으로 멈춤) → `bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline mcp-data-parsing mcp` → `bash deploy/host/scripts/host_ctl.sh timers`(타이머를 새 루트로).
+2. 서버: 옛 벌 폴더를 벌 폴더 밖에 백업하고([upgrade-guide §2](upgrade-guide.md#2-백업)) 벌 폴더에서 옛 코드만 지우고(`.git`·`settings*`·`edw_chain.yaml`·`output/`·`home/`은 남김 — [upgrade-guide §4](upgrade-guide.md#4-벌-폴더에-새-코드-덮어쓰기)) 새 코드를 그 위에 푼다 — `tar -xzf code-….tar.gz --no-same-owner -C /home/sbl/sbl_data_parsing-main-<번호>`(코드 zip이면 공용 폴더에 풀어 `cp -a sbl_data_parsing-<판>/. sbl_data_parsing-main-<번호>/`). `settings.yaml`·`edw_chain.yaml`·`output/`·`home/`은 묶음·zip에 없어 그대로 남는다(지우지 않는다 — `output/`을 잃으면 전부 다시 처리). 옛 코드를 지우지 않으면 새 판에서 지운 파일(옛 시험 등)이 남아 selftest가 실패한다.
+3. 바꾸기(벌 폴더에서): `bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>`(코드 a+rX · `output/` — 컨테이너 사용자 10001이 못 읽으면 "읽을 수 없음(권한)"으로 멈춤) → `bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline mcp-data-parsing mcp` → `bash deploy/host/scripts/host_ctl.sh timers`(단위 틀이 바뀌었을 수 있어 다시 씀).
 4. 확인: 컨테이너 로그 첫 줄 `[image] 이미지 <이름 버전 커밋> · 코드 <커밋> · 의존성 <지문>` → `bash deploy/host/scripts/host_ctl.sh check`(마지막 줄 `[host_ctl check] 통과 — 6개`). `의존성 지문이 다름`으로 멈추면 그 코드는 새 실행 이미지가 필요하다.
-5. 되돌리기: 앞 루트를 지우지 않고 두었다가 그 코드 폴더에서 `host_ctl.sh up -d --force-recreate …` → `host_ctl.sh timers`. `host_ctl.sh`가 없는 앞 판의 루트는 `dc.sh up -d --force-recreate …` → `dc.sh timers`. 루트는 최근 2개 이상 남긴다. 검색 DB는 두 루트가 같은 PG를 본다.
+5. 되돌리기: 2의 백업을 벌 폴더 위에 다시 풀고 `host_ctl.sh up -d --force-recreate …` → `host_ctl.sh timers`. 새 판이 DB 판을 올렸으면 DB도 되돌린다([upgrade-guide §11](upgrade-guide.md#11-되돌리기)). 벌이 여럿이면 모든 벌을 같은 판으로 맞춘다(같은 기준 스키마).
 
 ### 1-2. 개발 → 운영 — 시험한 그대로 굽기
 
@@ -29,13 +29,13 @@
 1. 개발 서버(시험한 코드 폴더에서): `bash deploy/release/bake_prod_image.sh <실행 이미지 판>`(개발 서버가 지금 쓰는 실행 이미지 판 — settings.yaml 이미지 칸의 태그, 대상 하나만이면 뒤에 `pipeline` 또는 `mcp`). 코드 폴더는 스크립트가 든 폴더(다른 폴더면 `CODE_DIR=`), 새 태그는 코드 `VERSION`(다른 `TAG=`는 거부), 컨테이너 도구는 podman(없으면 docker — `DOCKER=`), 저장 폴더 `/var/tmp/bake`(`OUT=`).
 2. 스크립트 순서: ① 코드 `DEPS_HASH` = 실행 이미지 지문인지(다르면 멈춤) ② 빌드 — 라벨 `org.opencontainers.image.revision`(코드 커밋)·`org.opencontainers.image.base.digest`(실행 이미지 ID) ③ `selftest_gate.sh` 판정(`[판정] 통과`가 아니면 멈춤) ④ 저장·45 MB 분할·sha256 → `/var/tmp/bake/sbl_images/`(`load.sh` · `<태그>/BUILD.txt` · `<태그>/<이미지>/` + 같은 태그 폴더에 코드 묶음 `code-<태그>-<커밋>.tar.gz`·sha256). 코드 묶음에는 `.git`·`deploy/host/scripts/test_space/`·`valid_env/`·`validation/`·`settings*.yaml`(sample 빼고)·`output/`이 들어가지 않는다(코드 폴더가 git clone이면 `git archive`로 추적 파일만).
 3. 옮기기: `/var/tmp/bake/sbl_images/`를 운영 서버로 옮긴다.
-4. 운영 서버: `DOCKER=podman bash sbl_images/load.sh <태그>` → 코드 묶음을 `<새 루트>/sbl_data_parsing-<버전>`에 풀고(호스트 스크립트만 씀) settings.yaml 이미지 칸을 `data-pipeline:<VERSION>`·`mcp-server:<VERSION>`으로 → §1-1 2·3으로 띄우고 `host_ctl.sh check`. 셸·unit에 `CODE_DIR`을 두지 않는다(두면 compose가 코드 폴더를 덮어 붙임).
+4. 운영 서버: `DOCKER=podman bash sbl_images/load.sh <태그>` → 코드 묶음을 벌 폴더(`/home/sbl/sbl_data_parsing-main` — 운영은 한 벌이라 번호 없이)에 풀고(호스트 스크립트만 씀) settings.yaml 이미지 칸을 `data-pipeline:<VERSION>`·`mcp-server:<VERSION>`으로 → §1-1 2·3으로 띄우고 `host_ctl.sh check`. 셸·unit에 `CODE_DIR`을 두지 않는다(두면 compose가 코드 폴더를 덮어 붙임).
 5. 어느 판인지: `podman image inspect <태그> --format '{{json .Config.Labels}}'`.
 
 ## 2. 서버에서 직접 고친 코드
 
 서버에서는 되도록 코드를 고치지 않는다(설정이나 [이슈](server-guide.md#이슈-기록)로). 고쳤다면 그때마다 `server-changes.md`에 적는다(형식 [server-guide §7](server-guide.md#7-개발자에게-보고하는-법)).
-- 새 판 폴더는 옛 판을 덮지 않으므로 서버 수정은 새 판에 **없다**. 링크를 옮기기 전에 `server-changes.md`의 `서버에만`·`PC 보냄` 행을 읽고, 새 코드에 이미 들어 있으면 `PC 반영됨 <커밋>`, 없으면 새 판 폴더에 다시 얹고 `다시 얹음 <커밋>`으로 바꾼다.
+- 새 판을 덮어쓰면 서버에서 고친 파일은 새 판 내용으로 바뀐다(옛 내용은 백업·gitea에만 남음). 덮어쓰기 전에 `server-changes.md`의 `서버에만`·`PC 보냄` 행을 읽고, 새 코드에 이미 들어 있으면 `PC 반영됨 <커밋>`, 없으면 덮어쓴 뒤 다시 얹고 `다시 얹음 <커밋>`으로 바꾼다.
 - 서버에서 바꾼 옵션 값은 코드가 아니라 `settings.yaml`에 둔다 — 새 판이 기본값을 바꿔도 settings.yaml 값이 이긴다.
 - 서버 수정은 PC(main)로 보내 받아들이는 것이 기본이다(`서버에만` 행 + `<ID>.diff` — 코드·숫자·오류만, 문서 본문·고객명·키 값 없음).
 
@@ -74,11 +74,11 @@ PC 명령은 [README §5-2](../../README.md#5-2-pc에서--이미지-만들기와
 ### 5-2. 서버에서
 
 - 이미지 불러오기는 `load.sh` 하나다(개발: README §5-0 2번 · 운영: §1-2 4).
-- **이미지·코드 폴더·`run_pipeline.py`는 같은 때에 바꾼다**(서로 맞아야 함). 순서: 새벽 배치·상주 컨테이너 멈춤 → 이미지 적재 → 새 루트에 새 코드 폴더(§1-1) → 새 이미지로 다시 띄움(`run_pipeline.py`는 새 코드 폴더 안의 것 — §5-4).
+- **이미지·코드 폴더·`run_pipeline.py`는 같은 때에 바꾼다**(서로 맞아야 함). 순서: 새벽 배치·상주 컨테이너 멈춤 → 이미지 적재 → 벌 폴더에 새 코드 덮어쓰기(§1-1) → 새 이미지로 다시 띄움(`run_pipeline.py`는 덮어쓴 코드 폴더 안의 것 — §5-4).
 - 이미지 이름은 settings.yaml `required.deploy.pipeline_image`·`required.deploy.mcp_image`에 적는다.
 - 배포 뒤, 컨테이너 안 코드가 있는지 파일로 본다(bind 마운트 원본이 없으면 빈 폴더가 붙어 `test -d`는 통과하므로):
 ```bash
-for c in data-pipeline mcp-data-parsing; do   # 여러 벌이면 이름 끝 -<ops.host.instance_name>(server-guide §1-3)
+for c in data-pipeline mcp-data-parsing; do   # 여러 벌이면 이름 끝 -<벌 번호>(server-guide §1-3)
  $DOCKER exec $c test -f /app/deploy/pipeline/transform/parse/parse_engines.py && echo "$c OK" || echo "$c 코드 없음(빈 마운트?)"; done
 ```
 
@@ -149,14 +149,14 @@ ls assets/rapidocr/*.onnx assets/opencode/opencode    # build_ship.sh가 보는 
 | 대상 | 남길 것 | 명령 |
 |---|---|---|
 | 이미지(`data-pipeline`·`mcp-server`, 실행 이미지 포함) | 지금 버전 + 직전 버전(컨테이너가 쓰는 태그는 늘 남김) | `bash deploy/host/scripts/prune_images.sh --apply`(기본 dry-run, `--keep N`) — `docker system prune`은 쓰지 않음(남의 이미지 보호) |
-| 루트 폴더(판마다 하나) | 지금 쓰는 루트 + 바로 앞 루트 | 새 판 확인 뒤 오래된 루트를 손으로 지움(`settings.yaml`·`backup/`에 비밀값·DB 내용 — 지우기 전에 확인) |
+| 벌 폴더 백업(덮어쓰기 전에 사람이 만든 것) | 지금 판 + 바로 앞 판 | 새 판 확인 뒤 오래된 백업을 손으로 지움(`settings.yaml`·`pg_dump`에 비밀값·DB 내용 — 지우기 전에 확인) |
 
 ## 7. 릴리스 체크리스트
 
 1. 서버에서 온 `server-changes.md`의 `PC 보냄` 행을 먼저 검토·병합(§2).
 2. 테스트 통과(CLAUDE.md §5-2·§6) → `release/<버전>` → main 병합·태그(§4).
 3. 코드만 바뀜 → §1-1 → §1-2. 의존성이 바뀜 → §5.
-4. 서버: [upgrade-guide.md](upgrade-guide.md) 순서 — 백업 → `server-changes.md` 대조(§2) → 새 이미지·새 루트 → DB 판(§5-5 — 적재·selftest 앞에) → `host_ctl.sh check` → `versions.md`에 한 줄(§3).
+4. 서버: [upgrade-guide.md](upgrade-guide.md) 순서 — 백업 → `server-changes.md` 대조(§2) → 새 이미지·새 코드 덮어쓰기 → DB 판(§5-5 — 적재·selftest 앞에) → `host_ctl.sh check` → `versions.md`에 한 줄(§3).
 5. 문제는 [server-guide §7](server-guide.md#7-개발자에게-보고하는-법) 형식으로 이슈 → PC가 고침 → 다음 판.
 
 ## 8. EDW 조인 사슬 파일 고쳐 쓰기(서버)
@@ -215,12 +215,12 @@ $DOCKER exec data-pipeline python -m pipeline.load.edw_doc_meta --check --file /
 
 ## 9. 서버에서 직접 만드는 파일
 
-서버마다 값이 다른 파일은 코드 폴더 밖 **루트 바로 아래**에 둔다. `host_ctl.sh init`이 **없을 때만** git의 예시를 복사한다(있으면 덮지 않음). 새 판(새 루트)에는 앞 루트에서 `cp -p`로 복사해 온다.
+서버마다 값이 다른 파일은 **루트(코드 폴더) 바로 아래**에 둔다 — git·코드 zip에 없는 파일이라 새 판을 덮어써도 남는다. `host_ctl.sh init`이 **없을 때만** git의 예시를 복사한다(있으면 덮지 않음).
 
 | 파일 | 자리(호스트 → 컨테이너) | 예시(복사 원본) | 읽는 곳 | 주인·권한 |
 |---|---|---|---|---|
 | `settings.yaml` | `<루트>/settings.yaml` → `/etc/rag/settings.yaml`(읽기 전용 — 세 컨테이너) | `settings.sample.yaml` | 모든 앱·호스트 스크립트 | 10001:<운영 그룹> 640(운영 계정 UID가 10001이면 600) |
 | `edw_chain.yaml` | `<루트>/edw_chain.yaml` → `/etc/rag/edw_chain.yaml`(읽기 전용 — `data-pipeline`·`mcp-server`) | `resources/config/edw_chain.yaml` | 적재·검색 MCP — `ops.paths.edw_chain_file: /etc/rag/edw_chain.yaml`을 적었을 때만 | 10001:<운영 그룹> 640 |
 
-- 백업 묶음 `<루트>/backup/<판>-<시각>/`(700): 설정 사본·`pg_dump` — [upgrade-guide §2](upgrade-guide.md#2-백업).
+- 백업 묶음(벌 폴더 밖, 700): 벌 폴더 사본·`pg_dump` — [upgrade-guide §2](upgrade-guide.md#2-백업).
 - 고객 명부·용어집은 서버 파일이 아니라 PG 마스터 표다(`migrate master load` — §5-5).

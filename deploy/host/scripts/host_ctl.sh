@@ -1,23 +1,23 @@
 #!/bin/bash
 # 상주 컨테이너 3개(data-pipeline·mcp-data-parsing·mcp)를 부르는 compose 입구.
 #   bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp   (서비스 하나만도 됨 · ps·logs·down 등 compose 하위 명령 그대로)
-#   bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>   서버 루트(이 코드 폴더의 부모) 채우기(root — 여러 번 불러도 안전)
+#   bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>   서버 루트(이 코드 폴더 자체 = 한 벌) 채우기(root — 여러 번 불러도 안전)
 #   bash deploy/host/scripts/host_ctl.sh timers                      systemd 타이머(새벽 배치·MCP 살리기)를 이 코드 폴더 기준으로 설치·켬(root)
 #   bash deploy/host/scripts/host_ctl.sh check                       배포 뒤 점검을 차례로 — 처음 실패에서 멈추고 마지막 한 줄로 판정
 # 하는 일: 코드 폴더 루트로 cd → settings.yaml을 셸 env로(load_settings.sh load_settings — 값은 출력 안 함) → 실행 이미지(*-runtime)면
 #   이 코드 폴더를 CODE_DIR로(in_container.sh code_dir_default — 파이프라인 이미지 기준, 개발 서버는 두 이미지가 함께 runtime) →
 #   $DOCKER compose -f compose.pipeline.yml -f compose.data-parsing.yml -f compose.mcp-server.yml [+ CODE_DIR면 compose.code*.yml]
 #   [+ option.devbox.ssh_port면 compose.dev.yml(+ opencode_config면 compose.opencode.yml) — prd·코드가 든 이미지면 종료 2] "$@".
-# 묶음 이름은 compose<NAME_SUFFIX>(한 벌은 compose, 여러 벌은 compose-<instance>) — mcp_keepalive.sh도 같은 이름으로 부른다.
+# 묶음 이름은 compose<NAME_SUFFIX>(한 벌은 compose, 여러 벌은 compose-<벌 번호>) — mcp_keepalive.sh도 같은 이름으로 부른다.
 # 종료 코드: compose 그대로 · 설정을 못 읽으면 load_settings의 코드(2) · init/check는 아래 설명.
 set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트
 if [ -n "${DC_ROOT:-}" ]; then RAG_ROOT=$DC_ROOT; fi   # 시험 루트(init) — load_settings.sh는 이미 있는 RAG_ROOT를 씀(결과 폴더 기본도 그 아래)
 . deploy/host/scripts/load_settings.sh   # 루트 RAG_ROOT·load_settings 한 곳(값은 아래 load_settings에서)
 
-# init — 서버 루트(이 코드 폴더의 부모)를 한 번에 채운다(값·파일 내용은 찍지 않음). 여러 번 불러도 안전.
-#   폴더: <결과 폴더>(UID 10001:<그룹>, 2775 — setgid) · <결과 폴더>/_mcp_parse/jobs(같음) · <루트>/backup(700) · <루트>/home(10001, 700 — 개발 작업 공간 홈)
-#   코드 폴더(이 스크립트의 폴더 — zip을 푼 sbl_data_parsing-<판>): chmod -R a+rX(컨테이너 UID 10001이 읽게)
+# init — 서버 루트(이 코드 폴더 자체)를 한 번에 채운다(값·파일 내용은 찍지 않음). 여러 번 불러도 안전.
+#   폴더: <결과 폴더>(UID 10001:<그룹>, 2775 — setgid) · <결과 폴더>/_mcp_parse/jobs(같음) · settings.yaml에 option.devbox.ssh_port가 있으면 <루트>/home(10001, 700 — 개발 작업 공간 홈)
+#   코드 폴더(이 스크립트의 폴더 — zip을 푼 sbl_data_parsing-<판>): chmod -R a+rX(컨테이너 UID 10001이 읽게) — settings.yaml·edw_chain.yaml·output/·home/은 빼고(비밀값 640·홈 700 그대로)
 #   settings.yaml: 코드 폴더의 settings.sample.yaml을 <루트>/settings.yaml로 — **없을 때만**(있으면 절대 덮지 않음), 10001:<그룹> 640.
 #   edw_chain.yaml: resources/config/edw_chain.yaml을 <루트>/edw_chain.yaml로 — 같은 규칙(없을 때만, 10001:<그룹> 640). data-pipeline·mcp-server가 이 파일을
 #     /etc/rag/edw_chain.yaml로 붙이므로(compose.pipeline.yml·compose.mcp-server.yml) 파일이 늘 있어야 함 — 앱은 ops.paths.edw_chain_file(적재·검색 같은 칸)을 적었을 때만 씀.
@@ -59,9 +59,10 @@ dc_init() {
   }
   _mk "$out" 2775 1
   _mk "$jobs" 2775 1
-  _mk "$root/backup" 700 0
-  _mk "$root/home" 700 1   # 개발 작업 공간(option.devbox)의 홈 /home/rag — 쓰지 않아도 빈 폴더로 둠
-  if [ -z "$test" ]; then chmod -R a+rX . && echo "  권한  $(pwd) (a+rX)"; else echo "  (시험 — 코드 폴더 a+rX 건너뜀)"; fi
+  [ -n "${DEVBOX_SSH_PORT:-}" ] && _mk "$root/home" 700 1   # 개발 작업 공간(option.devbox)의 홈 /home/rag
+  if [ -z "$test" ]; then   # 코드만 — 루트 = 코드 폴더라 설정(사본·백업 포함)·결과·홈을 건드리지 않음
+    find . \( -path "./settings*.yaml*" -o -path "./settings copy*" -o -path ./edw_chain.yaml -o -path ./output -o -path ./home \) -prune -o -exec chmod a+rX {} + && echo "  권한  $(pwd) (a+rX — 설정·결과·홈 빼고)"
+  else echo "  (시험 — 코드 폴더 a+rX 건너뜀)"; fi
   _cp settings.sample.yaml "$sf"
   if [ -d "$chain" ]; then   # docker가 init 전에 띄운 마운트로 빈 폴더를 만든 경우 — 지우지 않고 멈춤(앱은 IsADirectoryError)
     echo "[host_ctl init] $chain 자리에 폴더가 있음 — 컨테이너를 init 전에 띄운 흔적: 비어 있으면 rmdir 뒤 다시(종료 4 — 지우지 않음)" >&2; return 4
@@ -124,14 +125,14 @@ dc_check() {
 }
 
 # timers — systemd 단위 4개(deploy/host/systemd — 새벽 배치·MCP 살리기)의 코드 폴더 자리(@CODE_DIR@)를 이 코드 폴더로 채워
-#   /etc/systemd/system에 쓰고 두 타이머를 켠다. 새 루트에서 다시 부르면 그 루트로 바뀐다. root가 아니면 종료 3.
+#   /etc/systemd/system에 쓰고 두 타이머를 켠다. 다른 코드 폴더에서 다시 부르면 그 폴더로 바뀐다(벌 번호가 다르면 단위 이름도 따로). root가 아니면 종료 3.
 #   DC_UNIT_DIR=<폴더>는 /etc/systemd/system 대신(시험용 — root 확인·systemctl을 건너뜀).
 dc_timers() {
   local dest=${DC_UNIT_DIR:-/etc/systemd/system} u n
   if [ "$(id -u)" != 0 ] && [ -z "${DC_UNIT_DIR:-}" ]; then
     echo "[host_ctl timers] root로 실행할 것(sudo) — /etc/systemd/system에 쓴다" >&2; return 3
   fi
-  for u in deploy/host/systemd/*.service deploy/host/systemd/*.timer; do   # 여러 벌이면 단위 이름 끝에 -<instance>(타이머·서비스 짝이 같은 이름)
+  for u in deploy/host/systemd/*.service deploy/host/systemd/*.timer; do   # 여러 벌이면 단위 이름 끝에 -<벌 번호>(타이머·서비스 짝이 같은 이름)
     n=$(basename "$u"); n="${n%.*}$NAME_SUFFIX.${n##*.}"
     sed "s#@CODE_DIR@#$(pwd)#g" "$u" > "$dest/$n" && echo "  씀  $dest/$n" || return 1
   done
@@ -155,8 +156,9 @@ files="-f $C/compose.pipeline.yml -f $C/compose.data-parsing.yml -f $C/compose.m
 if [ -n "${DEVBOX_SSH_PORT:-}" ]; then
   [ "${RUN_ENV:-}" = prd ] && { echo "[host_ctl] option.devbox.ssh_port는 개발 서버(dev)에서만 — 운영(prd)은 비워 둠" >&2; exit 2; }
   [ -n "${CODE_DIR:-}" ] || { echo "[host_ctl] option.devbox.ssh_port — 개발 작업 공간은 실행 이미지(*-runtime)에서만(코드 폴더를 쓰기 가능으로 붙임)" >&2; exit 2; }
+  [ -d "$RAG_ROOT/home" ] || { echo "[host_ctl] $RAG_ROOT/home 없음 — ssh_port를 적은 뒤 host_ctl.sh init --group <운영 그룹>을 다시(root)" >&2; exit 2; }
   files="$files -f $C/compose.dev.yml"
   [ -n "${DEVBOX_OPENCODE_CONFIG:-}" ] && files="$files -f $C/compose.opencode.yml"
 fi
 # shellcheck disable=SC2086 — DOCKER(sudo podman처럼 두 낱말)·파일 인자는 낱말 나눔
-exec $DOCKER compose -p "compose$NAME_SUFFIX" $files "$@"   # 묶음 이름 — 한 벌은 compose 기본(폴더 이름 compose) 그대로, 여러 벌은 compose-<instance>
+exec $DOCKER compose -p "compose$NAME_SUFFIX" $files "$@"   # 묶음 이름 — 한 벌은 compose 기본(폴더 이름 compose) 그대로, 여러 벌은 compose-<벌 번호>

@@ -20,7 +20,7 @@
 | 기계 | 파일 | 적용 | 모델 엔드포인트 |
 |---|---|---|---|
 | PC(개발) | 저장소 루트 `settings.yaml`(git 밖, 권한 600) | `RUN_ENV`가 없거나 `local`이면 코드가 이 파일을 찾음. 한 번만 몇 칸 바꿀 때는 오버레이 설정 파일 `SETTINGS_FILE=$(python -m common.config.overrides PIPE_OUT_ROOT=… EMBED_ALLOW_EXTERNAL=1 …)`(**PC 전용**) | 내부망 또는 OpenRouter(기능 시험만 — CLAUDE.md §7) |
-| 수집·개발 서버 | `<루트>/settings.yaml`(루트 = 코드 폴더의 부모 — 코드 폴더 밖, README §5). **주인 UID 10001·그룹 운영 그룹·권한 640**(운영 계정 UID가 10001이면 600) | 컨테이너: compose가 `/etc/rag/settings.yaml`에 읽기 전용(`:ro,z`)으로 붙이고 env는 `SETTINGS_FILE`·`RUN_ENV`만 준다. **값을 바꿀 때는 이 파일을 직접 고친다.** 셸·systemd: `deploy/host/scripts/load_settings.sh`의 `load_settings`가 호스트 칸(이미지·자원·포트·`RAG_OUT`·`DOC_SRC`·`NIGHTLY_*` 등)을 셸 env로 내보내 compose가 치환한다 | 내부망만 |
+| 수집·개발 서버 | `<루트>/settings.yaml`(루트 = 코드 폴더 자체 — git·코드 zip에 없는 파일이라 새 판을 덮어써도 남음, README §5). **주인 UID 10001·그룹 운영 그룹·권한 640**(운영 계정 UID가 10001이면 600) | 컨테이너: compose가 `/etc/rag/settings.yaml`에 읽기 전용(`:ro,z`)으로 붙이고 env는 `SETTINGS_FILE`·`RUN_ENV`만 준다. **값을 바꿀 때는 이 파일을 직접 고친다.** 셸·systemd: `deploy/host/scripts/load_settings.sh`의 `load_settings`가 호스트 칸(이미지·자원·포트·`RAG_OUT`·`DOC_SRC`·`NIGHTLY_*` 등)을 셸 env로 내보내 compose가 치환한다 | 내부망만 |
 
 ### 0-0. 실행 기록(JSON 로그·DB 감사·성능)
 
@@ -106,7 +106,6 @@
 | `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 토큰은 `required.tokens.mcp_token` 하나 — 검색 MCP·`parse_document` 작업 서비스가 함께 쓴다(호출 쪽은 같은 값을 `Authorization: Bearer`로) · 공백만인 토큰은 없음과 같음 |
 | `FULLTEXT_SIGN_SECRET`(`required.tokens.fulltext_sign_key`) | 비움 | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키(비밀). 비면 두 도구가 `not_configured`. 바꾸면 이미 발급된 `sfid`가 모두 무효 |
 | `DATA_PARSING_PORT`(`ops.services.data_parsing.data_parsing_port`) | `8766` | `parse_document` 작업 서비스 포트(127.0.0.1) — 작업 서비스가 듣고 검색 MCP가 이 값으로 부름(칸 하나). 여러 벌이면 벌마다 다르게(기본값이면 시작 거부) |
-| `INSTANCE`(`ops.host.instance_name`) | 비움(한 벌) | 개발 서버 여러 벌 — 컨테이너 이름 끝 `-<벌>`, PG 스키마·EDW 기록 표 끝 `_<벌>`(`-`는 `_`로 — `dbtool --schema`로 직접 준 이름에도), dev 게시 경로 `<prefix>/<벌>`. prd면 시작 거부. settings.yaml에서만(셸 env로 덮지 않음) — server-guide §1-3 |
 | `DATA_PARSING_MAX_MB`(`ops.services.data_parsing.mcp_parse_max_file_mb`) | `100` | `parse_document` 파일 1건 크기 상한(MB) — 검색 MCP와 파싱 서비스가 같은 칸을 읽음 |
 | `MCP_METHODS` | `vector,bm25,id` | 이 셋만 있음 |
 | `MCP_ALLOWED_HOSTS` | 비움 | 루프백이 아닐 때, 리버스 프록시 등 다른 Host로도 부르면 쉼표로 추가 |
@@ -165,7 +164,7 @@
 
 | 이름 | 기본 | 뜻 |
 |---|---|---|
-| `DEVBOX_SSH_PORT`(`option.devbox.ssh_port`) | 비움(끔) | 적으면 `data-pipeline`을 SSH 작업 공간(`devbox`)으로 띄움 — 그 포트에서 sshd(호스트 네트워크 그대로, 개발자마다 다르게) · 코드 폴더 쓰기 가능 · 홈 `<루트>/home`. 개발 서버(dev)의 실행 이미지에서만 — prd·코드가 든 이미지면 `host_ctl.sh` 종료 2 |
+| `DEVBOX_SSH_PORT`(`option.devbox.ssh_port`) | 비움(끔) | 적으면 `data-pipeline`을 SSH 작업 공간(`devbox`)으로 띄움 — 그 포트에서 sshd(호스트 네트워크 그대로, 개발자마다 다르게) · 코드 폴더 쓰기 가능 · 홈 `<루트>/home`(포트를 적은 뒤 `host_ctl.sh init`이 만듦 — 없으면 `host_ctl.sh up` 종료 2). 개발 서버(dev)의 실행 이미지에서만 — prd·코드가 든 이미지면 `host_ctl.sh` 종료 2 |
 | `DEVBOX_OPENCODE_CONFIG`(`option.devbox.opencode_config`) | 비움(이미지의 틀) | opencode 설정 파일의 호스트 경로 — 읽기 전용으로 붙이고 `OPENCODE_CONFIG`로 가리킴. 비우면 홈의 `~/.config/opencode/opencode.json`(첫 시작에 틀 복사 — 내부망 모델만) |
 
 ## 2. 자원·병렬 (보통 안 건드림)

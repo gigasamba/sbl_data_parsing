@@ -19,27 +19,27 @@ PORTS = {"MCP_PORT": "8775", "DATA_PARSING_PORT": "8776"}  # 여러 벌은 포�
 SSH = {"DEVBOX_SSH_PORT": "2222"}  # option.devbox.ssh_port — 개발 작업 공간
 OC = {**SSH, "DEVBOX_OPENCODE_CONFIG": "/srv/x/opencode.json"}  # + option.devbox.opencode_config
 RT = "data-pipeline-runtime:0.2.0"
-CASES = [  # (DATA_PIPELINE_IMAGE, CODE_DIR, 덧붙는 compose 파일, ops.host.instance_name, 그 밖 env, compose 묶음 이름 — 종료 코드 2면 거부 문구)
-    ("data-pipeline:0.2.0", "", [], "", {}, "compose"),  # 코드가 든 이미지(운영) · 한 벌 — 묶음 이름은 compose 기본 그대로
-    (RT, "", CODE, "", {}, "compose"),  # 실행 이미지(개발) — 이 코드 폴더를 붙임
-    ("data-pipeline:0.2.0", "/srv/x/code", CODE, "", {}, "compose"),  # CODE_DIR를 주면 그 값
-    ("data-pipeline:0.2.0", "", [], "hong", PORTS, "compose-hong"),  # 여러 벌 — 묶음 이름 끝 -<instance>
-    ("data-pipeline:0.2.0", "", [], "Hong_1", PORTS, "!ops.host.instance_name"),  # 영소문자·숫자·-만 — 시작 거부
+CASES = [  # (DATA_PIPELINE_IMAGE, CODE_DIR, 덧붙는 compose 파일, 루트(코드 폴더) 이름 — 끝 -<숫자>가 벌 번호, 그 밖 env, compose 묶음 이름 — 종료 코드 2면 거부 문구)
+    ("data-pipeline:0.2.0", "", [], "code", {}, "compose"),  # 코드가 든 이미지(운영) · 한 벌 — 묶음 이름은 compose 기본 그대로
+    (RT, "", CODE, "code", {}, "compose"),  # 실행 이미지(개발) — 이 코드 폴더를 붙임
+    ("data-pipeline:0.2.0", "/srv/x/code", CODE, "code", {}, "compose"),  # CODE_DIR를 주면 그 값
+    ("data-pipeline:0.2.0", "", [], "sbl_data_parsing-main-2", PORTS, "compose-2"),  # 여러 벌 — 묶음 이름 끝 -<벌 번호>
+    ("data-pipeline:0.2.0", "", [], "sbl_data_parsing-0.3.0", {}, "compose"),  # 판 번호(점)는 벌 번호가 아님
     (
         "data-pipeline:0.2.0",
         "",
         [],
-        "hong",
+        "sbl_data_parsing-main-2",
         {"MCP_PORT": "8775"},
         "!ops.services.data_parsing.data_parsing_port",
     ),  # 여러 벌인데 기본 포트 — 거부
-    ("data-pipeline:0.2.0", "", [], "hong", {"DATA_PARSING_PORT": "8776"}, "!search.server.mcp_port"),
-    ("data-pipeline:0.2.0", "", [], "hong", {**PORTS, "RUN_ENV": "prd"}, "!운영(prd)"),  # prd는 한 벌
-    (RT, "", CODE + DEV, "", SSH, "compose"),  # 개발 작업 공간 — 코드 폴더 쓰기 가능·홈 폴더
-    (RT, "", CODE + DEV + ["compose.opencode.yml"], "", OC, "compose"),  # + opencode 설정 파일
-    (RT, "", CODE, "", {"DEVBOX_OPENCODE_CONFIG": "/srv/x/opencode.json"}, "compose"),  # 포트 없이 opencode만 — 끔
-    (RT, "", [], "", {**SSH, "RUN_ENV": "prd"}, "!option.devbox.ssh_port는 개발 서버"),  # 운영은 거부
-    ("data-pipeline:0.2.0", "", [], "", SSH, "!실행 이미지(*-runtime)에서만"),  # 코드가 든 이미지는 거부
+    ("data-pipeline:0.2.0", "", [], "sbl_data_parsing-main-2", {"DATA_PARSING_PORT": "8776"}, "!search.server.mcp_port"),
+    ("data-pipeline:0.2.0", "", [], "sbl_data_parsing-main-2", {**PORTS, "RUN_ENV": "prd"}, "!운영(prd)"),  # prd는 한 벌
+    (RT, "", CODE + DEV, "code", SSH, "compose"),  # 개발 작업 공간 — 코드 폴더 쓰기 가능·홈 폴더
+    (RT, "", CODE + DEV + ["compose.opencode.yml"], "code", OC, "compose"),  # + opencode 설정 파일
+    (RT, "", CODE, "code", {"DEVBOX_OPENCODE_CONFIG": "/srv/x/opencode.json"}, "compose"),  # 포트 없이 opencode만 — 끔
+    (RT, "", [], "code", {**SSH, "RUN_ENV": "prd"}, "!option.devbox.ssh_port는 개발 서버"),  # 운영은 거부
+    ("data-pipeline:0.2.0", "", [], "code", SSH, "!실행 이미지(*-runtime)에서만"),  # 코드가 든 이미지는 거부
 ]
 
 
@@ -54,14 +54,17 @@ def test_dc_command():
         sf.write_text("required:\n  env: {run_env: dev}\n", encoding="utf-8")
         p = sf.resolve().as_posix()
         sp = f"/{p[0].lower()}{p[2:]}" if p[1:2] == ":" else p  # Git Bash(Windows)가 절대 경로로 보는 꼴
-        for image, code, more, inst, extra, project in CASES:
+        for image, code, more, name, extra, project in CASES:
+            root = Path(d) / name
+            (root / "home").mkdir(parents=True, exist_ok=True)  # 개발 작업 공간 홈(init이 ssh_port일 때 만듦)
+            q = root.resolve().as_posix()
             env = {  # env 남김 — 하위 프로세스(호스트 셸이 load_settings로 받는 이름 — 시험)
                 "PATH": os.environ.get("PATH", ""),
                 "SETTINGS_FILE": sp,
                 "SETTINGS_LOADED": sp,  # 이미 읽은 것으로 — settings_to_env.py(PyYAML)를 부르지 않음
                 "DOCKER": "echo",
                 "DATA_PIPELINE_IMAGE": image,
-                "INSTANCE": inst,
+                "RAG_ROOT": f"/{q[0].lower()}{q[2:]}" if q[1:2] == ":" else q,  # 루트(코드 폴더) — 이름 끝 -<숫자>가 벌 번호
                 **extra,
             }
             if code:
@@ -70,7 +73,7 @@ def test_dc_command():
                 [bash, str(SCRIPT), "up", "-d", "mcp"], env=env, capture_output=True, text=True, encoding="utf-8", timeout=30
             )
             if project.startswith("!"):
-                assert r.returncode == 2 and project[1:] in r.stderr, (inst, extra, r.returncode, r.stderr)
+                assert r.returncode == 2 and project[1:] in r.stderr, (name, extra, r.returncode, r.stderr)
                 continue
             assert r.returncode == 0, (image, code, r.stderr)
             files = [w.rsplit("/", 1)[-1] for w in r.stdout.split() if w.endswith(".yml")]
@@ -78,7 +81,7 @@ def test_dc_command():
             assert files == BASE + more, (image, code, extra, files)
 
 
-STUB = "from pathlib import Path\nprint(f\"export DATA_PIPELINE_IMAGE='{Path(__file__).parents[4].name}'\")\n"  # settings_to_env.py 대역 — 루트 이름을 냄
+STUB = "from pathlib import Path\nprint(f\"export DATA_PIPELINE_IMAGE='{Path(__file__).parents[3].name}'\")\n"  # settings_to_env.py 대역 — 루트 이름을 냄
 
 
 def test_stale_shell_reads_own_root():
@@ -92,7 +95,7 @@ def test_stale_shell_reads_own_root():
         ls = {}
         for name in ("a", "b"):
             root = Path(d) / name
-            scripts = root / "code" / "deploy" / "host" / "scripts"
+            scripts = root / "deploy" / "host" / "scripts"  # 루트 = 코드 폴더
             scripts.mkdir(parents=True)
             (scripts / "load_settings.sh").write_bytes((SCRIPT.parent / "load_settings.sh").read_bytes())
             (scripts / "settings_to_env.py").write_text(STUB, encoding="utf-8")
@@ -108,5 +111,5 @@ def test_stale_shell_reads_own_root():
         }
         r = subprocess.run([bash, "-c", cmd], env=env, capture_output=True, text=True, encoding="utf-8", timeout=60)
         assert r.returncode == 0, r.stderr
-        root_b = ls["b"].rsplit("/code/", 1)[0]
+        root_b = ls["b"].rsplit("/deploy/", 1)[0]
         assert r.stdout.strip() == f"{root_b}|{root_b}/settings.yaml|b|{root_b}/output|echo", r.stdout

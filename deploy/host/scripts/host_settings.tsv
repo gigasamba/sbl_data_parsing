@@ -4,7 +4,6 @@ common.host.devbox.ssh_port	DEVBOX_SSH_PORT	num
 common.host.devbox.opencode_config	DEVBOX_OPENCODE_CONFIG	text
 common.host.doc_src	DOC_SRC	text
 common.host.docker	DOCKER	text
-common.host.instance	INSTANCE	text
 common.host.image_stage_dir	IMAGE_STAGE_DIR	text
 common.host.output_root	RAG_OUT	text
 common.host.prune_keep	PRUNE_KEEP	num

@@ -11,17 +11,17 @@
 
 - 이미지 시작 스크립트(`entrypoint.sh`)는 다른 이미지의 명령을 종료 64로 거부한다(맞는 이미지를 알려 줌). data-pipeline: `parse`·`publish`·`show-stack`·`idle`·`migrate`·`run-mcp-parsing` · mcp-server: `mcp`·`ask`·`show-stack`.
 - 어느 이미지에서나: `help`·`check`·`resources`·`services`·`check-modules`·`tool <이름> [인자]`·`selftest`.
-- 서버 배치: 공용 폴더(예 `/home/sbl/`) 아래 이미지 폴더 `sbl_images-main/`(서버에 한 번 load — 모든 벌이 같이 씀)와 루트(한 벌 — 예 `dev/`·`dev-hong/`). 루트 아래 `settings.yaml`·`edw_chain.yaml`·코드 폴더 `sbl_data_parsing-<판>/`·결과 폴더 `output/`·`backup/`. 루트 = 코드 폴더의 부모 — 호스트 스크립트가 자기 자리에서 구한다(README §5). 판마다 새 루트를 만든다([release-and-patch §1-1](release-and-patch.md#1-1-개발-서버--새-루트로-코드-바꾸기)).
+- 서버 배치: 공용 폴더(예 `/home/sbl/`) 아래 이미지 폴더 `sbl_images-main/`(서버에 한 번 load — 모든 벌이 같이 씀)·공용 `opencode.json`(선택)과 벌 폴더(한 벌 = 코드 폴더 하나 — 예 `sbl_data_parsing-main-1/`). 루트 = 코드 폴더 자체 — 그 안에 `settings.yaml`·`edw_chain.yaml`·결과 폴더 `output/`(+ SSH 작업 공간을 켜면 `home/`). 호스트 스크립트가 자기 자리에서 구한다(README §5). 새 판은 벌 폴더에 덮어쓴다([release-and-patch §1-1](release-and-patch.md#1-1-개발-서버--코드-폴더-덮어쓰기)).
 - 개발 서버는 실행 이미지(`*-runtime`)에 코드 폴더를 `/app/deploy`에 읽기 전용으로 붙인다 — `host_ctl.sh`·`mcp_keepalive.sh`가 자기 코드 폴더를 `CODE_DIR`로 잡는다(셸에 `CODE_DIR`가 있으면 그 값). 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2) — 실행 이미지 판은 `BUILD.txt`의 `DEPS_HASH`가 코드의 `deploy/docker/DEPS_HASH`와 같은 판을 쓴다. 운영 서버는 개발 서버에서 구운 코드가 든 이미지(`bake_prod_image.sh`)를 마운트 없이 쓴다. 모드(local·dev·prd)별 이미지·코드·띄우는 명령은 [README §1-3 실행 모드 표](../../README.md#실행-모드).
-- 서버로 옮기기: 처음 설치(PC → 개발 서버)는 [README §5-0 서버 설치 순서](../../README.md#서버-설치-순서), 코드만 바꿀 때는 [release-and-patch §1-1](release-and-patch.md#1-1-개발-서버--새-루트로-코드-바꾸기), 개발 서버 → 운영(수집) 서버는 [release-and-patch §1-2](release-and-patch.md#1-2-개발--운영--시험한-그대로-굽기)(`bake_prod_image.sh` → `load.sh` → `host_ctl.sh`). 컨테이너는 compose를 직접 부르지 않고 `host_ctl.sh`로 다룬다.
-- 명령은 모두 코드 폴더(`cd <루트>/sbl_data_parsing-<판>`)에서, root 셸에서 실행한다.
+- 서버로 옮기기: 처음 설치(PC → 개발 서버)는 [README §5-0 서버 설치 순서](../../README.md#서버-설치-순서), 코드만 바꿀 때는 [release-and-patch §1-1](release-and-patch.md#1-1-개발-서버--코드-폴더-덮어쓰기), 개발 서버 → 운영(수집) 서버는 [release-and-patch §1-2](release-and-patch.md#1-2-개발--운영--시험한-그대로-굽기)(`bake_prod_image.sh` → `load.sh` → `host_ctl.sh`). 컨테이너는 compose를 직접 부르지 않고 `host_ctl.sh`로 다룬다.
+- 명령은 모두 코드 폴더(`cd /home/sbl/sbl_data_parsing-main-<번호>`)에서, root 셸에서 실행한다.
 - 컨테이너 상태: 서버 전체는 `podman ps`·`docker ps`(root로 띄웠으면 `sudo podman ps`), 우리 묶음만은 `bash deploy/host/scripts/host_ctl.sh ps`.
 
 ## 1. 설정
 
 ```bash
 export DOCKER=podman                                   # 운영 계정 ~/.bashrc에 두거나 명령 앞에 붙인다
-bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>   # 루트의 output/·backup/·settings.yaml·edw_chain.yaml(없을 때만) — README §5-0 3번
+bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>   # 코드 폴더 안 output/·settings.yaml·edw_chain.yaml(없을 때만)·home/(ssh_port를 적었을 때만) — README §5-0 3번
 ```
 - 값은 `init`이 찍은 빈 필수 칸부터 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)). `nightly_batch.sh`·`pipe_exec.sh`·`mcp_keepalive.sh`·systemd unit은 `<루트>/settings.yaml`을 스스로 찾는다.
 - **엔진 구성은 코드 폴더의 파일이다**(`resources/config/pipeline_stack.json` 하나 — 설정 칸 없음). 바꾸려면 코드 폴더째 바꾼다. 원천은 폴더·`rdb:csv`만.
@@ -36,24 +36,23 @@ bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>   # 루트의 
 README §5-3 ④ 연결 점검과 ⑤ 이미지 점검, 또는 한 번에 `bash deploy/host/scripts/host_ctl.sh check`(기대 마지막 줄 `[host_ctl check] 통과 — 6개`).
 
 ### 1-3. 한 서버에 여러 벌 띄우기(개발자별)
-개발 서버(dev)만. 루트 하나가 한 벌이다. 개발자마다 루트를 따로 만들고(코드 zip을 풀고 `host_ctl.sh init`), 그 루트의 `settings.yaml`에 아래 세 칸을 **벌마다 다르게** 적는다.
+개발 서버(dev)만. 벌 폴더(코드 폴더) 하나가 한 벌이다. 폴더 배치·명령은 [README §5-0 "한 서버에 여러 벌"](../../README.md#5-0-배포-단계와-개발-서버-설치).
 
-| 칸 | 하는 일 | 예(홍 개발자) |
+| 무엇 | 정하는 곳 | 예(벌 2) |
 |---|---|---|
-| `ops.host.instance_name` | 벌 이름(영소문자·숫자·`-`) — 이것 하나로 아래가 갈린다. 비우면 한 벌 — 이름 그대로 | `hong` |
-| `search.server.mcp_port` | 검색 MCP 포트 — 벌 이름이 있는데 기본값(8765)이면 시작 거부 | `8775` |
-| `ops.services.data_parsing.data_parsing_port` | parse_document 작업 서비스 포트(검색 MCP도 이 값으로 부름) — 벌 이름이 있는데 기본값(8766)이면 시작 거부 | `8776` |
+| 벌 번호 | 코드 폴더 이름 끝 `-<숫자>`(끝이 숫자가 아니면 한 벌 — 이름 그대로) | `sbl_data_parsing-main-2` → `2` |
+| `search.server.mcp_port` | 그 벌의 settings.yaml — 번호가 붙은 벌인데 기본값(8765)이면 시작 거부 | `8775` |
+| `ops.services.data_parsing.data_parsing_port` | 그 벌의 settings.yaml — parse_document 작업 서비스 포트(검색 MCP도 이 값으로 부름), 번호가 붙은 벌인데 기본값(8766)이면 시작 거부 | `8776` |
+| `option.devbox.ssh_port` | 그 벌의 settings.yaml — 개발 작업 공간을 켤 때만 | `2223` |
 
-벌 이름 `hong`이 있으면 저절로:
-- 컨테이너·compose 묶음·systemd 단위 이름 끝에 `-hong`(`data-pipeline-hong`·`mcp-data-parsing-hong`·`mcp-server-hong`, 타이머 `data-pipeline-nightly-hong.timer`).
-- PG 스키마 `<required.pg.pg_schema>_hong`(원천 스키마 `<…>_hong_sfdc` 등도), EDW 기록 표 `<required.edw.parsing_meta_table>_hong`(기본 `AI.ParsingMeta_hong`). 이미 `_hong`으로 끝나게 적었으면 그대로. 이름의 `-`는 `_`가 된다.
-- 게시(Object Storage) 경로 `<prefix>/hong/…` — 개발 서버(dev)에서만.
-- 운영(prd)에서 벌 이름을 적으면 시작 거부(앱 시작 관문·`load_settings.sh`·`run_pipeline.py` 모두).
-- EDW 기록 표는 DB 담당자가 미리 만든다 — `docs/operations/parsing_meta_mssql.sql`을 복사해 표 이름만 바꿔 넘긴다(refactor.md C-94).
+벌 번호 `2`면 저절로:
+- 컨테이너·compose 묶음·systemd 단위 이름 끝에 `-2`(`data-pipeline-2`·`mcp-data-parsing-2`·`mcp-server-2`, 묶음 `compose-2`, 타이머 `data-pipeline-nightly-2.timer`).
+- PG 스키마·EDW 기록 표·게시 경로에는 아무것도 붙지 않는다 — 모든 벌이 같은 기준 스키마를 함께 쓰므로 모든 벌을 같은 코드 판으로 둔다. `migrate up`·`migrate master load`는 아무 벌 하나에서 한 번.
+- 운영(prd)에서 번호가 붙은 폴더면 시작 거부(종료 2 — `load_settings.sh`·`run_pipeline.py`).
 
 - 컨테이너는 모두 호스트 네트워크라 포트가 겹치면 뒤에 띄운 쪽이 시작하지 못한다.
-- 명령은 그 루트의 코드 폴더에서 `host_ctl.sh`로만 한다 — `host_ctl.sh`·`mcp_keepalive.sh`·`nightly_batch.sh`·`pipe_exec.sh`·`run_pipeline.py`가 settings.yaml의 `ops.host.instance_name`를 읽어 자기 벌의 컨테이너만 다룬다(셸 변수 `INSTANCE`로는 덮지 않음 — 컨테이너 명령은 셸 `DOCKER`가 `ops.host.container_cli`를 이김). compose를 직접 부르면 이름·포트 값이 채워지지 않는다.
-- 자동 실행(`host_ctl.sh timers`)도 벌마다 따로 켜진다. 개발자 벌은 새벽 배치가 필요 없으면 `systemctl disable --now data-pipeline-nightly-<이름>.timer`.
+- 명령은 그 벌 폴더에서 `host_ctl.sh`로만 한다 — `host_ctl.sh`·`mcp_keepalive.sh`·`nightly_batch.sh`·`pipe_exec.sh`·`run_pipeline.py`가 자기 코드 폴더 이름에서 벌 번호를 구해 자기 벌의 컨테이너만 다룬다(컨테이너 명령은 셸 `DOCKER`가 `ops.host.container_cli`를 이김). compose를 직접 부르면 이름·포트 값이 채워지지 않는다.
+- 자동 실행(`host_ctl.sh timers`)도 벌마다 따로 켜진다. 개발자 벌은 새벽 배치가 필요 없으면 `systemctl disable --now data-pipeline-nightly-<번호>.timer`.
 - CPU·메모리 상한(§README 5-0 "자원")은 서버 전체 합계를 보고 벌마다 줄인다.
 
 ## 2. 일상 실행 — run_pipeline(문서별 흐름)
@@ -105,7 +104,7 @@ MCP 토큰은 settings.yaml `required.tokens.mcp_token`, 모델은 `required.mod
 - 문제가 있으면 §7 형식으로 `issues.md`에 적는다. DB에서 더 보려면 §8의 SQL.
 
 ### 2-5. 서버를 다시 켠 뒤
-컨테이너·타이머를 사람이 다시 띄운다(자동 재시작에 맡기지 않는다). root 셸, 그 루트의 코드 폴더에서:
+컨테이너·타이머를 사람이 다시 띄운다(자동 재시작에 맡기지 않는다). root 셸, 그 벌 폴더(코드 폴더)에서:
 ```bash
 export DOCKER=podman
 bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp
@@ -114,13 +113,13 @@ systemctl start mcp-server-keepalive.timer data-pipeline-nightly.timer   # 꺼�
 systemctl list-timers 'mcp-server-keepalive*' 'data-pipeline-nightly*'   # 기대: 두 타이머 다음 실행 시각
 bash deploy/host/scripts/host_ctl.sh check                                # 기대 마지막 줄: [host_ctl check] 통과 — 6개
 ```
-- 여러 벌이면 벌마다(그 루트의 코드 폴더에서) 같은 순서로 한다. PG 컨테이너는 DB 담당 몫이다 — `check`가 PG에서 멈추면 DB 담당에게 알린다.
+- 여러 벌이면 벌마다(그 벌 폴더에서) 같은 순서로 한다. PG 컨테이너는 DB 담당 몫이다 — `check`가 PG에서 멈추면 DB 담당에게 알린다.
 - 꺼지기 전에 돌던 `run_pipeline.py`는 다시 시작하지 않는다 — 다음 새벽 배치가 `--skip-done`으로 이어 가거나, 사람이 다시 부른다(§3).
 
 ## 3. 실패한 문서 찾기와 다시 돌리기
 
 - **진행 기록:** `<작업 폴더>/batch_progress/progress.log` — 문서마다 `doc#<번호> 파싱 OK|FAIL` · `doc#<번호> publish OK|FAIL` · `doc#<번호> 구조화+적재 OK|FAIL` 줄. 문서별 로그(파싱·게시·구조화 출력)는 같은 폴더의 `doc_<번호>.log`.
-- **작업 폴더 자리:** 비우면 코드 폴더 안 `deploy/host/scripts/test_space/`라서 새 판(새 루트)마다 기록과 잠금이 따로 생긴다. settings.yaml `ops.run_pipeline.run_pipeline_work_dir`에 **루트 밖 호스트 절대 경로**(예 `/home/sbl/run_pipeline`)를 적어 두기를 권한다 — 판이 바뀌어도 기록이 이어지고, 두 판의 실행이 같은 잠금을 본다.
+- **작업 폴더 자리:** 비우면 코드 폴더 안 `deploy/host/scripts/test_space/` — 벌마다 따로이고, 새 판을 덮어써도 기록과 잠금이 남는다. 다른 자리에 두려면 settings.yaml `ops.run_pipeline.run_pipeline_work_dir`에 호스트 절대 경로를 적는다(벌마다 다르게 — 같으면 두 벌이 한 잠금을 나눠 써 함께 돌지 못한다).
 - **실패 문서 번호 모으기:**
 ```bash
 grep -E 'doc#[0-9]+ (파싱|publish|구조화\+적재) FAIL' <작업 폴더>/batch_progress/progress.log | grep -oE 'doc#[0-9]+' | sort -u | tr -d 'doc#' | paste -sd, -
@@ -249,7 +248,7 @@ bash deploy/host/scripts/pipe_exec.sh migrate master load --dir /app/output/glos
 ## 7. 개발자에게 보고하는 법
 
 ### 서버 버전 기록
-적용·업데이트마다 운영 기록 폴더(루트 밖 — 판이 바뀌어도 이어 씀, 이하 `<기록>`)의 `versions.md`에 한 줄: `날짜 · 서버 · 이미지 버전 · 코드 커밋 · 확인 결과`.
+적용·업데이트마다 운영 기록 폴더(벌 폴더 밖 — 판이 바뀌어도 이어 씀, 이하 `<기록>`)의 `versions.md`에 한 줄: `날짜 · 서버 · 이미지 버전 · 코드 커밋 · 확인 결과`.
 
 ### 서버 자체 개발 기록
 서버에서 코드를 직접 고치거나 새로 만들었거나 옵션 값을 바꿨으면 그때마다 `<기록>/server-changes.md`에 한 행 + diff를 `<기록>/server-changes/<ID>.diff`로(`diff -u <고치기 전> <고친 뒤>`, 새 파일이면 `diff -u /dev/null <파일>`). 새 판으로 바꿀 때 이 기록을 먼저 읽는다([release-and-patch §2](release-and-patch.md#2-서버에서-직접-고친-코드)).

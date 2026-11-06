@@ -10,7 +10,7 @@
 - 규칙:
   1. CLI `pipeline.cli`는 `parse`·`show-stack`·`selftest`. 이미지 entrypoint(`deploy/docker/entrypoint.sh`)가 `publish`·`migrate`·`check`·`services`·`resources`·`tool`·`ask`·`mcp`·`run-mcp-parsing`·`idle`을 더한다. `idle` = 상주 컨테이너가 떠 있기만 한다(run_pipeline이 `docker exec`).
   2. 서버 실행은 호스트 python의 `deploy/host/scripts/run_pipeline.py`(PyYAML·pymssql 필요)가 상주 컨테이너 `data-pipeline` 안에서 문서마다 명령을 `docker exec`로 돌린다. 컨테이너 명령은 settings.yaml `ops.host.container_cli`(없으면 podman). PC에서는 실행하지 않는다.
-  3. 시작: 설정 파일 = `--settings` → `SETTINGS_FILE` → `<루트>/settings.yaml`(루트 = 코드 폴더의 부모 — op-13). `required.env.run_env`가 dev·prd가 아니거나 필요한 칸이 없으면 칸 경로만 찍고 종료 2. 코드 폴더 = `--code`(없으면 스크립트가 든 코드 폴더) — 그 안의 `common/config/layout.py`·`deploy/host/scripts/host_settings.tsv`로 설정 배치와 컨테이너 안 경로를 읽는다.
+  3. 시작: 설정 파일 = `--settings` → `SETTINGS_FILE` → `<루트>/settings.yaml`(루트 = 코드 폴더 자체 — op-13). `required.env.run_env`가 dev·prd가 아니거나 필요한 칸이 없으면 칸 경로만 찍고 종료 2. 코드 폴더 = `--code`(없으면 스크립트가 든 코드 폴더) — 그 안의 `common/config/layout.py`·`deploy/host/scripts/host_settings.tsv`로 설정 배치와 컨테이너 안 경로를 읽는다.
   4. 대상 목록(컨테이너 안 `python -m pipeline.extract.candidate_pick list` — run_pipeline은 목록 파일 `<결과 자리>/_docflow/targets.json`만 읽음): EDW `SELECT id, s3_key, original_filename, file_size FROM AI.FileStorageMap WHERE (<이름 조건>) AND file_size IS NOT NULL ORDER BY file_size ASC`. 이름 조건 = `--filter`의 낱말마다 `LOWER(original_filename) LIKE '%낱말%'`를 OR — `--filter`가 없으면 이름 조건 없이 모든 문서(기본). 순번(seq)은 이 순서. `--start-offset N`(기본 0)부터, `--seqs`면 그 순번만, `--skip-done`이면 끝난 문서([pl-23](#pl-23))를 빼고, FAQ 먼저([load.md#pl-41](load.md#pl-41)), `--max-docs`면 그 뒤 앞에서 N건, `--limit`은 시험용(그 전에 자름). `--filter`는 글자·숫자·`_` `,` `.` `-`만, `--seqs`는 숫자와 쉼표만(아니면 종료 2).
   5. 문서마다: 미리 받기(`candidate_ready stage` — 받기 → 중복 → 거르기) → 레인 분류 → 파싱 → 게시 → 원본 삭제 → gold(구조화+적재) → 임시 삭제([pl-24](#pl-24)). 배치 장벽 없이 끝나는 순서대로 흐른다.
   6. 레인·대기열은 [rn-01](#rn-01)·[rn-02](#rn-02), MCP 양보는 [rn-03](#rn-03)·[rn-04](#rn-04), 종료 코드는 [pl-18](#pl-18).
@@ -149,16 +149,16 @@
 - Status: done
 
 <a id="rn-07"></a>
-## rn-07 · 벌 이름 하나로 갈리는 여러 벌, 적은 설정 칸, 목적만 적은 주석
+## rn-07 · 서로 덮지 않는 여러 벌, 적은 설정 칸, 목적만 적은 주석
 - 이유(사용자 11-05 점검): 개발 서버에 여러 벌이 EDW·게시·포트·스키마를 함께 쓰면 서로 덮는다. 같은 값 칸·늘 같은 스위치·옛 칸 표는 설정을 읽기 어렵게 한다.
 - 요건(되어야 할 모습):
-  1. 여러 벌은 `ops.host.instance_name` 한 칸으로 갈린다 — 컨테이너 이름 · PG 스키마 `<db_schema>_<벌>`(따로 적으면 그 값) · EDW 기록 표 `<parsing_meta_table>_<벌>`(예 `AI.ParsingMeta_hong` — DB 담당이 미리 만듦, 실행 중 DDL 없음) · 게시 경로는 dev에서만 `<prefix>/<벌>/…` · 포트는 기본값 그대로면 시작 거부. 버전 칸에는 접미를 붙이지 않는다. `prd`에서 벌 이름을 쓰면 시작 거부.
+  1. 여러 벌은 코드 폴더 이름 끝 벌 번호로 컨테이너 이름이 갈린다([op-15](ops-settings.md#op-15)) · 포트는 기본값 그대로면 시작 거부 · `prd`에서 번호가 붙은 폴더면 시작 거부. PG 스키마·EDW 기록 표·게시 경로·버전에는 벌 표시를 붙이지 않는다.
   2. 파싱 MCP는 컨테이너·서비스·compose 파일 `mcp-data-parsing`, 설정 칸 `data_parsing`(env `DATA_PARSING_*`). 파싱 포트와 프록시 주소는 한 칸, 토큰은 `tokens.mcp` 하나.
   3. `run_pipeline.py`가 컨테이너 명령에 붙이는 `--set` 값(VLM 동시 수·워커 수 등, vlm 레인 값 포함)은 `ops.run_pipeline.*` 칸에서 온다(비우면 그 칸 기본값).
   4. 늘 같은 값인 스위치 칸과 옛 칸 표는 없다. VLM 동시 수 칸은 둘(`common.models.vlm.vlm_requests_per_doc`·`vlm_max_total_requests`). 옛 칸이 남은 settings.yaml은 시작 거부.
   5. 스캔 PDF 판정은 `pdf_kind` 하나(그림 VLM의 스캔 쪽 판정도).
   6. 쓰지 않는 코드·한 곳만 쓰는 감싸기는 없다. 주석은 목적 한 줄(이력은 git·`docs/history`).
-- QA: selftest·pytest 기준선 유지(벌 이름 → 스키마·EDW 표·게시 경로·포트 거부, prd 거부 시험) · `check_modules`·`keyscan --check`·`sample --check`·`gen_host_keys --check` 통과 · 저장소 전체 ruff·mypy 0 · 옛 이름(`data-pipeline-mcp`·`parse_mcp`·`PARSE_MCP_`) 0건(docs/history 제외).
+- QA: selftest·pytest 기준선 유지(벌 번호 → 포트 거부, prd 거부 시험) · `check_modules`·`keyscan --check`·`sample --check`·`gen_host_keys --check` 통과 · 저장소 전체 ruff·mypy 0 · 옛 이름(`data-pipeline-mcp`·`parse_mcp`·`PARSE_MCP_`) 0건(docs/history 제외).
 - Status: done
 
 <a id="rn-08"></a>
@@ -257,7 +257,7 @@
 ### 규칙
 1. `run_pipeline.py`의 컨테이너 명령(목록·받기·파싱·게시·구조화·분류)은 도우미 하나가 만든다 — `docker exec`·`umask`·작업 폴더·`PYTHONPATH`·라이브러리 env가 모두 같다.
 2. 게시·구조화가 시간 초과면 → 파싱처럼 그 문서 표지를 가진 컨테이너 안 프로세스를 끈다.
-3. 벌(instance) 이름 검사는 한 곳이다.
+3. 벌 번호(코드 폴더 이름 끝 `-<숫자>`) 규칙은 한 곳이다.
 4. 스캔 문서 회전 정책은 설정 칸 하나를 컨테이너 안 거르기가 직접 읽는다(명령 인자로 여러 겹 전달하지 않음).
 5. 레인 분류는 받기 단계 안에서 한다(문서마다 따로 `docker exec` 없음). 분류 캐시는 줄을 덧붙여 쓴다(문서마다 파일 전체를 다시 쓰지 않음).
 
@@ -268,7 +268,7 @@
 
 ### QA
 - 규칙 1·2: `tests/general/deploy/test_run_pipeline.py` — 명령 줄 표에서 모든 명령의 앞부분(env)이 같음(`test_one_env_for_every_command`) · 파싱·게시·구조화 실패·시간 초과 사례 → 정리 명령이 불림(`test_failed_stage_sweeps_doc`) · 통과.
-- 정할 것(규칙 3~5): 벌 이름 검사 한 곳 · 스캔 회전 설정 칸 하나 · 받기 안 분류·덧붙이는 캐시.
+- 정할 것(규칙 3~5): 벌 번호 규칙 한 곳 · 스캔 회전 설정 칸 하나 · 받기 안 분류·덧붙이는 캐시.
 - Status: todo
 
 <a id="rn-10"></a>
@@ -322,7 +322,7 @@
 2. `init`의 권한 정리(`a+rX`)는 settings.yaml·edw_chain.yaml·output/·home/을 건드리지 않는다(비밀값 파일 640 유지). `home/`은 `ssh_port`를 켤 때만 만든다. git 제외 목록에 `edw_chain.yaml`(루트)·`home/`.
 3. 판 올리기는 사람이 한다 — 새 zip을 풀어 `-main-N`으로 이름을 바꿔 덮어쓴다(옛 것은 각자 백업, gitea에도 올림).
 4. 벌마다 compose 실행법(폴더 구조·명령)은 README "한 서버에 여러 벌" 절에 둔다.
-5. 벌 이름(`ops.host.instance_name`)은 컨테이너·compose 묶음·타이머 이름 끝(`-<벌>`)에만 붙는다. PG 스키마·EDW 표·게시 경로에 붙이던 `_<벌>` 접미사는 없앤다. 적재 판(`gold_version`)에도 벌 표시를 붙이지 않는다.
+5. 벌 번호는 코드 폴더 이름 끝 `-<숫자>`에서 저절로 정해지고(설정 칸 없음 — `ops.host.instance_name` 없앰) 컨테이너·compose 묶음·타이머 이름 끝(`-<숫자>`)에만 붙는다. PG 스키마·EDW 표·게시 경로에 붙이던 `_<벌>` 접미사는 없앤다. 적재 판(`gold_version`)에도 벌 표시를 붙이지 않는다.
 6. 원천 `DEV-<숫자>`(대소문자 무관)를 dev 서버에서만 받는다. 원천 스키마는 `<기준 스키마>_dev_<숫자>` — 다른 원천과 같은 표·뷰. 메타는 Other처럼 없다(EDW 사슬 없음).
 7. 원천 스키마는 설정에 따라 만든다(동적) — 마이그레이션 도구가 설정의 DEV 원천 스키마가 없으면 만들고, 뒤의 표 변경은 DB에 있는 `_dev_*` 스키마에도 적용한다. 검색 MCP의 원천 목록 = 5개 + DB에 있는 DEV 스키마.
 8. 파싱할 원천은 settings.yaml 맨 위 `required`의 목록 칸. 비우면 운영 5개 원천 전부. prd에서 `DEV-…`이면 시작 거부.

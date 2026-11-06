@@ -647,7 +647,7 @@ def run(a):
         if a.apply:
             raise SystemExit("[publish_parse] PM_BUCKET 필요(PM1 결정 뒤) — --apply에는 반드시 설정")
         bucket = "(PM_BUCKET 미설정 — dry-run 미리보기 값)"
-    prefix = C.publish_prefix(pub.prefix or "")  # 개발 서버 여러 벌이면 <접두>/<벌>
+    prefix = pub.prefix or ""
     upload_statuses = parse_upload_statuses(",".join(pub.upload_statuses))  # 목록 → 옛 쉼표 글자(빈 목록 = 안전 기본값)
     reparse_keys = load_reparse_keys(a.reparse)
     rows, missing = plan(

@@ -193,7 +193,6 @@ PLACED = {
     "pipeline.host.parse_mem_limit": "ops.containers.pipeline.pipeline_mem_limit",
     "common.host.docker": "ops.host.container_cli",
     "common.host.output_root": "ops.host.host_output_dir",
-    "common.host.instance": "ops.host.instance_name",
     "common.host.prune_keep": "ops.host.prune_keep_versions",
     "common.host.image_stage_dir": "ops.host.prune_stage_dir",
     "common.log.db_enabled": "ops.log.log_db_enabled",
@@ -503,14 +502,6 @@ def reject_dup_keys(loader_cls):
 
     loader_cls.add_constructor("tag:yaml.org,2002:map", no_dup)
     return loader_cls
-
-
-def per_instance(name, instance):
-    """여러 벌 — 이름 끝에 `_<벌>`(`-`는 `_`로). 벌 이름이 없거나 이미 붙어 있으면(따로 적은 값) 그대로. 앱(settings)·호스트(run_pipeline)가 같이 쓴다."""
-    if not name or not instance:
-        return name
-    tail = "_" + str(instance).replace("-", "_")
-    return name if name.endswith(tail) else name + tail
 
 
 def _role(model_path):

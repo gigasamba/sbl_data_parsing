@@ -84,7 +84,7 @@ if [ "$RUNTIME" = 1 ]; then
   # 맨 위 폴더 755 + 모든 항목 모두가 읽기(head로 자르지 않음 — pipefail에서 tar가 SIGPIPE로 실패함)
   bad=$(tar -tvzf - < "$CODE_OUT" | awk 'NR==1 && $1 != "drwxr-xr-x" {print "맨위폴더 " $1} $1 !~ /^.r..r..r/ {print $NF}')
   [ -z "$bad" ] || { echo "[오류] 코드 폴더 묶음 권한 — 컨테이너 사용자 10001이 못 읽음: $bad"; exit 1; }
-  echo "[코드 폴더 묶음] $CODE_OUT ($(du -h "$CODE_OUT" | cut -f1)) — 서버의 새 루트에 코드 폴더로 풂(release-and-patch.md §8 — op-13)"
+  echo "[코드 폴더 묶음] $CODE_OUT ($(du -h "$CODE_OUT" | cut -f1)) — 서버의 벌 폴더(sbl_data_parsing-main-<번호>)로 풂(release-and-patch.md §8 — op-13)"
   export MSYS_NO_PATHCONV=1   # Windows Git Bash가 -v 인자를 바꾸지 않게
   RUN_ARGS="-v $(cygpath -m "$CODE_DIR" 2>/dev/null || echo "$CODE_DIR"):/app/deploy:ro"
 fi
@@ -121,8 +121,8 @@ bash deploy/release/selftest_gate.sh ssh "$TARGET" "$REMOTE_DOCKER run --rm $R_A
 cat <<EOF
 완료: $TAG
 다음(수집 서버):
-  1) 루트 폴더(아무 자리 — 예 /home/dev/)에 코드 zip을 풀고 코드 폴더에서 sudo bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>(op-13)
-  2) <루트>/settings.yaml의 맨 위 required 빈 값을 채움(새 판이면 앞 루트의 settings.yaml·edw_chain.yaml을 복사해 옴)
+  1) 공용 폴더(예 /home/sbl/)에 코드 zip을 풀어 벌 폴더(sbl_data_parsing-main-<번호>)로 두고 그 안에서 sudo bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>(op-13)
+  2) <벌 폴더>/settings.yaml의 맨 위 required 빈 값을 채움(새 판 덮어쓰기면 settings.yaml·edw_chain.yaml·output/은 그대로 둠)
   3) 띄우기·점검: README §5(host_ctl.sh up -d … → host_ctl.sh check)
   압축본 $REMOTE_DIR/$(basename "$OUT") 은 적재 확인 뒤 지워도 됨
 EOF

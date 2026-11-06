@@ -18,7 +18,7 @@ from common.core.console import utf8_stdout
 
 OUT = S.REPO_ROOT / "settings.sample.yaml"
 HEAD = """# settings.sample.yaml — 설정 파일 구조와 설명. 생성: python -m common.config.sample (손으로 고치지 않음)
-# 복사해 [필수] 칸을 채우면 시작된다 — PC: 저장소 루트 settings.yaml(권한 600) · 서버: <루트>/settings.yaml(루트 = 코드 폴더의 부모 · UID 10001·권한 640).
+# 복사해 [필수] 칸을 채우면 시작된다 — PC: 저장소 루트 settings.yaml(권한 600) · 서버: <루트>/settings.yaml(루트 = 코드 폴더 자체 · UID 10001·권한 640).
 # 순서: required(사람이 채울 값) → common·extract·transform·load·search·ops(환경마다 정하는 값) → tuning(거의 안 바꾸는 값) → dev(PC 전용 — 서버는 비움) → option(선택 기능 — 비우면 끔).
 #   빈 칸(`이름:` 뒤가 비어 있음) = 사람이 꼭 적을 값([필수] — 주석에 예). null = 비워 두면 코드 기본값·계산값·끔(주석의 "null = …"). 그 밖의 값 = 코드 기본값.
 #   복사할 때는 [필수] 칸과 바꿀 칸만 옮기기를 권장 — 적힌 값은 코드 기본값보다 이겨서, 나중에 코드 기본값이 바뀌어도 반영되지 않는다.
@@ -199,7 +199,6 @@ NOTES = {
     "pipeline.paths.soffice_bin": "soffice 실행 파일 (null = PATH · 이미지 /usr/bin/soffice)",
     "common.host.output_root": "호스트 결과 폴더(절대 경로) · 예 /srv/rag/output (null = <루트>/output)",
     "common.host.docker": "컨테이너 명령 · docker·podman (null = podman, 없으면 docker)",
-    "common.host.instance": "여러 벌(dev만) 이름 · 영소문자·숫자·- · 예 jehun — 스키마·컨테이너·표 이름 끝에 붙음 (null = 한 벌)",
     "common.host.image_stage_dir": "prune_images.sh가 정리할 조각·tar 폴더 (null = 정리 안 함)",
     "common.host.prune_keep": "남길 이미지 판 수",
     "common.host.devbox.ssh_port": "개발 작업 공간 SSH 포트(dev만 — 개발자마다 다르게) · 예 2222 (null = 끔)",

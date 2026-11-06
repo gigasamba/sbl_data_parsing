@@ -44,7 +44,7 @@
 | 적재(gold) | 번들을 PostgreSQL(pgvector)에 넣는 일 |
 | 마스터 표 | 용어집·고객 명부 표(`<스키마>_master`) — 원본은 git의 `resources/vocab/glossary/*.csv` |
 | 실행 이미지(`*-runtime`) | 코드가 없는 이미지 — 개발 서버는 코드 폴더를 붙여 쓴다 |
-| 루트 · 코드 폴더 | 루트 = 서버 아무 자리의 폴더 하나(예 `/home/sbl/dev/` — 판마다 새로). 코드 폴더 = 그 안에 코드 zip을 푼 폴더(`sbl_data_parsing-<판>`) |
+| 루트 · 코드 폴더 · 벌 | 코드 폴더 = 코드 zip을 푼 폴더(예 `/home/sbl/sbl_data_parsing-main-1/`). 루트 = 코드 폴더 자체 — `settings.yaml`·`edw_chain.yaml`·`output/`이 그 안에 있다. 벌 = 한 서버에 따로 띄운 컨테이너 한 묶음(코드 폴더 하나) |
 | 핑거프린트 | 결과를 다시 쓸지 정하는 값 — 바뀌면 서버가 문서를 다시 처리한다 |
 | `$DOCKER` | 컨테이너 명령 — 서버는 `podman`(root 셸). 셸에서 `export DOCKER=podman` |
 
@@ -96,7 +96,7 @@
 | | local(PC) | dev(개발 서버) | prd(운영 서버) |
 |---|---|---|---|
 | 이미지(태그 꼴) | 없음 — Python으로 직접(§4). 이미지 시험만 코드가 든 이미지 `data-pipeline:<시험 태그>`·`mcp-server:<시험 태그>` | 실행 이미지 `data-pipeline-runtime:<이미지 판>`·`mcp-server-runtime:<이미지 판>` | 코드가 든 이미지 `data-pipeline:<VERSION>`·`mcp-server:<VERSION>` |
-| 코드가 오는 곳 | 저장소 체크아웃 그대로 · 시험 이미지는 빌드 때 COPY(Dockerfile 타깃 `pipeline`·`mcp`) | 루트에 푼 코드 폴더 `sbl_data_parsing-<판>`(코드 git zip)을 컨테이너 `/app/deploy`에 읽기 전용(`:ro,z`)으로 붙임 | 이미지 안(굽기 때 COPY) — 붙이지 않음. 함께 오는 코드 묶음은 호스트 스크립트(`deploy/host/`)용 |
+| 코드가 오는 곳 | 저장소 체크아웃 그대로 · 시험 이미지는 빌드 때 COPY(Dockerfile 타깃 `pipeline`·`mcp`) | 코드 폴더(코드 git zip을 푼 폴더 — 예 `sbl_data_parsing-main-1`)를 컨테이너 `/app/deploy`에 읽기 전용(`:ro,z`)으로 붙임 | 이미지 안(굽기 때 COPY) — 붙이지 않음. 함께 오는 코드 묶음은 호스트 스크립트(`deploy/host/`)용 |
 | 만드는 법 | `ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh`(mcp는 `IMAGE_TARGET=mcp TAG=mcp-server:<시험 태그>`) | PC: `BUILD_ONLY=1 IMAGE_TARGET=pipeline-runtime bash deploy/release/build_ship.sh`(+ `mcp-runtime` — 이 커밋 코드를 붙여 selftest 판정) → 통과하면 `stage_images.sh`로 조각을 만들어 개인 이미지 저장소 `jehunlee302/sbl_images`에 push(사람) → 개발 서버 `load.sh <이미지 판>`(§5-2). 의존성이 같으면 다시 만들지 않는다 | 개발 서버의 시험한 코드 폴더에서 `bash deploy/release/bake_prod_image.sh <이미지 판>` — 그 실행 이미지 위에 코드만 COPY(`deploy/docker/Dockerfile.bake`, 네트워크 없음) → 운영 서버 `load.sh <VERSION>`([release-and-patch §1-2](docs/operations/release-and-patch.md#1-2-개발--운영--시험한-그대로-굽기)) |
 | 띄우는 법 | `.venv/bin/python -m mcp_server.main` 등(§4-4·§4-5) · 이미지 시험 `bash valid_env/docker/smoke_test.sh`(`valid_env/docker/compose.test.yml` — §4-7) | 코드 폴더에서 `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp` — 이미지가 `*-runtime:`이면 `host_ctl.sh`가 자기 코드 폴더를 `CODE_DIR`로 잡아 `compose.code*.yml`을 더한다. 시작 스크립트 `runtime_entry.sh`가 마운트·의존성 지문을 확인하고 코드의 `deploy/docker/entrypoint.sh`로 넘긴다 | 같은 `host_ctl.sh up -d …` — 이미지가 `*-runtime`이 아니므로 마운트 없이 이미지 안 `entrypoint.sh`로 뜬다. 셸·systemd에 `CODE_DIR`을 두지 않는다 |
 | settings.yaml 이미지 칸(`required.deploy.pipeline_image`·`mcp_image`) | 쓰지 않음(이미지 시험은 셸 변수 `DATA_PIPELINE_IMAGE`·`MCP_SERVER_IMAGE`) | `data-pipeline-runtime:<이미지 판>` · `mcp-server-runtime:<이미지 판>` | `data-pipeline:<VERSION>` · `mcp-server:<VERSION>` |
@@ -106,7 +106,7 @@
 
 ```bash
 cat deploy/docker/DEPS_HASH                                                   # 코드 폴더에서 — 코드가 요구하는 지문
-grep -H DEPS_HASH ../../sbl_images-main/*/BUILD.txt                           # 이미지 판마다 지문 — 같은 값인 판을 load.sh <판>
+grep -H DEPS_HASH ../sbl_images-main/*/BUILD.txt                              # 이미지 판마다 지문 — 같은 값인 판을 load.sh <판>
 $DOCKER run --rm --entrypoint cat data-pipeline-runtime:<판> /app/docker/deps_hash   # 이미 불러온 이미지의 지문
 ```
 
@@ -143,7 +143,7 @@ pgvector의 표는 코드가 실행 중에 만들지 않는다. 모두 Alembic �
 
 | 항목 | 내용 |
 |---|---|
-| 위치 | PC: 저장소 루트 `settings.yaml`(git 제외, 권한 600) · 서버: `<루트>/settings.yaml`(루트 = 코드 폴더의 부모, 주인 UID 10001, 권한 640) · 다른 파일은 env `SETTINGS_FILE` |
+| 위치 | PC: 저장소 루트 `settings.yaml`(git 제외, 권한 600) · 서버: `<루트>/settings.yaml`(루트 = 코드 폴더 자체, 주인 UID 10001, 권한 640) · 다른 파일은 env `SETTINGS_FILE` |
 | 구조 | 맨 위 `required`(필수 접속·입력) → 역할 절 `common`·`extract`·`transform`·`load`·`search`·`ops`·`dev` → 맨 아래 `tuning`. 같은 절·칸을 두 번 쓰면 시작 거부. 칸 자리 찾기: `python -m common.config.sample --where <옛 env 이름>`. 칸 설명·기본값은 [settings.sample.yaml](settings.sample.yaml) |
 | 쓰는 법 | **기본값과 다르게 쓸 칸만** 적는다. 비운 칸은 코드 기본값 |
 | 필수 | `required.env.run_env` — `local`(PC) · `dev` · `prd`(서버 — 외부 모델 호출과 가짜 LLM을 거부하고, 설정 파일을 못 읽으면 시작하지 않는다) |
@@ -383,7 +383,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 ## 5. 서버(내부망)에 배포하고 실행하기
 
-서버는 **공용 폴더 하나**(예 `/home/sbl/`) 아래에서 동작한다. 공용 폴더 바로 아래에 **이미지 폴더**(`sbl_images-main/` — 서버에 한 번 불러오면 모든 벌이 같이 씀)와 **루트**(한 벌 = 루트 하나 — 예 `dev/`, 개발자별 `dev-hong/`)가 있다. 루트 = 코드 zip을 푼 폴더(코드 폴더)의 부모이고, 호스트 스크립트는 자기 자리에서 루트를 구한다. 루트 바로 아래에 **설정 파일**(`settings.yaml`·`edw_chain.yaml`) **· 코드 폴더**(`sbl_data_parsing-<판>/`) **· 결과 폴더**(`output/`) **· 백업**(`backup/`)이 있다. 판(버전)마다 새 루트를 만든다(§5-8). 서버 명령은 모두 root 셸의 코드 폴더에서 실행한다.
+서버는 **공용 폴더 하나**(예 `/home/sbl/`) 아래에서 동작한다. 공용 폴더 바로 아래에 **이미지 폴더**(`sbl_images-main/` — 서버에 한 번 불러오면 모든 벌이 같이 씀)와 **벌 폴더**(한 벌 = 코드 zip을 푼 코드 폴더 하나 — 예 `sbl_data_parsing-main-1/`)가 있다. 루트 = 코드 폴더 자체이고, 호스트 스크립트는 자기 자리에서 루트를 구한다. 코드 폴더 바로 아래에 코드와 함께 **설정 파일**(`settings.yaml`·`edw_chain.yaml`) **· 결과 폴더**(`output/`)(+ SSH 작업 공간을 켜면 `home/`)이 있다 — 모두 git·코드 zip에 없는 것이라 새 판을 덮어써도 남는다(§5-8). 서버 명령은 모두 root 셸의 코드 폴더에서 실행한다.
 
 > 이미 돌고 있는 서버를 새 판으로 올리는 법(판 확인·백업·새 이미지·DB 판·되돌리기 — 복사해 붙이는 명령과 기대 출력)은 [upgrade-guide.md](docs/operations/upgrade-guide.md)다. **0.1.0이 만든 DB에 `migrate up`을 그냥 하지 않는다**(검색 판 `0002_search`가 옛 표를 지움 — 그 문서 §0). 아래는 새 서버 설치다.
 
@@ -394,28 +394,27 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 | 단계 | 어디서 | 하는 일 | 확인 |
 |---|---|---|---|
 | ① 개발 이미지 만들기 | PC(`local`) | 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`을 빌드 → 이 커밋 코드를 붙여 selftest → 통과하면 `stage_images.sh`로 조각을 만들어 개인 이미지 저장소 `jehunlee302/sbl_images`에 push(사람) — §5-2 | `build_ship.sh`의 `[판정] 통과` |
-| ② 개발 서버에 띄우기 | 개발 서버(`dev`) | 이미지 저장소 zip을 받아 `load.sh <이미지 판>` → 코드 git zip을 루트에 풀고 그 코드 폴더를 `/app/deploy`에 읽기 전용으로 붙여 띄움(`host_ctl.sh`가 붙임 — 아래 설치 순서). 코드만 바뀌면 새 루트에 새 코드 zip(§5-8) | `host_ctl.sh check` · e2e |
+| ② 개발 서버에 띄우기 | 개발 서버(`dev`) | 이미지 저장소 zip을 받아 `load.sh <이미지 판>` → 코드 git zip을 공용 폴더에 풀어 벌 폴더 이름으로 바꾸고 그 코드 폴더를 `/app/deploy`에 읽기 전용으로 붙여 띄움(`host_ctl.sh`가 붙임 — 아래 설치 순서). 코드만 바뀌면 새 코드 zip을 벌 폴더에 덮어씀(§5-8) | `host_ctl.sh check` · e2e |
 | ③ 운영 이미지 굽기·옮기기 | 개발 서버 → 운영 서버(`prd`) | 개발 서버에서 불러온 실행 이미지 위에 시험한 코드 폴더를 넣어 앱마다 코드가 든 이미지 `data-pipeline:<VERSION>`·`mcp-server:<VERSION>`를 다시 빌드(`bake_prod_image.sh`) → 조각을 운영 서버로 옮겨 `load.sh <VERSION>` → `host_ctl.sh up`(마운트 없음, `CODE_DIR` 두지 않음) — [release-and-patch §1-2](docs/operations/release-and-patch.md#1-2-개발--운영--시험한-그대로-굽기) | 굽기의 `[판정] 통과` · 운영 `host_ctl.sh check` |
 
-반입은 git 저장소 두 개를 **zip으로 받아** 이미지는 공용 폴더에, 코드는 루트에 푼다:
-- 코드: `gigasamba/sbl_data_parsing`의 받을 판(태그·커밋). zip을 푼 폴더(`sbl_data_parsing-<판>`)가 그대로 코드 폴더다. zip은 `CODE_COMMIT`을 채운다(git clone은 안 채움 — 시작 로그의 커밋이 틀 그대로).
+반입은 git 저장소 두 개를 **zip으로 받아** 공용 폴더에 푼다:
+- 코드: `gigasamba/sbl_data_parsing`의 받을 판(태그·커밋). zip을 푼 폴더(`sbl_data_parsing-<판>`)를 벌 폴더 이름(`sbl_data_parsing-main-<번호>` — 아래 "한 서버에 여러 벌")으로 바꾼 것이 코드 폴더다. zip은 `CODE_COMMIT`을 채운다(git clone은 안 채움 — 시작 로그의 커밋이 틀 그대로).
 - 이미지: 비공개 `jehunlee302/sbl_images`. 판 폴더마다 실행 이미지를 분할한 조각과 `load.sh`가 있다.
 
 ```
 <공용 폴더>/                                  ← 예 /home/sbl/
-├── sbl_images-main/                         ← 공용 — load.sh · <판>/BUILD.txt · <판>/<이미지>/*.tar.gz.part* + *.sha256(서버에 한 번 load)
-├── opencode.json                           ← 공용 — 개발 작업 공간의 opencode 접속 설정(선택 — 모든 벌이 같이 씀, 아래 "개발 작업 공간")
-├── <루트>/                                   ← 한 벌 — 예 dev/ (판마다 새 루트 — dev-0.2.0/처럼)
-│   ├── settings.yaml  edw_chain.yaml        ← settings.sample.yaml·기본 사슬을 host_ctl.sh init이 없을 때만 복사(새 판이면 앞 루트에서 복사해 옴)
-│   ├── sbl_data_parsing-<판>/               ← 코드 폴더(VERSION · CODE_COMMIT · deploy/docker/DEPS_HASH)
-│   ├── output/                              ← 결과 폴더(host_ctl.sh init이 만듦 — 아래 _ 붙은 폴더는 임시 자리)
+├── sbl_images-main/                         ← 공용 — load.sh · readme.md · <판>/BUILD.txt · <판>/<이미지>/*.tar.gz.part* + *.sha256(서버에 한 번 load)
+├── opencode.json                            ← 공용 — 개발 작업 공간의 opencode 접속 설정(선택 — UID 10001, 640 · 아래 "개발 작업 공간")
+├── sbl_data_parsing-main-1/                 ← 벌 1 = 코드 폴더 = 루트(코드 · VERSION · CODE_COMMIT · deploy/docker/DEPS_HASH)
+│   ├── settings.yaml  edw_chain.yaml        ← settings.sample.yaml·기본 사슬을 host_ctl.sh init이 없을 때만 복사
+│   ├── output/                              ← 결과 폴더(host_ctl.sh init이 만듦 — 파싱 캐시가 있어 잃으면 전부 다시 처리 · 아래 _ 붙은 폴더는 임시 자리)
 │   │   ├── _docflow/<번호>/  _staging/  _faq_seen.txt  _mcp_parse/jobs/  _llm_spend/
 │   │   └── logs/                            ← DB 로그를 못 쓸 때의 예비 파일만
-│   └── backup/                              ← pg_dump 백업·설정 사본(700)
-└── <다른 루트>/                              ← 개발자별 벌(예 dev-hong/ — 아래 "한 서버에 여러 벌")
+│   └── home/                                ← 개발 작업 공간 홈(option.devbox.ssh_port를 적었을 때만 init이 만듦)
+└── sbl_data_parsing-main-2/                 ← 벌 2(아래 "한 서버에 여러 벌")
 ```
 
-검색 DB(pgvector — 따로 떠 있는 PG 컨테이너)는 루트 밖이라 판이 바뀌어도 같은 DB를 본다.
+검색 DB(pgvector — 따로 떠 있는 PG 컨테이너)는 벌 폴더 밖이라 판이 바뀌어도 같은 DB를 보고, 모든 벌이 같은 기준 스키마(`required.pg.pg_schema`)를 함께 쓴다.
 
 **미리 있어야 하는 것(서버 — 한 번 확인)**
 
@@ -429,12 +428,12 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 **컨테이너 도구는 root podman 하나로 쓴다.** 셸을 열면 먼저 `export DOCKER=podman`, settings.yaml에 `ops.host.container_cli: podman`. 일반 사용자 셸이면 `DOCKER="sudo podman"`. 이미지를 불러온 저장소와 띄우는 저장소가 같아야 한다(rootless와 root podman은 이미지를 따로 보관).
 
 <a id="서버-설치-순서"></a>
-**서버 설치 순서**(처음 한 번 — root 셸, `<루트>` = 만든 루트 폴더, `<코드>` = 코드 zip을 푼 폴더)
+**서버 설치 순서**(처음 한 번 — root 셸, `<루트>` = 벌 폴더 = 코드 폴더)
 
 0. `export DOCKER=podman` — 위 "미리 있어야 하는 것"을 확인한다.
-1. 공용 폴더와 루트를 만들고(`mkdir -p /home/sbl/dev`처럼 아무 자리) 이미지 zip은 공용 폴더(`/home/sbl/`)에, 코드 zip은 루트(`/home/sbl/dev/`)에 푼다.
+1. 공용 폴더를 만들고(`mkdir -p /home/sbl`처럼 아무 자리) 이미지 zip과 코드 zip을 거기에 푼다. 코드 폴더 이름을 벌 폴더 이름으로 바꾼다 — `mv sbl_data_parsing-<판> sbl_data_parsing-main-1`(한 벌만 띄우는 서버·운영 서버는 번호 없이 `sbl_data_parsing-main` — 이름 끝 `-<숫자>`가 벌 번호, 아래 "한 서버에 여러 벌").
 2. 이미지를 불러온다(공용 폴더에서 — 서버에 한 번, 이미 불러온 판이면 건너뜀): `cd /home/sbl && DOCKER=podman bash sbl_images-main/load.sh <이미지 판>` — 조각 sha256 확인 → 합치기 → load, 끝에 `<판>/BUILD.txt`(빌드 커밋·DEPS_HASH). **코드의 `deploy/docker/DEPS_HASH`가 `BUILD.txt`의 DEPS_HASH와 같은 판**을 고른다(확인 명령 — [§1-3](#실행-모드)).
-3. 루트 채우기: `cd <루트>/<코드> && bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>` — `output/`·`output/_mcp_parse/jobs`(UID 10001, 2775)·`backup/`(700), 코드 폴더 a+rX, `settings.sample.yaml` → `<루트>/settings.yaml`, `resources/config/edw_chain.yaml` → `<루트>/edw_chain.yaml`(둘 다 없을 때만, 10001:<운영 그룹> 640). 끝에 빈 필수 칸 **이름**을 찍는다. 여러 번 불러도 안전하다.
+3. 루트 채우기: `cd <루트> && bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>` — `output/`·`output/_mcp_parse/jobs`(UID 10001, 2775)(settings.yaml에 `option.devbox.ssh_port`가 있으면 `home/`도 — 10001, 700), 코드 a+rX(`settings.yaml`·`edw_chain.yaml`·`output/`·`home/`은 빼고), `settings.sample.yaml` → `<루트>/settings.yaml`, `resources/config/edw_chain.yaml` → `<루트>/edw_chain.yaml`(둘 다 없을 때만, 10001:<운영 그룹> 640). 끝에 빈 필수 칸 **이름**을 찍는다. 여러 번 불러도 안전하다.
 4. 설정을 채운다 — `<루트>/settings.yaml` 맨 위 `required`의 빈 값(§5-3 ② "꼭 채울 값"). 이미지 칸에는 2에서 불러온 실행 이미지 태그(`data-pipeline-runtime:<이미지 판>`·`mcp-server-runtime:<이미지 판>`). 자원 상한도 본다(아래).
    - EDW 표 설명 자료(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료, 받는 곳은 refactor.md C-91)를 루트 아래 결과 폴더에 복사하고(`<루트>/output/edw_meta/`, UID 10001이 읽을 수 있게) `search.edw_meta.edw_meta_catalog_dir: /app/output/edw_meta`를 적는다. 없으면 `edw_meta` 도구만 `not_configured`로 답한다(나머지 도구는 그대로).
 5. `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline`(코드 폴더에서 — DB 도구가 그 안에서 돈다).
@@ -459,69 +458,72 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 - 이때 `required.tokens.mcp_token`가 꼭 있어야 한다(없으면 시작 거부). 만들기: `openssl rand -hex 24`.
 - 방화벽에서 `search.server.mcp_port`(기본 8765)를 연다 — 예: `firewall-cmd --add-port=8765/tcp --permanent && firewall-cmd --reload`.
 
-**한 서버에 여러 벌 띄우기(개발자별 — 벌 이름 하나로 나뉨, 개발 서버만)**
-- 루트 하나가 한 벌이다. 개발자마다 공용 폴더 아래 루트를 새로 만들어(예 `/home/sbl/dev-hong/`) 위 설치 순서를 따로 한다. 이미지는 공용 폴더에서 이미 불러왔으므로 2번은 건너뛴다.
-- 그 루트의 `settings.yaml`에 벌 이름(`ops.host.instance_name`)과 포트 두 칸만 벌마다 다르게 적는다. compose를 직접 부르지 않는다 — `host_ctl.sh`가 이 값으로 이름·포트를 채운다.
-- 벌 이름을 적으면 저절로 나뉘는 것:
+**한 서버에 여러 벌 띄우기(개발자별 — 폴더 이름 끝 번호로 나뉨, 개발 서버만)**
+- 벌 폴더(코드 폴더) 하나가 한 벌이다. 개발자마다 공용 폴더 아래 벌 폴더를 하나씩 둔다(`sbl_data_parsing-main-1/`·`sbl_data_parsing-main-2/` …). 이미지는 공용 폴더에서 이미 불러왔으므로 설치 순서 2번은 건너뛴다.
+- 폴더 이름 끝 `-<숫자>`가 벌 번호다 — 컨테이너·compose 묶음·systemd 단위 이름 끝에 `-<숫자>`가 붙는다. 끝이 `-<숫자>`가 아니면(`sbl_data_parsing-main`·`sbl_data_parsing-0.3.0`) 한 벌 — 이름 그대로.
 
-| 무엇 | 한 벌(이름 비움) | 벌 `hong` |
-|---|---|---|
-| 컨테이너·compose 묶음·타이머 | `data-pipeline` · `mcp-data-parsing` · `mcp-server` | 끝에 `-hong` |
-| PG 스키마 | `required.pg.pg_schema`(예 `sbl`) | `sbl_hong`(원천 스키마 `sbl_hong_sfdc` …) |
-| EDW 기록 표 | `required.edw.parsing_meta_table`(기본 `AI.ParsingMeta`) | `AI.ParsingMeta_hong` |
-| 게시 경로(Object Storage) | `<prefix>/…` | 개발 서버(dev)에서만 `<prefix>/hong/…` |
+| 벌 폴더 | 컨테이너 | compose 묶음 | 타이머 |
+|---|---|---|---|
+| `sbl_data_parsing-main` | `data-pipeline` · `mcp-data-parsing` · `mcp-server` | `compose` | `data-pipeline-nightly.timer` · `mcp-server-keepalive.timer` |
+| `sbl_data_parsing-main-2` | `data-pipeline-2` · `mcp-data-parsing-2` · `mcp-server-2` | `compose-2` | `data-pipeline-nightly-2.timer` · `mcp-server-keepalive-2.timer` |
 
-- 이미 `_hong`으로 끝나게 적은 스키마·표 이름은 그대로 쓴다. 이름의 `-`는 스키마·표에서 `_`가 된다.
-- 운영 서버(`prd`)에서 벌 이름을 적으면 시작 거부(운영은 한 벌). 벌 이름이 있는데 포트 두 칸이 기본값(8765·8766) 그대로면 시작 거부(다른 벌과 겹침).
-- EDW 기록 표는 DB 담당자가 미리 만든다(실행 중 DDL 없음): `docs/operations/parsing_meta_mssql.sql`을 복사해 표 이름만 `AI.ParsingMeta_<벌>`로 바꿔 넘긴다(refactor.md C-94).
+- 포트는 벌마다 그 벌의 `settings.yaml`에 다르게 적는다 — `search.server.mcp_port`(검색 MCP, 기본 8765) · `ops.services.data_parsing.data_parsing_port`(작업 서비스, 기본 8766) · (작업 공간을 켜면) `option.devbox.ssh_port`. 번호가 붙은 벌인데 앞 두 포트가 기본값 그대로면 시작 거부(다른 벌과 겹침).
+- 운영 서버(`prd`)에서 번호가 붙은 폴더면 시작 거부(종료 2 — 운영은 한 벌, 폴더 이름에서 번호를 뗀다).
+- PG 스키마·EDW 기록 표·게시 경로는 벌마다 나뉘지 않는다 — 모든 벌이 같은 기준 스키마를 함께 쓴다. 그래서 **모든 벌이 같은 코드 판**이어야 한다(DB 표 판이 하나).
+- compose를 직접 부르지 않는다 — `host_ctl.sh`가 폴더 이름과 settings.yaml로 이름·포트를 채운다. 컨테이너 명령은 셸 `DOCKER`가 있으면 그 값, 없으면 `ops.host.container_cli`.
 
 ```yaml
+# /home/sbl/sbl_data_parsing-main-2/settings.yaml — 벌마다 다른 칸(나머지 접속·모델·이미지 칸은 다른 벌과 같게)
 ops:
-  host:
-    instance_name: hong                # 컨테이너 data-pipeline-hong · mcp-data-parsing-hong · mcp-server-hong, 타이머 data-pipeline-nightly-hong.timer
   services:
     data_parsing:
       data_parsing_port: 8776       # parse_document 작업 서비스 포트(기본 8766 — 검색 MCP도 이 값으로 부름)
 search:
   server:
     mcp_port: 8775                # 검색 MCP 포트(기본 8765)
+option:
+  devbox:
+    ssh_port: 2223                # 선택 — 개발 작업 공간(아래)
+    opencode_config: /home/sbl/opencode.json   # 선택 — 공용 opencode 설정
 ```
-- 명령(root 셸 — 이미지는 서버에 한 번만 불러 두면 벌끼리 같이 쓴다):
+- 명령(root 셸 — 벌 폴더 안에서):
 ```bash
-mkdir -p /home/sbl/dev-hong && cd /home/sbl/dev-hong && unzip <코드 zip>  # 공용 폴더 아래 새 루트 + 코드 폴더
-cd sbl_data_parsing-<판>
-bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>                    # <루트>/settings.yaml 생김 → 위 칸을 채움
-bash deploy/host/scripts/host_ctl.sh up -d data-pipeline                         # → data-pipeline-hong
-bash deploy/host/scripts/pipe_exec.sh migrate up --target all --dim <차원>  # 새 스키마 sbl_hong에 표 만들기(설치 순서 6)
-bash deploy/host/scripts/pipe_exec.sh migrate master load                   # 기준 표(고객 명부·용어) 넣기 — 검색 MCP가 시작할 때 읽음
-bash deploy/host/scripts/host_ctl.sh up -d mcp-data-parsing mcp                 # → mcp-data-parsing-hong · mcp-server-hong(포트 8776 · 8775)
+cd /home/sbl && unzip -q <코드 zip> && mv sbl_data_parsing-<판> sbl_data_parsing-main-2   # 새 벌 폴더
+cd sbl_data_parsing-main-2
+bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>                    # settings.yaml·edw_chain.yaml·output/ 생김 → 위 칸을 채움
+bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>                    # ssh_port를 적었으면 한 번 더 — home/ 생김(없으면 up이 종료 2)
+bash deploy/host/scripts/host_ctl.sh up -d data-pipeline                         # → data-pipeline-2
+bash deploy/host/scripts/pipe_exec.sh migrate up --target all --dim <차원>        # 공용 DB에 한 번만(아무 벌 하나에서) — 이미 했으면 건너뜀
+bash deploy/host/scripts/pipe_exec.sh migrate master load                        # 공용 DB에 한 번만 — 기준 표(고객 명부·용어), 검색 MCP가 시작할 때 읽음
+bash deploy/host/scripts/host_ctl.sh up -d mcp-data-parsing mcp                  # → mcp-data-parsing-2 · mcp-server-2(포트 8776 · 8775)
 bash deploy/host/scripts/host_ctl.sh check                                       # 마지막 줄 [host_ctl check] 통과 — 6개
 bash deploy/host/scripts/host_ctl.sh ps                                          # 이 벌의 컨테이너만 보임
+```
+- 모든 벌을 한 번에(스크립트는 자기 벌 폴더로 들어가 그 폴더의 설정을 읽는다):
+```bash
+for d in /home/sbl/sbl_data_parsing-main-*; do bash $d/deploy/host/scripts/host_ctl.sh up -d; done
 ```
 - 칸 값 찾기:
 
 | 칸 | 넣을 값 | 어디서 |
 |---|---|---|
-| `<코드 zip>` | 코드 저장소의 그 판 zip(예 태그 `v0.2.0` → 풀면 `sbl_data_parsing-0.2.0/`) | GitHub `gigasamba/sbl_data_parsing` 태그 — 같은 서버에 이미 한 벌이 있으면 zip 대신 그 코드 폴더를 `cp -a`로 복사해도 된다 |
+| `<코드 zip>` | 코드 저장소의 그 판 zip(예 태그 `v0.3.0` → 풀면 `sbl_data_parsing-0.3.0/`) | GitHub `gigasamba/sbl_data_parsing` 태그 — 다른 벌과 같은 판 |
 | `<운영 그룹>` | 컨테이너(UID 10001)와 사람 계정이 함께 쓰는 리눅스 그룹 | `id -gn <운영 계정>` — 모르면 서버 관리자. 첫 벌과 같은 그룹 |
-| `<차원>` | 임베딩 모델이 내는 벡터 길이(숫자, 예 1024) | `required.models.embed_model` 담당 — 첫 벌과 같은 모델이면 같은 값. 표를 처음 만들 때만 씀(벡터 칸 길이가 그때 정해짐) |
+| `<차원>` | 임베딩 모델이 내는 벡터 길이(숫자, 예 1024) | `required.models.embed_model` 담당. 표를 처음 만들 때만 씀(벡터 칸 길이가 그때 정해짐) |
 
-- `migrate up`이 필요한 때:
+- `migrate up`이 필요한 때(공용 DB라 아무 벌 하나에서 한 번):
 
 | 상황 | `migrate up` |
 |---|---|
-| 새 벌이 새 스키마(`sbl_hong`)를 씀 | 처음 한 번 `--dim`과 함께, 이어서 `migrate master load` |
-| 새 판에 표 변경(마이그레이션)이 있음 | 적재 전에 한 번(`--dim` 없이 — 있는 표는 DB의 차원을 씀) |
+| 공용 DB에 표가 아직 없음(서버의 첫 벌) | 처음 한 번 `--dim`과 함께, 이어서 `migrate master load` — 다른 벌은 건너뜀 |
+| 새 판에 표 변경(마이그레이션)이 있음 | 모든 벌을 새 판으로 덮어쓴 뒤 한 번(`--dim` 없이 — 있는 표는 DB의 차원을 씀) |
 
-- `migrate`에 `--schema <이름>`을 직접 주어도 벌 접미가 붙는다(설정 칸과 같은 규칙 — `--schema demo` → `demo_hong`, 이미 `_hong`으로 끝나면 그대로). 다른 벌의 스키마를 건드리지 않게.
-
-- `instance_name`을 비우면 한 벌(이름 그대로). 이름은 영소문자·숫자·`-`만, 앞은 글자·숫자(틀리면 `host_ctl.sh`·앱이 시작 거부). PG 스키마·EDW 기록 표 접미는 `-`를 `_`로 바꿔 붙인다(`kim-2` → `sbl_kim_2`·`AI.ParsingMeta_kim_2`). 벌 이름은 settings.yaml에서만 읽는다(셸 변수로 덮지 않음). 컨테이너 명령은 셸 `DOCKER`가 있으면 그 값, 없으면 `ops.host.container_cli`.
 - 확인: `bash deploy/host/scripts/host_ctl.sh ps` — 그 벌의 컨테이너만 보인다. 자세한 것은 [server-guide §1-3](docs/operations/server-guide.md#1-3-한-서버에-여러-벌-띄우기개발자별).
 
 **개발 작업 공간(SSH·opencode — 개발 서버만, 선택)**
 - 네 이미지 모두 개발 도구(sshd·git·uv·ruff·mypy·pytest·ripgrep·sqlite3·tmux·vim 등)와 opencode(이미지를 만들 때 `assets/opencode/opencode`가 있으면)를 담고 있다. 앱은 이 도구를 쓰지 않는다 — 켜지 않으면 이미지는 지금처럼 돈다.
-- 켜기: 그 루트의 `settings.yaml` 맨 아래 `option.devbox.ssh_port`에 포트를 적는다(개발자마다 다르게). 그러면 `host_ctl.sh`가 `data-pipeline`을 SSH 작업 공간으로 띄운다 — 명령 `devbox`(sshd, 컨테이너 사용자 UID 10001 · 열쇠 로그인만), 코드 폴더를 쓰기 가능으로, 홈 `/home/rag` = `<루트>/home`. 실행 이미지(`*-runtime`)에서만 되고, 운영(`prd`)이면 `host_ctl.sh`가 거부한다(종료 2).
-- opencode는 내부망 모델만 쓴다(외부 모델 목록 받기·자동 업데이트 끔). 첫 시작에 홈의 `~/.config/opencode/opencode.json`에 틀이 복사되니 모델 주소(`baseURL` — OpenAI 호환 `/v1`)·이름(`<model id>` 두 곳)을 채운다. 키가 필요한 모델이면 SSH 셸에서 `export INTERNAL_LLM_API_KEY=<키>`(틀이 이 env를 읽음 — 컨테이너 env·settings.yaml에는 넣지 않는다). 연결 모듈은 opencode에 들어 있어 폐쇄망에서 따로 받지 않는다. 공용 폴더에 둔 설정 파일 하나(`<공용 폴더>/opencode.json`)를 모든 벌이 같이 쓰려면 벌마다 settings.yaml `option.devbox.opencode_config`에 그 호스트 경로를 적는다(읽기 전용으로 붙고 `OPENCODE_CONFIG`가 가리킨다). 이 파일은 코드 폴더 밖이라 키를 직접 적어도 된다 — 주인 UID 10001·권한 640(settings.yaml과 같게).
+- 켜기: 그 벌의 `settings.yaml` 맨 아래 `option.devbox.ssh_port`에 포트를 적고(개발자마다 다르게) `host_ctl.sh init --group <운영 그룹>`을 다시 불러 `<루트>/home`(10001, 700)을 만든다(없으면 `host_ctl.sh up`이 종료 2). 그러면 `host_ctl.sh`가 `data-pipeline`을 SSH 작업 공간으로 띄운다 — 명령 `devbox`(sshd, 컨테이너 사용자 UID 10001 · 열쇠 로그인만), 코드 폴더를 쓰기 가능으로, 홈 `/home/rag` = `<루트>/home`. 실행 이미지(`*-runtime`)에서만 되고, 운영(`prd`)이면 `host_ctl.sh`가 거부한다(종료 2).
+- opencode는 내부망 모델만 쓴다(외부 모델 목록 받기·자동 업데이트 끔). 첫 시작에 홈의 `~/.config/opencode/opencode.json`에 틀이 복사되니 모델 주소(`baseURL` — OpenAI 호환 `/v1`)·이름(`<model id>` 두 곳)을 채운다. 키가 필요한 모델이면 SSH 셸에서 `export INTERNAL_LLM_API_KEY=<키>`(틀이 이 env를 읽음 — 컨테이너 env·settings.yaml에는 넣지 않는다). 연결 모듈은 opencode에 들어 있어 폐쇄망에서 따로 받지 않는다. 공용 폴더에 둔 설정 파일 하나(`<공용 폴더>/opencode.json`)를 모든 벌이 같이 쓰려면 벌마다 settings.yaml `option.devbox.opencode_config`에 그 호스트 경로를 적는다(읽기 전용으로 붙고 `OPENCODE_CONFIG`가 가리킨다). 이 파일은 코드 폴더 밖이라 키를 직접 적어도 된다 — 주인 UID 10001·권한 640(settings.yaml과 같게). 파일 하나를 붙이므로 고친 뒤에는 `host_ctl.sh restart data-pipeline`(편집기가 파일을 새로 바꿔 쓰면 컨테이너는 옛 내용을 계속 본다).
 
 ```bash
 # <루트>/settings.yaml 맨 아래
@@ -688,7 +690,7 @@ WHERE stage = 'load.embed_guard' AND ts_start > now() - interval '7 days' ORDER 
 | 새벽 배치 | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `ops.nightly.nightly_start_time: "HH:MM"`(그 시각부터 5분 안에 시작) · `max_docs`(새 문서 수 상한, 1 이상) · `deadline: "HH:MM"`(마감 — 시작보다 5분 넘게 뒤). **셋 중 하나라도 비면 돌지 않는다**(기본 비움) |
 | 재부팅 뒤 되살리기(podman) | `systemctl enable --now podman-restart` — `restart: unless-stopped` 컨테이너를 부팅 때 다시 띄운다. 일괄 `data-pipeline`은 keepalive가 보지 않으니 재부팅 뒤 `host_ctl.sh ps`로 보고 없으면 `host_ctl.sh up -d data-pipeline` |
 
-systemd 설치(DB 판과 컨테이너를 확인한 뒤 — 새 루트로 옮길 때마다 그 루트의 코드 폴더에서 다시):
+systemd 설치(DB 판과 컨테이너를 확인한 뒤 — 벌마다 그 벌 폴더에서, 새 판으로 덮어쓴 뒤에도 다시):
 
 ```bash
 bash deploy/host/scripts/host_ctl.sh timers        # 단위 4개의 코드 폴더 자리를 이 코드 폴더로 채워 /etc/systemd/system에 쓰고 두 타이머를 켬
@@ -719,8 +721,7 @@ sudo systemctl enable --now podman-restart
 | `<결과 폴더>/_docflow/` · `_staging/` | 문서 하나의 파싱 → 구조화·적재 작업 · 미리 받은 원본 | 문서가 끝나면 지워진다 |
 | `<결과 폴더>/_mcp_parse/jobs/` | `parse_document` 작업 | 최근 30개만 남는다 |
 | `<결과 폴더>/_llm_spend/` | 외부 모델 하루 지출 장부(PC만 — 서버에는 생기지 않음) | 지난 날짜는 지워도 된다 |
-| `<루트>/settings.yaml` | 서버 설정 | **비밀값이 들어 있다** — 권한 640, 옛 루트를 지울 때 함께 지운다 |
-| `<루트>/backup/` | `pg_dump` 백업 · 설정 사본 | **DB 내용·비밀값** — 권한 700 그대로, 밖으로 옮기지 않는다 |
+| `<루트>/settings.yaml` | 서버 설정 | **비밀값이 들어 있다** — 권한 640, 벌 폴더를 지울 때 함께 지운다 |
 | `/var/tmp/bake/` | 개발 서버에서 구운 이미지 조각·코드 묶음 | 운영 서버로 옮긴 뒤 지워도 된다 |
 
 ### 5-7. 서버 — 값 바꾸기
@@ -731,15 +732,17 @@ sudo systemctl enable --now podman-restart
 | 이번 실행만 다른 값 | `--set 이름=값`(오버레이 설정 파일 도구는 PC 전용 — 서버에서는 종료 2) |
 | 엔진 구성 | 코드 폴더의 `resources/config/pipeline_stack.json`을 고쳐 코드 폴더 바꾸기(§5-8) — 확인 `show-stack`([resources.md §1](docs/architecture/resources.md)) |
 
-### 5-8. 새 판 올리기 — 새 루트
+### 5-8. 새 판 올리기 — 덮어쓰기
 
-판(버전)마다 새 루트를 만든다. 판끼리 파일이 섞이지 않고, 앞 루트가 그대로 남아 되돌리기가 쉽다. 백업·새 이미지·DB 판·결과 폴더에서 옮길 파일·되돌리기까지 전체 순서는 [upgrade-guide.md](docs/operations/upgrade-guide.md) — 아래는 줄인 것이다.
-1. 새 루트(예 `/home/sbl/dev-0.3.0/`)를 만들고 새 코드 zip(이미지가 바뀌었으면 이미지 zip도)을 푼다.
-2. 앞 루트의 `settings.yaml`·`edw_chain.yaml`을 새 루트로 복사한다(`cp -p`).
-3. 새 코드 폴더에서 `host_ctl.sh init --group <운영 그룹>` → `host_ctl.sh up -d --force-recreate data-pipeline mcp-data-parsing mcp` → `host_ctl.sh check` → `host_ctl.sh timers`(타이머를 새 루트로 옮김).
-- 검색 DB는 같은 PG를 그대로 본다. 새 문서 판정은 EDW 기준이라 새 `output/`에서도 이어서 돈다 — 단 FAQ 교체 기록 `_faq_seen.txt`·임베딩 캐시 `edw/embed_cache.sqlite`는 앞 루트 `output/`에서 복사한다(없으면 FAQ 통째 교체·임베딩 다시 부름 — [upgrade-guide §4](docs/operations/upgrade-guide.md#4-새-루트에-새-코드-폴더)).
-- 되돌리기: 앞 루트의 코드 폴더에서 `host_ctl.sh up -d --force-recreate …` → `host_ctl.sh timers`.
-- 코드만 바뀐 판(`DEPS_HASH` 같음)은 이미지를 다시 만들지 않는다 — 개발 서버 [release-and-patch §1-1](docs/operations/release-and-patch.md#1-1-개발-서버--새-루트로-코드-바꾸기) → 운영 서버 §1-2(굽기).
+벌 폴더(코드 폴더)에 새 코드를 덮어쓴다. 백업·새 이미지·DB 판·되돌리기까지 전체 순서는 [upgrade-guide.md](docs/operations/upgrade-guide.md) — 아래는 줄인 것이다.
+1. 옛 벌 폴더를 각자 벌 폴더 밖에 백업한다(서버에서 고친 코드는 gitea에도 올린다).
+2. 벌 폴더에서 옛 코드만 지우고(설정·결과·홈은 남김) 새 코드 zip을 그 위에 푼다 — `cd /home/sbl && unzip -q <코드 zip> && find sbl_data_parsing-main-1 -mindepth 1 -maxdepth 1 ! -name .git ! -name output ! -name home ! -name edw_chain.yaml ! -name "settings*" -exec rm -rf {} + && cp -a sbl_data_parsing-<판>/. sbl_data_parsing-main-1/ && rm -rf sbl_data_parsing-<판>`(이미지가 바뀌었으면 이미지 zip도 — §5-0 2번).
+3. 벌 폴더에서 `host_ctl.sh init --group <운영 그룹>` → `host_ctl.sh up -d --force-recreate data-pipeline mcp-data-parsing mcp` → `host_ctl.sh check` → `host_ctl.sh timers`.
+- 덮어써도 남는 것 — 지우거나 옮기지 않는다: `settings.yaml`·`edw_chain.yaml`·`output/`(파싱 캐시·임베딩 캐시·FAQ 교체 기록 — 잃으면 전부 다시 처리)·`home/`.
+- 옛 코드를 먼저 지우는 까닭: 새 판에서 지운 파일(옛 시험 등)이 남으면 `host_ctl.sh check`의 selftest가 그 파일 때문에 실패한다.
+- 검색 DB는 같은 PG를 그대로 본다. 벌이 여럿이면 모두 같은 판으로 올린다(같은 기준 스키마).
+- 되돌리기: 1의 백업을 벌 폴더 위에 다시 덮어쓰고 `host_ctl.sh up -d --force-recreate …`.
+- 코드만 바뀐 판(`DEPS_HASH` 같음)은 이미지를 다시 만들지 않는다 — 개발 서버 [release-and-patch §1-1](docs/operations/release-and-patch.md#1-1-개발-서버--코드-폴더-덮어쓰기) → 운영 서버 §1-2(굽기).
 
 ---
 

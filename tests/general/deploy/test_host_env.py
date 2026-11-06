@@ -40,8 +40,6 @@ def _value(path, name, kind):
         return "01:30" if name == "NIGHTLY_TIME" else "06:00"  # HH:MM 칸(#99)
     if name == "DOCKER":
         return "podman"
-    if name == "INSTANCE":
-        return "hong"  # 벌 이름 꼴(영소문자·숫자·-)
     return f"/srv/x/{name.lower()}" if "DIR" in name or name in ("DOC_SRC", "RAG_OUT") else f"v-{name.lower()}:0.2.0"
 
 

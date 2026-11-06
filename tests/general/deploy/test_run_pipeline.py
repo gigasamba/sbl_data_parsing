@@ -234,31 +234,35 @@ def test_read_settings_new_layout(tmp_path):
 
 
 def test_instance_names(tmp_path):
-    """여러 벌 — 러너도 앱과 같은 규칙으로 컨테이너·PG 스키마가 갈리고, prd에서 벌 이름·기본 포트는 거부(EDW 기록 표는 컨테이너가 읽음)."""
+    """여러 벌 — 러너도 load_settings.sh와 같은 규칙(루트 = 코드 폴더, 벌 번호 = 그 이름 끝 -<숫자>)으로 컨테이너가 갈리고 PG 스키마는 그대로.
+    prd에서 벌 번호·기본 포트는 거부."""
     req = {p: "x" for p, _ in RD.SETTINGS_REQUIRED}
     ports = {"mcp.server.port": "8775", "common.runtime.data_parsing_port": "8776"}
-    # (run_env, 벌, 더 적는 칸, 기대 (컨테이너, 스키마) — None이면 거부)
-    for run, inst, extra, want in (
-        ("dev", "", {}, ("data-pipeline", "rag")),
-        ("dev", "hong", ports, ("data-pipeline-hong", "rag_hong")),
-        ("dev", "kim-a", ports, ("data-pipeline-kim-a", "rag_kim_a")),  # 스키마 접미는 -를 _로
-        ("prd", "hong", ports, None),
-        ("dev", "hong", {"mcp.server.port": "8775"}, None),  # 파싱 포트가 기본값 그대로
-        ("dev", "hong", {"common.runtime.data_parsing_port": "8776"}, None),  # 검색 포트가 기본값 그대로
-        ("dev", "", {"common.connections.rdb.write.user": ""}, None),  # EDW 쓰기 계정 없음 — 게시 못 함(읽기 계정으로 대신하지 않음, op-03)
+    # (run_env, 루트 이름, 더 적는 칸, 기대 컨테이너 — None이면 거부)
+    for run, name, extra, want in (
+        ("dev", "sbl_data_parsing-main", {}, "data-pipeline"),
+        ("dev", "sbl_data_parsing-0.3.0", {}, "data-pipeline"),  # 판 번호(점)는 벌 번호가 아님
+        ("dev", "sbl_data_parsing-main-2", ports, "data-pipeline-2"),
+        ("prd", "sbl_data_parsing-main-2", ports, None),
+        ("dev", "sbl_data_parsing-main-2", {"mcp.server.port": "8775"}, None),  # 파싱 포트가 기본값 그대로
+        ("dev", "sbl_data_parsing-main-2", {"common.runtime.data_parsing_port": "8776"}, None),  # 검색 포트가 기본값 그대로
+        ("dev", "sbl_data_parsing-main", {"common.connections.rdb.write.user": ""}, None),  # EDW 쓰기 계정 없음(op-03)
     ):
         rd = _load()  # 모듈 값을 바꾸므로 따로 읽음
         model = {}
         base = {**req, "common.run_env": run, "common.connections.pg.db_schema": "rag", "common.connections.rdb.port": "1433"}
-        for p, v in {**base, "common.host.instance": inst, **extra}.items():
+        for p, v in {**base, **extra}.items():
             rd._host().layout().set_path(model, p, v)
-        f = tmp_path / "settings.yaml"
+        root = tmp_path / name
+        root.mkdir(exist_ok=True)
+        f = root / "settings.yaml"
         f.write_text(yaml.safe_dump(rd._host().layout().to_file(model)), encoding="utf-8")
-        probs = rd.configure(f)
+        with mock.patch.object(rd, "_root", return_value=root):  # 루트(코드 폴더) — 이름 끝 -<숫자>가 벌 번호
+            probs = rd.configure(f)
         if want is None:
-            assert probs, (run, inst, extra)
+            assert probs, (run, name, extra)
             continue
-        assert probs == [] and (rd.PIPE_C, rd.PG_SCHEMA) == want, (run, inst, probs)
+        assert probs == [] and (rd.PIPE_C, rd.PG_SCHEMA) == (want, "rag"), (run, name, probs)
 
 
 def test_staging_name_same():

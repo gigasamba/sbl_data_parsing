@@ -91,11 +91,6 @@ def schema_of(target, schema=None):
         from common.store.pg import conf
 
         schema = conf()["PG_SCHEMA"]
-    else:  # 여러 벌 — 직접 준 이름에도 설정과 같은 벌 접미 `_<벌>`(이미 붙어 있으면 그대로)
-        from common.config import layout as L
-        from common.config.settings import cfg
-
-        schema = L.per_instance(schema, cfg().host.instance)
     if not _SCHEMA_RE.fullmatch(schema):
         raise DbToolError(f"검색 스키마 이름이 틀림: {schema!r} — 소문자·숫자·_ 만")
     if len(schema) > 50:  # 원천 스키마 `<기준>_other`·색인 `ix_<기준>_other_chunk_embq`가 PG 이름 63자를 넘지 않게(pl-28)

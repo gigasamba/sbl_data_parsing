@@ -57,7 +57,7 @@
   1. 설정 값은 settings.yaml(코드 기본값은 설정 모델에 한 번) 또는 이미지 기본값 표 `common/config/settings.py` `IMAGE_PATHS` 하나에서만 온다. 저장소 안 경로는 `common/core/paths.py` 상수로만.
   2. 환경마다 다른 경로·접속(게시 대상·Object Storage·EDW·PG·호스트 경로)은 필수 — 코드 기본값이 없고 비면 시작 거부. PG 자동 찾기는 없다.
   3. 컨테이너 안 경로(`output_root` `/app/output` · `code_root` `/app/deploy` 등)는 `IMAGE_PATHS`가 원본이다. `deploy/release/gen_host_keys.py`가 이 표를 `deploy/host/scripts/host_settings.tsv`(`image.<이름>`·`APP_<이름>` 줄)로 내고, `load_settings.sh`가 `APP_*` env로 내준다 — compose는 `${APP_OUTPUT_ROOT}`·`${APP_CODE_ROOT}`·`${APP_DOCS_MOUNT}`, `run_pipeline.py`는 코드 폴더의 표를 읽는다. 생성: `PYTHONPATH=. python deploy/release/gen_host_keys.py`.
-  4. 호스트 스크립트는 `load_settings.sh`(`settings_to_env.py` — PyYAML만)가 내준 값만 쓴다. 컨테이너 명령 = settings.yaml `ops.host.container_cli` > podman > docker(벌 이름 `INSTANCE`와 함께 셸 env로 덮지 않음 — `run_pipeline.py`와 같게, rn-07).
+  4. 호스트 스크립트는 `load_settings.sh`(`settings_to_env.py` — PyYAML만)가 내준 값만 쓴다. 컨테이너 명령 = settings.yaml `ops.host.container_cli` > podman > docker(`run_pipeline.py`와 같게, rn-07).
   5. 앱은 env에서 설정을 읽지 않는다 — 남은 env 줄은 분류 주석 필수(`python -m common.check.check_modules` ⑩·⑪).
 - 파일: `common/config/settings.py`(`IMAGE_PATHS`), `common/config/keyscan.py`, `deploy/release/gen_host_keys.py`, `deploy/host/scripts/{load_settings.sh,settings_to_env.py,host_settings.tsv}`.
 - QA: `python -m common.check.check_modules` · "모듈 경계 통과". `tests/general/deploy/test_host_env.py` · 통과. 서버 확인 refactor.md C-70.
@@ -77,15 +77,15 @@
 - Status: done
 
 <a id="op-15"></a>
-## op-15 · 한 서버에 여러 벌(개발자별) — 이름·포트를 설정으로
-- 이유(사용자 11-04): 개발 서버에 개발자마다 컨테이너를 따로 띄운다. 컨테이너 이름(`data-pipeline` 등)·compose 묶음 이름·systemd 타이머 이름이 고정이라 두 번째 벌이 첫 벌을 덮었다.
+## op-15 · 한 서버에 여러 벌(개발자별) — 벌 번호는 폴더 이름, 포트는 설정으로
+- 이유(사용자 11-04): 개발 서버에 개발자마다 컨테이너를 따로 띄운다. 컨테이너 이름(`data-pipeline` 등)·compose 묶음 이름·systemd 타이머 이름이 고정이라 두 번째 벌이 첫 벌을 덮었다. 벌 번호를 폴더 이름에서 읽어 설정 칸 없이 나눈다(사용자 11-06).
 - 규칙:
-  1. 루트 하나 = 한 벌. 새 칸 `ops.host.instance_name`(영소문자·숫자·`-`) — 적으면 컨테이너 3개·compose 묶음(`compose-<이름>`)·systemd 단위 4개 이름 끝에 `-<이름>`. 비우면 이름 그대로(한 벌 — 지금 서버와 같음).
-  2. 이름을 붙이는 곳은 `load_settings.sh load_settings`(`NAME_SUFFIX` — 틀린 꼴이면 종료 2) 한 곳, 호스트 스크립트(`host_ctl.sh`·`mcp_keepalive.sh`·`nightly_batch.sh`·`pipe_exec.sh`)와 compose 파일은 그 값을 쓴다. `run_pipeline.py`는 같은 규칙으로 `configure()`에서.
-  3. 벌 이름 하나로 갈림(rn-07): PG 스키마 `<db_schema>_<벌>` · EDW 기록 표 `<parsing_meta_table>_<벌>`(이미 붙어 있으면 그대로 — `layout.per_instance` 한 곳, 앱 `CommonSettings`·`run_pipeline.py`가 같이 씀) · 게시 경로는 dev에서만 `<prefix>/<벌>`(`settings.publish_prefix`). 버전에는 붙이지 않음.
-  4. 포트 두 칸(`search.server.mcp_port` · `ops.services.data_parsing.data_parsing_port` — 작업 서비스와 검색 MCP가 같은 칸)은 벌마다 다르게 — 벌 이름이 있는데 기본값이면 시작 거부. `prd`에서 벌 이름이면 시작 거부. 거부는 앱 시작 관문(`instance_problems`)·`load_settings.sh`·`run_pipeline.py configure()` 셋 — server-guide §1-3.
-- 파일: `common/config/settings.py` · `deploy/host/scripts/{load_settings.sh,host_ctl.sh,mcp_keepalive.sh,nightly_batch.sh,pipe_exec.sh,run_pipeline.py,host_settings.tsv}` · `deploy/host/compose/compose.{pipeline,data-parsing,mcp-server}.yml`.
-- QA: `tests/server/common/test_instance.py`(스키마·표·게시 경로·prd·기본 포트 거부) · `tests/general/deploy/test_run_pipeline.py`(`test_instance_names`) · `tests/general/deploy/test_dc.py`(묶음 이름 `compose`·`compose-hong` · 틀린 이름·기본 포트·prd 종료 2) · `test_dc_init.py`(타이머 단위 이름 끝) · `test_compose.py`(컨테이너 이름 끝 `${NAME_SUFFIX:-}`) · 통과.
+  1. 벌 폴더(코드 폴더 = 루트) 하나 = 한 벌. 벌 번호 = 코드 폴더 이름 끝 `-<숫자>`(예 `sbl_data_parsing-main-2` → `2`) — 있으면 컨테이너 3개·compose 묶음(`compose-<번호>`)·systemd 단위 4개 이름 끝에 `-<번호>`. 없으면(`sbl_data_parsing-main`·`sbl_data_parsing-0.3.0`) 이름 그대로(한 벌). 벌 이름 설정 칸은 없다(`ops.host.instance_name`이 남으면 모르는 칸으로 시작 거부).
+  2. 번호를 구하는 곳은 `load_settings.sh load_settings`(`INSTANCE`·`NAME_SUFFIX`) 한 곳, 호스트 스크립트(`host_ctl.sh`·`mcp_keepalive.sh`·`nightly_batch.sh`·`pipe_exec.sh`)와 compose 파일은 그 값을 쓴다. `run_pipeline.py`는 같은 규칙(`instance_of`)으로 `configure()`에서.
+  3. PG 스키마·EDW 기록 표·게시 경로·버전에는 벌 표시를 붙이지 않는다 — 모든 벌이 같은 기준 스키마를 함께 쓰므로 모든 벌이 같은 코드 판이어야 한다(벌끼리 데이터를 나누는 길은 [op-17](ops.md#op-17)).
+  4. 포트 두 칸(`search.server.mcp_port` · `ops.services.data_parsing.data_parsing_port` — 작업 서비스와 검색 MCP가 같은 칸)은 벌마다 다르게 — 번호가 붙은 벌인데 기본값이면 시작 거부. `prd`에서 번호가 붙은 폴더면 시작 거부(종료 2). 거부는 `load_settings.sh`·`run_pipeline.py configure()` 둘 — server-guide §1-3.
+- 파일: `deploy/host/scripts/{load_settings.sh,host_ctl.sh,mcp_keepalive.sh,nightly_batch.sh,pipe_exec.sh,run_pipeline.py}` · `deploy/host/compose/compose.{pipeline,data-parsing,mcp-server}.yml` · README §5-0 "한 서버에 여러 벌".
+- QA: `tests/general/deploy/test_dc.py`(묶음 이름 `compose`·`compose-2` · 판 번호 폴더 `sbl_data_parsing-0.3.0`은 한 벌 · 기본 포트·prd 종료 2) · `test_dc_init.py`(루트 = 코드 폴더 · 타이머 단위 이름 끝) · `test_run_pipeline.py::test_instance_names` · `test_compose.py`(컨테이너 이름 끝 `${NAME_SUFFIX:-}`) · 통과.
 - Status: done
 
 <a id="pl-21"></a>
