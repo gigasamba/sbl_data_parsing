@@ -310,3 +310,34 @@
 ### QA
 - `tests/general/deploy/test_dc.py`(포트를 적으면 `compose.dev.yml`, opencode 설정이면 `compose.opencode.yml`, prd·코드가 든 이미지 종료 2) · `test_devbox.py`(`dev_entry.sh` 인자 넘김 표 · `compose.dev.yml` 마운트 자리) · `test_dc_init.py`(`<루트>/home`) · 이미지 시험(`pipeline-runtime` 빌드 → 도구 확인·`selftest` `[판정] 통과`·`devbox` sshd) · 통과.
 - Status: done
+
+<a id="op-17"></a>
+## op-17 · 개발 서버 개인 시험 벌 — 코드 폴더 = 벌, DEV 원천, 처리 기록은 pgvector
+
+### 무엇·왜
+개발 서버에서 개발자마다 자기 문서만 파싱·적재·검색해 시험한다(사용자 11-06). 벌끼리는 원천 이름(`DEV-1`·`DEV-2`)으로 나뉘고, 처리 기록은 EDW가 아니라 pgvector에서만 관리한다. 0.3.0에 넣는다.
+
+### 정한 것(사용자 11-06)
+1. 벌 폴더 = 코드 폴더 자체(`/home/sbl/sbl_data_parsing-main-1/`). 그 안에 `settings.yaml`·`edw_chain.yaml`·`output/`(+ SSH 작업 공간을 켜면 `home/`). `backup/`은 만들지 않는다. 공용 폴더(`/home/sbl/`)에는 이미지 폴더와 공용 `opencode.json`.
+2. `init`의 권한 정리(`a+rX`)는 settings.yaml·edw_chain.yaml·output/·home/을 건드리지 않는다(비밀값 파일 640 유지). `home/`은 `ssh_port`를 켤 때만 만든다. git 제외 목록에 `edw_chain.yaml`(루트)·`home/`.
+3. 판 올리기는 사람이 한다 — 새 zip을 풀어 `-main-N`으로 이름을 바꿔 덮어쓴다(옛 것은 각자 백업, gitea에도 올림).
+4. 벌마다 compose 실행법(폴더 구조·명령)은 README "한 서버에 여러 벌" 절에 둔다.
+5. 벌 이름(`ops.host.instance_name`)은 컨테이너·compose 묶음·타이머 이름 끝(`-<벌>`)에만 붙는다. PG 스키마·EDW 표·게시 경로에 붙이던 `_<벌>` 접미사는 없앤다. 적재 판(`gold_version`)에도 벌 표시를 붙이지 않는다.
+6. 원천 `DEV-<숫자>`(대소문자 무관)를 dev 서버에서만 받는다. 원천 스키마는 `<기준 스키마>_dev_<숫자>` — 다른 원천과 같은 표·뷰. 메타는 Other처럼 없다(EDW 사슬 없음).
+7. 원천 스키마는 설정에 따라 만든다(동적) — 마이그레이션 도구가 설정의 DEV 원천 스키마가 없으면 만들고, 뒤의 표 변경은 DB에 있는 `_dev_*` 스키마에도 적용한다. 검색 MCP의 원천 목록 = 5개 + DB에 있는 DEV 스키마.
+8. 파싱할 원천은 settings.yaml 맨 위 `required`의 목록 칸. 비우면 운영 5개 원천 전부. prd에서 `DEV-…`이면 시작 거부.
+9. 원천은 EDW `AI.FileStorageMap.source_system` 칸으로 정한다(시험 행은 `dev-1`·`dev-2`). Object Storage 경로도 `DEV-1/…`.
+10. MCP `search`의 `source_system`: dev는 `DEV-<숫자>`도, prd는 지금처럼 5개 값.
+11. `AI.ParsingMeta`는 더 쓰지 않는다(우리만 씀). 처리 정보는 원천 스키마마다 `doc` 표에 칸을 더해 둔다.
+12. 적재되지 않은 문서(파싱 실패·내용 중복·DRM 등)의 기록은 `applog.error_doc_info` 하나 — `skip_doc_info`를 합친다.
+13. 서버에 쌓인 ParsingMeta 기록은 사람이 옮긴다(도구 없음).
+
+### 남은 것
+- `doc`에 더할 칸 목록, `error_doc_info`의 칸과 "다시 고름 / 영구 뺌" 구분, 끝난 문서·내용 중복 판정을 어느 표로 하는지.
+- 원천을 `source_system` 칸으로 정할 때 구조화·적재·게시의 원천 판정(지금은 원본 경로 첫 마디 — pl-28 규칙 3)도 같은 칸으로 바꾸는지.
+- EDW 쓰기 계정이 필요 없어지는지(ParsingMeta를 안 쓰면 EDW는 읽기만).
+
+### 사람 검토
+DB 스키마(마이그레이션 — `doc` 칸·`error_doc_info`·DEV 스키마), MCP 계약(dev 값), 비밀값 파일 권한(init), EDW 쓰기 중단.
+
+- Status: todo

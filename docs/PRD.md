@@ -161,6 +161,7 @@
 | PC(`local`)는 가짜 대상만 — `dev.local`의 가짜 EDW·게시 폴더·원본 폴더·새 문서 상한을 쓰고, 서버 전용 칸(EDW·Object Storage·서버 게시 버킷)은 비우고 경고, 경로는 저장소 루트 기준 상대 경로 | PC 시험에 EDW·Object Storage·토큰·배포 값이 필요 없게. 사용자 11-04·11-05 | done | [op-14](prd/ops-settings.md#op-14) |  |
 | 한 서버에 여러 벌(개발자별) — `ops.host.instance_name`가 컨테이너·compose 묶음·타이머 이름 끝에 붙고, 포트·스키마는 벌마다 설정으로 | 개발 서버에 개발자마다 컨테이너를 띄움. 사용자 11-04 | done | [op-15](prd/ops-settings.md#op-15) |  |
 | 네 이미지에 개발 도구(sshd·git·uv·ruff·mypy·pytest 등)와 opencode(선택)가 들어 있고, 개발 서버에서 `option.devbox.ssh_port`를 적으면 `data-pipeline`이 SSH 작업 공간(코드 폴더 쓰기 가능·홈 `<루트>/home`)으로 뜬다 — 비우면 지금과 같고, prd는 거부 | 개발 서버 컨테이너 안에서 바로 고치고 시험한다. opencode는 내부망 모델만. 사용자 11-05 | done | [op-16](prd/ops.md#op-16) |  |
+| 개발 서버 개인 시험 벌 — 벌 폴더 = 코드 폴더, 원천 `DEV-<숫자>`(dev만 — 원천 스키마를 설정에 따라 만듦), 파싱할 원천 목록은 settings.yaml 맨 위, 처리 기록은 pgvector `doc` 칸 + `applog.error_doc_info`(EDW `ParsingMeta`는 안 씀) | 개발자마다 자기 문서만 파싱·검색해 시험한다. 사용자 11-06 — 0.3.0 | todo | [op-17](prd/ops.md#op-17) | 설계 중 — 지금은 벌 폴더 = 코드 폴더의 부모, 데이터 이름에 `_<벌>` 접미사, ParsingMeta에 기록 |
 | 설정은 settings.yaml 하나 — `settings.sample.yaml`에 모든 키가 기본값과 함께(`python -m common.config.sample`로 생성) | — | done | [op-05](prd/ops-settings.md#op-05) |  |
 | 배치 — 맨 위 `required`(필수·비밀) → 역할 절 7개(환경마다 정하는 값) → `tuning`(거의 안 바꾸는 값 — 분류 제목, 11-04). 옛 배치·옛 자리·모르는 칸은 시작 거부(칸 이름만 알림 — rn-07) | sample과 실제 파일의 차이를 줄였다 | done | [op-08](prd/ops-settings.md#op-08) |  |
 | 설정 이관은 옛 배치 settings.yaml → 새 배치만 | 운영 서버는 0.1.0(settings.yaml 하나). 사용자 11-02 | done | [op-08](prd/ops-settings.md#op-08) |  |
