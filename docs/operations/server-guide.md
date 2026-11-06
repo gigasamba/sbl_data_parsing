@@ -157,7 +157,7 @@ grep -E 'doc#[0-9]+ (파싱|publish|구조화\+적재) FAIL' <작업 폴더>/bat
 
 | 무엇 | 위치 |
 |---|---|
-| 용어집 · 고객 명부 · ID 모양 · 단위 · 계약·고객 마스터 | PG 마스터 표 `<db_schema>_master`. 원본 CSV(`resources/vocab/glossary/` 또는 서버 폴더)를 고친 뒤 `pipe_exec.sh migrate master load [--dir <폴더>]`(5-1) |
+| 용어집 · 고객 명부 · ID 모양 | PG 마스터 표 `<db_schema>_master.glossary`. 원본 `glossary.csv`(`resources/vocab/glossary/` 또는 서버 폴더)를 고친 뒤 `pipe_exec.sh migrate master load [--dir <폴더>]`(5-1) |
 | 원천 표 열 이름 | settings.yaml `tuning.extract.source_columns.source_column_*` |
 | 엔진 구성 | `resources/config/pipeline_stack.json`(확인 `show-stack`) |
 | MCP 안내 문구 | 코드 `mcp_server/main.py`의 `_DEFAULT_MCP_INSTRUCTIONS`(설정 칸 없음 — 바꾸면 코드 배포) |
@@ -165,60 +165,69 @@ grep -E 'doc#[0-9]+ (파싱|publish|구조화\+적재) FAIL' <작업 폴더>/bat
 
 ### 5-1. 고객 명부·용어집 작성법
 
-구조화·검색은 파일이 아니라 PG 마스터 표만 읽는다. `migrate master load`가 CSV 여섯 개(`client_roster`·`client_master`·`contract_master`·`domain_terms`·`id_patterns`·`units` — 파일 이름·머리글 그대로)로 표를 통째로 바꾼다. 기본 폴더는 샘플(가상 회사·제품) `resources/vocab/glossary/`. 서버 실명 자료(고객 명부·용어집 CSV)는 **`<루트>/output/glossary/`**에 두고(UID 10001이 읽게) 컨테이너 안 자리로 넣는다: `bash deploy/host/scripts/pipe_exec.sh migrate master load --dir /app/output/glossary`. 표가 비었으면 서버의 구조화·검색이 시작하지 않는다.
+구조화·검색은 파일이 아니라 PG 마스터 표 `glossary`만 읽는다. `migrate master load`가 CSV 하나 `glossary.csv`(파일 이름·머리글 그대로)로 표를 통째로 바꾼다. 기본 폴더는 샘플(가상 회사·제품) `resources/vocab/glossary/`. 서버 실명 자료(고객 명부·용어집이 든 `glossary.csv`)는 **`<루트>/output/glossary/`**에 두고(UID 10001이 읽게) 컨테이너 안 자리로 넣는다: `bash deploy/host/scripts/pipe_exec.sh migrate master load --dir /app/output/glossary`. 표가 비었으면 서버의 구조화·검색이 시작하지 않는다.
 - **`master load` 뒤에는 검색 MCP를 다시 시작한다** — `bash deploy/host/scripts/host_ctl.sh restart mcp`(검색은 시작할 때와 새 적재 판이 들어올 때만 마스터를 읽음). 이미 적재한 문서는 자동으로 다시 처리하지 않는다(새로 적재하는 문서의 `gold_version` `<VERSION>+m<해시 8자>`만 바뀜 — 다시 하려면 [upgrade-guide §8](upgrade-guide.md#8-다시-처리할-층과-명령)).
 - `--dir`에는 **컨테이너 안에서 보이는** 폴더를 적는다 — 컨테이너에 붙는 서버 폴더는 결과 폴더(`/app/output`)뿐이다([env-guide §5](env-guide.md#5-서버-경로-칸--컨테이너-안-절대-경로)).
-- 머리글은 `docs/architecture/db_schema.md` §4. UTF-8로 저장(Excel이면 "CSV UTF-8" — cp949도 읽힘). 머리글이 다르면 `master load`가 거부한다.
+- 칸 설명은 `docs/architecture/db_schema.md` §4. UTF-8로 저장(Excel이면 "CSV UTF-8" — cp949도 읽힘). 머리글이 다르면 `master load`가 거부한다.
 
-#### 고객 명부 `client_roster.csv`
-한 줄 = 고객 하나. 필수는 `canonical_name` 또는 `name_ko` 하나.
+#### `glossary.csv` 꼴
+머리글 `kind,canonical,variant,variant_kind,description,context_required,case_sensitive`. 한 줄 = 값 하나 — 같은 `kind`·`canonical`(원본 값) 줄이 한 고객·용어·ID 종류다. 값이 하나뿐인 종류(`client_id`·`status` 등)를 한 고객·용어에 두 줄 쓰면, 또는 모르는 `kind`·`variant_kind`를 쓰면 `master load`가 표를 바꾸지 않고 거부한다.
 
-| 칸 | 쓰는 법 |
+```csv
+kind,canonical,variant,variant_kind,description,context_required,case_sensitive
+client,Hanbit Biologics,C0001,client_id,항체 바이오시밀러 위탁생산 고객,,
+client,Hanbit Biologics,한빛바이오,alias,,,
+term,Contract Manufacturing Organization,BIZ.CMO,concept_id,고객이 확립한 공정으로 생산만 위탁 수행,위탁생산|생산|제조,N
+term,Contract Manufacturing Organization,위탁생산,synonym,,,
+term,Contract Manufacturing Organization,CMO,abbr,,,
+id,contract_no,"C-[A-Z]{2,4}-\d{4}-\d{2}",regex,합성 데이터 형식,,
+```
+
+**고객(`client`)** — `canonical` = 정식 이름(없으면 한글 이름).
+
+| `variant_kind` | 쓰는 법 |
 |---|---|
-| `client_id` | 고객 번호(SFDC 등) — 비워도 됨 |
-| `canonical_name` | 정식 이름 — 비우면 `name_ko` |
+| `client_id` | 고객 번호(SFDC 등) — `description`에 고객 설명 |
 | `name_ko` | 한글 이름 — 별칭으로도 쓰임 |
-| `aliases` | 다른 표기를 `\|` 또는 `;`로 |
+| `alias` | 다른 표기 — 한 줄에 하나 |
 | `client_type` | `customer`·`prospect` — 둘 다 똑같이 쓰임 |
-| `segment`·`country`·`parent_client_id`·`description`·`source`·`updated` | 참고용 — 비워도 됨 |
-| `status` | 비우면 사용 · `inactive`·`deleted`면 무시 |
+| `segment`·`country`·`parent`(모회사 `client_id`)·`source`·`updated` | 참고용 — 빼도 됨 |
+| `status` | 없으면 사용 · `inactive`·`deleted`면 무시 |
 
 - 영문 3자 이하 별칭(예 `PFE`)은 오탐 때문에 무시된다 — 4자 이상이나 한글로. 같은 별칭을 두 고객에 쓰지 않는다.
 
+**용어(`term`)** — `canonical` = 표준 이름(필수).
+
+| `variant_kind` | 쓰는 법 |
+|---|---|
+| `concept_id` | 겹치지 않는 영문 ID(`분야.이름`, 예 `QA.OOS`) — 없으면 `AUTO.<canonical>`. `description`에 한글 정의, `context_required`(동음이의 줄임말이면 주변에 함께 나와야 하는 단어들, `\|` 구분)·`case_sensitive`(`Y`면 대소문자 구분)도 이 줄에 |
+| `category` | `org_client`(고객 — 명부에 합류)·`product_example`·`modality`·`modality_code`·`process`·`quality`·`contract`·`regulatory`·`business` 등 — 한 줄에 하나 |
+| `synonym` · `abbr` | 같은 뜻의 다른 표기 · 줄임말 — 한 줄에 하나 |
+| `weak` | 뜻이 넓어 약하게만 쓰는 말 |
+| `broader`·`related` | 상위·관련 개념의 `concept_id`(없는 ID면 오류) |
+| `definition_en`·`source`·`owner`·`updated` | 빼도 됨 |
+| `status` | 없으면 반영 · 빼려면 `draft`·`rejected` |
+
+**ID 꼴(`id`)** — `canonical` = 종류(`contract_no`·`product_code` 등). `regex` 줄 하나 = 정규식 하나(대소문자 무시, `description`에 메모), `example`·`updated`는 참고용. 줄 순서가 검색 동점 처리 순서다.
+
+- 오류(조용히 넘기지 않음): 명시한 `concept_id` 중복 · 없는 ID를 가리키는 `broader`/`related` · 깨진 정규식.
+- 초안 도구 `python -m pipeline.transform.structure.glossary_suggest`·`gen_roster --kind product`·`python -m pipeline.transform.structure.draft_terms --bundle <묶음>`은 `output/` 아래 초안(용어 사전 옛 칸 꼴 — 한 줄 = 개념 하나)만 만든다 — 사람이 확인해 `glossary.csv`의 `term` 줄로 옮긴다.
+
 #### 고객 마스터에서 명부 만들기
-SFDC·EDW 내보내기에서 명부를 만든다. 열 이름만 매핑 파일에 적는다(예제: `resources/vocab/glossary/client_master.example.csv` + `client_master_map.example.json`). 매핑 키 = 명부 칸: `name`(필수 → `canonical_name`) · `aliases`(`;`·`|`) · `client_id`·`name_ko`·`client_type`·`segment`·`country`·`parent_client_id`·`status`·`description`·`updated`(선택). 열 이름은 영문·숫자·`_`만. 같은 고객 여러 줄은 하나로 합친다(별칭은 합치고 다른 칸은 처음 값).
+SFDC·EDW 내보내기에서 명부 초안을 만든다. 열 이름만 매핑 파일에 적는다(예제: `resources/vocab/glossary/client_master.example.csv` + `client_master_map.example.json`). 매핑 키 = 명부 칸: `name`(필수 → `canonical_name`) · `aliases`(`;`·`|`) · `client_id`·`name_ko`·`client_type`·`segment`·`country`·`parent_client_id`·`status`·`description`·`updated`(선택). 열 이름은 영문·숫자·`_`만. 같은 고객 여러 줄은 하나로 합친다(별칭은 합치고 다른 칸은 처음 값).
 내보낸 파일과 매핑 파일을 `<루트>/output/glossary/`에 둔 뒤(컨테이너에서 `/app/output/glossary/`):
 ```bash
 G=/app/output/glossary
 $DOCKER exec data-pipeline python -m pipeline.transform.structure.roster_from_edw --kind client \
   --source csv:$G/client_master.csv --mapping $G/client_master_map.json \
   --out $G/client_roster.csv          # EDW 표에서 바로: --source rdb:<스키마.표>(읽기 계정)
-$DOCKER exec data-pipeline python -m pipeline.transform.structure.roster_from_edw --check $G/client_roster.csv   # 오류 0 확인 후 반영
+$DOCKER exec data-pipeline python -m pipeline.transform.structure.roster_from_edw --check $G/client_roster.csv   # 오류 0 확인
 ```
-
-#### 용어집 `domain_terms.csv`
-한 줄 = 개념 하나, 여러 값 칸은 `|` 구분.
-
-| 칸 | 쓰는 법 |
-|---|---|
-| `concept_id` | 겹치지 않는 영문 ID(`분야.이름`, 예 `QA.OOS`) — 비우면 `AUTO.<canonical>`(같은 정식 이름이 ID 없이 또 나오면 뒤 줄은 건너뛰고 알림) |
-| `canonical` | 표준 이름(필수) |
-| `category` | `org_client`(고객 — 명부에 합류)·`product_example`·`modality`·`modality_code`·`process`·`quality`·`contract`·`regulatory`·`business` 등 |
-| `synonyms` · `abbreviations` | 같은 뜻의 다른 표기 · 줄임말 |
-| `weak_synonyms` | 뜻이 넓어 약하게만 쓰는 말 |
-| `broader`·`related` | 상위·관련 개념의 `concept_id`(없는 ID면 오류) |
-| `context_required` | 동음이의 줄임말이면 주변에 함께 나와야 하는 단어들 |
-| `case_sensitive` | `Y`면 대소문자 구분 |
-| `definition_ko`·`definition_en`·`source`·`owner`·`updated` | 비워도 됨 |
-| `status` | 비우면 반영 · 빼려면 `draft`·`rejected` |
-
-- 오류(조용히 넘기지 않음): 명시한 `concept_id` 중복 · 없는 ID를 가리키는 `broader`/`related` · `id_patterns.csv`의 깨진 정규식.
-- 초안 도구 `python -m pipeline.transform.structure.glossary_suggest`·`gen_roster --kind product`·`python -m pipeline.transform.structure.draft_terms --bundle <묶음>`은 `output/` 아래 초안만 만든다 — 사람이 확인해 CSV로 옮긴다.
+초안은 한 줄 = 고객 하나(옛 명부 칸 꼴)다 — 사람이 확인해 `glossary.csv`의 `client` 줄로 옮긴다(칸 대응: `canonical_name` → `canonical`, `aliases`의 표기마다 `alias` 줄, 다른 칸은 같은 이름의 `variant_kind` 줄 — `parent_client_id`는 `parent`, `description`은 `client_id` 줄의 `description`).
 
 #### 점검(반영 전)
 ```bash
-$DOCKER exec data-pipeline python -m pipeline.transform.structure.roster_from_edw --check /app/output/glossary/client_roster.csv   # 오류 0이어야 함
-$DOCKER exec data-pipeline python -c "from common.core import terms as T; import sys; g=T.load_glossary(sys.argv[1]); print(len(g), '개념 반영', sorted(g)[:5])" /app/output/glossary   # 오류면 여기서 멈춤
+$DOCKER exec data-pipeline python -c "import sys; from pathlib import Path; from common.store import master as M; from common.core import terms as T; m = M.Master(M.read_csv(Path(sys.argv[1]))); print(len(T._master_glossary(m)), '개념 반영 ·', len(m.rows('client_roster')), '고객 ·', len(m.rows('id_patterns')), 'ID 꼴')" /app/output/glossary   # 오류면 여기서 멈춤
 bash deploy/host/scripts/pipe_exec.sh migrate master load --dir /app/output/glossary && bash deploy/host/scripts/host_ctl.sh restart mcp   # 반영
 ```
 

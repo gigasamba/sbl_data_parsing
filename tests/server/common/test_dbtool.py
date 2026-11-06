@@ -18,7 +18,7 @@ def selftest():
         and known("search") == ["0006_search", "0005_search", "0004_search", "0003_search", "0002_search", "0001_search"]
     )
     assert head("applog") == "0003_applog" and known("applog") == ["0003_applog", "0002_applog", "0001_applog"]
-    assert head("master") == "0001_master" and known("master") == ["0001_master"]
+    assert head("master") == "0002_master" and known("master") == ["0002_master", "0001_master"]
     assert not list((MIGRATIONS / "versions").glob("*struct*"))  # struct 갈래 없음(엔진 구성·원천 목록은 파일)
     print("[selftest] dbtool — 판 폴더 갈래 search 하나·끝 판·HNSW 2000 같음 통과")
     # 판 0002가 굳혀 둔 원천별 칸 = 지금 표 정의(pl-28 — 판 파일은 모델을 import하지 않으므로 여기서 대조)

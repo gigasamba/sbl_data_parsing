@@ -234,11 +234,13 @@ def _selftest_si43():
         w.writerows(rows)
 
     # ① 다중 태그 — org_client|org_cdmo는 고객 명부에 들어가고(기존 org_cdmo 한 칸은 안 들어감) ② 동의어(한·영) 병합
+    from types import SimpleNamespace
     from unittest import mock
 
     from common.store import master
 
-    fake = master.Master({"domain_terms": list(csv.DictReader((d / "domain_terms.csv").read_text(encoding="utf-8-sig").splitlines()))})
+    tables = {"domain_terms": list(csv.DictReader((d / "domain_terms.csv").read_text(encoding="utf-8-sig").splitlines()))}
+    fake = SimpleNamespace(hash="test-si43", rows=lambda n: tables.get(n, []))  # 옛 행 모양을 바로 주는 가짜 마스터
     with mock.patch.object(master, "get", lambda: fake):  # 명부·용어 사전은 마스터 표에서(시험은 가짜 마스터)
         al = _aliases()
         assert al.get("Celltrion") == ["셀트리온"], al  # org_client 태그 있음 — 명부에

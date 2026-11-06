@@ -42,7 +42,7 @@
 | 대표 결과(silver) | 문서 하나를 여러 엔진으로 파싱한 뒤 고른 결과 한 벌(`.md`·`.json`) |
 | 번들(bundle) | 구조화 결과 폴더(`docs.jsonl`·`chunks.jsonl`·`vectors.npy`·`meta.json`) — 적재의 입력 |
 | 적재(gold) | 번들을 PostgreSQL(pgvector)에 넣는 일 |
-| 마스터 표 | 용어집·고객 명부 표(`<스키마>_master`) — 원본은 git의 `resources/vocab/glossary/*.csv` |
+| 마스터 표 | 용어집·고객 명부·ID 꼴 표(`<스키마>_master.glossary`) — 원본은 git의 `resources/vocab/glossary/glossary.csv` |
 | 실행 이미지(`*-runtime`) | 코드가 없는 이미지 — 개발 서버는 코드 폴더를 붙여 쓴다 |
 | 루트 · 코드 폴더 · 벌 | 코드 폴더 = 코드 zip을 푼 폴더(예 `/home/sbl/sbl_data_parsing-main-1/`). 루트 = 코드 폴더 자체 — `settings.yaml`·`edw_chain.yaml`·`output/`이 그 안에 있다. 벌 = 한 서버에 따로 띄운 컨테이너 한 묶음(코드 폴더 하나) |
 | 핑거프린트 | 결과를 다시 쓸지 정하는 값 — 바뀌면 서버가 문서를 다시 처리한다 |
@@ -118,14 +118,14 @@ pgvector의 표는 코드가 실행 중에 만들지 않는다. 모두 Alembic �
 |---|---|---|
 | `search` | 기준 스키마(`required.pg.pg_schema`) + 원천 스키마 5벌 `<기준>_{sfdc,crms,las,faq,other}` | `0006_search`(0001→0006 차례로 — 0006은 `doc` 처리 기록 칸) |
 | `applog` | `applog`(고정 이름 — 다른 `--schema`는 종료 2, PC 시험 스키마 `test_*`만 예외) | `0003_applog`(0001→0003 — 0003은 적재 안 된 문서 표 `except_doc_info`) |
-| `master` | `<기준>_master` | `0001_master` — 채우기는 `master load` |
+| `master` | `<기준>_master` | `0002_master`(0001→0002 — 0002는 표 `glossary` 하나로 바꿈) — 채우기는 `master load` |
 
 | 명령 | 하는 일 |
 |---|---|
 | `up --target search\|applog\|master\|all` | 끝 판까지 실행 |
 | `current --target …` | 지금 DB 판과 코드의 끝 판 |
 | `check --target …` | `current`와 같고, 끝 판이 아니면 종료 1(읽기만) |
-| `master load [--dir <폴더>]` | 마스터 표를 CSV(기본 `resources/vocab/glossary/`)로 통째로 바꿈 |
+| `master load [--dir <폴더>]` | 마스터 표를 `glossary.csv`(기본 `resources/vocab/glossary/`)로 통째로 바꿈 |
 
 처음 설치(PC §4-4 ④, 서버 §5-0 6번) · 마이그레이션이 바뀐 릴리스(적재 전에 `up`) · 새 검색 스키마(임베딩 차원이 바뀜 — 새 `db_schema`에 `up --target all --schema <새 스키마> --dim <차원>`)일 때 실행한다. 자동 동작·오류 분기는 [release-and-patch §5-5](docs/operations/release-and-patch.md#5-5-db-버전-관리--migrate).
 
@@ -294,11 +294,11 @@ cp valid_env/edw/edw.sqlite output/demo/edw.sqlite   # EDW 대역 사본(원본 
 ```bash
 .venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle output/demo/bundle --create-extension
 .venv/bin/python -m common.store.db.dbtool master load --schema demo
-.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0006_search · applog 0003_applog · master 0001_master
+.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0006_search · applog 0003_applog · master 0002_master
 .venv/bin/python -m common.store.db.dbtool check --target all      # 기대: 갈래마다 판 끝, 종료 코드 0
 ```
 
-- 초기화 순서: `dbtool up`(search·applog·master) → `dbtool master load` → 파싱·구조화·적재. 서버는 마스터 표가 비었으면 구조화·검색이 시작하지 않는다. `resources/vocab/glossary/*.csv`를 고치면 `master load`를 다시 돌린다(이미 적재한 문서는 자동으로 다시 처리하지 않음).
+- 초기화 순서: `dbtool up`(search·applog·master) → `dbtool master load` → 파싱·구조화·적재. 서버는 마스터 표가 비었으면 구조화·검색이 시작하지 않는다. `resources/vocab/glossary/glossary.csv`를 고치면 `master load`를 다시 돌린다(이미 적재한 문서는 자동으로 다시 처리하지 않음).
 - `--bundle`은 벡터 차원을 `meta.json`에서 읽으려고 준다(또는 `--dim`). `--create-extension`은 새 PG일 때만.
 
 **⑤ 적재 — 번들 → pgvector**

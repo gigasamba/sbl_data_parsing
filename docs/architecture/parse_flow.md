@@ -450,7 +450,7 @@ sequenceDiagram
 | 명령 | 파일 | 하는 일 |
 |---|---|---|
 | `python -m common.store.db.dbtool up --target all --schema <이름> --bundle <묶음>` | `common/store/db/dbtool.py` · `common/store/db/migrations/versions/*` | Alembic으로 검색(`0001_search_base`~`0006_doc_record`)·`applog`·`master` 표를 만듦. 실행 중 DDL은 하지 않는다 |
-| `dbtool master load` | `common/store/master.py` | `resources/vocab/glossary/*.csv` → `<PG_SCHEMA>_master` 표 |
+| `dbtool master load` | `common/store/master.py` | `resources/vocab/glossary/glossary.csv` → `<PG_SCHEMA>_master.glossary` 표 |
 | `pgvector_load deploy` | `pipeline.load.pgvector_load.deploy()` | vector 확장·스키마 주인·차원 확인 뒤 `dbtool.upgrade("search", …)` |
 | `dbtool check --target all` | `common/store/db/dbtool.py` | DB 판이 코드의 끝 판인지 |
 

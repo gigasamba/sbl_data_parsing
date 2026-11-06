@@ -4,7 +4,7 @@
   python -m common.store.db.dbtool current --target …   — 지금 판·코드의 끝 판
   python -m common.store.db.dbtool check   --target …   — current와 같고, 판이 끝이 아니면 종료 코드 1
   python -m common.store.db.dbtool maintain --target applog  — 현재+2개월 파티션 생성/만료 기록 정리(매일 예약)
-  python -m common.store.db.dbtool master load [--schema S] [--dir D]  — 마스터 표(`<S>_master`)를 CSV(기본 git resources/vocab/glossary)로 통째로 바꿈(up --target master 뒤)
+  python -m common.store.db.dbtool master load [--schema S] [--dir D]  — 마스터 표(`<S>_master.glossary`)를 glossary.csv(기본 git resources/vocab/glossary)로 통째로 바꿈(up --target master 뒤)
   이미지: `migrate up --target all --bundle …`(entrypoint — pipeline 이미지, load와 같은 잠금).
 · 갈래 search = 기준 스키마(PG_SCHEMA — --schema로 바꿈) 하나 + 원천 스키마 5벌 `<기준>_sfdc|crms|las|faq|other`(판 0002가 만듦).
   판 기록 표·공용 doc_id 시퀀스는 기준 스키마에(<기준>.alembic_version).
@@ -317,8 +317,8 @@ def _schema_arg(a, target):
 
 
 def master_load(base=None, folder=None):
-    """pl-38 — 마스터 표를 CSV로 통째로 바꿈(한 트랜잭션) · 반환 (스키마, 해시). 판이 끝이 아니면 거부.
-    folder 기본 = git `resources/vocab/glossary` — 서버만의 기밀 명부는 서버 폴더를 --dir로(같은 파일 이름·머리글)."""
+    """pl-38·op-17 — 마스터 표 glossary를 glossary.csv로 통째로 바꿈(한 트랜잭션) · 반환 (스키마, 해시). 판이 끝이 아니면 거부.
+    folder 기본 = git `resources/vocab/glossary` — 서버만의 기밀 명부는 서버 폴더를 --dir로(같은 파일 이름 glossary.csv·머리글)."""
     from common.store import master
     from common.store.pg import PG, conf
 
@@ -329,7 +329,7 @@ def master_load(base=None, folder=None):
         st, have = status(db.q, "master", schema)
         if st != "끝":
             raise DbToolError(f"{schema} 판 {st} {have} — 먼저 `migrate up --target master`")
-        return schema, master.load(db, master.read_csvs(Path(folder)) if folder else None)
+        return schema, master.load(db, master.read_csv(Path(folder)) if folder else None)
     finally:
         db.cn.close()
 
@@ -337,12 +337,12 @@ def master_load(base=None, folder=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     ap.add_argument("cmd", choices=["up", "current", "check", "maintain", "master"])
-    ap.add_argument("sub", nargs="?", choices=["load"], help="master load — 마스터 표를 git CSV로 채움(pl-38)")
+    ap.add_argument("sub", nargs="?", choices=["load"], help="master load — 마스터 표를 git glossary.csv로 채움(pl-38·op-17)")
     ap.add_argument("--target", choices=[*TARGETS, "all"], default="all")
     ap.add_argument("--schema", help="기준 스키마(기본 settings PG_SCHEMA — 원천 스키마는 <기준>_<원천>)")
     ap.add_argument("--dim", type=int, help="임베딩 차원(새 검색 스키마 — 있는 스키마는 DB 차원)")
     ap.add_argument("--bundle", help="묶음 폴더 — meta.json의 dim")
-    ap.add_argument("--dir", help="master load — CSV 폴더(기본 git resources/vocab/glossary · 서버 기밀 명부는 서버 폴더)")
+    ap.add_argument("--dir", help="master load — glossary.csv가 있는 폴더(기본 git resources/vocab/glossary · 서버 기밀 명부는 서버 폴더)")
     ap.add_argument("--create-extension", action="store_true", help="vector 확장이 없으면 만들기(PC·단독 시험만)")
     a = ap.parse_args(argv)
     if a.cmd == "maintain" and a.target != "applog":
@@ -357,7 +357,7 @@ def main(argv=None):
         raise DbToolError("PG 접속 정보 없음(settings.yaml required.pg) — SQLite 대역은 판 관리 밖(표 정의에서 바로 만듦)")
     if a.cmd == "master":
         schema, h = master_load(a.schema, a.dir)
-        print(f"[migrate] master {schema}: CSV로 채움 · 해시 {h[:8]}")
+        print(f"[migrate] master {schema}: glossary.csv로 채움 · 해시 {h[:8]}")
         return 0
     dim, rc = _dim_arg(a), 0
     for target in _targets(a):

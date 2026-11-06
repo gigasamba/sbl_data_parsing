@@ -17,7 +17,7 @@ mapping.json(필수 name, 선택 aliases·category): {"name": "<열 이름>", "a
   python -m pipeline.transform.structure.roster_from_edw --kind product --source csv:product_master.csv --mapping map.json --out output/glossary_draft/domain_terms_draft_product.csv
 
 --kind product의 --out은 **GLOSSARY_DIR이 아니라 draft CSV 파일**(terms.write_draft_terms — GLOSSARY_DIR에 바로 쓰면
-서버에서 이미지 밖 실 운영 사전 폴더라 권한 오류가 날 수 있다). 사람이 검토해 domain_terms.csv로 옮겨야 검색에
+서버에서 이미지 밖 실 운영 사전 폴더라 권한 오류가 날 수 있다). 사람이 검토해 glossary.csv(구분 term 줄)로 옮겨야 검색에
 반영된다(glossary_suggest와 같은 관례)."""
 
 import common  # noqa: F401 — 설정 파일 검사(settings.pin_env)를 첫 줄에서
@@ -115,7 +115,7 @@ def build_client_extra(rows, mapping):
 
 
 def write_client_roster(roster, out_path, extra=None, source=""):
-    """CLIENT_ROSTER CSV in the new roster format (ROSTER_COLS — the same header as resources/vocab/glossary/client_roster.csv,
+    """CLIENT_ROSTER CSV in the new roster format (ROSTER_COLS — the same columns as common.store.master.SHAPES['client_roster'],
     aliases joined with |). extra = build_client_extra() result; source = where it came from (--source)."""
     extra = extra or {}
     with open(out_path, "w", encoding="utf-8", newline="") as f:

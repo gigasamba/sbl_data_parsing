@@ -168,9 +168,9 @@ FAQ는 판을 잇지 않는다. 새 FAQ가 오면 gold faq를 비우고 FAQ 전�
 용어집·고객 명부를 검색 PG의 마스터 표로 두고 구조화·검색이 같은 값을 읽는다. 원본은 git CSV다. ETL 규칙: 변환 = 문서 내용 + 고객 명부로 고객 알아보기(청크 머리의 고객이 임베딩 입력), 적재 = EDW 조인·분류·DB 쓰기, 대표 결과(silver)는 마스터를 읽지 않는다.
 
 ### 규칙
-1. 대상 CSV 여섯 개(`resources/vocab/glossary/`): `client_roster`·`client_master`·`contract_master`·`domain_terms`·`id_patterns`·`units`. `client_master.example.csv`·`client_master_map.example.json`·`client_roster_seed.json`은 파일로 남는다.
+1. 대상 CSV 하나 `resources/vocab/glossary/glossary.csv` — 고객 명부·용어 사전·ID 꼴을 합친 표 `glossary`(꼴은 [ops.md#op-17](ops.md#op-17) 규칙 19~21). `client_master.example.csv`·`client_master_map.example.json`·`client_roster_seed.json`은 파일로 남는다.
 2. 스키마 `<PG_SCHEMA>_master`, 표·칸은 Alembic 갈래 `master`로만(`dbtool up --target master`, `--target all`에 포함). 칸·해시 규칙은 [db_schema.md](../architecture/db_schema.md) §4.
-3. `dbtool master load`가 CSV로 표 내용을 한 트랜잭션에 통째로 바꾸고 내용 해시를 `master_meta`에 적는다. 초기화 순서: `dbtool up`(search·applog·master) → `dbtool master load`.
+3. `dbtool master load`가 CSV로 표 내용을 한 트랜잭션에 통째로 바꾼다. 내용 해시는 읽을 때 계산한다. 초기화 순서: `dbtool up`(search·applog·master) → `dbtool master load`.
 4. 읽는 곳: `common/core/terms.py`의 용어 사전·ID 모양·고객 명부 로더(프로세스마다 한 번, 마스터 해시가 바뀌면 다시) — 구조화 고객 판별(`infer_clients`)과 검색. PC·시험은 같은 CSV로 채운 SQLite 대역. 서버(`dev`·`prd`)는 마스터를 못 읽으면 시작하지 않는다.
 5. `gold_version` = `<VERSION>+m<마스터 해시 앞 8자>` — 구조화가 읽은 해시를 묶음 `meta.json` `master_hash`로 넘기고 적재가 gold `doc.gold_version`에 쓴다(`master_hash`가 없는 묶음은 `<VERSION>`만). `silver_version`에는 붙이지 않는다. 마스터 해시는 캐시 열쇠·code_fp에 넣지 않는다(마스터가 바뀌어도 자동 재처리 없음).
 

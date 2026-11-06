@@ -131,125 +131,26 @@ EDW 표(`AI.FileStorageMap`, 원천 표 SFDC·CRMS·LAS 등)는 서버에서 운
 
 ## 4. master — 마스터 표 (검색 PG, 스키마 `<PG_SCHEMA>_master`)
 
-원본은 git CSV `resources/vocab/glossary/<표>.csv`(샘플 데이터). 실행 중에는 이 표만 읽는다 — `dbtool up --target master`로 표를 만들고 `dbtool master load`가 CSV로 내용을 한 트랜잭션에 통째로 바꾼다(초기화 순서: `dbtool up`(search·applog·master) → `dbtool master load`). CSV 하나 = 표 하나 — 칸은 CSV 머리글 그대로(모두 `TEXT`) + 파일 순서 `row_no`(`INTEGER`, 기본 키), 목록 칸은 지금처럼 `;`·`|` 글자. 머리글을 바꾸면 새 Alembic 판(갈래 `master`). 판: `common/store/db/migrations/versions/0001_master_base.py` · 모델: `common/store/db/models/master_tables.py` · 읽기·채우기: `common/store/master.py`(프로세스마다 한 번 — 서버(dev·prd)는 못 읽으면 멈춤, PC는 같은 CSV로 채운 SQLite 대역). `tests/server/common/test_db_schema.py`가 이 절의 칸을 모델과 대조한다.
+원본은 git CSV `resources/vocab/glossary/glossary.csv`(샘플 데이터). 실행 중에는 이 표만 읽는다 — `dbtool up --target master`로 표를 만들고 `dbtool master load`가 CSV로 내용을 한 트랜잭션에 통째로 바꾼다(초기화 순서: `dbtool up`(search·applog·master) → `dbtool master load`). 칸은 CSV 머리글 그대로(모두 `TEXT`) + 파일 순서 `row_no`(`INTEGER`, 기본 키). 머리글을 바꾸면 새 Alembic 판(갈래 `master`). 판: `common/store/db/migrations/versions/0001_master_base.py`(옛 표 여섯 개 + `master_meta`) → `0002_master_glossary.py`(`glossary`를 만들고 옛 표 일곱 개를 지움 — 내용의 원본은 git CSV라 잃는 것 없음) · 모델: `common/store/db/models/master_tables.py` · 읽기·채우기: `common/store/master.py`(프로세스마다 한 번 — 서버(dev·prd)는 못 읽으면 멈춤, PC는 같은 CSV로 채운 SQLite 대역). `tests/server/common/test_db_schema.py`가 이 절의 칸을 모델과 대조한다.
 
-- **해시·판:** `master_meta.hash` = 표 이름·머리글·`row_no` 순서 행의 sha256(16진 64자). 구조화가 읽은 마스터 해시를 묶음 `meta.json` `master_hash`에 남기고 적재가 gold `doc.gold_version` = `<VERSION>+m<해시 앞 8자>`로 쓴다(`master_hash`가 없는 묶음은 `<VERSION>`만). `silver_version`에는 붙이지 않는다. 마스터 해시는 캐시 열쇠·code_fp에 없다 — 마스터가 바뀌어도 자동 전체 재처리는 없고 `gold_version`으로 추적한다.
+- **해시·판:** 마스터 해시 = 머리글·`row_no` 순서 `glossary` 행의 sha256(16진 64자) — 읽을 때 계산한다(해시를 적어 두는 표 없음). 구조화가 읽은 마스터 해시를 묶음 `meta.json` `master_hash`에 남기고 적재가 gold `doc.gold_version` = `<VERSION>+m<해시 앞 8자>`로 쓴다(`master_hash`가 없는 묶음은 `<VERSION>`만). `silver_version`에는 붙이지 않는다. 마스터 해시는 캐시 열쇠·code_fp에 없다 — 마스터가 바뀌어도 자동 전체 재처리는 없고 `gold_version`으로 추적한다.
+- **읽는 모양:** `common.store.master`가 `glossary` 줄을 원본 값(`kind`·`canonical`)마다 모아 `common.core.terms`가 읽는 행 모양(고객 명부·용어 사전·ID 꼴 — 칸 이름 `common.store.master.SHAPES`)으로 되돌려 넘긴다. 모르는 `kind`·`variant_kind`, 값이 하나인 종류가 두 줄이면 `master load`가 표를 바꾸지 않고 거부한다(읽을 때도 같은 검사).
 - **파일로 남는 것:** `client_master.example.csv`·`client_master_map.example.json`(명부 초안 도구 `gen_roster` 입력·예시) · `client_roster_seed.json`(주요 바이오·제약사 공개 이름 seed — 구조화 `infer_clients`가 파일로 읽음).
 
-### master.client_roster
+### master.glossary
 
-고객 명부 — 읽는 칸: `canonical_name`(비면 `name_ko`), `aliases`(`;`·`|` 구분), `status`(inactive·deleted면 건너뜀). 읽는 곳: `common.core.terms` `_aliases`(구조화 고객 판별 `infer_clients` · 검색 질문 고객·별칭).
-
-| 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|---|
-| row_no | INTEGER PK | `1` | CSV 파일 순서(1부터) | `dbtool master load` | 읽기 순서(ORDER BY) | 새로 |
-| client_id | TEXT | `C0001` | CSV 칸 `client_id` | `dbtool master load` | 〃 | 새로 |
-| canonical_name | TEXT | `Hanbit Biologics` | CSV 칸 `canonical_name` | `dbtool master load` | 〃 | 새로 |
-| name_ko | TEXT | `한빛바이오로직스` | CSV 칸 `name_ko` | `dbtool master load` | 〃 | 새로 |
-| aliases | TEXT | `Hanbit Biologics Co. Ltd.\|한빛바이오\|Hanbit Bio` | CSV 칸 `aliases` | `dbtool master load` | 〃 | 새로 |
-| client_type | TEXT | `customer` | CSV 칸 `client_type` | `dbtool master load` | 〃 | 새로 |
-| segment | TEXT | `biosimilar` | CSV 칸 `segment` | `dbtool master load` | 〃 | 새로 |
-| country | TEXT | `KR` | CSV 칸 `country` | `dbtool master load` | 〃 | 새로 |
-| parent_client_id | TEXT | (빈 글자 — 자회사 행이면 `C0001`) | CSV 칸 `parent_client_id` | `dbtool master load` | 〃 | 새로 |
-| status | TEXT | `active` | CSV 칸 `status` | `dbtool master load` | 〃 | 새로 |
-| description | TEXT | `항체 바이오시밀러 위탁생산 고객` | CSV 칸 `description` | `dbtool master load` | 〃 | 새로 |
-| source | TEXT | `SFDC` | CSV 칸 `source` | `dbtool master load` | 〃 | 새로 |
-| updated | TEXT | `2026-10-15` | CSV 칸 `updated` | `dbtool master load` | 〃 | 새로 |
-
-### master.client_master
-
-고객 마스터(별칭 `|` 구분). 읽는 곳: 없음.
+고객 명부·용어 사전·ID 꼴을 합친 표 — melt 꼴(유사값마다 한 줄). 읽는 곳: `common.core.terms` `_aliases`(구조화 고객 판별 `infer_clients` · 검색 질문 고객·별칭) · `load_glossary`(검색 질문 넓히기·근거 상태·고객 별칭의 `org_client`) · `load_id_patterns_typed`(검색 동점 처리·엔티티 힌트 — 줄 순서 그대로).
 
 | 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|---|
 | row_no | INTEGER PK | `1` | CSV 파일 순서(1부터) | `dbtool master load` | 읽기 순서(ORDER BY) | 새로 |
-| company_id | TEXT | `C0001` | CSV 칸 `company_id` | `dbtool master load` | 〃 | 새로 |
-| company | TEXT | `Hanbit Biologics` | CSV 칸 `company` | `dbtool master load` | 〃 | 새로 |
-| aliases | TEXT | `Hanbit Biologics Co. Ltd.\|한빛바이오` | CSV 칸 `aliases` | `dbtool master load` | 〃 | 새로 |
-
-### master.contract_master
-
-계약 마스터. 읽는 곳: 없음.
-
-| 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|---|
-| row_no | INTEGER PK | `1` | CSV 파일 순서(1부터) | `dbtool master load` | 읽기 순서(ORDER BY) | 새로 |
-| contract_id | TEXT | `CT-2026-0101` | CSV 칸 `contract_id` | `dbtool master load` | 〃 | 새로 |
-| company | TEXT | `Argen Biopharma` | CSV 칸 `company` | `dbtool master load` | 〃 | 새로 |
-| company_id | TEXT | `C0101` | CSV 칸 `company_id` | `dbtool master load` | 〃 | 새로 |
-| product_code | TEXT | `ABX-101` | CSV 칸 `product_code` | `dbtool master load` | 〃 | 새로 |
-| modality | TEXT | `mAb` | CSV 칸 `modality` | `dbtool master load` | 〃 | 새로 |
-| site | TEXT | `Plant 1` | CSV 칸 `site` | `dbtool master load` | 〃 | 새로 |
-| line_id | TEXT | `L1` | CSV 칸 `line_id` | `dbtool master load` | 〃 | 새로 |
-| batches_contracted | TEXT | `3` | CSV 칸 `batches_contracted` | `dbtool master load` | 〃 | 새로 |
-| contract_value_usd | TEXT | `2500000` | CSV 칸 `contract_value_usd` | `dbtool master load` | 〃 | 새로 |
-| currency | TEXT | `USD` | CSV 칸 `currency` | `dbtool master load` | 〃 | 새로 |
-| term_months | TEXT | `18` | CSV 칸 `term_months` | `dbtool master load` | 〃 | 새로 |
-| signed_on | TEXT | `2026-03-15` | CSV 칸 `signed_on` | `dbtool master load` | 〃 | 새로 |
-| start_date | TEXT | `2026-04-01` | CSV 칸 `start_date` | `dbtool master load` | 〃 | 새로 |
-| end_date | TEXT | `2027-09-30` | CSV 칸 `end_date` | `dbtool master load` | 〃 | 새로 |
-| status | TEXT | `active` | CSV 칸 `status` | `dbtool master load` | 〃 | 새로 |
-
-### master.domain_terms
-
-용어 사전(`status`는 approved·draft — approved만 씀). 읽는 곳: `common.core.terms` `load_glossary`(검색 질문 넓히기·근거 상태·고객 별칭의 org_client).
-
-| 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|---|
-| row_no | INTEGER PK | `1` | CSV 파일 순서(1부터) | `dbtool master load` | 읽기 순서(ORDER BY) | 새로 |
-| concept_id | TEXT | `BIZ.CMO` | CSV 칸 `concept_id` | `dbtool master load` | 〃 | 새로 |
-| canonical | TEXT | `Contract Manufacturing Organization` | CSV 칸 `canonical` | `dbtool master load` | 〃 | 새로 |
-| category | TEXT | `business` | CSV 칸 `category` | `dbtool master load` | 〃 | 새로 |
-| synonyms | TEXT | `위탁생산\|수탁생산` | CSV 칸 `synonyms` | `dbtool master load` | 〃 | 새로 |
-| abbreviations | TEXT | `CMO` | CSV 칸 `abbreviations` | `dbtool master load` | 〃 | 새로 |
-| weak_synonyms | TEXT | `CDO` | CSV 칸 `weak_synonyms` | `dbtool master load` | 〃 | 새로 |
-| broader | TEXT | `BIZ.CDMO` | CSV 칸 `broader` | `dbtool master load` | 〃 | 새로 |
-| related | TEXT | `BIZ.CDMO` | CSV 칸 `related` | `dbtool master load` | 〃 | 새로 |
-| context_required | TEXT | `생산\|제조\|계약` | CSV 칸 `context_required` | `dbtool master load` | 〃 | 새로 |
-| case_sensitive | TEXT | `N` | CSV 칸 `case_sensitive` | `dbtool master load` | 〃 | 새로 |
-| definition_ko | TEXT | `고객이 확립한 공정으로 생산만 위탁 수행` | CSV 칸 `definition_ko` | `dbtool master load` | 〃 | 새로 |
-| definition_en | TEXT | `Outsourced manufacturing of a client-established process` | CSV 칸 `definition_en` | `dbtool master load` | 〃 | 새로 |
-| source | TEXT | `예제` | CSV 칸 `source` | `dbtool master load` | 〃 | 새로 |
-| owner | TEXT | `영업` | CSV 칸 `owner` | `dbtool master load` | 〃 | 새로 |
-| status | TEXT | `approved` | CSV 칸 `status` | `dbtool master load` | 〃 | 새로 |
-| updated | TEXT | `2026-10-14` | CSV 칸 `updated` | `dbtool master load` | 〃 | 새로 |
-
-### master.id_patterns
-
-ID 모양 정규식(계약 번호·제품 코드 등). 읽는 곳: `common.core.terms` `load_id_patterns_typed`(검색 tie-break·엔티티 힌트).
-
-| 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|---|
-| row_no | INTEGER PK | `2` | CSV 파일 순서(1부터) | `dbtool master load` | 읽기 순서(ORDER BY) | 새로 |
-| id_type | TEXT | `contract_no` | CSV 칸 `id_type` | `dbtool master load` | 〃 | 새로 |
-| regex | TEXT | `C-[A-Z]{2,4}-\d{4}-\d{2}` | CSV 칸 `regex` | `dbtool master load` | 〃 | 새로 |
-| example | TEXT | `C-KVX-2024-02` | CSV 칸 `example` | `dbtool master load` | 〃 | 새로 |
-| note | TEXT | `합성 데이터 형식` | CSV 칸 `note` | `dbtool master load` | 〃 | 새로 |
-| updated | TEXT | `2026-10-02` | CSV 칸 `updated` | `dbtool master load` | 〃 | 새로 |
-
-### master.units
-
-단위 표기(숫자+단위 나누기는 코드 규칙). 읽는 곳: 없음.
-
-| 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|---|
-| row_no | INTEGER PK | `1` | CSV 파일 순서(1부터) | `dbtool master load` | 읽기 순서(ORDER BY) | 새로 |
-| canonical | TEXT | `g/L` | CSV 칸 `canonical` | `dbtool master load` | 〃 | 새로 |
-| variants | TEXT | `g/l\|g per L\|그램/리터` | CSV 칸 `variants` | `dbtool master load` | 〃 | 새로 |
-| quantity | TEXT | `concentration` | CSV 칸 `quantity` | `dbtool master load` | 〃 | 새로 |
-| equivalent_to | TEXT | `mg/mL` | CSV 칸 `equivalent_to` | `dbtool master load` | 〃 | 새로 |
-| note | TEXT | `1 g/L = 1 mg/mL` | CSV 칸 `note` | `dbtool master load` | 〃 | 새로 |
-| updated | TEXT | `2026-10-02` | CSV 칸 `updated` | `dbtool master load` | 〃 | 새로 |
-
-### master.master_meta
-
-마스터 내용 해시 1행(`id` = 1). 쓰는 곳: `dbtool master load`. 읽는 곳: `common.store.master.read`(표가 비었으면 멈춤).
-
-| 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|---|
-| id | INTEGER PK | `1` | 늘 1 | `dbtool master load` | — | 새로 |
-| hash | TEXT | `3f9a1c2e…`(64자) | 내용 sha256(위 해시 규칙) | 〃 | `common.store.master.read` | 새로 |
-| loaded_at | TIMESTAMP WITH TIME ZONE | `2026-10-15T00:20:31.482910+00:00` | 채운 시각(UTC) | 〃 | (운영자) | 새로 |
+| kind | TEXT | `term` | 구분 — `client`(고객)·`term`(용어)·`id`(ID 꼴) | `dbtool master load` | `common.store.master.to_tables` | 새로 |
+| canonical | TEXT | `Contract Manufacturing Organization` | 원본 값 — 고객은 정식 이름(비면 한글 이름), 용어는 표준 이름, ID는 종류(`contract_no`·`product_code` 등). 같은 `kind`·`canonical` 줄이 한 고객·용어·ID 종류 | 〃 | 〃 | 새로 |
+| variant | TEXT | `위탁생산` | 유사값 — `variant_kind`가 정하는 값(별칭·동의어·정규식·참조 ID·속성 값) | 〃 | 〃 | 새로 |
+| variant_kind | TEXT | `synonym` | 유사 종류. client: `client_id`·`name_ko`·`alias`(여러 줄)·`client_type`·`segment`·`country`·`parent`·`status`(`inactive`·`deleted`면 건너뜀)·`source`·`updated` · term: `concept_id`·`synonym`·`abbr`·`weak`(약한 동의어)·`broader`·`related`(개념 ID)·`category`(여러 줄 — `org_client`면 고객 명부에도)·`definition_en`·`source`·`owner`·`status`(approved만 씀)·`updated` · id: `regex`(줄마다 한 꼴)·`example`·`updated`. 여러 줄이 되는 것은 `alias`·`synonym`·`abbr`·`weak`·`broader`·`related`·`category`·`regex`, 나머지는 한 줄 | 〃 | 〃 | 새로 |
+| description | TEXT | `고객이 확립한 공정으로 생산만 위탁 수행` | 설명 — `client_id` 줄은 고객 설명, `concept_id` 줄은 한글 정의, `regex` 줄은 메모. 다른 줄은 비움 | 〃 | 〃 | 새로 |
+| context_required | TEXT | `생산\|제조\|계약` | 용어의 문맥 필요 — 동음이의 줄임말이면 질문에 함께 나와야 하는 말(`\|` 구분). term만(변환본은 `concept_id` 줄) | 〃 | `mcp_server.services.search.query_expand`(질문 넓히기) | 새로 |
+| case_sensitive | TEXT | `N` | 용어의 대소문자 구분 — `Y`면 구분. term만(변환본은 `concept_id` 줄) | 〃 | 〃 | 새로 |
 
 ## 5. DB 담당자 확인 필요
 

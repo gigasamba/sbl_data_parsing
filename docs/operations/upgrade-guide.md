@@ -23,6 +23,7 @@
 |---|---|---|
 | 네 이미지에 개발 도구·opencode가 들어가고 패키지 목록이 바뀜 | 새 실행 이미지 필요(코드 폴더만으로는 못 바꿈) | §3 |
 | applog 판 `0003_applog` — 적재 안 된 문서 표 `except_doc_info` · 검색 판 `0006_search` — `doc` 처리 기록 칸 · EDW에 쓰지 않음(쓰기 계정·`parsing_meta_table` 칸 없앰) | 첫 `run_pipeline.py` 전에 `migrate up` · 옛 기록 옮기기 | §6 |
+| 마스터 판 `0002_master` — 표 `glossary` 하나(옛 마스터 표 일곱 개를 지움), 원본 CSV 하나 `glossary.csv` | `migrate up --target master` 바로 뒤 `migrate master load` · 서버 실명 자료를 `glossary.csv`로 옮김 | §6 |
 | settings.yaml 칸 이름 정리 · 맨 아래 선택 절 `option.devbox` | 옛 이름이 남으면 모든 명령이 시작 거부 | §5 |
 | 벌 폴더 = 코드 폴더(`settings.yaml`·`edw_chain.yaml`·`output/`이 코드 폴더 안), 벌 번호 = 폴더 이름 끝 `-<숫자>`, 칸 `ops.host.instance_name` 지움 | 처음 한 번 옛 루트에서 옮김 · 그 칸이 남으면 시작 거부 | §4 · §5 |
 | 개발자별 벌(폴더 이름 끝 번호)·gitea | 개발 서버만, 원할 때 | §9 |
@@ -113,17 +114,19 @@ $DOCKER run --rm --entrypoint python -v "$PWD:/app/deploy:ro,z" <새 실행 이�
 ```bash
 bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline     # 벌 폴더에서 — pipe_exec.sh가 이 안에서 돈다
 bash deploy/host/scripts/pipe_exec.sh migrate current --target all
-# 기대(0.2.0 → 0.3.0): applog applog: 판 낮음 ['0001_applog'] · 코드의 끝 판 0003_applog · search도 판 낮음(끝 판 0006_search) (master는 "끝")
+# 기대(0.2.0 → 0.3.0): applog applog: 판 낮음 ['0001_applog'] · 코드의 끝 판 0003_applog · search도 판 낮음(끝 판 0006_search) · master도 판 낮음(끝 판 0002_master)
 bash deploy/host/scripts/pipe_exec.sh migrate up --target applog
 # 기대: [migrate] applog applog: 판 ['0003_applog'] (끝 0003_applog)
 bash deploy/host/scripts/pipe_exec.sh migrate up --target search                # 0.3.0: 원천 스키마 5벌 doc에 처리 기록 칸(0006_search)
-bash deploy/host/scripts/pipe_exec.sh migrate up --target master
+bash deploy/host/scripts/pipe_exec.sh migrate up --target master                # 0.3.0: 표 glossary 하나로(0002_master — 옛 마스터 표를 지움)
+bash deploy/host/scripts/pipe_exec.sh migrate master load --dir /app/output/glossary   # 바로 채움(샘플이면 --dir 없이) — 비어 있으면 구조화·검색이 시작하지 않음
 bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 기대: 갈래마다 "판 끝 [...] · 코드의 끝 판 ...", 종료 코드 0
 ```
 - 갈래(`--target`)마다 따로 올리면 어느 갈래가 바뀌었는지 출력에서 바로 보인다. 한 번에는 `--target all`.
 - 벌이 여럿이면 아무 벌 하나에서 한 번 — 다른 벌은 §4·§5 뒤 §10만 한다.
 - 0.3.0의 applog `0003_applog`는 새 표 `except_doc_info`를 만들고 옛 `skip_doc_info` 행을 `skip`으로 옮긴다. search `0006_search`는 `doc`에 처리 기록 칸(`sha256`·`silver_bucket`·`silver_key`·`engines`·`parse_status`·`silver_version`·`gold_version`·`parsed_at`·`loaded_at`)을 더한다. **첫 `run_pipeline.py` 전에** 둘 다 올린다 — 없으면 대상 목록·받기가 표 없음으로 멈춘다.
 - 0.3.0 사람이 할 일(DB 담당과): EDW `AI.ParsingMeta`에 있던 처리 기록을 `doc` 새 칸으로 손으로 옮긴다(파이프라인은 EDW에 더 쓰지 않고, `doc` 행이 있으면 끝난 문서로 본다). 옮긴 것을 확인한 뒤 옛 표 `applog.skip_doc_info`를 지운다(마이그레이션은 지우지 않음). settings.yaml에 `edw_write_user`·`edw_write_password`·`parsing_meta_table` 칸이 남아 있으면 시작을 거부하므로 지운다.
+- 0.3.0의 master `0002_master`는 표 `glossary`를 만들고 옛 마스터 표(`client_roster`·`domain_terms`·`id_patterns` 등 일곱 개)를 지운다(되돌리기 없음 — 먼저 마스터 스키마 백업). `master load`는 `glossary.csv` 하나만 읽으므로 **올리기 전에** 서버 실명 자료(옛 CSV)를 `glossary.csv` 꼴로 옮겨 둔다([server-guide §5-1](server-guide.md#5-1-고객-명부용어집-작성법), refactor.md C-108).
 - `올린 뒤에도 차이:`가 나오거나 종료 2이면 멈추고 출력(이름만)을 DB 담당과 본다. 오류 분기는 [release-and-patch §5-5](release-and-patch.md#5-5-db-버전-관리--migrate).
 
 ## 7. pgvector가 바뀔 때 — 두 경우

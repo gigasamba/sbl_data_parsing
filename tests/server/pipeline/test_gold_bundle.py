@@ -64,7 +64,7 @@ def selftest():
 
     from common.store import master
 
-    with mock.patch.object(master, "get", lambda: master.Master({})):  # pl-38 — 빈 마스터(명부 없음)
+    with mock.patch.object(master, "get", lambda: master.Master([])):  # pl-38 — 빈 마스터(명부 없음)
         buf = io.StringIO()
         with contextlib.redirect_stderr(buf):
             warn_if_no_client_roster([{"client": None}, {"client": ""}])

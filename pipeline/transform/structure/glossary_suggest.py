@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """청크(chunks.jsonl)에서 괄호 약어 정의 패턴("정식명(약어)"·"약어(정식명)")을 찾아 용어 사전
-후보를 draft CSV로 적는다. **검색에 쓰이지 않는다** — 사람이 검토해 domain_terms.csv로 옮겨야 반영됨(status=draft만).
+후보를 draft CSV로 적는다. **검색에 쓰이지 않는다** — 사람이 검토해 glossary.csv로 옮겨야 반영됨(status=draft만).
 
 사용: python -m pipeline.transform.structure.glossary_suggest --chunks <chunks.jsonl> [--out output/glossary/domain_terms_draft.csv]
-      [--glossary-dir resources/vocab/glossary]
+      [--glossary-dir <domain_terms.csv가 있는 폴더>]
 """
 
 import common  # noqa: F401 — 설정 파일 검사(settings.pin_env)를 첫 줄에서
@@ -15,7 +15,6 @@ import datetime
 import json
 from pathlib import Path
 
-from common.core.paths import GLOSSARY_ROOT
 from common.core.terms import filter_definitions, load_glossary, scan_definitions
 
 FIELDS = [
@@ -51,7 +50,7 @@ def _records(chunks_path):
 
 
 def build_rows(chunks_path, glossary_dir):
-    glossary = load_glossary(glossary_dir) if glossary_dir else {}
+    glossary = {} if glossary_dir == "" else load_glossary(glossary_dir)  # None = 마스터 표
     candidates = scan_definitions(_records(chunks_path))
     new = filter_definitions(candidates, glossary=glossary)
     today = datetime.date.today().isoformat()
@@ -84,13 +83,16 @@ def build_cli():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--chunks", required=True, help="구조화 묶음 chunks.jsonl 경로")
     ap.add_argument("--out", default="output/glossary/domain_terms_draft.csv")
-    ap.add_argument("--glossary-dir", default=str(GLOSSARY_ROOT), help="이미 있는 짝을 거를 기준 사전(approved만). 빈 문자열이면 안 거름")
+    ap.add_argument(
+        "--glossary-dir",
+        help="이미 있는 짝을 거를 기준 사전(approved만) — 기본 마스터 표, 폴더면 그 폴더 domain_terms.csv, 빈 문자열이면 안 거름",
+    )
     return ap
 
 
 def main(argv=None):
     a = build_cli().parse_args(argv)
-    rows, n_candidates = build_rows(a.chunks, a.glossary_dir or None)
+    rows, n_candidates = build_rows(a.chunks, a.glossary_dir)
     out_path = Path(a.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8-sig", newline="") as fh:
