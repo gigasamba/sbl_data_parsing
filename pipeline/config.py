@@ -40,6 +40,12 @@ class PipelineConnectionsRdbColumns(Section):
 
 class PipelineConnectionsRdb(Section):
     bucket: str | None = F(None, "RDB_BUCKET", "RDB 표에 버킷 정보가 없을 때 쓸 Object Storage 버킷 이름(레거시 대체값)")
+    file_table: str | None = F(
+        "AI.FileStorageMap",
+        "RDB_FILE_TABLE",
+        "파싱 대상 파일 목록을 읽을 EDW 표(<스키마>.<표> — 영문·숫자·_만, SQL에 그대로 들어감)",
+        pattern=r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$",
+    )
     increment_col: str | None = F(None, "RDB_INCREMENT_COL", "증분(since) 판정에 쓸 열 이름 — 비우면 문서 ID 열(columns.doc_id)")
     columns: PipelineConnectionsRdbColumns = Field(default_factory=PipelineConnectionsRdbColumns)
 

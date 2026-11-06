@@ -98,7 +98,7 @@
 ### 저장소 (PostgreSQL + pgvector)
 | 이름 | 메모 |
 |---|---|
-| `PG_HOST`·`PG_PORT`·`PG_DB`·`PG_USER`·`PG_PASSWORD`·`PG_SCHEMA` | 서버는 접속 다섯 칸 필수(자동 탐지 없음 — 비면 채울 자리를 적고 멈춤) · `PG_SCHEMA`(`pg_schema`)는 비우면 `data_parsing`(여러 벌이면 끝에 `_<벌>`) · PC(local)는 접속 칸을 모두 비우면 sqlite 대역. compose는 `network_mode: host`라 `127.0.0.1`이 서버 자신. 계정은 우리 스키마 권한만 |
+| `PG_HOST`·`PG_PORT`·`PG_DB`·`PG_USER`·`PG_PASSWORD`·`PG_SCHEMA` | 서버는 접속 다섯 칸 필수(자동 탐지 없음 — 비면 채울 자리를 적고 멈춤) · `PG_SCHEMA`(`pg_schema`)는 비우면 `data_parsing`(여러 벌도 같은 스키마) · PC(local)는 접속 칸을 모두 비우면 sqlite 대역. compose는 `network_mode: host`라 `127.0.0.1`이 서버 자신. 계정은 우리 스키마 권한만 |
 
 ### 검색 MCP
 | 이름 | 기본 | 메모 |
@@ -117,6 +117,7 @@
 | 이름 | 기본 | 메모 |
 |---|---|---|
 | `RDB_HOST`·`RDB_PORT`·`RDB_DATABASE`·`RDB_READ_USER`·`RDB_READ_PASSWORD` | 비움·`1433`·비움 | `required.edw`(`edw_host`·`edw_port`·`edw_database`·`edw_read_user`·`edw_read_password`) — 서버만. PC(local)는 적혀 있어도 주소·계정을 비우고 경고(칸 이름만) |
+| `RDB_FILE_TABLE`(`required.edw.edw_file_table`) | `AI.FileStorageMap` | 파싱 대상 파일 목록을 읽을 EDW 표 — `<스키마>.<표>`(영문·숫자·_만, SQL에 그대로 들어가므로 꼴이 틀리면 시작 거부). 대상 목록(`candidate_pick list`)만 쓴다 — 적재 메타 사슬의 표 이름은 `edw_chain.yaml` |
 | `RDB_SQLITE`(`dev.local.local_edw_sqlite_file`) | 비움 | PC(local) 전용 가짜 EDW 파일 — 비우면 `valid_env/edw/edw_copy.sqlite`(없으면 git의 `valid_env/edw/edw.sqlite`를 복사해 만듦 — 원본은 다시 만들기 `python -m validation.e2e.edw_standin`). local은 늘 이 대역을 쓴다 · 서버 설정에 있으면 EDW를 쓸 때 실패 |
 | `EDW_QUERY_MAX_ROWS` | `1000` | 도구 `max_rows`의 상한 |
 | `EDW_QUERY_TIMEOUT_SEC` | `20` | 넘으면 `timeout` |
@@ -159,12 +160,14 @@
 | `NIGHTLY_DEADLINE`(`ops.nightly.nightly_stop_time`) | 마감 HH:MM(시작보다 이르면 다음 날, 시작보다 5분 넘게 뒤) — 지나면 새 문서를 받지 않고 받은 문서는 끝까지 |
 
 ### 선택 기능 — 개발 작업 공간 (`option`, 파일 맨 아래)
-앱은 이 절을 읽지 않는다 — 호스트 스크립트(`host_ctl.sh`)만 쓴다. 비우면 끔. 쓰는 법: README §5-0 "개발 작업 공간".
+앱은 이 절을 읽지 않는다 — 호스트 스크립트(`host_ctl.sh`)와 작업 공간 시작 스크립트(`dev_entry.sh` → `git_cred.py`)만 쓴다. 비우면 끔. 쓰는 법: README §5-0 "개발 작업 공간".
 
 | 이름 | 기본 | 뜻 |
 |---|---|---|
 | `DEVBOX_SSH_PORT`(`option.devbox.ssh_port`) | 비움(끔) | 적으면 `data-pipeline`을 SSH 작업 공간(`devbox`)으로 띄움 — 그 포트에서 sshd(호스트 네트워크 그대로, 개발자마다 다르게) · 코드 폴더 쓰기 가능 · 홈 `<루트>/home`(포트를 적은 뒤 `host_ctl.sh init`이 만듦 — 없으면 `host_ctl.sh up` 종료 2). 개발 서버(dev)의 실행 이미지에서만 — prd·코드가 든 이미지면 `host_ctl.sh` 종료 2 |
 | `DEVBOX_OPENCODE_CONFIG`(`option.devbox.opencode_config`) | 비움(이미지의 틀) | opencode 설정 파일의 호스트 경로 — 읽기 전용으로 붙이고 `OPENCODE_CONFIG`로 가리킴. 비우면 홈의 `~/.config/opencode/opencode.json`(첫 시작에 틀 복사 — 내부망 모델만) |
+| `DEVBOX_GITEA_URL`·`DEVBOX_GITEA_USER`·`DEVBOX_GITEA_TOKEN`(`option.devbox.gitea_url`·`gitea_user`·`gitea_token` — 토큰은 비밀) | 비움(설정 안 함) | 셋 다 적으면 작업 공간 시작 때 `~/.git-credentials`(권한 600)에서 그 호스트 줄 `<scheme>://<계정>:<토큰>@<호스트[:포트]>`만 바꾸고(다른 줄 그대로) `git config --global credential.helper store` — 하나라도 비우면 전에 쓴 줄(`~/.devbox/gitea_host`)을 지움. 주소는 `http(s)://호스트[:포트][/경로]`(`https://` 권장 — http면 토큰이 암호화 없이 감). 컨테이너 안에서 붙인 settings.yaml을 직접 읽는다(토큰은 env로 안 넘김) |
+| `DEVBOX_GIT_USER_NAME`·`DEVBOX_GIT_USER_EMAIL`(`option.devbox.git_user_name`·`git_user_email`) | 비움 | 적으면 작업 공간 시작 때 `git config --global user.name`·`user.email` |
 
 ## 2. 자원·병렬 (보통 안 건드림)
 

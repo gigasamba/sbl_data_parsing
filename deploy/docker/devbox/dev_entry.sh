@@ -17,6 +17,9 @@ env | grep -vE '^(HOME|PWD|SHLVL|_|HOSTNAME)=' | while IFS= read -r l; do printf
 # First start: opencode config template (internal model only) — the developer fills in the model address.
 O=$HOME/.config/opencode/opencode.json
 [ -f "$O" ] || { mkdir -p "$(dirname "$O")"; cp /etc/devbox/opencode.json "$O"; }
+# git account (option.devbox.gitea_* / git_user_*): read from the mounted settings file inside the container — the token
+# never goes through env. A failure only warns; the workspace still starts.
+python /etc/devbox/git_cred.py || echo "[devbox] git account setup failed — check option.devbox.gitea_*" >&2
 [ -f "$K/ssh_host_ed25519_key" ] || ssh-keygen -q -t ed25519 -N '' -f "$K/ssh_host_ed25519_key"
 exec /usr/sbin/sshd -D -e -f /etc/devbox/sshd_config -p "${SSH_PORT:-2222}" \
   -h "$K/ssh_host_ed25519_key" -o PidFile="$K/sshd.pid"

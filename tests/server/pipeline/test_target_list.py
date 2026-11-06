@@ -101,6 +101,8 @@ def _edw(tmp):
     cn = sqlite3.connect(path)
     cn.execute("CREATE TABLE FileStorageMap (id INTEGER, s3_key TEXT, original_filename TEXT, file_size INTEGER, source_system TEXT)")
     cn.executemany("INSERT INTO FileStorageMap VALUES (?, ?, ?, ?, ?)", FSM)
+    cn.execute("CREATE TABLE DocFiles (id INTEGER, s3_key TEXT, original_filename TEXT, file_size INTEGER, source_system TEXT)")
+    cn.executemany("INSERT INTO DocFiles VALUES (?, ?, ?, ?, ?)", [r for r in FSM if r[0] in (2, 3)])  # 다른 표(edw_file_table)
     cn.commit()
     cn.close()
     return path
@@ -132,6 +134,46 @@ def test_target_list():
             if seen_after is not None:
                 assert sorted(seen_f.read_text(encoding="utf-8").split()) == sorted(seen_after), args
             assert resets == ([] if reset is None else [reset]), (args, resets)
+
+
+# required.edw.edw_file_table(RDB_FILE_TABLE) → 기대 키 순서(None = 설정 거부 — <스키마>.<표> 식별자만, SQL에 그대로 들어감)
+TABLES = [
+    ("SFDC.DocFiles", ["x", "prop"]),
+    ("AI.FileStorageMap", ["faq1", "faq2", "dev", "x", "prop", "ok", "dup", "nogold", "big"]),
+    ("AI.FileStorageMap WHERE 1=1 --", None),
+    ("FileStorageMap", None),
+]
+
+
+def test_file_table():
+    from common.config.settings import require_run_env
+
+    with tempfile.TemporaryDirectory() as tmp:
+        edw, out, f = _edw(tmp), Path(tmp) / "targets.json", Path(tmp) / "settings.yaml"
+        for table, want in TABLES:
+            if want is None:  # 설정 파일에 적으면 시작 거부(시험 덮기 env.(…)는 틀린 꼴을 무시하므로 파일로)
+                f.write_text(f"required:\n  env:\n    run_env: local\n  edw:\n    edw_file_table: '{table}'\n", encoding="utf-8")
+                try:
+                    require_run_env("시험", {"SETTINGS_FILE": str(f)}, sections=("pipeline",))
+                    code = None
+                except SystemExit as e:
+                    code = e.code
+                assert code == 2, (table, code)
+                with COMMON.env(RUN_ENV="local", RDB_SQLITE=str(edw)), pc.PIPE.env(RDB_FILE_TABLE=table):
+                    try:  # 덮은 값(--set·시험)이 틀리면 읽는 자리에서 실패(조용히 기본 표로 돌지 않게)
+                        CP._list_cmd(["--out", str(out)])
+                        raised = False
+                    except ValueError:
+                        raised = True
+                assert raised, table
+                continue
+            with (
+                COMMON.env(RUN_ENV="local", RDB_SQLITE=str(edw), PG_STANDIN_DIR=str(Path(tmp) / "pg")),
+                pc.PIPE.env(RDB_FILE_TABLE=table),
+            ):
+                assert CP._list_cmd(["--out", str(out)]) == 0, table
+            got = json.loads(out.read_text(encoding="utf-8"))
+            assert [d["s3_key"] for d in got["docs"]] == [K[w] for w in want], (table, got["docs"])
 
 
 # op-17 — 원천 목록 값과 실행 환경(시작 관문 require_run_env): (run_env, source_systems, 기대 종료 코드 — None = 시작함)

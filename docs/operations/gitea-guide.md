@@ -47,6 +47,17 @@ bash deploy/host/scripts/host_ctl.sh check                                   # �
 ```
 - 새벽 배치가 필요 없는 벌은 `systemctl disable --now data-pipeline-nightly-<번호>.timer`.
 - **SSH 작업 공간(선택):** `option.devbox.ssh_port`에 자기 포트를 적고 `host_ctl.sh init`을 다시 부르면 `data-pipeline-<번호>`가 SSH로 들어가 코드 폴더를 고칠 수 있는 작업 공간으로 뜬다 — 열쇠 놓기·접속·끄기는 README [§5-0 "개발 작업 공간"](../../README.md#5-0-배포-단계와-개발-서버-설치).
+- **작업 공간의 gitea 계정(선택):** 작업 공간에서 바로 `git pull`·`push`하려면 그 벌의 settings.yaml 맨 아래 `option.devbox`에 적고 `host_ctl.sh up -d data-pipeline`으로 다시 띄운다 — 시작할 때 홈에 `~/.git-credentials`(권한 600)가 생긴다(토큰은 화면·로그·컨테이너 env에 나오지 않음). 토큰은 gitea 웹의 내 설정 > 응용 > 새 토큰(저장소 읽기·쓰기 권한)에서 만든다. `~/.git-credentials`의 다른 줄은 그대로 두고 그 gitea 호스트 줄만 바꾼다. 셋(`gitea_url`·`gitea_user`·`gitea_token`) 중 하나라도 비우면 전에 쓴 그 호스트 줄을 지운다. 주소 꼴은 `http(s)://호스트[:포트][/경로]` — 틀리면 경고만 남기고 아무것도 쓰지 않는다.
+```yaml
+option:
+  devbox:
+    ssh_port: <내 포트>
+    gitea_url: https://<gitea 주소>:<포트>    # 예 https://gitea.example.local:3000 — http면 토큰이 암호화 없이 감
+    gitea_user: <내 gitea 계정>
+    gitea_token: <내 토큰>                   # 비밀 — settings.yaml에만
+    git_user_name: <커밋에 남길 이름>         # 선택
+    git_user_email: <커밋에 남길 메일>        # 선택
+```
 
 ## 3. 매일 쓰는 법
 

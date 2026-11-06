@@ -321,7 +321,7 @@ def rdb_pick(table, state, limit=0, done=frozenset()):
 # "docs": [{"seq", "id", "s3_key", "original_filename", "file_size", "source_system"}, …]} — 처리 순서대로, seq = 목록 안 자리(FAQ 덧붙임 포함).
 # 원천 목록(extract.source.systems — required.source.source_systems)이 있으면 그 원천 행만(UPPER(source_system) — 대소문자 무관).
 FSM_SQL = (
-    "SELECT id, s3_key, original_filename, file_size, source_system FROM AI.FileStorageMap "
+    "SELECT id, s3_key, original_filename, file_size, source_system FROM {table} "
     "WHERE ({cond}){src} AND file_size IS NOT NULL ORDER BY file_size ASC"
 )
 FAQ_PREFIX = "FAQ/"
@@ -338,7 +338,10 @@ def edw_rows(edw, keywords=(), faq=False, systems=()):
         cond, args = "1=1", []
     else:
         cond, args = " OR ".join(["LOWER(original_filename) LIKE ?"] * len(keywords)), [f"%{k.lower()}%" for k in keywords]
-    rows = edw.q(FSM_SQL.format(cond=cond, src=src), [*args, *systems])
+    pc.checked("RDB_FILE_TABLE")  # 덮은 값(--set)이 꼴이 틀리면 여기서 실패(조용히 기본 표로 돌지 않게)
+    # 설정 모델이 <스키마>.<표> 식별자만 받음(SQL 삽입 막기) — [스키마].[표]로 감쌈(MSSQL·SQLite 대역 둘 다)
+    table = ".".join(f"[{p}]" for p in pc.cfg().connections.rdb.file_table.split("."))
+    rows = edw.q(FSM_SQL.format(table=table, cond=cond, src=src), [*args, *systems])
     return [{**r, "source_system": src_name(r["source_system"])} for r in rows]
 
 

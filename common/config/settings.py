@@ -1350,7 +1350,7 @@ class CommonConnectionsPg(Section):
     password: SecretStr | None = F(None, "PG_PASSWORD", "PostgreSQL 비밀번호")
     pool_max: int | None = F(8, "PG_POOL_MAX", "검색 MCP PostgreSQL 연결 풀 최대 연결 수")
     port: Port | None = F(None, "PG_PORT", "PostgreSQL 포트(필수 — op-09)")
-    db_schema: str | None = F("data_parsing", "PG_SCHEMA", "pgvector 기본 스키마 이름(소문자·숫자·_ — 여러 벌이면 끝에 _<벌>, op-09)")
+    db_schema: str | None = F("data_parsing", "PG_SCHEMA", "pgvector 기본 스키마 이름(소문자·숫자·_ — 여러 벌도 같은 스키마, op-09·op-17)")
     standin_dir: str | None = F(None, "PG_STANDIN_DIR", "PG 접속 정보가 없을 때 쓰는 로컬 대체 DB(sqlite) 폴더", repo=True)
     standin_schema: str | None = F(
         "data_parsing", "PG_STANDIN_SCHEMA", "로컬 대체 DB(sqlite)의 스키마 이름 — PG_SCHEMA가 비었을 때(PC 전용, op-09)"
@@ -1481,6 +1481,17 @@ class CommonHostDevbox(Section):
         "DEVBOX_OPENCODE_CONFIG",
         "개발 작업 공간의 opencode 설정 파일(호스트 경로, 선택) — 읽기 전용으로 붙이고 OPENCODE_CONFIG로 가리킴. 비우면 이미지의 틀(홈의 ~/.config/opencode/opencode.json)",
     )
+    gitea_url: str | None = F(
+        None,
+        "DEVBOX_GITEA_URL",
+        "개발 작업 공간의 내부망 gitea 주소(선택 — http(s)://호스트[:포트][/경로]) · 예 https://gitea.corp.local:3000 — http는 토큰이 암호화 없이 감."
+        " 주소·계정·토큰을 모두 적으면 시작할 때 ~/.git-credentials(권한 600)에 그 호스트 줄을 씀",
+        pattern=r"^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/\S*)?$",
+    )
+    gitea_user: str | None = F(None, "DEVBOX_GITEA_USER", "개발 작업 공간의 gitea 계정 이름(선택)")
+    gitea_token: SecretStr | None = F(None, "DEVBOX_GITEA_TOKEN", "개발 작업 공간의 gitea 접근 토큰(선택 — gitea 설정 > 응용 > 토큰)")
+    git_user_name: str | None = F(None, "DEVBOX_GIT_USER_NAME", "개발 작업 공간의 git 커밋 이름(git config user.name, 선택)")
+    git_user_email: str | None = F(None, "DEVBOX_GIT_USER_EMAIL", "개발 작업 공간의 git 커밋 메일(git config user.email, 선택)")
 
 
 class CommonHost(Section):

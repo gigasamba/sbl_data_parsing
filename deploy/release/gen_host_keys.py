@@ -23,8 +23,9 @@ HOST_SECTIONS = (
 HOST_SKIP = (
     "pipeline.host.run_pipeline",
     "pipeline.host.run_pipeline_dir",
-    "common.host.pg_container",
-)  # run_pipeline.py가 settings.yaml에서 직접 읽음(셸 env로 안 냄)
+    "common.host.pg_container",  # 위 셋: run_pipeline.py가 settings.yaml에서 직접 읽음(셸 env로 안 냄)
+    *(f"common.host.devbox.{k}" for k in ("gitea_url", "gitea_user", "git_user_name", "git_user_email")),  # 컨테이너 git_cred.py만 읽음
+)
 IMAGE_CONSTS = ("code_root", "docs_mount", "output_root")  # compose·run_pipeline.py가 쓰는 약속 경로만
 PORTS = ("common.runtime.data_parsing_port", "mcp.server.port")  # 여러 벌 포트 거부에 쓰는 기본값(load_settings.sh·run_pipeline.py가 읽음)
 HOST_TABLE = DEPLOY_ROOT / "deploy" / "host" / "scripts" / "host_settings.tsv"

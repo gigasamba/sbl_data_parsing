@@ -23,7 +23,7 @@ required:
     pg_database:                              # [필수 · dev·prd(pipeline·mcp) — local은 비우면 sqlite 대역] PG 데이터베이스 이름 · 예 rag
     pg_user:                                  # [필수 · dev·prd(pipeline·mcp) — local은 비우면 sqlite 대역] PG 계정 · 예 rag_app
     pg_password:                              # [필수 · dev·prd(pipeline·mcp) — local은 비우면 sqlite 대역] PG 비밀번호 · 서버는 8자 이상 · 예 DB 담당이 준 값 [비밀]
-    pg_schema: data_parsing                   # [선택 — 비우면 data_parsing(여러 벌이면 끝에 _<벌>)] 검색 스키마(소문자·숫자·_)
+    pg_schema: data_parsing                   # [선택 — 비우면 data_parsing] 검색 스키마(소문자·숫자·_)
   # ---- 모델 접속 — 임베딩·LLM·VLM(모델마다 따로) ----
   models:
     # ---- 임베딩 모델 ----
@@ -45,6 +45,7 @@ required:
     edw_database:                             # [필수 · dev·prd(pipeline·mcp) — local은 무시(비움)] EDW 데이터베이스 이름 · 예 EDW
     edw_read_user:                            # [필수 · dev·prd(pipeline·mcp) — local은 무시(비움)] EDW 읽기 계정(원천 목록·메타 사슬·query_edw) · 예 svc_parse_r
     edw_read_password:                        # [필수 · dev·prd(pipeline·mcp) — local은 무시(비움)] EDW 읽기 비밀번호 · 예 DB 담당이 준 값 [비밀]
+    edw_file_table: AI.FileStorageMap         # [필수 · 모두(pipeline) — 기본값 그대로 두면 AI.FileStorageMap] 파싱 대상 파일 목록 EDW 표(<스키마>.<표> — 영문·숫자·_만) · 예 AI.FileStorageMap
   # ---- 게시(silver 적재) 위치 ----
   publish:
     publish_bucket:                           # [필수 · dev·prd(pipeline) — local은 무시(dev.local.local_publish_dir)] 게시 버킷(원본 버킷과 다르게) · 예 rag-silver
@@ -436,3 +437,8 @@ option:
   devbox:
     ssh_port: null                            # 개발 작업 공간 SSH 포트(dev만 — 개발자마다 다르게) · 예 2222 (null = 끔)
     opencode_config: null                     # opencode 설정 파일(호스트 절대 경로) · 예 /home/sbl/opencode.json (null = 이미지의 틀)
+    gitea_url: null                           # 내부망 gitea 주소(http(s)://호스트[:포트][/경로] — http는 토큰이 암호화 없이 감) · 예 https://gitea.corp.local:3000 (null = git 계정 설정 안 함 — 주소·계정·토큰을 모두 적어야 씀)
+    gitea_user: null                          # gitea 계정 이름 · 예 hong (null = 설정 안 함)
+    gitea_token: null                         # gitea 접근 토큰 · 예 gitea 설정 > 응용 > 토큰에서 만든 값 (null = 설정 안 함) [비밀]
+    git_user_name: null                       # git 커밋 이름(user.name) · 예 홍길동 (null = 설정 안 함)
+    git_user_email: null                      # git 커밋 메일(user.email) · 예 hong@corp.local (null = 설정 안 함)

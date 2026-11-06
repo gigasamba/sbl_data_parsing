@@ -201,6 +201,11 @@ NOTES = {
     "common.host.prune_keep": "남길 이미지 판 수",
     "common.host.devbox.ssh_port": "개발 작업 공간 SSH 포트(dev만 — 개발자마다 다르게) · 예 2222 (null = 끔)",
     "common.host.devbox.opencode_config": "opencode 설정 파일(호스트 절대 경로) · 예 /home/sbl/opencode.json (null = 이미지의 틀)",
+    "common.host.devbox.gitea_url": "내부망 gitea 주소(http(s)://호스트[:포트][/경로] — http는 토큰이 암호화 없이 감) · 예 https://gitea.corp.local:3000 (null = git 계정 설정 안 함 — 주소·계정·토큰을 모두 적어야 씀)",
+    "common.host.devbox.gitea_user": "gitea 계정 이름 · 예 hong (null = 설정 안 함)",
+    "common.host.devbox.gitea_token": "gitea 접근 토큰 · 예 gitea 설정 > 응용 > 토큰에서 만든 값 (null = 설정 안 함)",
+    "common.host.devbox.git_user_name": "git 커밋 이름(user.name) · 예 홍길동 (null = 설정 안 함)",
+    "common.host.devbox.git_user_email": "git 커밋 메일(user.email) · 예 hong@corp.local (null = 설정 안 함)",
     "pipeline.host.parse_cpus": "data-pipeline 컨테이너 CPU(호스트 CPU 수 이하)",
     "pipeline.host.parse_mem_limit": "data-pipeline 메모리 · 예 16g",
     "pipeline.host.data_parsing_cpus": "parse MCP 서비스 컨테이너 CPU",
@@ -257,6 +262,7 @@ NOTES = {
     "common.text.draft_terms_max": "용어 초안 행 상한",
     "common.text.search_en_stem": "검색 글자 영어 복수 → 단수",
     "common.text.token_num_norm": "검색 글자 숫자·단위 정규화",
+    "pipeline.connections.rdb.file_table": "파싱 대상 파일 목록 EDW 표(<스키마>.<표> — 영문·숫자·_만) · 예 AI.FileStorageMap",
     "pipeline.connections.rdb.increment_col": "원천 목록 증분 판정 열 (null = 문서 ID 열)",
     "pipeline.connections.rdb.columns.content_version": "원천 목록 열 이름 — 판 ID · 예 content_version_id",
     "pipeline.connections.rdb.columns.doc_id": "원천 목록 열 이름 — 문서 ID · 예 id",
@@ -460,9 +466,9 @@ SET_MATTERS = {"PIPE_PROCS", "PIPE_THREADS", "PM_BUCKET"}
 def _value(p, f):
     """칸에 적을 값(YAML 한 줄) — 코드 기본값. 빈 글자: 사람이 꼭 적을 [필수] 칸(layout.NEED가 "필수"). null: 기본 없음·비밀·빈 글자·
     이미지 기본값 칸(이미지·PC 값이 다름)·SET_MATTERS·저장소 경로가 든 기본값. YAML에서 빈 칸과 null은 같다(둘 다 비움)."""
-    if L.NEED.get(p, "").startswith("필수"):
-        return ""
     d = f.get_default(call_default_factory=True)
+    if L.NEED.get(p, "").startswith("필수") and d is None:  # 기본값이 있는 필수 칸은 그 값을 적어 둠(edw_file_table)
+        return ""
     if S.is_secret(f) or d is None or d == "" or S.env_name(f) in _IMAGE_ENVS | SET_MATTERS:
         return "null"
     if isinstance(d, str) and str(S.REPO_ROOT) in d:

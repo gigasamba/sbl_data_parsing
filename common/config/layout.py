@@ -30,7 +30,7 @@ REQUIRED_GROUPS = (
                 (f"pg_{k}", f"common.connections.pg.{m}", _PG_NEED)
                 for k, m in (("host", "host"), ("port", "port"), ("database", "db"), ("user", "user"), ("password", "password"))
             ),
-            ("pg_schema", "common.connections.pg.db_schema", "선택 — 비우면 data_parsing(여러 벌이면 끝에 _<벌>)"),
+            ("pg_schema", "common.connections.pg.db_schema", "선택 — 비우면 data_parsing"),
         ),
     ),
     (
@@ -62,6 +62,7 @@ REQUIRED_GROUPS = (
             ("edw_database", "common.connections.rdb.database", _SERVER_NEED),
             ("edw_read_user", "common.connections.rdb.read.user", _SERVER_NEED),
             ("edw_read_password", "common.connections.rdb.read.password", _SERVER_NEED),
+            ("edw_file_table", "pipeline.connections.rdb.file_table", "필수 · 모두(pipeline) — 기본값 그대로 두면 AI.FileStorageMap"),
         ),
     ),
     (
