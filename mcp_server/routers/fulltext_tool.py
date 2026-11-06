@@ -1,9 +1,9 @@
-"""원문 도구 2개 등록(mc-17, 11-01 — 등급 A 계약 추가) — 서비스(do_list·do_get)를 스레드 창구(_bg)로 부르기만.
+"""원문 도구 2개 등록 — 서비스(do_list·do_get)를 스레드 창구(_bg)로 부르기만.
 함수 이름·독스트링·서명은 MCP 도구 계약(tools/list 바이트)이다.
 """
 
-from mcp_server.routers.dispatch import _bg
-from mcp_server.services.fulltext import do_get, do_list
+from mcp_server.services.fulltext_svc import do_get, do_list
+from mcp_server.services.tool_runner import _bg
 
 
 def register(m):
@@ -22,7 +22,7 @@ def register(m):
     ) -> dict:
         """Stage 1 of 2: list each document's representative parse-result files (.md/.json) and issue signed handles (sfid).
         At least one condition (AND): docs (<=200 original file names with extension, or 64-hex doc_key), source_system
-        (SFDC/CRMS/LAS/FAQ; '-test' suffix accepted), doc_class, sf_op_id, since/until (parse time), created_since/created_until
+        (SFDC/CRMS/LAS/FAQ; '-test' suffix accepted) (개발 서버: DEV-<숫자>), doc_class, sf_op_id, since/until (parse time), created_since/created_until
         (source registration time). Dates: YYYY-MM-DD or YYYY-MM-DD HH:MM:SS without time zone (KST); date-only until includes
         that whole day. limit default 50, max 200; cursor = previous batch.next_cursor.
         Returns {batch:{matched, returned, next_cursor, files_total_bytes}, documents:[{file_name, doc_key, source_system,

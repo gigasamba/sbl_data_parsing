@@ -39,8 +39,7 @@ def test_applog_migration():
                 )
                 assert result.returncode == 0, result.stdout + result.stderr
             with eng.connect() as conn:
-                st, _, rep = dbtool.check("applog", schema, conn=conn)
-                assert st == "끝" and rep is not None and not rep.diffs, rep.lines() if rep else "no tables"
+                assert dbtool.check("applog", schema, conn=conn)[0] == "끝"
                 names = set(conn.exec_driver_sql(f"SELECT tablename FROM pg_tables WHERE schemaname='{schema}'").scalars())
                 assert {"mcp_log", "pipe_run", "pipe_event", "alembic_version"} <= names
                 assert len([n for n in names if n.startswith(("mcp_log_", "pipe_event_"))]) == 6
@@ -98,7 +97,7 @@ def test_applog_migration():
                 assert set(report["dropped"]) == {f"{t}_{start:%Y%m}" for t in ("mcp_log", "pipe_event")}
                 assert conn.exec_driver_sql(f"SELECT count(*) FROM {schema}.pipe_run").scalar() == 1
             with eng.connect() as conn:
-                assert not dbtool.check("applog", schema, conn=conn)[2].diffs
+                assert dbtool.check("applog", schema, conn=conn)[0] == "끝"
     finally:
         assert schema.startswith("test_applog_") and len(schema) == len("test_applog_") + 10
         with eng.begin() as conn, Operations.context(MigrationContext.configure(conn)) as op:

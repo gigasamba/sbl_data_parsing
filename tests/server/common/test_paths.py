@@ -1,4 +1,4 @@
-"""common.core.paths 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.core.paths`."""
+"""common.core.paths 자기 점검."""
 
 import os
 from pathlib import Path
@@ -53,24 +53,21 @@ def _demo():
         assert lookup_run_dir(root, "no-such") is None
     fake_dir = Path("some") / "doc" / "dir"
     with COMMON.env(DOC_DIR=str(fake_dir)):
-        assert doc_dir() == PROJ_ROOT / fake_dir  # 상대 경로는 저장소 루트 기준(op-14)
-    with COMMON.env(DOC_DIR=""):  # 빈 글자 = 정말 비움(S7e2 — None은 기본값이라 pipeline 이미지에서는 /data/docs)
+        assert doc_dir() == PROJ_ROOT / fake_dir  # 상대 경로는 저장소 루트 기준
+    with COMMON.env(DOC_DIR=""):  # 빈 글자 = 정말 비움(None은 기본값이라 pipeline 이미지에서는 /data/docs)
         assert doc_dir(required=False) is None
         try:
             doc_dir()
             raise AssertionError("DOC_DIR 없으면 SystemExit이어야 함")
         except SystemExit as e:
-            assert "ops.paths.doc_dir" in str(e)
-    # S2 — resources/prompts/는 모든 이미지에 폴더째 있으므로 앱별 묶음도 이미지 구분 없이 확인
-    # (11-01 — 호출부 없는 지시서 research_judge·agg_llm_route·parse_shadow·doc_summary·mermaid_check는 지움)
+            assert "ops.paths.source_docs_dir" in str(e)
+    # resources/prompts/는 모든 이미지에 폴더째 있으므로 앱별 묶음도 이미지 구분 없이 확인
     assert resolve_agent_dir("page_transcribe") == RES_ROOT / "prompts" / "common" / "page_transcribe"
     assert resolve_agent_dir("nested_figure") == RES_ROOT / "prompts" / "pipeline" / "nested_figure"
-    assert (
-        RES_ROOT / "prompts" / "common" / "_common" / "tail.md"
-    ).is_file() and CRITERIA_FILE.is_file()  # 보고서 틀 폴더·TEMPLATES_DIR 상수는 지움(11-01·pl-46)
-    assert STACK_FILE.is_file() and (GLOSSARY_ROOT / "domain_terms.csv").is_file()
-    if (PROJ_ROOT / "dev_tools").is_dir():  # 저장소 체크아웃에서만(이미지엔 dev_tools 없음)
-        assert resolve_agent_dir("example_agentic") == PROJ_ROOT / "dev_tools" / "unit_test" / "fixtures" / "example_agentic"
+    assert (RES_ROOT / "prompts" / "common" / "_common" / "tail.md").is_file() and CRITERIA_FILE.is_file()
+    assert STACK_FILE.is_file() and (GLOSSARY_ROOT / "glossary.csv").is_file()
+    if (PROJ_ROOT / "valid_env").is_dir():  # 저장소 체크아웃에서만(이미지엔 valid_env 없음)
+        assert resolve_agent_dir("rag_qa") == PROJ_ROOT / "valid_env" / "answer_test" / "rag_qa"
     try:
         resolve_agent_dir("_no_such_agent_")
         raise AssertionError("없는 agent_id면 FileNotFoundError여야 함")
@@ -78,7 +75,7 @@ def _demo():
         pass
     print("common/core/paths self-check OK")
 
-    # RV6 — 원자적 쓰기(옛 atomic.py): 임시 파일 안 남고, 덮어쓰기도 원자적
+    # 원자적 쓰기: 임시 파일 안 남고, 덮어쓰기도 원자적
     with tempfile.TemporaryDirectory() as t:
         dst = Path(t) / "out.txt"
         atomic_write_text(dst, "hello")
@@ -92,5 +89,5 @@ def _demo():
     print("common/core/paths atomic self-check OK")
 
 
-def test_main():  # 옛 `if __name__ == "__main__":` 몸통
+def test_main():
     _demo()

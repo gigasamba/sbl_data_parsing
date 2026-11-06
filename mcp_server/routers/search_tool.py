@@ -1,10 +1,9 @@
 """search 도구 등록 — 입력을 받아 서비스(do_search)를 스레드 창구(_bg)로 부르기만.
-함수 이름·독스트링·서명·반환 형식은 MCP 도구 계약(🔒 CLAUDE.md §4 — tools/list 바이트)이다. 11-01(mc-16, 등급 A) 운영 계약으로 바꿈 —
-question 필수, 거르기 13칸(운영 이름 그대로) + attrs(pl-52 11-03, 등급 A), 옛 입력 methods·decompose·limit·index_id 지움.
+함수 이름·독스트링·서명·반환 형식은 MCP 도구 계약(tools/list 바이트)이다 — question 필수, 거르기 13칸(운영 이름 그대로) + attrs.
 """
 
-from mcp_server.routers.dispatch import _bg
 from mcp_server.services.search.search_svc import do_search
+from mcp_server.services.tool_runner import _bg
 
 
 def register(m):
@@ -29,7 +28,7 @@ def register(m):
     ) -> dict:
         """Natural-language top-k evidence search inside hard filters (vector + bm25 + id, fused server-side).
         question is required (empty -> {"error"}). k: default 8, max 50 (larger is clamped).
-        source_system is required: exactly one of SFDC/CRMS/LAS/FAQ/Other ('-test' suffix accepted); each call searches that one
+        source_system is required: exactly one of SFDC/CRMS/LAS/FAQ/Other ('-test' suffix accepted) (개발 서버: DEV-<숫자>); each call searches that one
         source only (call again for another source; missing -> {"error"}). Other filters are optional; different filters AND
         together, a list inside one filter is OR, all exact match: client (account name; client_like=true -> substring),
         project_id, division, service_type, FAQ_group, doc_class (within its source system's taxonomy), sf_op_id, sf_op_name,

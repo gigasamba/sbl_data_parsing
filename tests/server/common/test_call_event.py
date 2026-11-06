@@ -1,4 +1,4 @@
-"""op-01(이슈 #117): 모델 호출별 pipe_event — 성공·실패 모든 호출이 한 행."""
+"""op-01: 모델 호출별 pipe_event — 성공·실패 모든 호출이 한 행."""
 
 import uuid
 from unittest import mock

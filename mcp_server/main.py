@@ -13,10 +13,10 @@
     (EDW_QUERY_TABLES), row/time/response-size caps. Returns raw rows only — no summarization, the
     calling agent does its own post-processing. See mcp_server/services/edw_query.py for the full guard.
   (2026-10-21 사용자 요청·같은 날 단일화) parse_document(path, content_b64, filename, time_out_threshold=300, max_chars=200000) —
-    비정형 파일 1건의 text 파싱 대표 결과: data-pipeline-mcp 컨테이너(11-03 — 옛 data-pipeline-parse)의 작업 서비스(PARSE_URL, 기본 http://127.0.0.1:8766 ·
-    그 컨테이너의 주 프로세스 — 토큰은 그 컨테이너 settings.yaml required.tokens.parse_mcp)가
+    비정형 파일 1건의 text 파싱 대표 결과: mcp-data-parsing 컨테이너(11-03 — 옛 data-pipeline-parse)의 작업 서비스(PARSE_URL, 기본 http://127.0.0.1:8766 ·
+    그 컨테이너의 주 프로세스 — 토큰은 settings.yaml required.tokens.mcp_token)가
     prepare → run_all( phase 1·2만 — 그림[VLM] 파싱은 phase 3이라 실행 안 됨, 표 인식 유지) → parse_qa → represent(대표 결과)만
-    수행(구조화·임베딩·EDW/OS 적재 없음). path는 허용 루트(/app/output/_mcp_parse/inbox) 하위만(jail) · 파일 상한 100MB(path·content_b64 같음 — ops.runtime.parse_max_mb, 11-03) ·
+    수행(구조화·임베딩·EDW/OS 적재 없음). path는 허용 루트(/app/output/_mcp_parse/inbox) 하위만(jail) · 파일 상한 100MB(path·content_b64 같음 — ops.services.data_parsing.mcp_parse_max_file_mb, 11-03) ·
     time_out_threshold(기본 300초) 안에 끝나야 결과를 돌려주고 못 끝내면 {"error": "시간 안에 수행 못했습니다", "job_id": …}만 반환 —
     노출 도구는 parse_document 하나뿐(사용자 결정: 결과 수령 도구 parse_result는 등록하지 않는다), 이 도구만 MCP_TOOL_TIMEOUT_SEC(기본 30초)
     대신 자체 예산으로 기다린다(_bg_long) · 응답 text는 max_chars(기본 20만자) 상한(초과 시 잘리고 text_truncated, 전체는 rep_path 파일에).
@@ -34,8 +34,7 @@
   호출자(X-MCP-Client 머리글)는 감사 기록의 agent로 · 결과 크기 상한 MCP_MAX_CHARS(기본 20000자).
 질의 기록: 파일 없음 — 호출마다 DB applog.mcp_log 한 행(입력 args에 질문·SQL, 결과 키 — op-01 · op-13).
 동시 접속(S12): 도구는 스레드로 돌림(MCP_MAX_CONCURRENCY 기본 8) · PG는 연결 풀(PG_POOL_MAX 기본 8) · GET /health(토큰 없이, 프로세스·준비 여부·적재 버전 ·
-  MC1 — 기동 때 예열이 백그라운드로 도는 동안은 503 {"warming": true}, 끝나면 200 {"ready": true}, 예열 실패는 200 + {"warning": "warmup_failed"}(서버는 안 죽음),
-  MCP_WARMUP=0으로 끔·기본 켬) ·
+  MC1 — 기동 때 예열이 백그라운드로 도는 동안은 503 {"warming": true}, 끝나면 200 {"ready": true}, 예열 실패는 200 + {"warning": "warmup_failed"}(서버는 안 죽음)) ·
   load 재실행 뒤 데이터는 최소 MCP_RELOAD_CHECK_SEC(기본 30초) 간격으로 확인해 바뀌었으면 다시 읽음.
 과부하 보호(MC2, RV2, 기본 켬): 요청 시간 상한 MCP_TOOL_TIMEOUT_SEC(기본 30초, 넘으면 {"error": "timeout"}) ·
   동시 상한보다 밀린 대기가 대기열 상한 MCP_MAX_QUEUE(기본 동시 상한×4)에 차면 기다리지 않고 바로 {"error": "busy"} ·
@@ -56,11 +55,11 @@ import threading
 
 import anyio
 
-from common.core import jsonlog
+from common.core import jsonlog, parse_limit
 from common.core.console import utf8_stdout
 from mcp_server import config as mc  # 설정 객체(S7d)
 from mcp_server.routers import edw_tools, fulltext_tool, health, parse_tool, search_tool  # 도구·/health 등록(5-1)
-from mcp_server.services import call_log, parse_proxy
+from mcp_server.services import call_log
 from mcp_server.services.search.server_state import _warmup_bg
 
 _DEFAULT_MCP_INSTRUCTIONS = (
@@ -123,7 +122,7 @@ def build(host, port):
         stateless_http=True,
         json_response=True,
         transport_security=None if loop else _transport_security(host),
-        max_request_body_size=parse_proxy.body_cap(),  # 11-03 — SDK 기본 4MiB면 parse_document content_b64가 약 3MB에서 413
+        max_request_body_size=parse_limit.body_cap(),  # SDK 기본 4MiB면 parse_document content_b64가 약 3MB에서 막힘
     )
     _sdk_logging()  # FastMCP가 로깅을 설정한 뒤에 덮는다
 
@@ -245,9 +244,8 @@ if __name__ == "__main__":
     utf8_stdout()
     if "--stdio" in sys.argv:
         call_log.configure_stdio()
-    from common.config.settings import edw_read_only, require_run_env
+    from common.config.settings import require_run_env
 
-    edw_read_only()  # 검색 MCP는 EDW 읽기 계정만 — 공용 설정 파일의 쓰기 계정 칸은 이 프로세스에서 비움(사용자 10-29, ops.md#op-03)
     require_run_env("mcp_server.main", sections=("mcp",))  # S7a(D-028 ②) — 실행 환경 없으면 시작 거부(서버면 설정 검증 실패도 — S7e2 U-1)
     from common.store.db import cfgfile
 
@@ -265,9 +263,10 @@ if __name__ == "__main__":
         host, port, token = (
             _c.host,  # op-09 — 기본값은 설정 모델 한 곳
             int(_c.port),
-            mc.token_text(_c.token),
+            mc.token_text(mc.common_cfg().tokens.mcp),
         )  # 공백뿐인 토큰 = 토큰 없음(사용자 결정 10-27)
         if host == "auto":  # 브리지 네트워크 컨테이너: 자기 사설 IP(포트 게시로 밖에서 부름) — 토큰 필수
+            # 같은 풀이: compose.mcp-server.yml healthcheck 한 줄·mcp_keepalive.sh(컨테이너 안 exec) — 바꾸면 함께
             import socket
 
             host = socket.gethostbyname(socket.gethostname())

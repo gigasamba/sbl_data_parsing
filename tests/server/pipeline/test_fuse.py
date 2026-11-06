@@ -1,4 +1,4 @@
-"""pipeline.transform.represent.fragment_vote 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.fragment_vote`."""
+"""pipeline.transform.represent.fragment_vote 시험."""
 
 from pipeline.transform.represent.fragment_vote import (
     _doc_locale_pref,

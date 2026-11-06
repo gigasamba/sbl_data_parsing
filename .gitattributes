@@ -27,7 +27,7 @@
 *.mako      text eol=lf
 Dockerfile  text eol=lf
 Dockerfile.bake  text eol=lf
-deploy/docker/IMAGE_BASE   text eol=lf
+deploy/docker/devbox/sshd_config   text eol=lf
 .gitignore      text eol=lf
 .dockerignore   text eol=lf
 .gitattributes  text eol=lf

@@ -1,4 +1,4 @@
-"""common.config.settings 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.config.settings --selftest`."""
+"""common.config.settings 자기 점검."""
 
 import contextlib
 import os
@@ -8,6 +8,7 @@ from unittest import mock
 
 from pydantic import ValidationError
 
+from common.config import settings as S
 from common.config.layout import to_file
 from common.config.settings import (
     COMMON,
@@ -57,14 +58,23 @@ from common.config.settings import (
 )
 
 
+def _raw(v):
+    """YAML 값을 쓴 글자·꼴 그대로 다시 쓰게(settings._Raw) — 글자는 글자로, 숫자·켜기·날짜는 쓴 표기 그대로."""
+    if isinstance(v, S.YamlScalar):
+        return str(v) if isinstance(v.value, str) else S._Raw.of(v)
+    if isinstance(v, dict):
+        return {str(k): _raw(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_raw(x) for x in v]
+    return v
+
+
 def _new(text):
-    """옛 배치(모델 경로) YAML 글자 → 새 배치(op-08 ② — layout.to_file) 글자. 쓴 글자·꼴(yes·0123·1.10)은 그대로(migrate._raw)."""
+    """모델 경로 YAML 글자 → 파일 배치(layout.to_file) 글자. 쓴 글자·꼴(yes·0123·1.10)은 그대로."""
     import yaml
 
-    from common.config import migrate
-
     doc = yaml.load(text, Loader=_yaml_loader())
-    return yaml.dump(to_file(migrate._raw(doc)), Dumper=_raw_dumper(), allow_unicode=True, sort_keys=False)
+    return yaml.dump(to_file(_raw(doc)), Dumper=_raw_dumper(), allow_unicode=True, sort_keys=False)
 
 
 def selftest():
@@ -109,7 +119,7 @@ def selftest():
             and secret not in st.model_dump_json(),
         )
         check("채운 칸만 set(기본값과 구별)", _is_set(st, "common.connections.pg.host") and not _is_set(st, "common.connections.pg.db"))
-        # S7e2 — env의 옛 이름은 읽지 않음 · 시험 names= > 덮기 파일 overrides > YAML · RUN_ENV는 env 신호가 YAML을 이김
+        # env의 설정 이름은 읽지 않음 · 시험 names= > 덮기 파일 overrides > YAML · RUN_ENV는 env 신호가 YAML을 이김
         env = {"PG_HOST": "10.0.0.9", "PG_PORT": "1", "RUN_ENV": "dev"}
         st2 = load(_TApp, file=good, environ=env)
         check(
@@ -137,18 +147,18 @@ def selftest():
         bad.write_text(
             _new(f"common:\n  connections:\n    pg:\n      port: abc\n      password: [{secret}]\n      hots: x\n"), encoding="utf-8"
         )
-        ok, msg = raises(lambda: load(_TApp, file=bad, environ={}), "required.pg.port", "common.connections.pg.hots")
+        ok, msg = raises(lambda: load(_TApp, file=bad, environ={}), "required.pg.pg_port", "common.connections.pg.hots")
         check("검증 오류: 칸 경로·오타 칸을 알림", ok)
         check("검증 오류: 비밀 칸 값은 메시지에 없음", ok and secret not in msg)
         (d / "empty.yaml").write_text("", encoding="utf-8")
-        # R-1 — 입력값은 어떤 칸에서도 찍지 않음: 비밀 칸 이름을 틀린 값(extra_forbidden)·형식 틀린 글자 값
+        # 입력값은 어떤 칸에서도 찍지 않음: 비밀 칸 이름을 틀린 값(extra_forbidden)·형식 틀린 글자 값
         typo = d / "typo.yaml"
         typo.write_text(_new(f"common:\n  connections:\n    pg:\n      pasword: {secret}\n      port: wrong-{secret}\n"), encoding="utf-8")
-        ok, msg = raises(lambda: load(_TApp, file=typo, environ={}), "pg.pasword", "extra_forbidden", "pg.port")
+        ok, msg = raises(lambda: load(_TApp, file=typo, environ={}), "pg.pasword", "extra_forbidden", "pg_port")
         check(
             "검증 오류(R-1): 비밀 칸 오타·형식 오류에서도 입력값 없음(경로·오류 종류만)", ok and secret not in msg and "wrong-" not in msg
         )
-        # R-3 — YAML 스칼라: 글자 칸은 쓴 글자 그대로, 켜기·숫자·JSON 칸은 YAML이 푼 값
+        # YAML 스칼라: 글자 칸은 쓴 글자 그대로, 켜기·숫자·JSON 칸은 YAML이 푼 값
         y = d / "scalars.yaml"
         y.write_text(
             _new(
@@ -208,7 +218,7 @@ def selftest():
             data={"common": {"connections": {"object_storage": {"region": True}}}}, file=d / "empty.yaml", environ={"RUN_ENV": "local"}
         ) as so:
             check("시험 data=: 글자 칸에 파이썬 True → 옛 env 꼴 '1'", so.common.connections.object_storage.region == "1")
-        # R-4 — 빈 글자: 기본값 있는 칸은 설정 안 함(옛 `get(X) or 기본값`), 기본값 None인 글자 칸만 '' 유지 · 옛 env·migrate도 같은 규칙
+        # 빈 글자: 기본값 있는 칸은 설정 안 함(= 기본값), 기본값 None인 글자 칸만 '' 유지
         bl = load(
             _TApp,
             file=d / "empty.yaml",
@@ -225,16 +235,16 @@ def selftest():
             and bl.common.models.embed.timeout == 60
             and bl.common.models.guard.internal_ip_ranges == [],
         )
-        bk = load(_TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"OS_VERIFY_TLS": "", "PM_TABLE": ""})
+        bk = load(_TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"OS_VERIFY_TLS": ""})
         check(
-            "빈 글자: blank=keep 칸(옛 os.environ.get(X, 기본) — OS_VERIFY_TLS·PM_TABLE)은 '' 유지(S7a2 (b))",
-            (bk.common.connections.object_storage.verify_tls, bk.common.connections.parsing_meta.table) == ("", ""),
+            "빈 글자: blank=keep 칸(옛 os.environ.get(X, 기본) — OS_VERIFY_TLS)은 '' 유지(S7a2 (b))",
+            bk.common.connections.object_storage.verify_tls == "",
         )
         check(
             "PG_HOST·PG_PORT 기본값 None(필수 칸 — 비면 pg.conf가 거부, op-09)",
             bl.common.connections.pg.port is None and CommonConnectionsPg().host is None,
         )
-        # R-2 — int | "auto"
+        # int | "auto" 칸
         au = load(_TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"PIPE_PROCS": "auto", "PIPE_THREADS": "3"})
         bx = load(
             _TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"PIPE_PROCS": "x", "PIPE_THREADS": "many", "PG_HOST": "h"}
@@ -259,7 +269,7 @@ def selftest():
             and f25.pipe_max_procs == 8,
         )
         saved_img = dict(IMAGE_DEFAULTS)
-        try:  # B-2 — 이미지 기본값 칸의 빈 글자는 정말 비움(옛 env_file `X=`이 이미지 ENV를 덮던 것) — 이미지 흉내(표만 바꿈)
+        try:  # 이미지 기본값 칸의 빈 글자는 정말 비움 — 이미지 흉내(표만 바꿈)
             IMAGE_DEFAULTS.update(DOC_DIR="/data/docs", PIPE_PROCS="auto")
             ib = load(_TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"DOC_DIR": "", "PIPE_PROCS": ""}).common
             img_blank = (ib.paths.doc_dir, ib.runtime.pipe_procs) == ("", None)
@@ -283,7 +293,7 @@ def selftest():
             "PIPE_PROCS auto(VS7c1 R-1): 대소문자·앞뒤 공백 무시·공백만도 auto(옛 resolve_procs strip·lower) · ' 5'는 5",
             aw == {"AUTO": "auto", "Auto": "auto", "auto ": "auto", " ": "auto", " 5": 5.0},
         )
-        # VS7a2 R-c — 켜기 칸은 키마다 옛 판정 꼴(env 글자 그대로 · 빈 글자 포함)
+        # 켜기 칸은 키마다 정한 판정 꼴(env 글자 그대로 · 빈 글자 포함)
         cases = [
             (
                 "LLM_FAKE",
@@ -308,7 +318,7 @@ def selftest():
             not bad_j,
         )
 
-        # VS7a2 R-a — 기본값 있는 목록 칸의 빈 값([]·'')은 옛 `or 기본`처럼 기본값, blank=keep 목록은 빈 목록
+        # 기본값 있는 목록 칸의 빈 값([]·'')은 기본값, blank=keep 목록은 빈 목록
         class _TL(Section):
             phases: CsvList | None = F(["1", "2"], "X_PH", "시험")
             tables: CsvList | None = F(None, "X_TB", "시험", blank="keep")
@@ -332,7 +342,7 @@ def selftest():
             and _TD(threads="2.5").threads is None
             and _TD(threads="05").threads == 5,
         )
-        # 설정 캐시(S7e2) — 파일 기반: 신호(SETTINGS_FILE)가 바뀌거나 put()이면 다시 읽음 · env()는 os.environ 안 건드림 · 옛 env 이름은 안 읽음
+        # 설정 캐시 — 파일 기반: 신호(SETTINGS_FILE)가 바뀌거나 put()이면 다시 읽음 · env()는 os.environ 안 건드림 · env의 설정 이름은 안 읽음
         cc = Cache(CommonAppSettings)
         tf = d / "cache.yaml"
         tf.write_text(_new("common:\n  run_env: local\n  models:\n    embed:\n      timeout: 7\n"), encoding="utf-8")
@@ -341,7 +351,7 @@ def selftest():
             os.environ["SETTINGS_FILE"] = str(tf)  # env 남김 — 시험
             a1 = cc.get().common.models.embed.timeout
             same = cc.get() is cc.get()
-            os.environ["EMBED_TIMEOUT"] = "8"  # env 남김 — 시험 · 옛 env 이름 — 읽지 않음
+            os.environ["EMBED_TIMEOUT"] = "8"  # env 남김 — 시험 · 설정 이름 — 읽지 않아야 함
             a2 = cc.get().common.models.embed.timeout
             pp = put(EMBED_TIMEOUT="9", PIPE_PROCS="3")
             a3 = (
@@ -360,7 +370,7 @@ def selftest():
             rel_ok = (
                 load(CommonAppSettings, file=flat, environ={}).common.connections.pg.host == "relhost"
                 and load(CommonAppSettings, file=flat, environ={}).common.models.embed.timeout == 7
-            )  # 상대 base(리뷰 S7e2)
+            )  # 상대 base
             ce = child_env(EMBED_TIMEOUT="11")
             child_ok = ce["SETTINGS_FILE"] != os.environ["SETTINGS_FILE"] and cc.get().common.models.embed.timeout == 9  # env 남김 — 시험
             child_ok = (
@@ -389,7 +399,7 @@ def selftest():
         )
         check("child_env(): 자식 env만 새 덮기 파일(부모 값 그대로) · 앞 put 값 이어받음", child_ok)
         check("덮기 파일 이어받기: 상대 base는 그 덮기 파일 폴더 기준(임시 폴더로 옮겨도 원본을 찾음)", rel_ok)
-        # S7e3 — VS7e2 B-2(서버는 overrides 도구 막음·코드 안 child_env는 그대로)·R-2(손으로 쓴 YAML 값)·R-3(서버 거부)·R-5·R-11
+        # 덮기 파일 — 서버는 overrides 도구 막음(코드 안 child_env는 그대로) · 손으로 쓴 YAML 값 · 서버 거부
         from common.config import overrides as OV
 
         srv = d / "srv"
@@ -403,9 +413,7 @@ def selftest():
             and raises(lambda: OV.server_run_env(environ={"RUN_ENV": "prod"}), "RUN_ENV")[0]
         )
         (srv / "typo.yaml").write_text(_new("common:\n  run_env: prod\n"), encoding="utf-8")
-        blocked = (
-            blocked and raises(lambda: OV.server_run_env(base=srv / "typo.yaml", environ={}), "RUN_ENV")[0]
-        )  # --base도 같은 규칙(리뷰 S7e3)
+        blocked = blocked and raises(lambda: OV.server_run_env(base=srv / "typo.yaml", environ={}), "RUN_ENV")[0]  # --base도 같은 규칙
         senv = {"RUN_ENV": "dev", "SETTINGS_FILE": str(srv / "settings.yaml")}  # 컨테이너 안 꼴(env RUN_ENV·SETTINGS_FILE = 붙인 파일)
         ce_srv = child_env(senv, EMBED_TIMEOUT="13", PIPE_PROCS=None)
         ce_doc = read_yaml(ce_srv["SETTINGS_FILE"])
@@ -442,14 +450,14 @@ def selftest():
             "덮기 파일 모르는 이름·형식 오류(R-3): 서버는 거부(이름·칸 경로만) · local은 경고 뒤 그 칸 버림",
             raises(lambda: load(CommonAppSettings, file=d / "ovs.yaml", environ={}), "PG_HSOT")[0]
             and (lambda r: r[0] and "54x32" not in r[1])(
-                raises(lambda: load(CommonAppSettings, file=d / "ovf.yaml", environ={}), "pg.port")
+                raises(lambda: load(CommonAppSettings, file=d / "ovf.yaml", environ={}), "pg_port")
             )
             and loc.common.connections.pg.port is None
             and loc._dropped == {"PG_PORT"}
             and raises(
                 lambda: load(CommonAppSettings, file=d / "ovl.yaml", environ={"RUN_ENV": "production"}, lenient_run_env=True), "PG_HSOT"
             )[0],
-        )  # 모르는 RUN_ENV 글자는 가드처럼 서버로(리뷰 S7e3)
+        )  # 모르는 RUN_ENV 글자는 가드처럼 서버로
         envw = {"SETTINGS_FILE": str(tf), "RAG_ROOT": "/home/dev", "PIPE_PROCS": "2"}
         _warned.clear()
         import io as _io
@@ -512,6 +520,7 @@ def selftest():
         # op-02 — LLM_FAKE는 local 전용: 서버(dev·prd)에서 켜져 있으면 시작 관문이 종료 2, 꺼져 있으면 통과
         (d / "srv_fake.yaml").write_text(_new("common:\n  run_env: dev\n  dev: {llm_fake: true}\n"), encoding="utf-8")
         (d / "srv_ok.yaml").write_text(_new("common:\n  run_env: prd\n"), encoding="utf-8")
+        (d / "local_ok.yaml").write_text(_new("common:\n  run_env: local\n"), encoding="utf-8")  # PC 루트 settings.yaml에 기대지 않음
         try:
             require_run_env("시험", {"SETTINGS_FILE": str(d / "srv_fake.yaml")}, sections=())
             fake_gate = False
@@ -521,14 +530,17 @@ def selftest():
             "require_run_env: 서버에서 llm_fake 켜면 종료 2 · 끄면 통과 · local은 켜도 통과",
             fake_gate
             and require_run_env("시험", {"SETTINGS_FILE": str(d / "srv_ok.yaml")}, sections=()) == "prd"
-            and require_run_env("시험", {"RUN_ENV": "local"}) == "local",
+            and require_run_env("시험", {"RUN_ENV": "local", "SETTINGS_FILE": str(d / "local_ok.yaml")}) == "local",
         )
         try:
             require_run_env("시험", {"SETTINGS_FILE": str(d / "empty.yaml")})
             gate = False
         except SystemExit as e:
             gate = e.code == 2
-        check("require_run_env: 없으면 종료 코드 2", gate and require_run_env("시험", {"RUN_ENV": "local"}) == "local")
+        check(
+            "require_run_env: 없으면 종료 코드 2",
+            gate and require_run_env("시험", {"RUN_ENV": "local", "SETTINGS_FILE": str(d / "local_ok.yaml")}) == "local",
+        )
         check("SETTINGS_FILE env로 파일 찾기", load(_TApp, environ={"SETTINGS_FILE": str(good)}).common.run_env == "local")
         # 내보내기 — 켜기 1/0, 목록 쉼표, 비밀은 secrets=True일 때만, 채운 칸만
         st3 = load(
@@ -553,7 +565,6 @@ def selftest():
         with cache.override(file=d / "empty.yaml", data={"common": {"runtime": {"cpu_max_load": 5}}}, environ={"RUN_ENV": "local"}) as s:
             check("Cache.override: 시험 동안 바꿔 끼움", cache.get() is s and s.common.runtime.cpu_max_load == 5.0)
         check("Cache.override: 끝나면 되돌림", cache._value is None)
-        # VS7b 처리(S7c1)
         with COMMON.env(PG_PASSWORD="", PG_HOST="h", EDW_PASSWORD=""):
             blank_secret = given("PG_PASSWORD") is None and given("EDW_PASSWORD") is None and given("PG_HOST") == "h"
         check("given(BLOCK-1): 빈 비밀(PG_PASSWORD=·EDW_PASSWORD= — SecretStr(''))은 준 값 아님(접속 파일 값을 덮지 않음)", blank_secret)
@@ -586,7 +597,7 @@ def selftest():
         check(
             "guard_run_env(U-1): 모르는 RUN_ENV 글자(prod)는 그대로(가드가 서버로 봄) · 아는 값은 그 값", unk == "prod" and known == "dev"
         )
-        # STRICT(S7b c안 · VS7e1 U-1 — 사용자 10-28): 틀린 설정 파일이면 서버는 import common(영구 다리)에서 바로 실패, local은 경고 뒤 계속
+        # STRICT: 틀린 설정 파일이면 서버는 import common에서 바로 실패, local은 경고 뒤 계속
         import subprocess
 
         badf = d / "strict_bad.yaml"
@@ -619,11 +630,16 @@ def selftest():
             gate_u1b = False
         except SystemExit as e:
             gate_u1b = e.code == 2
+        try:
+            require_run_env("시험", {"RUN_ENV": "local", "SETTINGS_FILE": str(gb)})
+            gate_local = False
+        except SystemExit as e:
+            gate_local = e.code == 2
         check(
-            "시작 관문(U-1): 서버면 설정 파일을 못 읽거나(없음) 검증 실패면 종료 2 · local은 검증 안 함",
-            gate_u1 and gate_u1b and require_run_env("시험", {"RUN_ENV": "local", "SETTINGS_FILE": str(gb)}) == "local",
+            "시작 관문: 서버면 설정 파일을 못 읽거나(없음) 검증 실패면 종료 2 · local도 검증 실패면 종료 2",
+            gate_u1 and gate_u1b and gate_local,
         )
-        if "mcp" in app_classes(("mcp",)):  # VS7d R-1 — import common 먼저여도 mcp CFG(시작 상수)가 settings.yaml 값을 봄(mcp 이미지·PC)
+        if "mcp" in app_classes(("mcp",)):  # import common 먼저여도 mcp CFG(시작 상수)가 settings.yaml 값을 봄(mcp 이미지·PC)
             cf = d / "cfg.yaml"
             cf.write_text(_new("mcp:\n  output:\n    max_chars: 12345\n"), encoding="utf-8")
             got = [
@@ -638,7 +654,7 @@ def selftest():
                 for o in ("import common; from mcp_server.config import CFG", "from mcp_server.config import CFG; import common")
             ]
             check(f"VS7d R-1: import 순서와 무관하게 mcp CFG가 설정 파일 값 {got}", got == [["12345"], ["12345"]])
-        # U-a(사용자 10-27) — import 때 점검은 파일 읽기만: mcp 이미지는 틀린 pipeline 절이어도 시작(op-09 — env로 내는 칸 없음)
+        # import 때 점검은 파일 읽기만: mcp 이미지는 틀린 pipeline 절이어도 시작(env로 내는 칸 없음)
         ua_bad = d / "ua_bad.yaml"
         ua_bad.write_text(
             _new("common:\n  paths:\n    draft_terms_out: /g\npipeline:\n  extract:\n    ocr:\n      dpi: abc\n"), encoding="utf-8"
@@ -678,9 +694,7 @@ def selftest():
         and _TW().mods == ["a", "b"],
     )
 
-    if (
-        {"pipeline", "mcp"} <= set(app_classes())
-    ):  # S7e1 — export(호스트 스크립트 다리) — 두 앱 모델이 있는 곳(PC·두 이미지) · migrate env 파일·--compare 시험은 11-02에 기능과 함께 지움
+    if {"pipeline", "mcp"} <= set(app_classes()):  # export(호스트 스크립트 다리) — 두 앱 모델이 있는 곳(PC·두 이미지)
         import io
 
         from common.config import export as E
@@ -728,48 +742,21 @@ def selftest():
                 and rc3 == 2
                 and "dummy" not in o1 + o2 + e2 + e3,
             )
-            # 사용자 10-29 — 지운 칸 synthetic_truth(옛 migrate C-35가 서버 파일에 옮겨 둠)는 경고만 하고 무시 · 다른 모르는 칸은 그대로 거부
-            from common.config.settings import CommonModelsGuard
-
-            _g = CommonModelsGuard.model_validate({"synthetic_truth": "/t.json", "budget_usd": 0.1})
-            try:
-                CommonModelsGuard.model_validate({"synthetic_truthx": "/t.json"})
-                _typo_rejected = False
-            except ValueError:
-                _typo_rejected = True
-            check("지운 칸 synthetic_truth: 시작 거부 대신 무시 · 오타 칸은 거부", _g.budget_usd == 0.1 and _typo_rejected)
-            # 사용자 10-29 — 기능 삭제(OpenViking·재순위·질문 분해·graph 검색·파싱 판단 에이전트 등)로 지운 칸·절도 옛 파일에 남아 있으면 무시
+            # 없어진 칸·절이 설정 파일에 남아 있으면 시작 거부(칸 자리만 알림)
             _old = {
-                "common": {"connections": {"openviking": {"url": "http://x:1933"}}, "models": {"rerank": {"model": "m"}}},
+                "common": {"connections": {"openviking": {"url": "http://x:1933"}}, "models": {"guard": {"synthetic_truth": "/t.json"}}},
             }
-            if "pipeline" in app_classes():
-                _old["pipeline"] = {
-                    "paths": {"mineru_bin": "mineru", "paddle_python": "/p", "soffice_candidates": ["a"]},
-                    "transform": {"agent": {"enabled": "shadow"}},
-                    "load": {"structure_target": "pg"},
-                    "eval": {"phase_report_legacy": False},
-                    "dev": {"parse_agent_fake": False},
-                    "connections": {"openviking": {"root": "r"}, "graphiti": {"neo4j_uri": "bolt://x"}},
-                }
-            if "mcp" in app_classes():
-                _old["mcp"] = {
-                    "output": {"list_docs_max": 200},
-                    "search": {
-                        "rerank": {"mode": "off"},
-                        "graph": {"concept_per": 1},
-                        "decompose": True,
-                        "decompose_llm": True,
-                        "ov_search_path": "/x",
-                    },
-                }
             _of = d / "old_removed.yaml"
             import yaml as _yaml
 
             from common.config import settings as _S
 
             _of.write_text(_yaml.safe_dump(to_file(_old), allow_unicode=True), encoding="utf-8")
-            _loaded = [_S.load(cls, file=_of, environ={}, strict=False) for cls in app_classes().values()]
-            check("10-29 지운 칸·절 17개: 옛 설정 파일에 남아도 앱마다 읽힘(경고만)", len(_loaded) == len(app_classes()))
+            _refused = [
+                raises(lambda c=cls: _S.load(c, file=_of, environ={}, strict=False), "openviking", "synthetic_truth")[0]
+                for cls in app_classes().values()
+            ]
+            check("지운 칸·절이 남은 파일: 앱마다 시작 거부(칸 이름만)", all(_refused))
             lb = d / "lib.yaml"
             lb.write_text(
                 _new("common:\n  runtime:\n    lib_env:\n      TZ: Asia/Seoul\n      HF_HUB_OFFLINE: 1\n      OMP_NUM_THREADS: 02\n"),
@@ -809,5 +796,5 @@ def selftest():
         raise SystemExit(1)
 
 
-def test_main():  # 옛 `if __name__ == "__main__":` 의 --selftest 갈래(`_S.selftest()`)
+def test_main():
     selftest()

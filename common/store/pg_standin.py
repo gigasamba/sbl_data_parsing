@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""AD41 — PG(pgvector) 스탠드인(연결 정보 없을 때만, common/pg.connect()·connect_pool()가 단일 전환점으로 씀).
-Docker·새 패키지 없이 sqlite3(표준 라이브러리)만으로 load/pgstore.py·search/pgsearch.py가 실제로 내는 SQL을
-스키마 하나당 파일 하나(PG_STANDIN_DIR, 기본 output/pg_standin/<schema>.sqlite)로 돌린다 — 여러 프로세스(cli/index.py가
-deploy·load를 따로 띄우는 subprocess들)가 같은 파일을 보게.
+"""PG(pgvector) 스탠드인(연결 정보 없을 때만 — common/store/pg.py의 connect()·connect_pool()이 단일 전환점).
+Docker·새 패키지 없이 sqlite3(표준 라이브러리)만으로 적재·검색(pgsearch.py)이 실제로 내는 SQL을
+스키마 하나당 파일 하나(PG_STANDIN_DIR, 기본 output/pg_standin/<schema>.sqlite)로 돌린다 — 여러 프로세스(단계마다
+따로 띄우는 subprocess들)가 같은 파일을 보게.
 
 ponytail: pgvector 전용(HNSW·이진 양자화·<~>)·BM25(unnest CTE)·그래프 중간 노드는 흉내 안 낸다(여기까지 하면 PG를
 새로 만드는 것) — vector(코사인, 전체 스캔으로 파이썬에서 계산)·순수 SQL(ANY→IN 번역)만 지원. 서버는 settings.yaml
-required.pg를 채우면 코드 변경 없이 이 파일을 거치지 않고 진짜 PG로 전환된다(common/pg.py
+required.pg를 채우면 코드 변경 없이 이 파일을 거치지 않고 진짜 PG로 전환된다(common/store/pg.py
 has_conn() 단일 분기). bm25·그래프·집계가 필요한 검증은 실 PG에서(이 스탠드인의 한계 — 업그레이드 경로).
 """
 
@@ -38,7 +38,7 @@ _COPY_RE = re.compile(r"COPY\s+(\S+?)\((.+?)\)\s+FROM STDIN", re.IGNORECASE)
 
 
 def standin_dir():
-    return Path(cfg().connections.pg.standin_dir or (APP_ROOT / "output" / "pg_standin"))  # S7b — 설정 객체
+    return Path(cfg().connections.pg.standin_dir or (APP_ROOT / "output" / "pg_standin"))
 
 
 def _now_iso():
@@ -70,8 +70,8 @@ def _contains(a, b):
 
 
 def _xlat(sql, params, schema):
-    """%s→? · X = ANY(%s)→X IN (...) · %s::TYPE 캐스트 제거 · unnest(...) 2-배열 CTE→제거(한 곳, X4-BM25는 스탠드인
-    미지원이라 호출 전에 걸러짐) — 한 번에(파라미터 위치가 꼬이지 않게, enforcement §2 — 번역은 이 함수 하나)."""
+    """%s→? · X = ANY(%s)→X IN (...) · %s::TYPE 캐스트 제거 · unnest(...) 2-배열 CTE→제거(한 곳, BM25는 스탠드인
+    미지원이라 호출 전에 걸러짐) — 한 번에(파라미터 위치가 꼬이지 않게 — 번역은 이 함수 하나)."""
     sql = sql.replace(f"{schema}.", "")
     sql = _SELECT_ONCONFLICT_RE.sub(r"\1 WHERE 1=1\2", sql)  # SQLite upsert 파싱 모호성(SELECT 기반 INSERT 뒤 ON CONFLICT)
     sql = _UPDATE_ALIAS_RE.sub(r"\1 AS \2 SET", sql)  # UPDATE t alias SET(AS 생략, PG 허용) → SQLite는 AS 필수
@@ -131,7 +131,7 @@ def _run_ddl_script(con, sql):
     ADD COLUMN IF NOT EXISTS→중복이면 무시 · CREATE OR REPLACE VIEW→DROP+CREATE 로 바꾼다."""
     sql = re.sub(r"--[^\n]*", "", sql)  # 줄 주석 제거(먼저) — 안 그러면 주석이 섞인 첫 덩어리가 "CREATE SCHEMA"로 안 시작해 건너뛰기를 놓침
     sql = _SERIAL_RE.sub("INTEGER", sql)
-    sql = sql.replace("TEXT[]", "TEXT")  # 10-15 chunk.clients — SQLite has no arrays: stored as JSON text, filtered in Python
+    sql = sql.replace("TEXT[]", "TEXT")  # chunk.clients — SQLite에는 배열이 없어 JSON 글자로 저장하고 파이썬에서 거른다
     sql = _DEFAULT_NOW_RE.sub("DEFAULT (now())", sql)
     for stmt in sql.split(";"):
         stmt = stmt.strip()
@@ -180,7 +180,7 @@ def _vector_top(con, sql, params):
 
 def _run(con, sql, params=None):
     """단일 실행 지점 — .q()·커서 .execute() 둘 다 이걸 거침. 반환 (rows:list[tuple], cols:list[str]|None).
-    mc-01(11-01) — 검색 MCP는 작업 스레드에서 부르므로 연결 하나를 잠금(con.lock)으로 줄 세움."""
+    검색 MCP는 작업 스레드에서 부르므로 연결 하나를 잠금(con.lock)으로 줄 세움."""
     with con.lock:
         return _run_locked(con, sql, params)
 
@@ -199,7 +199,7 @@ def _run_locked(con, sql, params=None):
         return [], None
     if "information_schema.schemata" in low:
         return ([(1,)] if con.existed_before else []), ["x"]
-    if "information_schema.tables" in low and "alembic_version" in sql:  # 우리 표식(11-02 — load_run 대신) — 대역은 늘 우리 것(판 관리 밖)
+    if "information_schema.tables" in low and "alembic_version" in sql:  # 우리 표식 — 대역은 늘 우리 것(판 관리 밖)
         return [(1,)], ["x"]
     if "information_schema.tables" in low:
         r = con.sqlite.execute("SELECT 1 FROM sqlite_master WHERE type='table' LIMIT 1").fetchall()
@@ -293,7 +293,7 @@ class StandinPG:
     """common.pg.PG·PGPool과 같은 자리(schema·q()·scope()·cn.cursor()·cn.transaction()) — load/pgstore.py·
     search/pgsearch.py가 db 종류를 안 가리고 그대로 쓴다."""
 
-    is_standin = True  # 코디네이터 10-14 — MCP /health가 "db": "standin"|"pg"를 구분하는 자리(PG·PGPool엔 없음 → False 취급)
+    is_standin = True  # MCP /health가 "db": "standin"|"pg"를 구분하는 자리(PG·PGPool엔 없음 → False 취급)
 
     def __init__(self, schema):
         d = standin_dir()
@@ -301,12 +301,12 @@ class StandinPG:
         path = d / f"{schema}.sqlite"
         self.schema = schema
         self.existed_before = path.exists()
-        # check_same_thread=False + lock(RLock) — 검색 MCP 작업 스레드에서도 쓰게(mc-01 11-01, 실 PG는 PGPool)
+        # check_same_thread=False + lock(RLock) — 검색 MCP 작업 스레드에서도 쓰게(실 PG는 PGPool)
         self.sqlite = sqlite3.connect(str(path), timeout=30, isolation_level=None, check_same_thread=False)
         self.lock = threading.RLock()
         self.sqlite.execute("PRAGMA foreign_keys=ON")
         self.sqlite.create_function("now", 0, _now_iso)
-        # mc-01(11-01) — PG 검색 SQL을 대역에서 그대로 돌리게: v_chunk_source 뷰의 regexp_replace · BM25의 ln(이미지 sqlite에 수학 함수가 없을 수도)
+        # PG 검색 SQL을 대역에서 그대로 돌리게: v_chunk_source 뷰의 regexp_replace · BM25의 ln(이미지 sqlite에 수학 함수가 없을 수도)
         self.sqlite.create_function("regexp_replace", 3, lambda s, p, r: None if s is None else re.sub(p, r, s))
         self.sqlite.create_function("ln", 1, lambda x: None if x is None or x <= 0 else math.log(x))
         self.sqlite.create_function("jsonb_contains", 2, _contains)

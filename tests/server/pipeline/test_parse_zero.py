@@ -20,12 +20,12 @@ def test_zero_docs():
         out = Path(tempfile.mkdtemp())
         src = out / "prepared"
         src.mkdir()
-        a = argparse.Namespace(src=str(src), source=None, engines="plaintext", procs="1", workers="1", max_new=0, deadline=None)
+        a = argparse.Namespace(src=str(src), source=None, engines="plaintext", procs="1", workers="1", max_new=0)
         calls = []
         buf = io.StringIO()
         with (
             mock.patch.object(cli, "OUT", out),
-            mock.patch.object(cli, "_run_until", lambda args, *_, rc=rc, calls=calls: calls.append(args[0]) or rc),
+            mock.patch.object(cli, "_run_step", lambda args, *_, rc=rc, calls=calls: calls.append(args[0]) or rc),
         ):
             with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
                 try:
@@ -33,4 +33,4 @@ def test_zero_docs():
                 except SystemExit as e:
                     got = e.code
         assert got == want and says in buf.getvalue(), (rc, got, buf.getvalue())
-        assert calls == ["pipeline.extract.run_engines"], calls  # 채점(parse_qa)·대표 결과(represent)는 부르지 않음
+        assert calls == ["pipeline.transform.parse.parse_engines"], calls  # 채점(parse_qa)·대표 결과(represent)는 부르지 않음

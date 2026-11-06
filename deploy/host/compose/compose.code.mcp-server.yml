@@ -1,8 +1,8 @@
-# 개발 서버 검색 MCP(실행 이미지 mcp-server-runtime — op-06, 사용자 10-30): 서버 코드 폴더(CODE_DIR)를 /app/deploy에 읽기 전용으로.
-#   docker compose -f compose.mcp-server.yml -f compose.code.mcp-server.yml up -d mcp   (mcp_up.sh는 셸에 CODE_DIR가 있으면 덧붙임)
+# 개발 서버 검색 MCP(실행 이미지 mcp-server-runtime): 서버 코드 폴더(CODE_DIR)를 /app/deploy에 읽기 전용으로.
+#   docker compose -f compose.mcp-server.yml -f compose.code.mcp-server.yml up -d mcp   (mcp_keepalive.sh는 셸에 CODE_DIR가 있으면 덧붙임)
 #   이미지 변수 MCP_SERVER_IMAGE=mcp-server-runtime:<태그>. 이 파일 없이 띄우면 runtime_entry.sh가 바로 멈춤(종료 2).
 x-code: &code
-  - ${CODE_DIR:?CODE_DIR=<코드 폴더 — 저장소 트리 그대로> 필요(op-06)}:${APP_CODE_ROOT:?APP_CODE_ROOT 필요 — settings_env.sh load_settings가 냄}:ro,z
+  - ${CODE_DIR:?CODE_DIR=<코드 폴더 — 저장소 트리 그대로> 필요(op-06)}:${APP_CODE_ROOT:?APP_CODE_ROOT 필요 — load_settings.sh load_settings가 냄}:ro,z
 
 services:
   mcp: {volumes: *code}

@@ -1,10 +1,11 @@
-"""pipeline.shared.parse_run 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.shared.parse_run --selftest`."""
+"""pipeline.shared.raw_cache·parse_engines(엔진 버전·캐시 지우기) 시험."""
 
 import os
 from pathlib import Path
 
 from common.core.artifacts import sha8
-from pipeline.shared.parse_run import engine_version, prompt_id, purge_caches, raw_engine_path, raw_vlm_path
+from pipeline.shared.raw_cache import prompt_id, raw_engine_path, raw_vlm_path
+from pipeline.transform.parse.parse_engines import engine_version, purge_caches
 
 
 def selftest():

@@ -1,7 +1,6 @@
-"""호스트 flow 러너 run_docs.py의 main() 흐름 배선(S12, 사용자 10-29 — refactor.md C-59).
-10-23 "MCP 업로드 감시" 수정 때 mcp_busy·_mcp_pause_monitor가 main() 한가운데에 끼어들어 lane_worker와 그 뒤(레인 스레드 시작·끝 대기·
-구조화 센티널·마지막 로그)가 main() 밖으로 빠졌다 — main()이 파싱 스레드를 띄우지 않고 끝났다(pre-refactor부터). 이 시험이 그 배선을 고정한다.
-run_docs.py는 로컬에서 실행하지 않는다(CLAUDE.md §4) — 설정·docker·EDW·다운로드·파싱·구조화 함수를 가짜로 바꾸고 문서 2건으로 main()만 돌린다
+"""호스트 flow 러너 run_pipeline.py의 main() 흐름 배선 — main()이 레인 스레드를 띄우고 끝까지 기다리며 구조화 센티널·마지막 로그까지
+도는지 고정한다(refactor.md C-59).
+run_pipeline.py는 로컬에서 실행하지 않는다(CLAUDE.md §4) — 설정·docker·EDW·다운로드·파싱·구조화 함수를 가짜로 바꾸고 문서 2건으로 main()만 돌린다
 (운영 접속·docker·DB 없음). 끝 대기가 5초 간격이라 몇 초 걸린다. main()이 umask·모듈 상태를 바꾸므로 자식 프로세스로 돈다(INPROCESS 아님)."""
 
 import importlib.util
@@ -14,21 +13,21 @@ from unittest import mock
 
 from common.core.paths import DEPLOY_ROOT
 
-ROOT = DEPLOY_ROOT  # 저장소 루트(op-09 — paths 상수)
+ROOT = DEPLOY_ROOT  # 저장소 루트(paths 상수)
 
 
 def _load():
-    spec = importlib.util.spec_from_file_location("run_docs_flow_under_test", ROOT / "deploy" / "host" / "scripts" / "run_docs.py")
+    spec = importlib.util.spec_from_file_location("run_pipeline_flow_under_test", ROOT / "deploy" / "host" / "scripts" / "run_pipeline.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)  # 모듈 맨 위는 정의만(configure()·docker 호출 없음)
     return mod
 
 
-def _ok_pub(seq, row):
+def _ok_pub(seq):
     return True
 
 
-def _ok_gold(seq, row, enq_t=None):
+def _ok_gold(seq, enq_t=None):
     return True
 
 
@@ -38,7 +37,7 @@ def _run_main(work, rows, parse_one, gold_one=_ok_gold, publish_one=_ok_pub, dro
     M = _load()
     rec = drops if drops is not None else []
 
-    class _FastTime:  # run_docs의 5초 대기 고리(_mcp_pause_monitor·흐름 끝 기다림)를 짧게 — 다른 time 기능은 그대로
+    class _FastTime:  # run_pipeline의 5초 대기 고리(_mcp_pause_monitor·흐름 끝 기다림)를 짧게 — 다른 time 기능은 그대로
         def __getattr__(self, name):
             return getattr(time, name)
 
@@ -51,17 +50,17 @@ def _run_main(work, rows, parse_one, gold_one=_ok_gold, publish_one=_ok_pub, dro
     def configure(_settings):  # 설정 파일 대신 — 작업 폴더만 임시 폴더로
         M.TEST, M.PROG = work, work / "batch_progress"
         M.DOCSPACE = work / "out"
-        M.DOCFLOW, M.WARM = M.DOCSPACE / "_docflow", M.DOCSPACE / "_warm"
+        M.DOCFLOW, M.STAGING = M.DOCSPACE / "_docflow", M.DOCSPACE / "_staging"
         M.MCP_JOBS_DIR = work / "jobs"
         if setup:
             setup(M)
         return []
 
     M.configure = configure
-    M.edw_list = lambda keywords=(), where=None: rows
-    M.faq_first = lambda rows, order: order  # FAQ 교체(pl-41)는 test_run_docs.test_faq_first에서
+    # 대상 목록(컨테이너 candidate_pick list) 대신 — 고르기·FAQ 순서는 tests/server/pipeline/test_target_list.py
+    M.pick_targets = lambda a: (dict(enumerate(rows)), list(range(len(rows))), len(rows), 0)
     M.stack_check = lambda: None  # 엔진 구성 파일 확인(docker exec) 대신
-    M.warm_one = lambda seq, row: True
+    M.stage_one = lambda seq, row: True
     M.classify_doc = lambda seq, row, cache=None: M._class.setdefault(seq, "light")  # 레인 분류(docker exec) 대신 — 규칙은 test_doc_group
     M.parse_one, M.publish_one, M.gold_one = parse_one, publish_one, gold_one
     M.drop_original = lambda seq, row: rec.append(("orig", seq))
@@ -70,8 +69,8 @@ def _run_main(work, rows, parse_one, gold_one=_ok_gold, publish_one=_ok_pub, dro
     M.pg_count = lambda: (0, 0)
     M.rc = None
     argv = sys.argv
-    sys.argv = ["run_docs.py", "--start-offset", "0", "--settings", str(work / "unused.yaml"), *args]
-    # 가짜로 바꾸지 않은 외부 명령(docker exec·셸)이 불리면 바로 실패 — main()에 새 부작용이 생겨도 운영 쪽으로 새지 않게(S12 /simplify)
+    sys.argv = ["run_pipeline.py", "--start-offset", "0", "--settings", str(work / "unused.yaml"), *args]
+    # 가짜로 바꾸지 않은 외부 명령(docker exec·셸)이 불리면 바로 실패 — main()에 새 부작용이 생겨도 운영 쪽으로 새지 않게
     no_shell = AssertionError("시험 중 외부 명령 호출 — 가짜로 바꾸지 않은 부작용")
     try:
         with (
@@ -96,31 +95,31 @@ def test_main_runs_lanes_to_end():
 
         def parse_one(seq, row):
             calls["parse"].append(seq)
-            return True, work / f"{seq}"
+            return True
 
-        def gold_one(seq, row, enq_t=None):
+        def gold_one(seq, enq_t=None):
             calls["struct"].append(seq)
             return True
 
         M = _run_main(work, rows, parse_one, gold_one)
-        assert sorted(calls["parse"]) == [0, 1], calls  # 레인 스레드가 _one → parse_one을 부름(결함 때는 0건)
+        assert sorted(calls["parse"]) == [0, 1], calls  # 레인 스레드가 _one → parse_one을 부름
         assert sorted(calls["struct"]) == [0, 1], calls  # 파싱 OK → 게시 → 구조화 대기열 → gold_one
         assert M._lane_inflight == {"light": 0, "medium": 0, "vlm": 0}
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
-        assert "문서별 flow 끝: 2건(완료 2 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 0)" in log, log
+        assert "문서별 flow 끝: 2건(완료 2 · 건너뜀 0 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 0)" in log, log
         assert M.rc == 0
 
 
 def test_main_survives_errors_in_failure_path():
-    """예외 처리 중 다시 예외(정리 함수 실패 — 디스크 가득 등)가 나도 작업 스레드가 죽지 않고 main()이 실패 수를 세고 끝난다(S12 리뷰 ①)."""
+    """예외 처리 중 다시 예외(정리 함수 실패 — 디스크 가득 등)가 나도 작업 스레드가 죽지 않고 main()이 실패 수를 세고 끝난다."""
     rows = [{"id": i, "s3_key": f"k{i}", "original_filename": f"doc{i}.txt", "file_size": 10} for i in range(2)]
     with tempfile.TemporaryDirectory(prefix="orca_s12_") as tmp:
         work = Path(tmp)
 
         def parse_one(seq, row):  # 문서 0은 파싱 실패, 문서 1은 통과
-            return seq == 1, work / f"{seq}"
+            return seq == 1
 
-        def gold_one(seq, row, enq_t=None):
+        def gold_one(seq, enq_t=None):
             raise RuntimeError("구조화 실패(시험)")
 
         def setup(M):
@@ -132,12 +131,13 @@ def test_main_survives_errors_in_failure_path():
         M = _run_main(work, rows, parse_one, gold_one, setup=setup)
         assert M._lane_inflight == {"light": 0, "medium": 0, "vlm": 0}
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
-        assert "문서별 flow 끝: 2건(완료 0 · 파싱실패 1 · 게시실패 0 · gold실패 1 · 스레드 예외 0)" in log, log
+        assert "문서별 flow 끝: 2건(완료 0 · 건너뜀 0 · 파싱실패 1 · 게시실패 0 · gold실패 1 · 스레드 예외 0)" in log, log
+        assert "doc#1 구조화 예외 — RuntimeError" in log, log
         assert M.rc == 1
 
 
 def test_thread_error_fails_the_run():
-    """gold 뒤 기록(mark — 디스크 가득 등)이 예외를 내도 집계는 먼저 되고, 스레드 예외는 실패로 세어 종료 코드 1(PR #107 리뷰 P1)."""
+    """gold 뒤 기록(mark — 디스크 가득 등)이 예외를 내도 집계는 먼저 되고, 스레드 예외는 실패로 세어 종료 코드 1."""
     rows = [{"id": 0, "s3_key": "k0", "original_filename": "doc0.txt", "file_size": 10}]
     with tempfile.TemporaryDirectory(prefix="orca_thr_") as tmp:
         work = Path(tmp)
@@ -152,34 +152,34 @@ def test_thread_error_fails_the_run():
 
             M.mark = mark
 
-        M = _run_main(work, rows, lambda seq, row: (True, work / f"{seq}"), setup=setup)
+        M = _run_main(work, rows, lambda seq, row: True, setup=setup)
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
-        assert "완료 1 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 1" in log, log
+        assert "완료 1 · 건너뜀 0 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 1" in log, log
         assert M.rc == 1
 
 
-def test_warm_error_does_not_hang():
-    """받기 워커에서 예외가 나도 main()이 끝나고(_warming에 남지 않음) 실패로 세어 종료 코드 1(PR #107 재리뷰 P1)."""
+def test_stage_error_does_not_hang():
+    """받기 워커에서 예외가 나도 main()이 끝나고(_fetching에 남지 않음) 실패로 세어 종료 코드 1."""
     rows = [{"id": i, "s3_key": f"k{i}", "original_filename": f"doc{i}.txt", "file_size": 10} for i in range(2)]
-    with tempfile.TemporaryDirectory(prefix="orca_warm_") as tmp:
+    with tempfile.TemporaryDirectory(prefix="orca_stage_") as tmp:
         work = Path(tmp)
 
         def setup(M):
-            def warm_one(seq, row):
+            def stage_one(seq, row):
                 if seq == 0:
                     raise OSError("받기 실패(시험 — 디스크 가득 흉내)")
                 return True
 
-            M.warm_one = warm_one
+            M.stage_one = stage_one
 
-        M = _run_main(work, rows, lambda seq, row: (True, work / f"{seq}"), setup=setup)
+        M = _run_main(work, rows, lambda seq, row: True, setup=setup)
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
-        assert "완료 1 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 1" in log, log
-        assert M.rc == 1 and not M._warming
+        assert "완료 1 · 건너뜀 0 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 1" in log, log
+        assert M.rc == 1 and not M._fetching
 
 
 def test_depth_write_error_does_not_hang():
-    """대기열 깊이 기록(depth)이 디스크 오류를 내도 main()이 멈추지 않고 정상 끝(관찰용 기록 — PR #107 재리뷰 P1)."""
+    """대기열 깊이 기록(depth)이 디스크 오류를 내도 main()이 멈추지 않고 정상 끝(관찰용 기록)."""
     rows = [{"id": i, "s3_key": f"k{i}", "original_filename": f"doc{i}.txt", "file_size": 10} for i in range(2)]
     with tempfile.TemporaryDirectory(prefix="orca_depth_") as tmp:
         work = Path(tmp)
@@ -187,9 +187,9 @@ def test_depth_write_error_does_not_hang():
         def setup(M):
             (M.PROG / "queue_depth.jsonl").mkdir(parents=True)  # 파일 자리에 폴더 — open("a")가 OSError
 
-        M = _run_main(work, rows, lambda seq, row: (True, work / f"{seq}"), setup=setup)
+        M = _run_main(work, rows, lambda seq, row: True, setup=setup)
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
-        assert "완료 2 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 0" in log, log
+        assert "완료 2 · 건너뜀 0 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 0" in log, log
         assert M.rc == 0
 
 
@@ -205,11 +205,11 @@ def test_struct_backlog_holds_new_parses():
         def setup(M):
             M._BACKLOG_SETTING, M.STRUCT_WORKERS = 1, 1  # 상한 1 · 구조화 1개(느림)
 
-        def gold_one(seq, row, enq_t=None):
+        def gold_one(seq, enq_t=None):
             time.sleep(0.3)
             return True
 
-        M = _run_main(work, rows, lambda seq, row: (True, work / f"{seq}"), gold_one, setup=setup)
+        M = _run_main(work, rows, lambda seq, row: True, gold_one, setup=setup)
         lines = [json.loads(x) for x in (M.PROG / "queue_depth.jsonl").read_text(encoding="utf-8").splitlines()]
         picks = [x for x in lines if x["event"] == "pick"]
         assert len(picks) == 8, len(picks)
@@ -229,7 +229,7 @@ def _lanes_by_name(M):  # 분류(docker probe)를 가짜로 — 파일 이름 �
 
 
 def test_medium_vlm_lanes_and_vlm_cap():
-    """medium·vlm 레인도 끝까지 돌고, vlm 문서 동시 파싱은 vlm_cap을 넘지 않는다(rn-04 — 전에는 light만 시험)."""
+    """medium·vlm 레인도 끝까지 돌고, vlm 문서 동시 파싱은 vlm_cap을 넘지 않는다(rn-04)."""
     lanes = ["light", "medium", "vlm"] * 3
     rows = [{"id": i, "s3_key": f"k{i}", "original_filename": f"{c}_{i}.bin", "file_size": 10} for i, c in enumerate(lanes)]
     seen, live, peak, lock = [], {"vlm": 0}, {"vlm": 0}, threading.Lock()
@@ -245,7 +245,7 @@ def test_medium_vlm_lanes_and_vlm_cap():
             time.sleep(0.1)
             with lock:
                 live[lane] -= 1
-            return True, work / f"{seq}"
+            return True
 
         def setup(M):
             _lanes_by_name(M)
@@ -262,7 +262,7 @@ def test_medium_vlm_lanes_and_vlm_cap():
 
 
 def test_mcp_busy_yields_medium_own_worker():
-    """MCP 업로드 처리 중(_mcp_pause)이면 medium 전담 워커는 새 문서를 안 뽑고, medium 문서는 공유 워커가 처리한다(10-23 양보 길 — rn-04)."""
+    """MCP 업로드 처리 중(_mcp_pause)이면 medium 전담 워커는 새 문서를 안 뽑고, medium 문서는 공유 워커가 처리한다(rn-04)."""
     rows = [{"id": i, "s3_key": f"k{i}", "original_filename": f"medium_{i}.bin", "file_size": 10} for i in range(4)]
     seen = []
     with tempfile.TemporaryDirectory(prefix="orca_rn04_") as tmp:
@@ -273,7 +273,7 @@ def test_mcp_busy_yields_medium_own_worker():
         def parse_one(seq, row):
             (job / "status").write_text("running", encoding="utf-8")  # 작업 파일이 계속 갱신됨 — 감시가 계속 '처리 중'으로 봄
             seen.append(threading.current_thread().name)
-            return True, work / f"{seq}"
+            return True
 
         def setup(M):
             _lanes_by_name(M)
@@ -287,7 +287,7 @@ def test_mcp_busy_yields_medium_own_worker():
 
 
 def test_mcp_busy_scans_recent_job_folders_only():
-    """mcp_busy는 이름 날짜가 어제·오늘·내일인 작업 폴더에서 30초 안에 바뀐 파일만 본다(rn-04 — 5초마다 jobs 전체 rglob 대신)."""
+    """mcp_busy는 이름 날짜가 어제·오늘·내일인 작업 폴더에서 30초 안에 바뀐 파일만 본다(rn-04 — 5초마다 jobs 전체를 훑지 않게)."""
     import os
 
     M = _load()
@@ -317,6 +317,7 @@ ORDER_CASES = [
     ((True, True, False), ["parse", "publish", "orig", "gold", "temp"], 1),  # gold 실패 — silver는 이미 게시됨, 원본은 게시 뒤 지움
     ((True, False, True), ["parse", "publish", "temp"], 1),  # 게시 실패 — 원본 남김, gold 안 감
     ((False, True, True), ["parse", "temp"], 1),  # 파싱 실패 — 원본 남김, 게시·gold 안 감
+    (("skip", True, True), ["parse", "orig", "temp"], 0),  # 받기가 뺀 문서(중복·DRM) — 게시·gold 없이 원본·임시 삭제, 실패 아님
 ]
 
 
@@ -330,9 +331,9 @@ def test_doc_order_and_exit_code():
             M = _run_main(
                 work,
                 rows,
-                lambda seq, row, ok=p_ok, ev=ev, w=work: (ev.append("parse"), (ok, w))[1],
-                lambda seq, row, enq_t=None, ok=g_ok, ev=ev: (ev.append("gold"), ok)[1],
-                lambda seq, row, ok=pub_ok, ev=ev: (ev.append("publish"), ok)[1],
+                lambda seq, row, ok=p_ok, ev=ev: (ev.append("parse"), ok)[1],
+                lambda seq, enq_t=None, ok=g_ok, ev=ev: (ev.append("gold"), ok)[1],
+                lambda seq, ok=pub_ok, ev=ev: (ev.append("publish"), ok)[1],
                 drops=_Rec(ev),
             )
         assert ev == want and M.rc == rc, ((p_ok, pub_ok, g_ok), ev, M.rc)
@@ -350,9 +351,9 @@ class _Rec(list):
 
 
 def test_exit_codes():
-    """pl-18: 대상 0건 = 0 · 마감 도달(실패 없음) = 75 · 다른 run_docs가 도는 중 = 75."""
+    """pl-18: 대상 0건 = 0 · 마감 도달(실패 없음) = 75 · 다른 run_pipeline이 도는 중 = 75."""
     rows = [{"id": i, "s3_key": f"k{i}", "original_filename": f"doc{i}.txt", "file_size": 10} for i in range(2)]
-    ok_parse = lambda seq, row: (True, Path("."))  # 시험 한 줄
+    ok_parse = lambda seq, row: True  # 시험 한 줄
 
     def past_deadline(M):
         M.deadline_at = lambda hhmm: time.time() - 1
@@ -363,7 +364,7 @@ def test_exit_codes():
     cases = [  # (rows, setup, args, 기대 종료 코드, 로그에 있어야 할 글자)
         ([], None, (), 0, "종료"),
         (rows, past_deadline, ("--deadline", "05:00"), 75, "마감 — 남은 2건"),
-        (rows, locked, (), 75, "다른 run_docs가 도는 중"),
+        (rows, locked, (), 75, "다른 run_pipeline이 도는 중"),
     ]
     for rws, setup, args, want, text in cases:
         with tempfile.TemporaryDirectory(prefix="orca_pl18_") as tmp:
@@ -383,13 +384,13 @@ def test_lock_blocks_second_run():
 
     M = _load()
     with tempfile.TemporaryDirectory(prefix="orca_pl18_") as tmp:
-        lock = Path(tmp) / "run_docs.lock"
+        lock = Path(tmp) / "run_pipeline.lock"
         held = M.take_lock(lock)
         assert held is not None
         # flock은 같은 프로세스 안 다른 열기도 막지만, 실제 상황(다른 프로세스)으로 확인
         code = (
             "import importlib.util,sys;"
-            f"s=importlib.util.spec_from_file_location('rd',{str(ROOT / 'deploy' / 'host' / 'scripts' / 'run_docs.py')!r});"
+            f"s=importlib.util.spec_from_file_location('rd',{str(ROOT / 'deploy' / 'host' / 'scripts' / 'run_pipeline.py')!r});"
             "m=importlib.util.module_from_spec(s);s.loader.exec_module(m);"
             f"sys.exit(0 if m.take_lock({str(lock)!r}) is None else 1)"
         )

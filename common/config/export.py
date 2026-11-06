@@ -1,12 +1,12 @@
-"""settings.yaml의 절을 KEY=VALUE 줄로 내보내기 — YAML을 직접 못 읽는 셸·compose·systemd용 다리(S7a 시제품 → S7e1 정식, refactor_plan 5-2 · D-028 ⑭).
-  · 옛 env 이름으로 낸다(셸·compose 파일이 지금 쓰는 ${X} 그대로).
+"""settings.yaml의 절을 KEY=VALUE 줄로 내보내기 — YAML을 직접 못 읽는 셸·compose·systemd용 다리.
+  · env 이름으로 낸다(셸·compose 파일이 쓰는 ${X} 그대로).
   · 비밀 칸은 내보내지 않는다 — 컨테이너 안 앱이 붙인 설정 파일에서 직접 읽는다. YAML에 적은 값만 낸다(기본값은 스크립트·compose 쪽 기본값).
-  · --format sh(호스트 스크립트 — deploy/host/scripts/settings_env.sh의 load_settings): `export KEY='VALUE'`(bash 3.2·4·5 — eval)
+  · --format sh(호스트 스크립트 — deploy/host/scripts/load_settings.sh의 load_settings): `export KEY='VALUE'`(bash 3.2·4·5 — eval)
   · --format env(기본 — 사람이 compose `--env-file <(…)`로 줄 때): `KEY=VALUE` — compose가 env 파일 값의 `$`를 다시 치환하므로 값에 `$`가
-    있으면 거부한다(이름만 — VS7a R-11, 사용자 10-27 S7e1 Q3). 셸 env로 넘기는 sh 꼴은 다시 치환되지 않는다.
+    있으면 거부한다(오류에는 이름만). 셸 env로 넘기는 sh 꼴은 다시 치환되지 않는다.
 사용: python -m common.config.export --section pipeline.host [--section common.host] [--section mcp.server.port] [--file settings.yaml] [--format sh]
       호스트 절(common.host·pipeline.host·pipeline.host.nightly·mcp.host·common.dev.docker)이 주 용도. 앱 칸도 낼 수 있음(비밀 빼고 —
-      compose가 앱 칸을 덮는 MCP_HOST·TRIGGER_HOST 등). pipeline·mcp 절을 한 번에 줘도 된다(앱마다 읽어 이름 겹침 없이 합침 — S7e1).
+      compose가 앱 칸을 덮는 MCP_HOST·TRIGGER_HOST 등). pipeline·mcp 절을 한 번에 줘도 된다(앱마다 읽어 이름 겹침 없이 합침).
 """
 
 import argparse
@@ -21,7 +21,7 @@ def lines(settings, sections, fmt="env", seen=None):
     out, seen = [], set() if seen is None else seen
     for sec in sections:
         # 칸마다 호스트·앱을 가리지 않고 고른 절(또는 칸) 아래 전부 — 잎 칸 이름이 host인 앱 칸(mcp.server.host·pipeline.service.trigger.host)도
-        # 그 칸 하나로 고를 수 있게(S7e1 — 전엔 절 이름+".x"로 호스트 절을 가려 이 둘이 빠짐)
+        # 그 칸 하나로 고를 수 있게
         for name, value, _ in S.env_items(settings, section=sec, hosts=None, secrets=False):
             if name in seen:
                 continue
@@ -69,13 +69,13 @@ def run(cls, a, tag="export"):
 
 
 def _requested(file, sections):
-    """설정 파일을 한 번 읽어 고른 절(칸)과 common.run_env만 남긴 사전 — 고르지 않은 칸은 검증하지 않는다(S7e1 리뷰: mcp 절의 오타가
-    pipeline 호스트 스크립트(trigger.sh·새벽 배치)를 멈추지 않게 — U-a와 같은 뜻). 파일 자리는 load()와 같은 규칙(SETTINGS_FILE·RUN_ENV)."""
+    """설정 파일을 한 번 읽어 고른 절(칸)과 common.run_env만 남긴 사전 — 고르지 않은 칸은 검증하지 않는다(mcp 절의 오타가
+    pipeline 호스트 스크립트(nightly_batch.sh·새벽 배치)를 멈추지 않게). 파일 자리는 load()와 같은 규칙(SETTINGS_FILE·RUN_ENV)."""
     import os
 
     run = os.environ.get("RUN_ENV") or None  # env 남김 — RUN_ENV 신호
     path = S.Path(file) if file else S.find_file(os.environ, run if run in S.RUN_ENVS else None)  # env 남김 — 설정 파일 자리 신호
-    full, over = S.read_settings(path) if path else ({}, {})  # 덮기 파일(base·overrides — S7e2)도
+    full, over = S.read_settings(path) if path else ({}, {})  # 덮기 파일(base·overrides)도
     doc = {}
     for sec in [*sections, "common.run_env"]:
         v = S._peek(full, sec)

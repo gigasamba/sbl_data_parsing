@@ -1,16 +1,16 @@
-"""F14 — 차트 값 정밀 추출 + 추세(사용자 10-14).
+"""차트 값 정밀 추출 + 추세.
 
 (a) 벡터 PDF 차트: page.get_drawings()(선·채운 사각형)+get_text("words")(눈금 글자)만으로 결정적 값 추출(VLM 없음).
     y축(가장 왼쪽 수직선)·x축(가장 아래쪽 수평선)을 찾고, y축 왼쪽의 숫자 글자(일반 숫자·%·"10^n")를 눈금으로
     최소제곱 피팅해 픽셀→값 변환을 만든다(눈금이 전부 10의 정수 거듭제곱이면 로그축). 채운 사각형(막대, 누적이면
     세그먼트별로)·꺾은선(여러 "l" 세그먼트로 이은 한 drawing)의 꼭짓점을 이 변환으로 값으로 바꾼다. 축 눈금이
     2개 미만(표·흐름도 등 숫자 눈금이 없는 그림)이면 빈 목록 — 값을 지어내지 않는다.
-(b) 래스터 차트 단계식(VLM — 실 호출 배선 없이 시험만 부르던 raster_chart_values·지시서 figure_chart_raster)은 10-30 지움(e2-17).
-(c) 추세: compute_trend — 값이 있으면 상대변화 문턱으로 결정적 판정(ponytail: 단순 규칙, 실측 쌓이면 재조정).
+(b) 추세: compute_trend — 값이 있으면 상대변화 문턱으로 결정적 판정(ponytail: 단순 규칙, 실측 쌓이면 재조정).
 """
 
 import math
 import re
+from pathlib import Path
 
 POW10_RE = re.compile(r"^10\s*\^\s*(-?\d+)$")  # "^" 글자가 꼭 있어야(없으면 "100"을 10^0=1로 잘못 읽음)
 _CURRENCY_CHARS = "₩$€£¥"
@@ -21,7 +21,7 @@ _PLAIN_RE = re.compile(r"^-?[\d,]+\.?\d*$")
 
 
 def _to_number(s):
-    """숫자 글자 → float, 못 읽으면 None. 독립 검토(10-14) — 지원 확장: 쉼표(1,200)·%(45%)·통화 기호
+    """숫자 글자 → float, 못 읽으면 None. 지원 확장: 쉼표(1,200)·%(45%)·통화 기호
     (₩1,200·$45)·K/M/B 단위(1.2K·3M)·과학적 표기(1e6)·"10^n"(눈금 전용 표기)."""
     s = (s or "").strip()
     if not s:
@@ -62,7 +62,7 @@ def _fmt_num(v):
 
 
 def _is_log_axis(ticks_px_order):
-    """눈금(픽셀 순서대로, _y_ticks가 이미 픽셀 오름차순 정렬해 넘김) → 로그축인지. 독립 검토(10-14) — 문자 그대로
+    """눈금(픽셀 순서대로, _y_ticks가 이미 픽셀 오름차순 정렬해 넘김) → 로그축인지. 문자 그대로
     "10^n"이 아니어도(예: 2·20·200·2000) 연속 값의 비율이 거의 일정(기하수열)하면 로그축으로 본다(일반화,
     ratio>=3개 있을 때만 — 2개짜리는 비율 하나로는 기하/선형을 가를 수 없어 10^n 리터럴 폴백만)."""
     vals = [v for _, v in ticks_px_order]
@@ -81,7 +81,7 @@ def _is_log_axis(ticks_px_order):
 def _fit_axis(ticks):
     """[(pixel, value)](>=2) → (slope, intercept, log_axis) 또는 None(피팅 불가, 모든 픽셀이 같음).
     value = slope*pixel + intercept(선형) 또는 log10(value) = slope*pixel + intercept(로그).
-    로그축 판정은 _is_log_axis (10^n 리터럴만이 아니라 일반 기하수열도 인식, 독립 검토 10-14)."""
+    로그축 판정은 _is_log_axis (10^n 리터럴만이 아니라 일반 기하수열도 인식)."""
     raw = sorted(((p, v) for p, v in ticks), key=lambda t: t[0])  # 픽셀 오름차순(_is_log_axis가 기하수열 비율을 보려면 순서가 필요)
     log_axis = _is_log_axis(raw)
     vals = [v for _, v in raw]
@@ -150,7 +150,7 @@ def _find_axes(drawings, region):
 
 
 def _infer_axis_from_labels(words, vertical=True):
-    """스파인(축 선)이 전혀 없는 차트(엑셀·파워포인트에서 그대로 내보낸 PDF 등, 독립 검토 10-14) — 숫자 글자가
+    """스파인(축 선)이 전혀 없는 차트(엑셀·파워포인트에서 그대로 내보낸 PDF 등) — 숫자 글자가
     세로로(vertical=True, y축) 또는 가로로(x축 폴백은 아직 안 씀, 자리만) 비슷한 위치에 늘어서 있고 ①값이
     단조(증가 또는 감소) ②픽셀 간격이 고르면(변동 35% 안) 진짜 눈금으로 보고 (ax, lo, hi) 근사를 돌려준다.
     표의 숫자 열은 보통 값이 들쭉날쭉하거나(비단조) 행 간격이 본문처럼 고르지 않아 자연히 걸러진다(완전한
@@ -166,7 +166,7 @@ def _infer_axis_from_labels(words, vertical=True):
     if len(cands) < 3:
         return None
     # 오른쪽 끝(x1)으로 묶는다 — 실제 눈금 숫자는 보통 오른쪽 정렬(자릿수가 다르면 왼쪽 끝 x0은 들쭉날쭉해도
-    # 오른쪽 끝은 가지런함, 독립 검토 10-14에서 왼쪽 정렬 가정이 자릿수 다른 눈금에서 깨짐을 확인).
+    # 오른쪽 끝은 가지런함, 실측에서 왼쪽 정렬 가정이 자릿수 다른 눈금에서 깨짐을 확인).
     cands.sort(key=lambda c: c[1])
     best = None
     i = 0
@@ -223,16 +223,16 @@ def _y_ticks(words, y_axis):
 
 def _x_ticks(words, x_axis, region=None, y_axis=None):
     """x축 아래(세로 20pt 안)의 글자(숫자 아니어도 됨 — 분기·연도 같은 범주 이름) → [(픽셀중심x, 글자)].
-    x_axis가 없으면(스파인 없는 차트, 독립 검토 10-14) region 하단 18%의 글자를 범주 라벨 후보로(회전된
+    x_axis가 없으면(스파인 없는 차트) region 하단 18%의 글자를 범주 라벨 후보로(회전된
     라벨도 bbox 중심은 대략 맞음 — 완전한 회전 보정은 아님, ponytail 한계) — y_axis(추론된 것 포함)가 있으면
     그 눈금 글자 열(x0 <= y_axis[0])은 제외한다(안 그러면 y축 맨 아래 눈금 글자가 하단 18%와 겹쳐 x 범주로
-    잘못 섞여 들어감, 실측 10-14 log_axis_exported)."""
+    잘못 섞여 들어감, 실측 log_axis_exported)."""
     if x_axis is not None:
         ay, xl, xr = x_axis
         out = []
         for w in words:
             x0, y0, x1, _y1, txt = w[0], w[1], w[2], w[3], w[4]
-            if y0 < ay - 2 or y0 > ay + 70:  # 70pt — 세로로 회전된(rotate=90) 범주 라벨은 글자 수만큼 더 아래로 뻗음(독립 검토 10-14)
+            if y0 < ay - 2 or y0 > ay + 70:  # 70pt — 세로로 회전된(rotate=90) 범주 라벨은 글자 수만큼 더 아래로 뻗음
                 continue
             if x1 < xl - 10 or x0 > xr + 10:
                 continue
@@ -261,7 +261,7 @@ def _rect_key(r):
 def _bar_ok(r, x_axis, region, legend_rects):
     """막대 후보 bbox 공용 필터 — 너무 작음·범례 상자(legend_rects, 위치로 x_axis 유무와 무관하게 늘 제외)·
     x축 가로 범위 밖·너무 아래는 제외. x_axis가 없으면(스파인 없는 차트) region 경계만으로(덜 엄격 — 뒤의
-    공통 기준선 가드가 가짜를 추가로 거름). 독립 검토(10-14) — 범례 제외를 x_axis 유무에 기대지 않게 고침
+    공통 기준선 가드가 가짜를 추가로 거름). 범례 제외를 x_axis 유무에 기대지 않게 고침
     (스파인 없는 차트에서 범례 상자가 '누적 세그먼트'로 잘못 섞여 들어가 전체 탐지가 막히던 회귀)."""
     if r.width < 4 or r.height < 4 or r.width * r.height < 20:
         return False
@@ -274,7 +274,7 @@ def _bar_ok(r, x_axis, region, legend_rects):
 
 def _bars(drawings, region, x_axis, legend_rects=frozenset()):
     """채운 사각형(단일 're' 아이템짜리 drawing·같은 색 여러 막대를 한 shape로 묶은 drawing 둘 다) + 둥근 모서리
-    등 're'가 아닌 닫힌 채움 경로(독립 검토 10-14 — 엑셀·파워포인트 차트가 흔히 이렇게 그림, 'c'·'l' 곡선/직선
+    등 're'가 아닌 닫힌 채움 경로(엑셀·파워포인트 차트가 흔히 이렇게 그림, 'c'·'l' 곡선/직선
     조합)는 drawing 전체 bbox를 막대 하나로. 범례 상자(legend_rects)·x축의 가로 범위 밖·너무 작은 사각형은 뺀다."""
     out = []
     for d in drawings:
@@ -298,7 +298,7 @@ def _bars(drawings, region, x_axis, legend_rects=frozenset()):
 
 def _columns_look_like_bars(cols, tol=3):
     """여러 막대가 한 '열'로 묶였으면(_group_columns, x 구간이 겹치거나 가까움) 진짜 누적 막대인지 — 위→아래로
-    세그먼트가 서로 맞닿아야(이전 세그먼트 바닥 ≈ 다음 세그먼트 위) 한다. 독립 검토(10-14) — Gantt류 수평 막대가
+    세그먼트가 서로 맞닿아야(이전 세그먼트 바닥 ≈ 다음 세그먼트 위) 한다. Gantt류 수평 막대가
     x 구간이 겹쳐 한 열로 묶여도(서로 다른 행이라 y가 제각각·안 맞닿음) 누적 막대로 오인하지 않게."""
     for c in cols:
         items = sorted(c["items"], key=lambda b: b["rect"].y0)
@@ -310,8 +310,7 @@ def _columns_look_like_bars(cols, tol=3):
 
 
 def _shares_baseline(bars, tol=3):
-    """단일 막대(누적 아님)들 대부분이 같은 픽셀에서 '쉬는'(resting) 모서리를 공유하는지 — 독립 검토(10-14):
-    Gantt류(행마다 세로 위치·가로 시작점이 제각각인 수평 막대)를 세로 막대그래프로 오인하지 않게 막는 가드.
+    """단일 막대(누적 아님)들 대부분이 같은 픽셀에서 '쉬는'(resting) 모서리를 공유하는지 — Gantt류(행마다 세로 위치·가로 시작점이 제각각인 수평 막대)를 세로 막대그래프로 오인하지 않게 막는 가드.
     진짜 세로 막대그래프는 전부 같은 플롯 바닥(또는 0선)에서 자란다 — 공유 모서리가 없으면 False."""
     if len(bars) < 2:
         return True
@@ -345,7 +344,7 @@ def _group_columns(bars, gap=6):
 
 def _legend(drawings, words, region):
     """작은 채운 사각형(범례 상자) + 바로 오른쪽 글자 → ({fill색: 이름}, {범례 상자 rect 키 집합}). 뒤엣것은
-    _bars()가 범례 상자를 막대 후보에서 빼는 데 쓴다(독립 검토 10-14 — x_axis 유무와 무관하게 늘 제외해야
+    _bars()가 범례 상자를 막대 후보에서 빼는 데 쓴다(x_axis 유무와 무관하게 늘 제외해야
     스파인 없는 차트에서 범례가 '누적 세그먼트'로 섞여 들어가지 않음)."""
     colors, rects = {}, set()
     for d in drawings:
@@ -369,8 +368,8 @@ def extract_vector(page, bbox):
     도형(막대·축·선)은 bbox 그대로(vector_regions가 VLM 크롭용으로 이미 14~18pt만 여유를 둔 영역)로 자르지만,
     눈금 글자는 그보다 훨씬 넓게(축 왼쪽 100pt·위아래 20~60pt) 찾는다 — vector_regions의 bbox는 '도형'만 보고
     계산돼(get_drawings) 글자 폭·범주 라벨 위치는 모르므로, 자릿수가 긴 눈금(예: "43.2")이 14pt 여유를 넘어가면
-    도형 bbox 안에서는 잘려 눈금을 못 찾던 회귀(실측 10-14, stacked_bar_hard) · x축 범주 라벨(D0·D2…)이 도형
-    bbox 아래 40pt를 살짝 넘어가 아예 빠지던 회귀(실측 10-14, log_axis_exported — 스파인 없는 차트는 범주
+    도형 bbox 안에서는 잘려 눈금을 못 찾던 회귀(실측 stacked_bar_hard) · x축 범주 라벨(D0·D2…)이 도형
+    bbox 아래 40pt를 살짝 넘어가 아예 빠지던 회귀(실측 log_axis_exported — 스파인 없는 차트는 범주
     라벨이 도형보다 한참 아래)도 같은 이유. 폭을 넓혀도 안전한 건 _y_ticks·_x_ticks가 이미 찾아낸 축 위치
     기준으로 다시 한번 가까운지 확인하기 때문(먼 글자가 섞여 들어오지 않음)."""
     import fitz
@@ -380,7 +379,7 @@ def extract_vector(page, bbox):
     drawings = [d for d in page.get_drawings() if _touches(d["rect"], region)]
     words = [w for w in page.get_text("words") if word_region.intersects(fitz.Rect(w[:4]))]
     y_axis, x_axis = _find_axes(drawings, region)
-    used_fallback_axis = y_axis is None  # 독립 검토(10-14) — 스파인(축 선) 없는 "내보내기" 스타일 차트
+    used_fallback_axis = y_axis is None  # 스파인(축 선) 없는 "내보내기" 스타일 차트
     if y_axis is None:
         y_axis = _infer_axis_from_labels(words)
     y_ticks = _y_ticks(words, y_axis)
@@ -393,7 +392,7 @@ def extract_vector(page, bbox):
     x_labels = _x_ticks(words, x_axis, region if x_axis is None else None, y_axis)
     if used_fallback_axis and not x_labels:
         # 스파인도 없고 범주 라벨도 없음 — 진짜 차트라는 증거가 약함(표의 세로 숫자 열 등과 구분 안 됨),
-        # 값을 지어내지 않는다(독립 검토 10-14 — 과탐지 방지).
+        # 값을 지어내지 않는다(과탐지 방지).
         return [], {"axis": None}
     legend, legend_rects = _legend(drawings, words, region)
 
@@ -403,7 +402,7 @@ def extract_vector(page, bbox):
     cols0 = _group_columns(bars) if bars else []
     single_bars = [b for col in cols0 for b in col["items"] if len(col["items"]) == 1]
     if bars and ((single_bars and not _shares_baseline(single_bars)) or not _columns_look_like_bars(cols0)):
-        # 독립 검토(10-14) — 공통 기준선이 없는 단일 막대들(Gantt류 수평 막대) 또는 서로 안 맞닿는 '누적'
+        # 공통 기준선이 없는 단일 막대들(Gantt류 수평 막대) 또는 서로 안 맞닿는 '누적'
         # 세그먼트(x 구간만 겹칠 뿐 다른 행) → 진짜 막대그래프가 아니라고 보고 막대 경로를 건너뛴다(값을 지어내지 않음).
         bars = []
     if bars:
@@ -462,7 +461,7 @@ def extract_vector(page, bbox):
         path_len = sum(math.hypot(it[2].x - it[1].x, it[2].y - it[1].y) for it in items)
         if path_len < 15:
             continue
-        # 독립 검토(10-14) — 다계열 꺾은선: 선 색(stroke, d["color"])을 범례 상자 색(_legend는 채움 색 기준)과
+        # 다계열 꺾은선: 선 색(stroke, d["color"])을 범례 상자 색(_legend는 채움 색 기준)과
         # 맞춰 series를 채운다(범례 상자의 채움 색을 선과 같은 색으로 그리는 게 일반적인 관례).
         series = legend.get(tuple(round(c, 3) for c in (d.get("color") or ())))
         pts = [items[0][1]] + [it[2] for it in items]
@@ -477,7 +476,7 @@ def extract_vector(page, bbox):
     return [], {"axis": "log" if fit[2] else "linear", "chart_type": None}
 
 
-# ── (c) 추세 ────────────────────────────────────────────────────────────
+# ── (b) 추세 ────────────────────────────────────────────────────────────
 FLAT_REL = 0.05  # ponytail: 전체 범위가 최대 절댓값의 5% 안이면 "유지" — 실측 쌓이면 재조정
 PEAK_REL = 0.10  # 중간 값이 양끝보다 이만큼(최대 절댓값 대비) 더 높아야 '정점'으로 본다(잡음과 구분)
 NOISE_REL = 0.15  # 전체 중 이 비율 안의 반대 방향 변화는 잡음으로 보고 단조 증가·감소 판정을 안 깨뜨림
@@ -517,7 +516,7 @@ def compute_trend(values):
     # 순환참조라(유지 판정에 쓰는 값 범위를 범위 자신으로 나눔) 값 크기를 기준으로 삼는다.
     noise = NOISE_REL * scale
     # 1) 정점(중간, 양끝보다 뚜렷이 높음) 후 전부 감소 — "유지"보다 먼저 본다(왕복 10→100→10이 처음=끝이라고
-    # "유지"로 뭉개지지 않게, 독립 검토 10-14).
+    # "유지"로 뭉개지지 않게).
     if 0 < peak_i < len(series_vals) - 1:
         rise_before = series_vals[peak_i] - min(series_vals[: peak_i + 1])
         if rise_before / scale > PEAK_REL and all(d <= noise for d in diffs[peak_i:]) and any(d > 0 for d in diffs[:peak_i]):
@@ -550,7 +549,7 @@ def _norm_text(s):
 
 def _match_key(v):
     """det 값({series,x,...})·VLM 값({label,...}, series/x 없음) 공용 중복 판정 키 — series는 없으면 None,
-    x는 x 필드 없으면 label로 대신(VLM 스키마 보완). 독립 검토(10-14) — 라벨 문자열 그대로가 아니라 정규화해
+    x는 x 필드 없으면 label로 대신(VLM 스키마 보완). 라벨 문자열 그대로가 아니라 정규화해
     비교(서식만 다른 같은 지점을 다른 값으로 오인하지 않게)."""
     return (_norm_text(v.get("series")), _norm_text(v.get("x")) or _norm_text(v.get("label")))
 
@@ -568,4 +567,28 @@ def merge_values(det_values, vlm_values):
     return out
 
 
-# ── (b) 래스터: VLM 전용(실 호출 없음) — 단계식: 눈금값·격자선 픽셀 → 비율 배치 → 보간 ───────────────
+def chart_text(p):
+    """오피스 내장 차트(charts/chart*.xml)의 제목·계열·값 캐시 → [차트] 줄."""
+    import xml.etree.ElementTree as ET
+    import zipfile
+
+    p = Path(p)
+    if p.suffix.lower() not in (".xlsx", ".pptx", ".docx"):
+        return ""
+    lines = []
+    loc = lambda e: e.tag.rsplit("}", 1)[-1]
+    kids = lambda e, name: [x for x in e.iter() if loc(x) == name]
+    pts = lambda e: [v.text for pt in kids(e, "pt") for v in pt if loc(v) == "v"]
+    with zipfile.ZipFile(p) as z:
+        for n in sorted(x for x in z.namelist() if re.search(r"charts/chart\d+\.xml$", x)):
+            root = ET.fromstring(z.read(n))
+            for title in kids(root, "title")[:1]:
+                lines.append("[차트] " + " ".join(x.text or "" for x in kids(title, "t")))
+            for ser in kids(root, "ser"):
+                name = " ".join(v.text or "" for tx in kids(ser, "tx")[:1] for v in kids(tx, "v"))
+                cat = kids(ser, "cat")
+                val = kids(ser, "val")
+                lines.append(
+                    f"계열 {name}: " + ", ".join(f"{c}={v}" for c, v in zip(pts(cat[0]) if cat else [], pts(val[0]) if val else []))
+                )
+    return "\n".join(lines)

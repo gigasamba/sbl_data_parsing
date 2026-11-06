@@ -1,7 +1,7 @@
-"""pipeline.extract.engines.registry(엔진 등록부 — 엔진 지문 밖) 자기 점검 — S9b(VS9 B-1, D-018)에 모듈 `__main__`에서 옮김(줄 글자 그대로).
-옛 명령 `python -m pipeline.extract.engines.registry`(반입 판정 목록 밖 — 일반 시험)."""
+"""pipeline.transform.parse.engines.registry(엔진 등록부 — 엔진 지문 밖) 자기 점검 — S9b(VS9 B-1, D-018)에 모듈 `__main__`에서 옮김(줄 글자 그대로).
+옛 명령 `python -m pipeline.transform.parse.engines.registry`(반입 판정 목록 밖 — 일반 시험)."""
 
-from pipeline.extract.engines.registry import CORE, engines, engines_for, installed, select, stacks
+from pipeline.transform.parse.engines.registry import CORE, engines, engines_for, installed, select, stacks
 
 
 def test_main():  # 옛 `if __name__ == "__main__":   # 자기점검: 등록·형식 매핑` 몸통

@@ -7,9 +7,10 @@ SETTINGS(common + pipeline 절)는 확인 명령(python -m pipeline.config)·시
 사용: python -m pipeline.config [--file 경로]   # 읽어서 요약(비밀 가림) · export --section pipeline.host …
 """
 
+import re
 import sys
 
-from pydantic import Field, SecretStr, field_validator  # 칸 형식
+from pydantic import Field, field_validator  # 칸 형식
 
 from common.config.settings import (
     AppSettings,
@@ -19,7 +20,6 @@ from common.config.settings import (
     CsvText,
     EnvView,
     F,
-    Port,
     Section,
     image_default,
 )
@@ -33,12 +33,18 @@ class PipelineConnectionsRdbColumns(Section):
     filename: str | None = F("original_filename", "RDB_COL_FILENAME", "RDB 문서 위치 표에서 원본 파일 이름 열의 이름", blank="keep")
     key: str | None = F("s3_key", "RDB_COL_KEY", "RDB 문서 위치 표에서 Object Storage 키(s3_key) 열의 이름", blank="keep")
     size: str | None = F("file_size", "RDB_COL_SIZE", "RDB 문서 위치 표에서 파일 크기 열의 이름", blank="keep")
+    source_system: str | None = F(
+        "source_system", "RDB_COL_SOURCE_SYSTEM", "RDB 문서 위치 표에서 원천(source_system) 열의 이름", blank="keep"
+    )
 
 
 class PipelineConnectionsRdb(Section):
     bucket: str | None = F(None, "RDB_BUCKET", "RDB 표에 버킷 정보가 없을 때 쓸 Object Storage 버킷 이름(레거시 대체값)")
-    engine: str | None = F(
-        "mssql", "RDB_ENGINE", "RDB 종류(mssql | pg) — mssql 접속은 common.connections.rdb(읽기 계정 · PC 시험은 그 sqlite)", blank="keep"
+    file_table: str | None = F(
+        "AI.FileStorageMap",
+        "RDB_FILE_TABLE",
+        "파싱 대상 파일 목록을 읽을 EDW 표(<스키마>.<표> — 영문·숫자·_만, SQL에 그대로 들어감)",
+        pattern=r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$",
     )
     increment_col: str | None = F(None, "RDB_INCREMENT_COL", "증분(since) 판정에 쓸 열 이름 — 비우면 문서 ID 열(columns.doc_id)")
     columns: PipelineConnectionsRdbColumns = Field(default_factory=PipelineConnectionsRdbColumns)
@@ -63,14 +69,12 @@ class PipelineExtractCache(Section):
     )
 
 
-class PipelineExtractDedup(Section):
-    """칸 없음 — 지운 칸만 남은 절(이름은 layout.REMOVED — 옛 파일이 경고만 받게)."""
-
-
 class PipelineExtractOcr(Section):
     dpi: int | None = F(150, "OCR_DPI", "쪽·그림 이미지 렌더링 해상도(DPI, OCR 엔진·VLM 엔진·쪽 VLM·그림 VLM·pptx 슬라이드·prepare 공용)")
     max_pages: int | None = F(
-        0, "OCR_MAX_PAGES", "문서당 OCR 엔진(rapidocr 등 — VLM 아님) 쪽 수 상한(쪽, 0=제한 없음 · VLM 쪽 수 상한은 transform.vlm.page_max)"
+        0,
+        "OCR_MAX_PAGES",
+        "문서당 OCR 엔진(rapidocr 등 — VLM 아님) 쪽 수 상한(쪽, 0=제한 없음 · VLM 쪽 수 상한은 transform.vlm.vlm_max_pages_per_doc)",
     )
     table_grid: bool | None = F(True, "OCR_TABLE_GRID", "OCR 박스 좌표로 표 격자를 추정할지(=0이면 끔)")
     threads: int | None = F(
@@ -82,7 +86,6 @@ class PipelineExtractOcr(Section):
 
 
 class PipelineExtractPrepare(Section):
-    link: str | None = F("auto", "PREPARE_LINK", "회전 불필요 파일을 out으로 놓는 방식: auto|hardlink|symlink|copy")
     rotate: bool | None = F(
         False,
         "PREPARE_ROTATE",
@@ -91,19 +94,41 @@ class PipelineExtractPrepare(Section):
     )
 
 
+SOURCE_RE = re.compile(
+    r"(SFDC|CRMS|LAS|FAQ|OTHER|DEV-[1-9][0-9]?)"
+)  # 파싱할 원천 값(대문자로 바꾼 뒤) — DEV-<1~99>는 dev·local만(require_run_env)
+
+
 class PipelineExtractSource(Section):
-    fetch_workers: int | None = F(1, "SOURCE_FETCH_WORKERS", "원본 문서 병렬 다운로드 스레드 수(개) — rdb:csv 받기·미리받기(warm) 공용")
-    warm: str | None = F(None, "SOURCE_WARM", "미리받기(warm) 저장 폴더 — 비면 warm 기능 꺼짐")
+    systems: CsvList | None = F(
+        None,
+        "SOURCE_SYSTEMS",
+        "파싱할 원천 목록(FileStorageMap.source_system — 대소문자 무관): SFDC·CRMS·LAS·FAQ·Other·DEV-<1~99>(dev·local만) — 비우면 운영 원천 5개(DEV 행 뺌)",
+    )
+    fetch_workers: int | None = F(1, "SOURCE_FETCH_WORKERS", "원본 문서 병렬 다운로드 스레드 수(개) — 미리 받기(candidate_ready stage)")
+    staging: str | None = F(None, "SOURCE_STAGING", "미리 받기(staging) 폴더 — 원본을 받는 유일한 자리, 비면 rdb:csv 원본을 받지 못함")
+
+    @field_validator("systems")
+    @classmethod
+    def _source_names(cls, v):
+        """원천 이름은 대문자로(비교는 대소문자 무관) — 모르는 값은 거부."""
+        if not v:
+            return v
+        up = [x.strip().upper() for x in v]
+        bad = [x for x in up if not SOURCE_RE.fullmatch(x)]
+        if bad:
+            raise ValueError(f"모르는 원천 {bad} — SFDC·CRMS·LAS·FAQ·Other·DEV-<1~99>")
+        return up
 
 
 class PipelineHostNightly(Section):
     time: str | None = F(
         None,
         "NIGHTLY_TIME",
-        "새벽 배치 시작 시각(HH:MM, 서버 시간) — 비우면 새벽 배치 없음. 타이머가 5분마다 깨워 이 시각부터 5분 안이면 시작(trigger.sh scheduled)",
+        "새벽 배치 시작 시각(HH:MM, 서버 시간) — 비우면 새벽 배치 없음. 타이머가 5분마다 깨워 이 시각부터 5분 안이면 시작(nightly_batch.sh scheduled)",
         pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$",  # 틀린 꼴은 설정을 읽을 때 거부(타이머가 5분마다 실패로 남기지 않게)
     )
-    # 사용자 11-02 — 시작 시각·문서 수 상한·마감 시각 셋이 모두 있어야 새벽 배치가 돈다(하나라도 비면 trigger.sh scheduled가 조용히 끝)
+    # 사용자 11-02 — 시작 시각·문서 수 상한·마감 시각 셋이 모두 있어야 새벽 배치가 돈다(하나라도 비면 nightly_batch.sh scheduled가 조용히 끝)
     max_docs: int | None = F(
         None, "NIGHTLY_MAX_DOCS", "새벽 배치 한 번에 처리할 새 문서 수 상한(이미 끝난 문서 뺀 뒤) — 비우면 새벽 배치 없음", ge=1
     )
@@ -125,31 +150,30 @@ class PipelineLoadPublish(Section):
     bucket: str | None = F(
         None, "PM_BUCKET", "publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소)", repo="file://"
     )
-    bucket_skip_overlap_check: bool | None = F(
-        False, "PM_BUCKET_SKIP_OVERLAP_CHECK", "PM_BUCKET이 원천 원본 버킷과 같은지 검사 생략 — 1이면 생략", on=("1",)
+    local_dir: str | None = F(
+        "valid_env/object_storage/Parsing_Result",
+        "LOCAL_PM_DIR",
+        "PC(RUN_ENV=local) 게시 폴더(저장소 기준 상대 가능 — 처음 게시할 때 만듦) — local은 서버 게시 버킷(PM_BUCKET) 대신 이 폴더를 씀(op-14)",
     )
     prefix: str | None = F(None, "PM_PREFIX", "버킷 안 업로드 경로 접두")
     upload_statuses: CsvList | None = F(
-        ["ok", "partial"], "PM_UPLOAD_STATUSES", "원본을 업로드할 파싱 상태 목록(쉼표 — ok·partial·failed 등 parsing_meta.STATUSES 중에서)"
+        ["ok", "partial"], "PM_UPLOAD_STATUSES", "원본을 업로드할 파싱 상태 목록(쉼표 — ok·partial·failed 등 게시 STATUSES 중에서)"
     )
 
 
-class PipelineServiceParseMcp(Section):
-    job_timeout_sec: float | None = F(600.0, "PARSE_MCP_JOB_TIMEOUT_SEC", "parse MCP 서비스 작업 1건 제한 시간(초)")
-    jobs_dir: str | None = F(None, "PARSE_MCP_JOBS_DIR", "parse MCP 서비스 작업 기록 폴더")
-    port: Port | None = F(8766, "PARSE_MCP_PORT", "parse MCP 서비스 포트")
-    procs: int | None = F(None, "PARSE_MCP_PROCS", "parse MCP 서비스 엔진 묶음 병렬 프로세스 수(개)")
-    queue_max: int | None = F(8, "PARSE_MCP_QUEUE_MAX", "parse MCP 서비스 대기 작업 상한(건)")
+class PipelineServiceDataParsing(Section):
+    job_timeout_sec: float | None = F(600.0, "DATA_PARSING_JOB_TIMEOUT_SEC", "parse MCP 서비스 작업 1건 제한 시간(초)")
+    procs: int | None = F(None, "DATA_PARSING_PROCS", "parse MCP 서비스 엔진 묶음 병렬 프로세스 수(개)")
+    queue_max: int | None = F(8, "DATA_PARSING_QUEUE_MAX", "parse MCP 서비스 대기 작업 상한(건)")
     roots: CsvList | None = F(
-        None, "PARSE_MCP_ROOTS", "parse MCP 서비스가 읽을 수 있는 허용 루트 폴더(쉼표 목록) — 비면 코드가 정함(<서비스 폴더>/inbox)"
+        None, "DATA_PARSING_ROOTS", "parse MCP 서비스가 읽을 수 있는 허용 루트 폴더(쉼표 목록) — 비면 코드가 정함(<서비스 폴더>/inbox)"
     )
     text_page_sec: float | None = F(
-        1.0, "PARSE_MCP_TEXT_PAGE_SEC", "parse MCP 서비스 작업의 글자 엔진 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
+        1.0, "DATA_PARSING_TEXT_PAGE_SEC", "parse MCP 서비스 작업의 글자 엔진 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
     )
-    token: SecretStr | None = F(None, "PARSE_MCP_TOKEN", "parse MCP 서비스 Bearer 토큰(MCP 서버 MCP_TOKEN과 같은 값)")
     warmup_sec: float | None = F(
         20.0,
-        "PARSE_MCP_WARMUP_SEC",
+        "DATA_PARSING_WARMUP_SEC",
         "parse MCP 서비스 작업의 첫 시도 제한 하한(초) — 새 프로세스에서 엔진을 처음 띄울 때(import·모델 적재) 여유",
     )
 
@@ -178,8 +202,7 @@ class PipelineTransformRepresent(Section):
 
 
 class PipelineTransformStructure(Section):
-    chunk_overlap: int | None = F(64, "CHUNK_OVERLAP", "고정 길이 청커(chunk_fixed512)의 청크 간 겹침 글자 수")
-    chunk_size: int | None = F(None, "CHUNK_SIZE", "청크 목표 길이(글자) — 청커별 기본이 다름")
+    chunk_size: int | None = F(None, "CHUNK_SIZE", "청크 목표 길이(글자) — 비우면 800")
     chunk_table: str | None = F(None, "CHUNK_TABLE", "'rows'이면 큰 표를 행 묶음 단위로 쪼갬(그 외 값·미설정은 표를 통째로 둠)")
     chunk_table_rows: int | None = F(25, "CHUNK_TABLE_ROWS", "표를 쪼갤 때 청크당 행 수(CHUNK_TABLE=rows일 때만)")
     embed_batch: int | None = F(32, "EMBED_BATCH", "임베딩 API 한 번에 보내는 청크 수")
@@ -187,7 +210,6 @@ class PipelineTransformStructure(Section):
     embed_concurrency: int | None = F(4, "EMBED_CONCURRENCY", "임베딩 호출 병렬 수(EMBED_BATCH 묶음을 동시에 전송)")
     embed_max_chars: int | None = F(8000, "EMBED_MAX_CHARS", "임베딩 입력 청크 최대 글자 수(넘으면 자름, 400 오류 방지 안전망)")
     embed_retry: int | None = F(2, "EMBED_RETRY", "임베딩 API 실패 시 재시도 횟수")
-    page_chunk_max: int | None = F(None, "PAGE_CHUNK_MAX", "쪽 청크 최대 글자 수(임베딩 입력 한도 초과 방지)")
 
 
 class PipelineTransformVlm(Section):
@@ -203,16 +225,6 @@ class PipelineTransformVlm(Section):
     page_max: int | None = F(
         None, "VLM_PAGE_MAX", "문서당 VLM으로 옮길 쪽 수 상한(VLM 엔진 qwen_vlm·쪽 VLM 공통 — 빈 값=전부, 0=쪽 VLM 끔·VLM 엔진은 빈 결과)"
     )
-
-
-class PipelineDev(Section):
-    check_env_any_py: bool | None = F(
-        False, "CHECK_ENV_ANY_PY", "check_env가 시스템 python에서도 멈추지 않고 계속할지(=1 계속 / 그 외 중단)", on=("1",)
-    )
-
-
-class PipelineEval(Section):
-    """칸 없음 — 지운 칸만 남은 절(이름은 layout.REMOVED — 옛 파일이 경고만 받게)."""
 
 
 class PipelineExtract(Section):
@@ -234,11 +246,22 @@ class PipelineExtract(Section):
         off=("0",),
     )
     max_file_mb: float | None = F(0.0, "MAX_FILE_MB", "이 크기(MB)를 넘는 문서는 파싱에서 건너뜀(0=제한 없음)")
-    max_new: int | None = F(0, "PARSE_MAX_NEW", "이번 실행에서 처음 파싱할 새 문서 수 상한(개, 0=제한 없음)")
+    max_new: int | None = F(
+        None, "PARSE_MAX_NEW", "이번 실행에서 처음 파싱할 새 문서 수 상한(개, 0=제한 없음) — 비우면 제한 없음(local은 local_max_new)"
+    )
+    local_max_new: int | None = F(
+        5,
+        "LOCAL_PARSE_MAX_NEW",
+        "PC(RUN_ENV=local) 한 번에 처음 파싱할 새 문서 수 상한(개, 0=제한 없음) — PARSE_MAX_NEW를 안 적었을 때(op-14)",
+    )
+    local_source: str | None = F(
+        "valid_env/object_storage",
+        "LOCAL_PARSE_SOURCE",
+        "PC(RUN_ENV=local) 파싱 원본 폴더(저장소 기준 상대 가능) — PARSE_SOURCE를 안 적었을 때(op-14). 게시 폴더(local_dir)는 원본으로 읽지 않음",
+    )
     rapidocr_page_workers: int | None = F(1, "RAPIDOCR_PAGE_WORKERS", "rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개)")
     rotated_max: int | None = F(20, "PARSE_ROTATED_MAX", "쪽 VLM 후보로 올릴 '회전된 쪽' 상한(쪽 수) — 0이면 rotation.csv를 안 읽음")
     skipped_log: str | None = F(None, "PARSE_SKIPPED_LOG", "건너뛴 문서(암호 PDF 등) 기록 jsonl 경로")
-    source_limit: int | None = F(0, "PARSE_SOURCE_LIMIT", "원본에서 처리할 문서 건수 상한(0=제한 없음)")
     text_page_sec: float | None = F(
         10.0, "PARSE_TEXT_PAGE_SEC", "글자 엔진(VLM 아님) 문서×엔진 1건의 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
     )
@@ -248,31 +271,62 @@ class PipelineExtract(Section):
     warmup_sec: float | None = F(60.0, "PARSE_WARMUP_SEC", "엔진 첫 문서의 제한 시간 하한(초) — import·모델 적재 여유")
     attach: PipelineExtractAttach = Field(default_factory=PipelineExtractAttach)
     cache: PipelineExtractCache = Field(default_factory=PipelineExtractCache)
-    dedup: PipelineExtractDedup = Field(default_factory=PipelineExtractDedup)
     ocr: PipelineExtractOcr = Field(default_factory=PipelineExtractOcr)
     prepare: PipelineExtractPrepare = Field(default_factory=PipelineExtractPrepare)
     source: PipelineExtractSource = Field(default_factory=PipelineExtractSource)
 
 
-class PipelineHostRunDocs(Section):
-    """문서별 flow 러너(deploy/host/scripts/run_docs.py — 호스트에서 글자 그대로 읽음) 레인·대기열(사용자 10-29, docs/prd/runner.md rn-01·rn-02).
-    기본값은 run_docs.py RUN_DOCS_DEFAULTS와 같다(tests/general/deploy/test_run_docs.py가 대조)."""
+class PipelineHostRunPipeline(Section):
+    """문서별 flow 러너(deploy/host/scripts/run_pipeline.py — 호스트에서 글자 그대로 읽음) 레인·대기열(사용자 10-29, docs/prd/runner.md rn-01·rn-02).
+    기본값은 run_pipeline.py RUN_PIPELINE_DEFAULTS와 같다(tests/general/deploy/test_run_pipeline.py가 대조)."""
 
-    warm: int | None = F(20, "RUN_DOCS_WARM", "진입 대기열 — 미리 받아 둘 문서 수(받는 중 포함·파싱 중 제외, 명령 인자 --warm이 덮음)")
-    warm_workers: int | None = F(
-        2, "RUN_DOCS_WARM_WORKERS", "미리 받기 동시 수 — 실제 동시 받기 = min(이 값, 대기열 빈자리)(pl-48, 사용자 11-02)"
+    staging: int | None = F(
+        20, "RUN_PIPELINE_STAGING", "진입 대기열 — 미리 받아 둘 문서 수(받는 중 포함·파싱 중 제외, 명령 인자 --staging이 덮음)"
     )
-    struct_workers: int | None = F(2, "RUN_DOCS_STRUCT_WORKERS", "구조화·적재 스레드 수(명령 인자 --struct-workers가 덮음)")
+    staging_workers: int | None = F(
+        2, "RUN_PIPELINE_STAGING_WORKERS", "미리 받기 동시 수 — 실제 동시 받기 = min(이 값, 대기열 빈자리)(pl-48, 사용자 11-02)"
+    )
+    struct_workers: int | None = F(2, "RUN_PIPELINE_STRUCT_WORKERS", "구조화·적재 스레드 수(명령 인자 --struct-workers가 덮음)")
     struct_backlog: int | None = F(
-        None, "RUN_DOCS_STRUCT_BACKLOG", "중간 대기열 상한(파싱 끝·구조화 대기 문서 수) — 비우면 구조화 스레드 × 2, 0이면 상한 없음"
+        None, "RUN_PIPELINE_STRUCT_BACKLOG", "중간 대기열 상한(파싱 끝·구조화 대기 문서 수) — 비우면 구조화 스레드 × 2, 0이면 상한 없음"
     )
-    vlm_cap: int | None = F(2, "RUN_DOCS_VLM_CAP", "vlm 레인 문서 동시 파싱 상한(gpu 예산)")
-    light_dedicated: int | None = F(1, "RUN_DOCS_LIGHT_DEDICATED", "light 레인 전담 워커 수(light 문서만)")
-    light_shared: int | None = F(1, "RUN_DOCS_LIGHT_SHARED", "light 레인 공유 워커 수(light 먼저, 비면 가장 긴 다른 레인에서 가져옴)")
-    medium_dedicated: int | None = F(1, "RUN_DOCS_MEDIUM_DEDICATED", "medium 레인 전담 워커 수(MCP 업로드 처리 중에는 쉼)")
-    medium_shared: int | None = F(1, "RUN_DOCS_MEDIUM_SHARED", "medium 레인 공유 워커 수(medium 먼저, 비면 다른 레인)")
-    vlm_dedicated: int | None = F(1, "RUN_DOCS_VLM_DEDICATED", "vlm 레인 전담 워커 수(vlm 문서만)")
-    vlm_shared: int | None = F(1, "RUN_DOCS_VLM_SHARED", "vlm 레인 공유 워커 수(vlm 먼저, 비면 다른 레인)")
+    vlm_cap: int | None = F(2, "RUN_PIPELINE_VLM_CAP", "vlm 레인 문서 동시 파싱 상한(gpu 예산)")
+    light_dedicated: int | None = F(1, "RUN_PIPELINE_LIGHT_DEDICATED", "light 레인 전담 워커 수(light 문서만)")
+    light_shared: int | None = F(1, "RUN_PIPELINE_LIGHT_SHARED", "light 레인 공유 워커 수(light 먼저, 비면 가장 긴 다른 레인에서 가져옴)")
+    medium_dedicated: int | None = F(1, "RUN_PIPELINE_MEDIUM_DEDICATED", "medium 레인 전담 워커 수(MCP 업로드 처리 중에는 쉼)")
+    medium_shared: int | None = F(1, "RUN_PIPELINE_MEDIUM_SHARED", "medium 레인 공유 워커 수(medium 먼저, 비면 다른 레인)")
+    vlm_dedicated: int | None = F(1, "RUN_PIPELINE_VLM_DEDICATED", "vlm 레인 전담 워커 수(vlm 문서만)")
+    vlm_shared: int | None = F(1, "RUN_PIPELINE_VLM_SHARED", "vlm 레인 공유 워커 수(vlm 먼저, 비면 다른 레인)")
+    # 컨테이너 안 파싱·구조화 명령에 --set으로 넘기는 값(문서 하나씩 도는 서버 배치 — 앱 기본값과 다름)
+    vlm_concurrency: int | None = F(
+        8, "RUN_PIPELINE_VLM_CONCURRENCY", "light·medium 문서 하나의 VLM 동시 요청 수(VLM_MAX_CONCURRENCY·VLM_CONCURRENCY로 넘김)"
+    )
+    vlm_lane_concurrency: int | None = F(
+        6, "RUN_PIPELINE_VLM_LANE_CONCURRENCY", "vlm 레인 문서 하나의 VLM 동시 요청 수(vlm_cap 문서가 GPU 서버를 나눔)"
+    )
+    figures_max: int | None = F(10, "RUN_PIPELINE_FIGURES_MAX", "문서당 그림 VLM 상한(VLM_FIGURES_MAX)")
+    parse_post: str | None = F(
+        "supsub,charts,figures,context,attachments", "RUN_PIPELINE_PARSE_POST", "light·medium 문서의 후처리 목록(PARSE_POST)"
+    )
+    vlm_lane_post: str | None = F(
+        "supsub,charts,figures,context,attachments,vlm_page",
+        "RUN_PIPELINE_VLM_LANE_POST",
+        "vlm 레인 문서의 후처리 목록(PARSE_POST — vlm_page는 스캔 쪽만 VLM 전사, 쪽 상한 없음)",
+    )
+    rapidocr_page_workers: int | None = F(2, "RUN_PIPELINE_RAPIDOCR_PAGE_WORKERS", "rapidocr 쪽 병렬 스레드 수(RAPIDOCR_PAGE_WORKERS)")
+    ocr_threads: int | None = F(1, "RUN_PIPELINE_OCR_THREADS", "rapidocr onnxruntime 스레드 수(OCR_THREADS)")
+    pipe_procs: int | None = F(4, "RUN_PIPELINE_PIPE_PROCS", "문서 하나의 엔진 묶음 병렬 프로세스 수(PIPE_PROCS)")
+    fetch_workers: int | None = F(2, "RUN_PIPELINE_FETCH_WORKERS", "원본 받기 스레드 수(SOURCE_FETCH_WORKERS)")
+    rep_select: str | None = F("first", "RUN_PIPELINE_REP_SELECT", "대표 엔진 선택 방식(PARSE_REP_SELECT — first·acc·best)")
+    qa_light: bool | None = F(True, "RUN_PIPELINE_QA_LIGHT", "풀문서 CER·순서 비교 생략(PARSE_QA_LIGHT)")
+    scan_rotate: bool | None = F(
+        False, "RUN_PIPELINE_SCAN_ROTATE", "이미지 PDF 쪽 방향 바로잡기 — false면 받기(stage)에 --no-scan-rotate를 붙여 회전 OCR 생략"
+    )
+    cpu_gate: float | None = F(1.3, "RUN_PIPELINE_CPU_GATE", "light 밖 레인의 파싱 CPU 게이트(CPU_MAX_LOAD — 명령 인자 --cpu-gate가 덮음)")
+    light_cpu_gate: float | None = F(9.0, "RUN_PIPELINE_LIGHT_CPU_GATE", "light 레인 CPU 게이트(CPU_MAX_LOAD — 높게 두어 바로 소화)")
+    embed_concurrency: int | None = F(6, "RUN_PIPELINE_EMBED_CONCURRENCY", "구조화·적재 임베딩 호출 병렬 수(EMBED_CONCURRENCY)")
+    embed_batch: int | None = F(32, "RUN_PIPELINE_EMBED_BATCH", "임베딩 한 번에 보내는 청크 수(EMBED_BATCH)")
+    bm25_threads: int | None = F(3, "RUN_PIPELINE_BM25_THREADS", "BM25 계산 스레드 수(BM25_THREADS)")
 
 
 class PipelineHost(Section):
@@ -283,39 +337,32 @@ class PipelineHost(Section):
         "일괄 상주 컨테이너(data-pipeline — compose.pipeline.yml) CPU 개수 상한(개) — docker는 호스트 CPU 수보다 큰 값을 거부(CPU 4개 개발 서버는 3 이하로)",
     )
     parse_mem_limit: str | None = F("24g", "PARSE_MEM_LIMIT", "일괄 상주 컨테이너(data-pipeline) 메모리·스왑 상한(docker 형식)")
-    parse_mcp_cpus: float | None = F(
+    data_parsing_cpus: float | None = F(
         3.0,
-        "PARSE_MCP_CPUS",
-        "parse_document 작업 컨테이너(data-pipeline-mcp — #107) CPU 개수 상한(개) — 줄이면 pipeline.service.parse_mcp.procs도 그 이하로",
+        "DATA_PARSING_CPUS",
+        "parse_document 작업 컨테이너(mcp-data-parsing — #107) CPU 개수 상한(개) — 줄이면 pipeline.service.data_parsing.procs도 그 이하로",
     )
-    parse_mcp_mem_limit: str | None = F(
-        "8g", "PARSE_MCP_MEM_LIMIT", "parse_document 작업 컨테이너(data-pipeline-mcp) 메모리·스왑 상한(docker 형식)"
+    data_parsing_mem_limit: str | None = F(
+        "8g", "DATA_PARSING_MEM_LIMIT", "parse_document 작업 컨테이너(mcp-data-parsing) 메모리·스왑 상한(docker 형식)"
     )
-    parse_mcp_cpu_shares: int | None = F(
+    data_parsing_cpu_shares: int | None = F(
         4096,
-        "PARSE_MCP_CPU_SHARES",
+        "DATA_PARSING_CPU_SHARES",
         "parse_document 작업 컨테이너 CPU 나눔 비율(data-pipeline 1024의 4배 — CPU가 모자랄 때 먼저 받음, rn-03)",
     )
-    run_docs_dir: str | None = F(
+    run_pipeline_dir: str | None = F(
         None,
-        "RUN_DOCS_DIR",
-        "문서별 flow 러너(deploy/host/scripts/run_docs.py) 작업 폴더(호스트 — 진행 기록 batch_progress/·batches/) — 비우면 스크립트 옆 test_space/(C-29 ⑨, S7e1)",
+        "RUN_PIPELINE_DIR",
+        "문서별 flow 러너(deploy/host/scripts/run_pipeline.py) 작업 폴더(호스트 — 진행 기록 batch_progress/·batches/) — 비우면 스크립트 옆 test_space/(C-29 ⑨, S7e1)",
     )
     nightly: PipelineHostNightly = Field(default_factory=PipelineHostNightly)
-    run_docs: PipelineHostRunDocs = Field(default_factory=PipelineHostRunDocs)
+    run_pipeline: PipelineHostRunPipeline = Field(default_factory=PipelineHostRunPipeline)
 
 
 class PipelineLoad(Section):
     bm25_threads: int | None = F(4, "BM25_THREADS", "BM25 항목(term,tf) 계산 병렬 스레드 수(개)")
     edw_path_prefix: str | None = F(None, "EDW_PATH_PREFIX", "저장소 doc.file_path에 기록할 원본 경로 접두(서버의 실제 보관 위치)")
-    pg_create_extension: bool | None = F(
-        False, "PG_CREATE_EXTENSION", "deploy 때 vector 확장 직접 생성 시도 — 1이면 켬(공유 PG에서는 금지)", on=("1",)
-    )
     publish: PipelineLoadPublish = Field(default_factory=PipelineLoadPublish)
-
-
-class PipelineNight(Section):
-    """칸 없음 — 옛 칸(workers·vlm_concurrency 등)이 남은 파일을 경고로 받으려고 절만 둔다(layout.REMOVED)."""
 
 
 class PipelinePaths(Section):
@@ -336,7 +383,7 @@ class PipelineConnections(Section):
 
 
 class PipelineService(Section):
-    parse_mcp: PipelineServiceParseMcp = Field(default_factory=PipelineServiceParseMcp)
+    data_parsing: PipelineServiceDataParsing = Field(default_factory=PipelineServiceDataParsing)
 
 
 class PipelineTransform(Section):
@@ -348,12 +395,9 @@ class PipelineTransform(Section):
 
 class PipelineSettings(Section):
     connections: PipelineConnections = Field(default_factory=PipelineConnections)
-    dev: PipelineDev = Field(default_factory=PipelineDev)
-    eval: PipelineEval = Field(default_factory=PipelineEval)
     extract: PipelineExtract = Field(default_factory=PipelineExtract)
     host: PipelineHost = Field(default_factory=PipelineHost)
     load: PipelineLoad = Field(default_factory=PipelineLoad)
-    night: PipelineNight = Field(default_factory=PipelineNight)
     paths: PipelinePaths = Field(default_factory=PipelinePaths)
     service: PipelineService = Field(default_factory=PipelineService)
     transform: PipelineTransform = Field(default_factory=PipelineTransform)
@@ -386,12 +430,28 @@ by_env, given, dropped, checked = _VIEW.by_env, _VIEW.given, _VIEW.dropped, _VIE
 
 
 def stack():
-    """엔진 구성(사전 — name·body_sha + body). 서버·PC 같은 파일(common.paths.stack_file — 비우면 resources/config/pipeline_stack.json,
+    """엔진 구성(사전 — name·body_sha + body). 서버·PC 같은 파일(resources/config/pipeline_stack.json —
     사용자 11-01: 판 표 없음). 층 파일(run_all·attachments)이 이것만 부른다 — 이 모듈은 층의 code_fp 의존이 아니다(common 아래만 셈)."""
     from common.store.db import cfgfile  # 파일 읽기 한 곳(이 모듈은 층의 code_fp 의존이 아님)
 
     a = cfgfile.active("stack")
     return {"name": a.name, "body_sha": a.body_sha, **a.body}
+
+
+FEATURES = ("vlm_page", "supsub", "charts", "figures", "context", "attachments")
+
+
+def active_features(config=None):
+    """PARSE_POST 글자 → 켠 기능 집합(결정적 — 순서 섞이지 않게 set 아닌 frozenset도 괜찮지만 멤버십만 씀)."""
+    if config is None:  # 없음 = "all", 빈 글자 = 끔
+        v = cfg().transform.represent.post
+        config = "all" if v is None else v
+    config = (config or "").strip()
+    if config in ("", "none"):
+        return frozenset()
+    if config == "all":
+        return frozenset(FEATURES)
+    return frozenset(f.strip() for f in config.split(",") if f.strip())
 
 
 if __name__ == "__main__":

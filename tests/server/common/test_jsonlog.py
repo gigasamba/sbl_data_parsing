@@ -160,7 +160,7 @@ def test_mask_linear():
             assert _mask(value) == value
             samples.append(time.thread_time() - started)
         timings.append(median(samples))
-    assert timings[1] / timings[0] < 10, timings  # 선형 4배 허용, 종전 제곱 16배는 거부.
+    assert timings[1] / timings[0] < 10, timings  # 선형 4배 허용, 제곱(16배)은 거부.
 
 
 def test_short_and_json_options():

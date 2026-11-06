@@ -3,7 +3,7 @@
 import contextlib
 import io
 
-from mcp_server.cli import ask as A
+from mcp_server.cli import search_ask as A
 from mcp_server.services.search.server_state import _STATE
 from tests.server.mcp import pgfix
 

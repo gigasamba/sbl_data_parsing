@@ -1,4 +1,4 @@
-"""common.store.pg 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.store.pg`."""
+"""common.store.pg 자기 점검."""
 
 from common.config.settings import COMMON
 from common.store.pg import PG, PGPool, conf
@@ -77,7 +77,7 @@ def _selftest_pool():
 
 
 def _selftest_connect_timeout():
-    """PG()·PGPool() 모두 psycopg connect_timeout을 넘기는지(env PG_CONNECT_TIMEOUT, 기본 10초) — 실제 접속 없이 psycopg.connect만 가짜로(XS4)."""
+    """PG()·PGPool() 모두 psycopg connect_timeout을 넘기는지(env PG_CONNECT_TIMEOUT, 기본 10초) — 실제 접속 없이 psycopg.connect만 가짜로."""
     import psycopg
 
     captured = []
@@ -108,8 +108,8 @@ def _selftest_connect_timeout():
 
 
 def _selftest_conf():
-    """conf() — 준 접속 칸을 글자로 · 형식 틀린 PG_PORT는 옛처럼 실패(R-7). 가짜 값만, 실제 접속 없음."""
-    full = dict(PG_HOST="h", PG_PORT="5432", PG_DB="d", PG_USER="u", PG_SCHEMA="ai")  # op-09 — 접속 칸 모두 필수
+    """conf() — 준 접속 칸을 글자로 · 형식 틀린 PG_PORT는 실패. 가짜 값만, 실제 접속 없음."""
+    full = dict(PG_HOST="h", PG_PORT="5432", PG_DB="d", PG_USER="u", PG_SCHEMA="ai")  # 접속 칸 모두 필수
     with COMMON.env(**full, PG_PASSWORD="x2"):
         assert conf()["PG_PASSWORD"] == "x2" and conf()["PG_PORT"] == "5432"
     with COMMON.env(**{**full, "PG_PORT": "abc"}, PG_PASSWORD=None):
@@ -121,7 +121,7 @@ def _selftest_conf():
     print("[selftest] conf() — 빈 PG_PASSWORD는 접속 파일 값 유지·형식 틀린 PG_PORT 실패 통과")
 
 
-def test_main():  # 옛 `if __name__ == "__main__":` 몸통
+def test_main():
     _selftest_pool()
     _selftest_connect_timeout()
     _selftest_conf()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""파이프라인 실행 1건의 성능·추적 분석(op-01) — applog.pipe_run/pipe_event를 읽어 사람이 보는 표로.
+"""파이프라인 실행 1건의 성능·추적 분석 — applog.pipe_run/pipe_event를 읽어 사람이 보는 표로.
 
     python -m pipeline.tools.perf_report <run_id>                 # 단계·엔진별 p50/p95/최대·비율, wait/작업, 느린 문서, 쪽당 시간, 캐시·재시도·실패
     python -m pipeline.tools.perf_report                           # run_id를 빼면 가장 최근 실행
@@ -491,7 +491,7 @@ def main(argv=None):
     ap.add_argument("--compare", nargs="+", metavar="RUN_ID", help="이 실행과 비교할 다른 run_id들")
     ap.add_argument("--file", nargs="+", help="DB 대신 logsink 대체 기록 JSON Lines 파일")
     ap.add_argument(
-        "--since", type=float, metavar="HOURS", help="최근 N시간의 모든 실행을 합쳐 분석(run_docs는 문서·단계마다 실행이 따로 생김)"
+        "--since", type=float, metavar="HOURS", help="최근 N시간의 모든 실행을 합쳐 분석(run_pipeline은 문서·단계마다 실행이 따로 생김)"
     )
     ap.add_argument("--top", type=int, default=10, help="느린 문서 개수")
     ap.add_argument("--json", action="store_true", help="표 대신 JSON")

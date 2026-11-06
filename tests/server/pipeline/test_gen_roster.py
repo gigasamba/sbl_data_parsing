@@ -1,10 +1,10 @@
-"""pipeline.transform.structure.roster_from_edw 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.structure.roster_from_edw --selftest`."""
+"""pipeline.transform.structure.roster_from_edw 시험."""
 
 from pathlib import Path
 
 from common.core import terms as T
+from common.store import master as M
 from pipeline.transform.structure.roster_from_edw import (
-    ROSTER_COLS,
     build_client_extra,
     build_roster,
     check_roster,
@@ -19,7 +19,10 @@ def selftest():
 
     d = Path(tempfile.mkdtemp())
 
-    # --kind client — csv: 추출본 → CLIENT_ROSTER (별칭 합침·결정적 순서)
+    def clients(path):  # glossary.csv → {정식 이름: [별칭…]}(terms가 마스터에서 읽는 것과 같은 규칙)
+        return T._merge_roster(T._roster_dicts(M.Master(M.read_csv(path)).rows("client_roster")))
+
+    # --kind client — csv: 추출본 → glossary.csv 고객 줄(별칭 합침·결정적 순서)
     (d / "client_master.csv").write_text(
         "company_name,aka\nCelltrion,CT Inc\nCelltrion,셀트리온\nNorthfield Biologics,\n", encoding="utf-8-sig"
     )
@@ -27,9 +30,9 @@ def selftest():
     rows = rows_from_csv(d / "client_master.csv")
     roster = build_roster(rows, mapping)
     assert roster == {"Celltrion": ["CT Inc", "셀트리온"], "Northfield Biologics": []}, roster
-    out = d / "CLIENT_ROSTER.csv"
+    out = d / "glossary.csv"
     write_client_roster(roster, out)
-    assert out.read_text(encoding="utf-8").splitlines()[0] == ",".join(ROSTER_COLS)  # GL3 — new roster format
+    assert out.read_text(encoding="utf-8").splitlines()[0] == ",".join(M.COLS)  # op-17 — glossary 꼴(master load가 그대로 읽음)
 
     # GL3 — optional columns from the master (id, Korean name, status): inactive rows are dropped by the reader
     (d / "master2.csv").write_text(
@@ -37,12 +40,29 @@ def selftest():
     )
     m2 = load_mapping({"name": "eng", "client_id": "cust_id", "name_ko": "kor", "status": "state"})
     rows2 = rows_from_csv(d / "master2.csv")
-    out2 = d / "CLIENT_ROSTER2.csv"
+    out2 = d / "glossary2.csv"
     write_client_roster(build_roster(rows2, m2), out2, build_client_extra(rows2, m2), source="csv:master2.csv")
-    assert "C-1,Acme Bio,에이크미,,,,,,active,,csv:master2.csv," in out2.read_text(encoding="utf-8")
-    assert T.read_roster(out2) == {"Acme Bio": ["에이크미"]}, T.read_roster(out2)  # inactive dropped, name_ko → alias
-    al = T.read_roster(out)  # pl-38 — 명부는 마스터 표(client_roster)로 들어감: 생성 파일을 같은 규칙(read_roster)으로 읽음
+    acme = M.Master(M.read_csv(out2)).rows("client_roster")[0]
+    assert (acme["client_id"], acme["name_ko"], acme["status"], acme["source"]) == ("C-1", "에이크미", "active", "csv:master2.csv"), acme
+    assert clients(out2) == {"Acme Bio": ["에이크미"]}, clients(out2)  # inactive dropped, name_ko → alias
+    al = clients(out)
     assert al.get("Celltrion") and set(al["Celltrion"]) == {"CT Inc", "셀트리온"}, al
+    # 있는 glossary.csv — 고객 줄만 바꾸고 용어·ID 꼴 줄은 그대로
+    term = dict(zip(M.COLS, ("term", "Drug Substance", "PROC.DS", "concept_id", "", "", "")))
+    M.write_csv([dict(zip(M.COLS, ("client", "Gone Bio", "G1", "client_id", "", "", ""))), term], out2)
+    write_client_roster(roster, out2)
+    assert clients(out2) == clients(out) and [r for r in M.read_csv(out2) if r["kind"] != "client"] == [term]
+    try:  # glossary 꼴이 아닌 파일은 덮지 않음
+        write_client_roster(roster, d / "client_master.csv")
+        raise AssertionError("glossary 꼴이 아닌 파일을 덮음")
+    except SystemExit:
+        pass
+    assert check_roster(out)[0] == [] and check_roster(out)[2] == 2  # --check는 glossary.csv도 읽음
+    wide = d / "wide.csv"  # Excel이 붙인 빈 열 — 그래도 glossary로 읽고, 'kind'·'client'를 고객 이름으로 읽지 않음
+    lines = out.read_text(encoding="utf-8").splitlines()
+    wide.write_text("\n".join([lines[0] + ",,", *lines[1:]]) + "\n", encoding="utf-8")
+    errs, _, n = check_roster(wide)
+    assert errs == [] and n == 2, (errs, n)
 
     # E15 — --check: cp949(한국어 Excel) 읽힘·짧은 영문 별칭 무시·별칭 충돌·같은 이름 여러 줄 경고, 빈 명부는 오류
     chk = d / "sfdc_export.csv"
@@ -76,7 +96,9 @@ def selftest():
         raise AssertionError("식별자 아닌 name이 통과함")
     except ValueError:
         pass
-    print("[selftest] SI43③ — gen_roster: csv: 추출본→CLIENT_ROSTER(별칭 합침·terms.py가 그대로 읽음)·제품 draft(멱등)·매핑 검증 통과")
+    print(
+        "[selftest] SI43③ — gen_roster: csv: 추출본→glossary 고객 줄(별칭 합침·있는 파일은 고객 줄만 바꿈)·제품 draft(멱등)·매핑 검증 통과"
+    )
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

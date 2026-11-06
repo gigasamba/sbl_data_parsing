@@ -91,7 +91,7 @@ def test_progress_without_run_has_no_thread():
 
 
 def test_run_all_job_spans_and_usage():
-    from pipeline.extract import run_engines as run_all
+    from pipeline.transform.parse import parse_engines as run_all
 
     rows = []
     with mock.patch.object(span, "_emit", lambda row, level=None: rows.append(row)), jsonlog.context(run_id=str(uuid.uuid4())):
@@ -101,7 +101,7 @@ def test_run_all_job_spans_and_usage():
                 pass
 
         with span.span("extract.plan") as plan:
-            run_all._run_docs([(Path("a.pdf"), "e1"), (Path("a.pdf"), "e2"), (Path("b.pdf"), "e1")], job, 2)
+            run_all._run_pipeline([(Path("a.pdf"), "e1"), (Path("a.pdf"), "e2"), (Path("b.pdf"), "e1")], job, 2)
         jobs = [r for r in rows if r["stage"] == "extract.parse"]
         assert len(jobs) == 3 and {r["parent_id"] for r in jobs} == {plan.span_id}
 
@@ -110,17 +110,17 @@ def test_run_all_job_spans_and_usage():
             pid, returncode = 1, 0
 
             def communicate(self, timeout=None):
-                return "엔진 출력\n" + span.USAGE_PREFIX + '{"cpu_ms": 1234, "rss_peak_mb": 321.5}\n', ""
+                return "엔진 출력\n" + run_all.CHARS_PREFIX + "42\n" + span.USAGE_PREFIX + '{"cpu_ms": 1234, "rss_peak_mb": 321.5}\n', ""
 
         rows.clear()
         with span.span("extract.parse", doc_id="a.pdf", engine="e1"):
             with mock.patch.object(RS, "gated_popen", lambda *a, **k: Proc()):
-                run_all._isolated_once("e1", Path("a.pdf"), Path("/nonexistent/out.json"), "default", 5, sys.executable)
-    assert rows[0]["cpu_ms"] == 1234 and rows[0]["rss_peak_mb"] == 321.5
+                chars = run_all._isolated_once("e1", Path("a.pdf"), Path("/nonexistent/out.json"), "default", 5, sys.executable)
+    assert rows[0]["cpu_ms"] == 1234 and rows[0]["rss_peak_mb"] == 321.5 and chars == 42  # 본문 글자 수도 자식 줄에서(결과 파일 안 읽음)
 
 
 def test_run_all_redact_shared():
-    from pipeline.extract import run_engines as run_all
+    from pipeline.transform.parse import parse_engines as run_all
 
     body = "민감한 문서 본문 조각이 여기에 길게 들어 있습니다 1234567890"
     assert run_all.redact(f"ValueError: '{body}'") == span.redact_text(f"ValueError: '{body}'") and body not in run_all.redact(

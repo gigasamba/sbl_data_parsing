@@ -1,4 +1,4 @@
-"""파이프라인 실행 1건의 추적 기록(op-01) — applog.pipe_run 시작·종료 + 60초 run.progress.
+"""파이프라인 실행 1건의 추적 기록 — applog.pipe_run 시작·종료 + 60초 run.progress.
 
     with run("parse", sys.argv[1:]):      # 최상위 진입점에서 한 번 — command는 하위 명령/모듈 이름(pipe_run.command)
         main()                              # 부모가 run_id를 이어줬으면(자식 프로세스) 새로 시작하지 않음
@@ -74,7 +74,7 @@ def _code_fp():
 
 def _start_row(run_id, command, argv):
     cfg = C.cfg()
-    db_on = cfg.log.db_enabled  # 켜져 있을 때만 씀 — code_fp는 층마다 파일을 다시 읽어 run_docs 프로세스마다 시작을 늦춘다
+    db_on = cfg.log.db_enabled  # 켜져 있을 때만 씀 — code_fp는 층마다 파일을 다시 읽어 run_pipeline 프로세스마다 시작을 늦춘다
     return {
         "run_id": run_id,
         "command": command,
@@ -193,3 +193,17 @@ class Progress:
                 )
         except Exception as ex:  # done() 등 진행 계산 실패 — 다음 주기에 다시
             span.soft_fail("progress.emit", ex)
+
+
+def skip_event(name, reason, source_system=None, **metrics):
+    """건너뛴 문서 1건 = extract.skip span 1행(applog.pipe_event): status=skip, err_kind=doc, err·metrics.reason = 이유
+    (dup_batch·dup_done·dup_run·drm_*·encrypted_*·unsupported_*), 중복이면 metrics.dup_of = 남긴 문서(이름 또는 원본 키 — dup_run은 이번 실행이 먼저 받은 원본 키)."""
+    from pathlib import Path
+
+    with span.span(
+        "extract.skip", "extract", doc_id=name, ext=Path(name).suffix.lower(), source_system=source_system
+    ) as sp:  # 원천 — 모르면 manifest(판 0004)
+        sp.add(reason=reason, **metrics)
+        sp.result("skip", "doc", span.safe(reason))
+    if metrics.get("dup_of"):
+        print(f"[dedup] {name}: {reason} — {metrics['dup_of']}와 같은 내용, 건너뜀", flush=True)

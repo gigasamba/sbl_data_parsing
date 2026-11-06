@@ -7,8 +7,8 @@ from pathlib import Path
 from openpyxl import Workbook
 
 from common.core.paths import STACK_FILE
-from pipeline.transform.structure.build_bundle import main
 from pipeline.transform.structure.chunking import faq_rows
+from pipeline.transform.structure.gold_bundle import main
 
 
 def _book(path, sheets):
@@ -77,14 +77,16 @@ def _bundle(root):
     rep = {"engine": "office_stdlib", "source": {}, "format": ".xlsx", "pages": 1, "meta": {"pairs": [], "all": []}}
     (pd / "_rep" / f"{doc}.json").write_text(json.dumps({"text": "DS type Q1? A1", "rep": rep}), encoding="utf-8")
     (pd / "_rep" / "index.json").write_text(json.dumps({"docs": [{"doc": doc, "engine": "office_stdlib"}]}), encoding="utf-8")
-    (pd / "_source" / "manifest.jsonl").write_text(json.dumps({"file_name": doc, "key": "FAQ/u1/q.xlsx"}) + "\n", encoding="utf-8")
+    (pd / "_source" / "manifest.jsonl").write_text(
+        json.dumps({"file_name": doc, "key": "misc/u1/q.xlsx", "source_system": "FAQ"}) + "\n", encoding="utf-8"
+    )
     main(["--parse-dir", str(pd), "--src", str(sd), "--embed", "none", "--stack", str(STACK_FILE), "--out", str(out)])
     cs = [json.loads(ln) for ln in (out / "chunks.jsonl").read_text(encoding="utf-8").splitlines() if ln.strip()]
     assert [(c["seq"], c["faq_group"], c["section"], c["chunk_text"], c["line_start"]) for c in cs] == [
         (0, "DS", "DS / capability", "Q: Q1?\nA: A1", 2),
         (1, "DP", "DP", "Q: Q2?\nA: A2", 2),  # 유형이 비면 절 = 시트 이름만
     ]
-    assert {c["source_system"] for c in cs} == {"FAQ"}
+    assert {c["source_system"] for c in cs} == {"FAQ"}  # 원천 = manifest 값(키 첫 마디 misc가 아님 — op-17)
 
 
 def test_faq_sync():

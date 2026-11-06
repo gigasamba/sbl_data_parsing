@@ -1,4 +1,4 @@
-"""층 코드 지문(code_fp) — 11-03 구조 검토: ① 결과를 바꾸는 transform 파일은 모두 어느 층에 들어 있다(빠지면 고쳐도 옛 결과를 다시 씀),
+"""층 코드 지문(code_fp): ① 결과를 바꾸는 transform 파일과 층 파일이 import하는 pipeline 파일은 모두 층에 들어 있다(빠지면 고쳐도 낡은 결과를 다시 씀),
 ② 기록·DB 표 정의처럼 결과와 무관한 common 파일은 지문을 바꾸지 않는다, 결과를 바꾸는 파일은 바꾼다. 임시 복사본에서 본다(실제 코드 수정 없음)."""
 
 import shutil
@@ -20,8 +20,50 @@ def test_every_transform_file_in_a_layer():
     assert not missing, f"층 목록(artifacts.LAYER_CODE)이나 NOT_LAYER에 적을 것: {missing}"
 
 
+# 층 파일이 import해도 층에 넣지 않는 pipeline 파일 — 결과를 바꾸지 않음(실행 기록)
+NOT_OUTPUT = {"pipeline/shared/runtrace.py"}
+
+
+APPS = ("pipeline", "mcp_server")
+
+
+def _app_imports(f):
+    """파일이 import하는 앱(pipeline·mcp_server) 모듈 파일(deploy/ 기준 경로) — 점 이름을 뒤에서부터 줄여 .py나 패키지를 찾는다."""
+    import ast
+
+    def file_of(dotted):
+        parts = dotted.split(".")
+        for end in range(len(parts), 0, -1):
+            p = DEPLOY_ROOT.joinpath(*parts[:end])
+            for c in (p.with_suffix(".py"), p / "__init__.py"):
+                if c.is_file():
+                    return c.relative_to(DEPLOY_ROOT).as_posix()
+        return None
+
+    names = set()
+    for n in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
+        if isinstance(n, ast.ImportFrom) and n.module and n.module.split(".")[0] in APPS:
+            names |= {f"{n.module}.{al.name}" for al in n.names}
+        elif isinstance(n, ast.Import):
+            names |= {al.name for al in n.names if al.name.split(".")[0] in APPS}
+    return {x for x in map(file_of, names) if x}
+
+
+def test_layer_imports_in_layer():
+    """층 파일이 import하는 앱 파일(pipeline·mcp_server — 엔진 파일 포함)은 같은 층에 있다 — 빠지면 그 파일을 고쳐도 지문이 안 바뀜."""
+    if not (DEPLOY_ROOT / "pipeline" / "transform").is_dir():  # mcp-server 이미지
+        return
+    for layer, globs in a.LAYER_CODE.items():
+        own = {p.relative_to(DEPLOY_ROOT).as_posix() for g in globs for p in DEPLOY_ROOT.glob(g) if p.is_file()}
+        missing = sorted({m for f in own for m in _app_imports(DEPLOY_ROOT / f)} - own - NOT_OUTPUT)
+        assert not missing, f"층 {layer} 목록(artifacts.LAYER_CODE)에 적을 것: {missing}"
+
+
 CASES = [  # (고칠 파일, 바뀌어야 하는 층)
-    ("pipeline/transform/represent/rep_accuracy.py", {"p1"}),
+    ("pipeline/transform/represent/text_normalize.py", {"p1"}),
+    ("pipeline/shared/raw_cache.py", {"p0", "p1"}),
+    ("pipeline/transform/parse/engines/registry.py", {"p0", "p1"}),
+    ("mcp_server/services/search/query_expand.py", {"r"}),
     ("pipeline/transform/structure/client_roster.py", {"s"}),
     ("common/store/db/models/search_tables.py", set()),
     ("common/core/jsonlog.py", set()),
@@ -40,6 +82,8 @@ def test_code_fp_follows_output_code():
         base = fps()
         for rel, want in CASES:
             f = root / rel
+            if not f.is_file():  # 코드 포함 pipeline 이미지 — mcp_server는 config만(r 층 파일 없음)
+                continue
             orig = f.read_bytes()
             f.write_bytes(orig + b"\n# x\n")
             now = fps()

@@ -18,8 +18,7 @@ CREATE TABLE RM_MAS_CLIENT_GENERAL (
     KOR_ABBR_NM   TEXT CHECK (KOR_ABBR_NM IS NULL OR length(KOR_ABBR_NM) <= 100)
 ) STRICT;
 
--- seed rows (CRMS clients = valid_env/eval_sets/rfp/{client_master,client_roster}.csv exactly — DS2 dropped Merko,
--- 4 client-project folders remain: Pfizar P2026014, AstraNova P2026033+P2026052, Korvexa P2026047)
+-- seed rows (4 client-projects: Pfizar P2026014, AstraNova P2026033+P2026052, Korvexa P2026047)
 INSERT INTO RM_MAS_CLIENT (CLIENT_CD, CLIENT_ENG_NM, CLIENT_TYPE, COUNTRY_CD, PARENT_CLIENT_CD, STATUS, ALIAS_NM) VALUES
     ('C9001', 'Pfizar Biopharma', 'Customer', 'KR', NULL, 'Y', 'PFZ;Pfizar Biopharma Inc.;Pfizar Inc.;파이자'),
     ('C9002', 'Pfizar Biopharma USA', 'Customer', 'US', 'C9001', 'Y', 'PFZ-US;Pfizar USA'),

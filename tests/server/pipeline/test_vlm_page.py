@@ -1,4 +1,4 @@
-"""pipeline.transform.figures.scan_page_vlm 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.figures.scan_page_vlm`."""
+"""pipeline.transform.figures.scan_page_vlm 시험."""
 
 import contextlib
 import io
@@ -8,8 +8,7 @@ from pathlib import Path
 import pipeline.transform.figures.scan_page_vlm as M
 from common.config.settings import COMMON
 from pipeline import config as pc
-from pipeline.shared.parse_run import raw_vlm_path
-from pipeline.shared.post_features import raw_root
+from pipeline.shared.raw_cache import raw_root, raw_vlm_path
 from pipeline.shared.vlmcall import (
     MAX_SIDE,
     P_PAGE,
@@ -30,7 +29,7 @@ from pipeline.transform.figures.scan_page_vlm import (
     PAGE_SIGNALS_VERSION,
     _signals_path,
     is_scan,
-    page_text,
+    page_text_pages,
     scan_pages,
     scan_pages_detail,
 )
@@ -117,13 +116,24 @@ def selftest():
         img = d / "scan.png"
         Image.new("RGB", (80, 80), "white").save(img)
         assert is_scan(img)
+        import fitz
+
+        # 스캔 판정은 pdf_kind 하나(쪽당 평균 20자): 1쪽만 25자·나머지 빈 3쪽 PDF는 스캔
+        sparse = d / "sparse.pdf"
+        sd = fitz.open()
+        sd.new_page().insert_text((50, 50), "a" * 25)
+        sd.new_page()
+        sd.new_page()
+        sd.save(sparse)
+        sd.close()
+        assert is_scan(sparse)
         assert page_count(img) == 1 and render(img, [1]) == [img.read_bytes()]
         text, prov = vlm_page(img.read_bytes())
         assert text == "" and "미설정" in prov["error"]
         with pc.PIPE.env(VLM_PAGE_MAX="0"):
-            assert page_text(img) == ("", [])  # 꺼짐 — is_scan조차 안 부름(호출 0 보장)
-        t, provs = page_text(img)  # VLM 미설정 — 빈 글자(파싱은 계속), provenance는 오류로 남음
-        assert t == "" and len(provs) == 1 and provs[0].get("error")
+            assert page_text_pages(img) == []  # 꺼짐 — is_scan조차 안 부름(호출 0 보장)
+        provs = [pv for _, t, pv in page_text_pages(img) if not t]  # VLM 미설정 — 빈 글자(파싱은 계속), provenance는 오류로 남음
+        assert len(provs) == 1 and provs[0].get("error")
         assert PID_PAGE.startswith("page-v1-")
         print("[selftest] 스캔 판정·쪽 렌더·VLM_PAGE_MAX 끔·VLM 미설정 안전 경로 통과")
 
@@ -196,8 +206,8 @@ def selftest():
             assert scan_pages(mixed) == [2]
             assert not is_scan(mixed)  # 문서 전체는 스캔 아님(1·3쪽 글자 있음, 기존 is_scan 그대로)
 
-            t2, provs2 = page_text(mixed)  # AD31 — 기본 켬: 2쪽(스캔 쪽)만 대상 — 1·3쪽은 안 부름
-            assert t2 == "" and len(provs2) == 1 and provs2[0].get("error"), (t2, provs2)
+            pages2 = page_text_pages(mixed)  # AD31 — 기본 켬: 2쪽(스캔 쪽)만 대상 — 1·3쪽은 안 부름
+            assert len(pages2) == 1 and pages2[0][0] == 2 and not pages2[0][1] and pages2[0][2].get("error"), pages2
         finally:
             _e1.__exit__(None, None, None)
         print("[selftest] AD12·AD31 — page_signals·scan_pages·스캔 쪽만 쪽 VLM 대상 통과")
@@ -231,7 +241,7 @@ def selftest():
 
         # 독립 검토 MAJOR(10-07) — '검색 가능 스캔 PDF'(이미지 위에 그 이미지와 같은 내용을 옮긴 양질의 render_mode=3
         # OCR 글자층)도 hidden_ratio·image_area_ratio가 똑같이 높아 조건②에 걸린다. 지금 동작은 **그대로 둠**(일부러
-        # 보수적 — OCR 후보가 다시 돌아도 손해 없음) 대신 reason='hidden'을 남겨 다음 단계(build_rep.py, b2 범위)가
+        # 보수적 — OCR 후보가 다시 돌아도 손해 없음) 대신 reason='hidden'을 남겨 다음 단계(doc_represent.py, b2 범위)가
         # '숨은 층이 OCR과 일치하면 원래 글 유지'를 그 이유로 구분할 수 있게 한다.
         searchable = d / "searchable_scan.pdf"
         ssdoc = fitz.open()
@@ -245,7 +255,7 @@ def selftest():
         with pc.PIPE.env(PARSE_RAW_ROOT=str(d / "store4")):  # S7c — 설정 객체만 바꿔 끼움
             assert scan_pages_detail(searchable) == {1: "hidden"}, scan_pages_detail(
                 searchable
-            )  # 지금 동작 명시(한계, 후속은 build_rep.py)
+            )  # 지금 동작 명시(한계, 후속은 doc_represent.py)
         print("[selftest] 독립 검토 MAJOR — 검색 가능 스캔 PDF(양질 OCR 숨은 층)도 reason='hidden'으로 잡힘(지금 동작) 통과")
 
         # AD47 — synth-mixedpdf textlayer_mismatch.pdf와 같은 모양: 쪽 대부분은 정상 글자(hidden_ratio·image_area_ratio
@@ -297,6 +307,21 @@ def test_pick_pages():
     assert pick_pages(0, False, [2, 5], None) == {2, 5}
     assert pick_pages(0, False, [5, 2, 7], 2) == {5, 2}  # 신호 순서대로 자름
     assert pick_pages(0, False, [], None) == set()  # 스캔 쪽 없음 — 쪽 VLM 호출 없음
+
+
+def test_page_text_looped():
+    """0.3.0 엔진 비교 — 쪽 VLM이 같은 줄을 되풀이하면(흐름도 PDF에 빈 표 줄 4,061줄) 그 쪽 글을 비워 글자층을 지킨다."""
+    from unittest import mock
+
+    from pipeline.transform.figures import scan_page_vlm as vp
+
+    loop = "| a | b |\n" + "| | |\n" * (vp.LOOP_LINES_MAX + 1)
+    ok = "| a | b |\n" + "| | |\n" * vp.LOOP_LINES_MAX + "\n\n끝"
+    with (
+        mock.patch.object(vp, "page_targets", return_value={1, 2}),
+        mock.patch.object(vp, "transcribe", return_value=[(1, loop, {}), (2, ok, {})]),
+    ):
+        assert vp.page_text_pages("x.pdf") == [(1, "", {"looped": True}), (2, ok, {})]
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

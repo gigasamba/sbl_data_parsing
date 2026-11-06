@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""PostgreSQL(pgvector) 검색(검색 모듈) — 코사인(HNSW·4096차원은 이진 양자화+재정렬) + BM25 + 드문 ID → RRF.
-명령: search --q(옛 bench — 로컬 대 pgvector 비교는 mc-01 11-01에 지움). 적재·배포는 modules/load/pgstore.py."""
+"""PostgreSQL(pgvector) 검색 — 코사인(HNSW·4096차원은 이진 양자화+재정렬) + BM25 + 드문 ID → RRF.
+명령: search --q. 적재는 pipeline/load/pgvector_load.py."""
 
 import argparse
 from collections import Counter
@@ -9,9 +9,9 @@ from common.ai.embed import model_key
 from common.core.console import utf8_stdout
 from common.core.text import id_terms, tokens  # 토큰 규칙(모듈 계약)
 from common.store.pg import HNSW_MAX, PG, conf, vec
-from mcp_server import config as mc  # 설정 객체(S7d)
-from mcp_server.services.search.local import ID_MAX_DF, embed_query, tie_break, weights  # BR41 동점 깨기(local과 공용)
-from mcp_server.services.search.text import term_weights  # X3(10-16 검색 전용으로 분리)
+from mcp_server import config as mc
+from mcp_server.services.search.bm25_weights import term_weights
+from mcp_server.services.search.rank_rules import ID_MAX_DF, embed_query, tie_break, weights  # BR41 동점 깨기(rank_rules와 공용)
 
 RERANK = 200  # 이진 양자화 후보 수 → 원 벡터 코사인으로 재정렬
 
@@ -25,7 +25,7 @@ def dim_of(db):
 
 
 def index_meta(db):
-    """질의 임베딩에 쓸 색인 정보(mc-19 — 묶음 meta.json 대신 PG): 모델 = 그 스키마 gold doc.embed_model(값이 여럿이면 쉼표로 이어
+    """질의 임베딩에 쓸 색인 정보(PG): 모델 = 그 스키마 gold doc.embed_model(값이 여럿이면 쉼표로 이어
     질의 모델과 같을 수 없어 embed_query가 거부 — 섞인 색인), 차원 = chunk.embedding 칸 형식(벡터가 하나도 없으면 0 — 키워드·ID만).
     모델 이름은 embed.model_key로 비교(query_model_mismatch와 같은 규칙). 모델 칸이 빈 옛 문서가 이름 있는 문서와 섞이면 그것도 섞인 색인."""
     s = db.schema
@@ -38,7 +38,7 @@ def index_meta(db):
 
 
 def _scope_restrict(db, scope):
-    """(2026-10-20 통합 search) 하드 필터 범위에 **포함될** 문서(file_path 집합)의 chunk_id 허용 집합.
+    """하드 필터 범위에 **포함될** 문서(file_path 집합)의 chunk_id 허용 집합.
     question+하드 필터 검색이 저장소 질의 단계부터 그 문서들 안에서만 돌게 한다 — 후치 필터로는 좁은 범위가 전역 상위 풀에 못 들어 근거가 0건이 되는 문제(실측: E29H 1문서)를 고침."""
     s = db.schema
     rows = db.q(f"SELECT c.chunk_id FROM {s}.chunk c JOIN {s}.doc d ON d.doc_id = c.doc_id WHERE d.file_path = ANY(%s)", (sorted(scope),))
@@ -52,7 +52,7 @@ def vector_top(db, q, n, restrict=None):
     PGPool(검색 MCP 상주 Retriever)은 q() 호출마다 풀에서 다른 연결을 꺼내 와, SET이 그 질의에 안 먹거나
     다음 요청(다른 연결 체크아웃)에 새는 문제가 있었다 — scope()는 끝나면(COMMIT) 자동 리셋."""
     s, d = db.schema, dim_of(db)
-    # 10-15 urgent — HNSW reads ef_search candidates first and filters after, so a narrow client filter can return fewer
+    # HNSW reads ef_search candidates first and filters after, so a narrow client filter can return fewer
     # than n hits. A small allowed set is cheaper to scan exactly anyway (chunk_id primary key) and never loses hits.
     exact = restrict is not None and len(restrict) <= mc.cfg().search.pg.filter_exact_max
     where, rparam = (" WHERE chunk_id = ANY(%s)", [sorted(restrict)]) if restrict is not None else ("", [])
@@ -95,17 +95,17 @@ def search(
     """코사인(기본) 또는 하이브리드(코사인 + BM25 + 드문 ID → RRF). 결과 = v_chunk_source 행 + rrf·via.
     vr = 벡터 순위(chunk_id 목록)를 밖에서 줄 때(EDW 벡터 검색 결과) — 없으면 pgvector로 계산.
     methods = 쓸 방법 {vector, bm25, id}(없으면 retrieve대로) · 가중치 weights(question)(SEARCH_W_*, G14 —
-    local.py와 같은 함수를 import해 씀, 가중치가 두 저장소에서 갈라지지 않음).
-    scope(2026-10-20 통합 search) = 하드 필터 범위 **안** 문서 file_path 집합 — _scope_restrict로 저장소 질의 단계부터
+    rank_rules.py와 같은 함수를 import해 씀, 가중치가 두 저장소에서 갈라지지 않음).
+    scope = 하드 필터 범위 **안** 문서 file_path 집합 — _scope_restrict로 저장소 질의 단계부터
     그 문서의 청크만 후보로(vector·bm25·ID 전부). None이면 전과 바이트 동일.
     question(G14) = 원문 질문 글자(weights()에 그대로 건넴 — 안 주면 전과 바이트 동일, BR41 tie_break에도 그대로 건넴).
     BR41 — 최종 top-k 안에서(멤버십 불변, 추가 질의 없음) 동점(상대 오차 TIE_EPS_REL)이면 질문 엔티티(고객·계약번호·
-    제품코드)와 맞는 문서를 앞으로(local.py tie_break 공용)."""
+    제품코드)와 맞는 문서를 앞으로(rank_rules.py tie_break 공용)."""
     s = db.schema
     q = vec(qv) if qv is not None else None  # 질의 임베딩이 없으면(장애) 키워드·ID만 — 부르는 쪽이 methods에서 vector를 뺌
     m = set(methods) if methods else ({"vector"} if retrieve == "cosine" else {"vector", "bm25", "id"})
     w = weights(question)
-    restrict = _scope_restrict(db, scope) if scope else None  # 하드 거르기 범위 안 문서만(고객도 이 범위로 — client_edw, 11-02)
+    restrict = _scope_restrict(db, scope) if scope else None  # 하드 거르기 범위 안 문서만(고객도 이 범위로 — client_edw)
     lists = []
     if "vector" in m:
         if vr is None:
@@ -136,7 +136,7 @@ def search(
             else []
         )
         ids = id_terms(terms)
-        # BR32 — 문턱은 "문서" 수 기준(local.py doc_df와 같은 규칙). term_stat.df는 적재 때 쌓인 청크 기준 수라
+        # BR32 — 문턱은 "문서" 수 기준(rank_rules.py doc_df와 같은 규칙). term_stat.df는 적재 때 쌓인 청크 기준 수라
         # 안 쓴다 — 한 문서가 청크 여러 개로 쪼개지면(메일 스크린샷 OCR 등) 문서는 하나인데도 청크 기준은 문턱을
         # 넘어 걸렸다(실측 QA074). doc_id 중복 제거 집계는 질의 때 바로.
         ir = (
@@ -164,14 +164,14 @@ def search(
     top = [cid for cid, _ in sorted(rrf.items(), key=lambda x: (-x[1], x[0]))[:k]]
     if not top:
         return []
-    rows = {  # mc-19 — 문서 날짜는 gold doc.content_date(근거 이름은 doc_date — 검색 뷰는 출력 계약이라 그대로 두고 JOIN)
+    rows = {  # 문서 날짜는 gold doc.content_date(근거 이름은 doc_date — 검색 뷰는 출력 계약이라 그대로 두고 JOIN)
         r["chunk_id"]: r
         for r in db.q(
             f"SELECT v.*, d.content_date AS doc_date FROM {s}.v_chunk_source v JOIN {s}.doc d ON d.doc_id = v.doc_id WHERE v.chunk_id = ANY(%s)",
             (top,),
         )
     }
-    top = [c for c in top if c in rows]  # BR41 — rows를 이미 가져온 뒤 재배열(추가 질의 없음), local.py와 같은 tie_break
+    top = [c for c in top if c in rows]  # BR41 — rows를 이미 가져온 뒤 재배열(추가 질의 없음), rank_rules.py와 같은 tie_break
     # v_chunk_source에 product_code·contract_no 열이 없음 — rows[c].get()은 그대로 None(죽지 않음, 그 축은 안 씀)
     docmeta = {
         c: (rows[c].get("file_name"), rows[c].get("client_edw"), rows[c].get("contract_no"), rows[c].get("product_code")) for c in top

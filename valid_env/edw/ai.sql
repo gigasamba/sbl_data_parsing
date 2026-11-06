@@ -2,7 +2,7 @@
 -- the connector ATTACHes that file AS AI, so AI.FileStorageMap resolves like T-SQL.
 -- STRICT tables + CHECK(length) mirror the NVARCHAR(n)/BIGINT/INT/FLOAT types, so a bad value fails here as on the server.
 
--- AI.FileStorageMap — one row per stored source file (s3_key 1:1). Columns read by pipeline/extract/fetch_docs.py
+-- AI.FileStorageMap — one row per stored source file (s3_key 1:1). Columns read by pipeline/extract/candidate_pick.py
 -- (id, content_version_id, s3_key, original_filename, file_size) and by doc_meta_map.json (source_system, sf_op_id, contract_id).
 CREATE TABLE FileStorageMap (
     id                 INTEGER PRIMARY KEY,                                                    -- BIGINT IDENTITY
@@ -18,39 +18,7 @@ CREATE TABLE FileStorageMap (
     created_at         TEXT    NOT NULL CHECK (created_at = strftime('%Y-%m-%d %H:%M:%S', created_at))   -- DATETIME2(0)
 ) STRICT;
 
--- AI.ParsingMeta — same columns and keys as deploy/data_etl/tools/parsing_meta_mssql.sql
--- (common_tools/handoff_contract.py PARSING_META_COLUMNS). Written by pipeline/load/publish_parse_result.py (RDB_SQLITE).
-CREATE TABLE ParsingMeta (
-    parse_meta_id     INTEGER PRIMARY KEY AUTOINCREMENT,                                          -- BIGINT IDENTITY
-    source_system     TEXT    CHECK (source_system IS NULL OR length(source_system) <= 64),
-    source_key        TEXT    CHECK (source_key IS NULL OR length(source_key) <= 1024),
-    source_uri        TEXT    CHECK (source_uri IS NULL OR length(source_uri) <= 2048),
-    original_filename TEXT    CHECK (original_filename IS NULL OR length(original_filename) <= 512),
-    file_format       TEXT    CHECK (file_format IS NULL OR length(file_format) <= 32),
-    file_size         INTEGER,                                                                    -- BIGINT
-    sha256            TEXT    CHECK (sha256 IS NULL OR length(sha256) <= 64),
-    rep_bucket        TEXT    CHECK (rep_bucket IS NULL OR length(rep_bucket) <= 256),
-    rep_key           TEXT    CHECK (rep_key IS NULL OR length(rep_key) <= 2048),
-    rep_etag          TEXT    CHECK (rep_etag IS NULL OR length(rep_etag) <= 128),
-    parse_status      TEXT    CHECK (parse_status IS NULL OR length(parse_status) <= 32),
-    status_reason     TEXT    CHECK (status_reason IS NULL OR length(status_reason) <= 2000),
-    rep_engine        TEXT    CHECK (rep_engine IS NULL OR length(rep_engine) <= 128),
-    rep_acc           REAL,                                                                       -- FLOAT
-    page_count        INTEGER CHECK (page_count IS NULL OR page_count BETWEEN -2147483648 AND 2147483647),   -- INT
-    doc_key           TEXT    NOT NULL CHECK (length(doc_key) <= 64),
-    parse_date        TEXT    CHECK (parse_date IS NULL OR length(parse_date) <= 32),
-    pipeline_version  TEXT    CHECK (pipeline_version IS NULL OR length(pipeline_version) <= 64),
-    status            TEXT    CHECK (status IS NULL OR status IN ('active', 'changed', 'deleted')),
-    status_at         TEXT    CHECK (status_at IS NULL OR length(status_at) <= 32),
-    engines_used      TEXT,                                                                       -- NVARCHAR(MAX), JSON array
-    engines_summary   TEXT    CHECK (engines_summary IS NULL OR length(engines_summary) <= 512),
-    parsed_at         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now'))             -- DATETIME2(0) DEFAULT SYSUTCDATETIME()
-) STRICT;
-CREATE UNIQUE INDEX UQ_ParsingMeta_key    ON ParsingMeta (source_system, source_key, parse_date) WHERE source_key IS NOT NULL;
-CREATE UNIQUE INDEX UQ_ParsingMeta_dockey ON ParsingMeta (doc_key, parse_date) WHERE source_key IS NULL;
-CREATE INDEX IX_ParsingMeta_doc_key ON ParsingMeta (doc_key);
-
--- seed rows (FileStorageMap only; ParsingMeta starts empty — publish writes it)
+-- seed rows (FileStorageMap)
 
 INSERT INTO FileStorageMap (id, content_id, s3_key, source_system, original_filename, content_version_id, file_size, sha256, sf_op_id, contract_id, created_at) VALUES
     (1, 'd2139fbd2cbe40341dbe83966c9ad767066ad1333806a21d45295223262b0660', 'CRMS/19f7e8be-02be-5b8a-8918-64496e955191/normal_control.pdf', 'CRMS', 'normal_control.pdf', 1, 918, 'd2139fbd2cbe40341dbe83966c9ad767066ad1333806a21d45295223262b0660', NULL, NULL, '2026-10-15 09:00:00'),
@@ -132,7 +100,16 @@ INSERT INTO FileStorageMap (id, content_id, s3_key, source_system, original_file
     (77, '5053acb7b0910563e5b6da509dbf4851411c8411b22b93a65fec299b2e6aa6b8', 'CRMS/58ee9e22-34a3-5004-9104-924c49e3e287/arg_abx101_test_report_scan.png', 'CRMS', 'arg_abx101_test_report_scan.png', 1, 2385394, '5053acb7b0910563e5b6da509dbf4851411c8411b22b93a65fec299b2e6aa6b8', NULL, NULL, '2026-10-30 09:00:00'),
     (78, 'cf0e5aaabc4cb1cde34dd89d43d53dbe24a2a0314c095e5895a15ad1c34e5e00', 'CRMS/c6532711-6031-5a69-a504-985dd8a86fb1/lmx_lxt204_sample_receipt_photo.png', 'CRMS', 'lmx_lxt204_sample_receipt_photo.png', 1, 2339899, 'cf0e5aaabc4cb1cde34dd89d43d53dbe24a2a0314c095e5895a15ad1c34e5e00', NULL, NULL, '2026-10-30 09:00:00'),
     (79, '783c3a16e500d23dfad3be5c310977943be88ed42ffac3cb8c58c125a402eab3', 'CRMS/ad0831fc-55a6-5a3d-8161-fcd3ab418236/arg_arb305_lims_stability_capture.png', 'CRMS', 'arg_arb305_lims_stability_capture.png', 1, 1585828, '783c3a16e500d23dfad3be5c310977943be88ed42ffac3cb8c58c125a402eab3', NULL, NULL, '2026-10-30 09:00:00'),
-    (80, 'c2bdb0b14f897e7b1d272f26f3c9f37799d02beb5c0a357bc443c2e45d1ea567', 'FAQ/74e7751a-97c6-4e17-a73e-85bbd890188f/CDO questionnarie library.xlsx', 'FAQ', 'CDO questionnarie library.xlsx', 1, 14316, 'c2bdb0b14f897e7b1d272f26f3c9f37799d02beb5c0a357bc443c2e45d1ea567', NULL, NULL, '2026-11-01 09:00:00');
+    (80, 'c2bdb0b14f897e7b1d272f26f3c9f37799d02beb5c0a357bc443c2e45d1ea567', 'FAQ/74e7751a-97c6-4e17-a73e-85bbd890188f/CDO questionnarie library.xlsx', 'FAQ', 'CDO questionnarie library.xlsx', 1, 14316, 'c2bdb0b14f897e7b1d272f26f3c9f37799d02beb5c0a357bc443c2e45d1ea567', NULL, NULL, '2026-11-01 09:00:00'),
+    (81, 'a2ec4393f9a701b189c728b0fc2f5baf730effbfb6b889cc879a9065548c8f9c', 'CRMS/2822b5f4-2ff4-5770-8245-b2669b04198c/special_chars_ko.docx', 'CRMS', 'special_chars_ko.docx', 1, 37603, 'a2ec4393f9a701b189c728b0fc2f5baf730effbfb6b889cc879a9065548c8f9c', NULL, NULL, '2026-11-05 09:00:00'),
+    (82, '8486965f1e27f303137401fb3aeba0f37e521ca6b3d75bb4ccf50223a08c381e', 'CRMS/99db9330-3721-5eeb-9163-8a16fd1142dc/diagram_image_only.docx', 'CRMS', 'diagram_image_only.docx', 1, 70103, '8486965f1e27f303137401fb3aeba0f37e521ca6b3d75bb4ccf50223a08c381e', NULL, NULL, '2026-11-05 09:00:00'),
+    (83, 'c5977b4b1216e2e3752176c1f001a14cd649feecc9c1536577a73174e2a1d9b7', 'CRMS/a2586335-7157-5715-8839-828161b6de38/overlay_text_slide.pptx', 'CRMS', 'overlay_text_slide.pptx', 1, 151462, 'c5977b4b1216e2e3752176c1f001a14cd649feecc9c1536577a73174e2a1d9b7', NULL, NULL, '2026-11-05 09:00:00'),
+    (84, 'a562defef6175d99a2a478b38781423486c3265d39aff050a918b2c6f233bd25', 'CRMS/c8c67ad5-f790-5d9d-98d6-2916e3e1c123/whiteboard_photo.jpg', 'CRMS', 'whiteboard_photo.jpg', 1, 96513, 'a562defef6175d99a2a478b38781423486c3265d39aff050a918b2c6f233bd25', NULL, NULL, '2026-11-05 09:00:00'),
+    (85, 'b8566a2e76a1725601b7324c6391d63e2e1eb040199936cc4cd482e62fe3a005', 'CRMS/705137f5-28a5-5e8d-b531-fd4b1fa8c6e7/qc_export_cp949.csv', 'CRMS', 'qc_export_cp949.csv', 1, 231, 'b8566a2e76a1725601b7324c6391d63e2e1eb040199936cc4cd482e62fe3a005', NULL, NULL, '2026-11-05 09:00:00'),
+    (86, 'f5e1bd6347dd4d6028caf88f922db9f665e41a84e13b2812a52ff9b31fd6c2e1', 'CRMS/ecc49815-5f6c-5dbd-94e1-cedf58b8bf39/legacy_report.doc', 'CRMS', 'legacy_report.doc', 1, 19456, 'f5e1bd6347dd4d6028caf88f922db9f665e41a84e13b2812a52ff9b31fd6c2e1', NULL, NULL, '2026-11-05 09:00:00'),
+    (87, '5d5e8e99365b5d7964fe250c3bc0246bdc8d0642b1313845648145dbfb20bb72', 'CRMS/702afbc7-4ac8-518a-b48a-6f6685f1321f/legacy_sheet.xls', 'CRMS', 'legacy_sheet.xls', 1, 6144, '5d5e8e99365b5d7964fe250c3bc0246bdc8d0642b1313845648145dbfb20bb72', NULL, NULL, '2026-11-05 09:00:00'),
+    (88, '469db2d2770fa68fbf5a0b53dd336e4efd08f4c76f8fa2001888ea2cb6676c70', 'CRMS/d951c578-98b3-5021-bf1b-e3b7bdfdb202/legacy_deck.ppt', 'CRMS', 'legacy_deck.ppt', 1, 652288, '469db2d2770fa68fbf5a0b53dd336e4efd08f4c76f8fa2001888ea2cb6676c70', NULL, NULL, '2026-11-05 09:00:00'),
+    (89, 'd3080402ada6ec6e49bc477b418b82d81acb5f313d36eb8020e57f9fa8578602', 'SFDC/55a0c399-b862-556c-bed2-7873a128b7a2/견적서(최종)_v2 [검토].pdf', 'SFDC', '견적서(최종)_v2 [검토].pdf', 1, 119604, 'd3080402ada6ec6e49bc477b418b82d81acb5f313d36eb8020e57f9fa8578602', NULL, NULL, '2026-11-05 09:00:00');
 
 -- [SYNTHETIC] 11-02(pl-29) — 원천별 파일 대응 표(운영 gold 스키마 노트의 칸 이름 — 실제 정의는 DB 담당자 확인, D-1). 값은 가짜.
 CREATE TABLE FileStorageMap_CRMS (

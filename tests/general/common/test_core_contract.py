@@ -1,5 +1,4 @@
-"""common.core.contract(인계 파일 — FINGERPRINT) 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.core.contract --selftest`(반입 판정 목록 밖 — 일반 시험).
-⚠️ 이 옮기기는 인계 지문(FINGERPRINT)을 바꾼다(사용자 10-28 — 인계 파일 옮기기 커밋 하나, 되돌리기는 그 커밋 revert · refactor.md C-52)."""
+"""common.core.contract(인계 파일 — FINGERPRINT) 자기 점검 — 반입 판정 목록 밖의 일반 시험."""
 
 import json
 from pathlib import Path
@@ -38,5 +37,5 @@ def selftest():
     print("[selftest] 인계 계약 점검(파싱 _rep) 통과")
 
 
-def test_main():  # 옛 `if __name__ == "__main__":` 몸통
+def test_main():
     selftest()

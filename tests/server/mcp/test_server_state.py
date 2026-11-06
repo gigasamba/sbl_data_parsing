@@ -1,17 +1,17 @@
-"""mcp_server.services.search.server_state 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.search.server_state`."""
+"""mcp_server.services.search.server_state 시험."""
 
 from mcp_server.services.search import server_state as M
-from mcp_server.services.search.server_state import _STATE, _health, _retriever, _warmup_bg
+from mcp_server.services.search.server_state import _STATE, _retriever, _warmup_bg, health_body
 from tests.server.mcp import pgfix
 
 
 def _selftest_warmup_health():
     """MC1 — 예열 끝나기 전 `/health`는 ready=False·warming=True(라우트 503) · 끝나면 ready=True ·
-    예열(또는 색인 로드)이 실패해도 ready=True + warning만(서버는 안 죽음, MCP_WARMUP=0으로 끈 건 경고 아님)."""
+    예열(또는 색인 로드)이 실패해도 ready=True + warning만(서버는 안 죽음)."""
     saved = dict(_STATE)
     _STATE.clear()
     try:
-        body = _health()  # 스레드 시작 전(또는 아직 도는 중) — warmup_done 없음
+        body = health_body()  # 스레드 시작 전(또는 아직 도는 중) — warmup_done 없음
         assert body["ready"] is False and body.get("warming") is True and "warning" not in body, body
 
         class _FakeR:
@@ -19,15 +19,15 @@ def _selftest_warmup_health():
 
         _STATE["Rs"] = {"sfdc": _FakeR()}
         _STATE["warmup_done"], _STATE["warmup_ok"] = True, True
-        body = _health()
+        body = health_body()
         assert body["ready"] is True and "warming" not in body and "warning" not in body, body
 
         _STATE["warmup_ok"] = False  # 예열 실패 — ready는 그대로 켜짐, 경고만
-        body = _health()
+        body = health_body()
         assert body["ready"] is True and body.get("warning") == "warmup_failed", body
 
-        _STATE["warmup_ok"] = None  # MCP_WARMUP=0(꺼짐) — 경고 아님
-        body = _health()
+        _STATE["warmup_ok"] = None  # 예열 결과 없음 — 경고 아님
+        body = health_body()
         assert body["ready"] is True and "warning" not in body, body
     finally:
         _STATE.clear()
@@ -64,7 +64,7 @@ def _selftest_reload():
     _env = pgfix.use(d, MCP_RELOAD_CHECK_SEC="0")  # 설정 객체 덮기(S7d) · 늘 대역
     try:
         r1 = _retriever("other")
-        assert r1.pg.is_standin and _health()["store"] == "pgvector"
+        assert r1.pg.is_standin and health_body()["store"] == "pgvector"
         r1.pg.q(f"INSERT INTO {r1.pg.schema}.doc(file_path) VALUES (%s)", ("b.txt",))  # 새 적재 — 개수 바뀜
         r2 = _retriever("other")
         assert r2 is not r1, "적재 버전 바뀌었는데 다시 안 만듦"

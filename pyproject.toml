@@ -9,7 +9,7 @@ line-length = 140
 target-version = "py312"
 force-exclude = true                   # 파일을 직접 넘겨도 아래 제외 목록을 지킴(lint_changed.sh)
 extend-exclude = [
-  "pipeline/extract/engines",          # 엔진 지문
+  "pipeline/transform/parse/engines",  # 엔진 지문
   "common/core/contract.py",           # 인계 지문(FINGERPRINT) — common/core/fingerprint.py HANDOFF_FILES
   "common/core/repfmt.py",
   "common/core/terms.py",
@@ -50,7 +50,7 @@ files = ["common", "pipeline", "mcp_server", "deploy", "validation", "tests"]
 # annotation-unchecked는 오류가 아니라 안내(타입 표시 없는 함수 몸통은 안 봄 — check_untyped_defs=false)라 끈다.
 disable_error_code = ["annotation-unchecked"]
 exclude = [
-  "^pipeline/extract/engines/",
+  "^pipeline/transform/parse/engines/",
   "^resources/",
   "^valid_env/",
   "^output/",

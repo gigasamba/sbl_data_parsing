@@ -11,6 +11,8 @@
 !assets
 !VERSION
 !CODE_COMMIT
+# 개발 도구 pip 판(이미지 base 단계 — PC 개발 도구와 같은 파일)
+!requirements-dev.txt
 # S9(D-018) — 서버 반입 시험만(실행기·tests/server) — 일반 시험(tests/general)·pytest 설정(conftest.py)·시험 데이터는 이미지에 안 들어감
 !tests/__init__.py
 !tests/runner.py
@@ -30,5 +32,7 @@
 # S11(VS10 D-11) — 빈 틀(.env*.example)이 S7e2에 없어져 예외 줄 `!common/config/*.example`을 지움(빌드 컨텍스트 같음)
 **/.env.*
 # S11 리뷰 — S7e2부터 비밀은 settings.yaml(+ 덮기 파일 yaml)에 있음: 코드 폴더 안에 둔 사본이 이미지에 들지 않게(git이 추적하는 settings*.yaml 없음 — 빌드 컨텍스트 같음)
-**/settings.yaml
-**/settings.*.yaml
+# 이름이 settings로 시작하는 yaml·그 백업(`settings copy.yaml`·`settings.yaml.bak-…` 포함) — 추적하는 sample만 예외
+**/settings*.yaml
+**/settings*.yaml.*
+!settings.sample.yaml

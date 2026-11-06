@@ -9,6 +9,8 @@ DATE 칸은 실제 날짜인 'YYYY-MM-DD' 글자만 날짜로 바꾸고 그 밖(
 
 from alembic import context, op
 
+from common.store.db.migrations import search_parts
+
 revision = "0005_search"
 down_revision = "0004_search"
 branch_labels = None
@@ -61,9 +63,9 @@ def view(src, doc_cols):
 def upgrade():
     b = context.config.attributes["schema"]
     bind = op.get_bind()
-    for src in SOURCES:
+    for src in search_parts.sources(SOURCES):
         s = f"{b}_{src}"
-        cols = OLD_COLS[src]
+        cols = OLD_COLS.get(src, ())  # DEV 원천은 옛 칸 없음
         bind.exec_driver_sql(f"ALTER TABLE {s}.doc ADD COLUMN IF NOT EXISTS attrs JSONB")
         obj = "jsonb_strip_nulls(jsonb_build_object(" + ", ".join(f"'{n}', {n}" for n, _ in cols) + "))" if cols else "'{}'::jsonb"
         bind.exec_driver_sql(f"UPDATE {s}.doc SET attrs = {obj}")
@@ -89,9 +91,9 @@ def _back(n, t):
 def downgrade():
     b = context.config.attributes["schema"]
     bind = op.get_bind()
-    for src in SOURCES:
+    for src in search_parts.sources(SOURCES):
         s = f"{b}_{src}"
-        cols = OLD_COLS[src]
+        cols = OLD_COLS.get(src, ())  # DEV 원천은 옛 칸 없음
         bind.exec_driver_sql(f"DROP VIEW IF EXISTS {s}.v_chunk_source")
         if cols:
             bind.exec_driver_sql(f"ALTER TABLE {s}.doc " + ", ".join(f"ADD COLUMN IF NOT EXISTS {n} {t}" for n, t in cols))

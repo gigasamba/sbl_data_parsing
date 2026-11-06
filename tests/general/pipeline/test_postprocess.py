@@ -1,9 +1,10 @@
-"""pipeline.shared.post_features 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.shared.post_features`."""
+"""후보정 기능(pipeline.config.active_features)·raw_root 시험."""
 
 from pathlib import Path
 
 from pipeline import config as pc
-from pipeline.shared.post_features import FEATURES, active_features, raw_root
+from pipeline.config import FEATURES, active_features
+from pipeline.shared.raw_cache import raw_root
 
 
 def selftest_raw_root():

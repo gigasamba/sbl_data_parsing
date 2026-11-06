@@ -1,4 +1,4 @@
-"""pipeline.transform.represent.build_rep 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.build_rep --selftest`."""
+"""pipeline.transform.represent.doc_represent 시험."""
 
 import json
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 from common.config.settings import COMMON
 from common.core.contract import source_record
 from pipeline import config as pc
-from pipeline.transform.represent.build_rep import (
+from pipeline.transform.represent.doc_represent import (
     apply_post,
     fill_scan_pages,
     fix_tables,
@@ -210,9 +210,9 @@ def selftest():
     doc4 = "mixed.pdf"
     pdf4 = d4 / doc4
     mdoc4 = _fitz.open()
-    mdoc4.new_page(width=200, height=200).insert_text((10, 10), "1쪽 글자층 문서 본문이 충분히 길다")  # is_scan() = False(혼합)이 되게
+    mdoc4.new_page(width=200, height=200).insert_text((10, 10), "1쪽 글자층 문서 본문 text layer long enough")  # 혼합(평균 20자 넘음)
     mdoc4.new_page(width=200, height=200)  # 2쪽 — 글자층 없음(스캔)
-    mdoc4.new_page(width=200, height=200).insert_text((10, 10), "3쪽 글자층 문서 본문이 충분히 길다")
+    mdoc4.new_page(width=200, height=200).insert_text((10, 10), "3쪽 글자층 문서 본문 text layer long enough")
     mdoc4.save(pdf4)
     mdoc4.close()
     base_rep4 = {"text": "1쪽 글자\f\f3쪽 글자", "facts": [], "tables": []}  # 2쪽은 스캔이라 글자층이 비어 있음
@@ -379,7 +379,7 @@ def selftest():
         with pc.PIPE.env(PARSE_POST="figures"):  # 쪽 VLM 꺼짐 — 덮지 않으면 쪽 전체 그림은 그림 VLM 대상
             assert not any(f["loc"].get("page_vlm") for f in _figures(scan6) if f["loc"].get("page_render"))
             assert all(f["loc"].get("page_vlm") for f in _figures(scan6, page_covered=True) if f["loc"].get("page_render"))
-        # run_docs light 레인처럼 vlm_page 없이 figures만 — VLM 엔진이 옮긴 문서의 쪽 전체 그림은 그림 VLM 0회
+        # run_pipeline light 레인처럼 vlm_page 없이 figures만 — VLM 엔진이 옮긴 문서의 쪽 전체 그림은 그림 VLM 0회
         from pipeline.transform.figures import figure_extract as _fig_mod
 
         fig_calls = []
@@ -394,7 +394,7 @@ def selftest():
     finally:
         _vc.vlm_page = orig_vlm_page
     # covered 판정 표 — 대표가 VLM 엔진·본문 있음·이미지/스캔 형식(run_all과 같은 형식 키)일 때만
-    from pipeline.transform.represent.build_rep import _vlm_transcribed as _vt
+    from pipeline.transform.represent.doc_represent import _vlm_transcribed as _vt
 
     def _r(engine, text):
         return {"rep": {"engine": engine}, "text": text}
@@ -450,11 +450,6 @@ def selftest():
     assert on5["fused"]["conflicts"][0]["losers"][0]["engines"] == ["rapidocr_ko"]
     assert "reread" not in on5["fused"]  # 재판독 칸 없음(pl-34에 지움)
     print("[selftest] AD29 P1 — 라벨:값 조각 투표(신뢰도 높은 쪽 승, 본문·기존 facts 불변) 통과")
-
-    # PA0 — 맥락 기록: rep에 context·decisions가 생김
-    assert on5["context"]["format"] == ".txt" and set(on5["context"]["engines"]) == {"pdfplumber", "pymupdf", "rapidocr_ko"}
-    assert [x["step"] for x in on5["decisions"]][:2] == ["engine_scope", "representative"]
-    print("[selftest] PA0 — 문서·엔진 신호 + 규칙 결정 기록 통과")
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

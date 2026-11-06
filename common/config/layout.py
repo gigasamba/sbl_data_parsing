@@ -1,135 +1,119 @@
-"""settings.yaml 배치(op-08 ②) — 파일의 칸 자리(YAML 경로) ↔ 설정 모델의 칸 경로(common.* · pipeline.* · mcp.*).
-파일은 `required`(운영자가 꼭 채울 값) → 역할 절 `common`·`extract`·`transform`·`load`·`search`·`ops`(환경마다 운영자가 정하는 값) → `tuning`(거의 안 바꾸는 값 — 분류별) →
-`dev`(PC 전용 — 서버는 비워 둠) 순서다.
+"""settings.yaml 배치 — 파일의 칸 자리(YAML 경로) ↔ 설정 모델의 칸 경로(common.* · pipeline.* · mcp.*).
+파일은 `required`(운영자가 꼭 채울 값) → 역할 절 `common`·`extract`·`transform`·`load`·`search`·`ops`(환경마다 운영자가 정하는 값) →
+`tuning`(거의 안 바꾸는 값 — 분류별) → `dev`(PC 전용 — 서버는 비워 둠) → `option`(선택 기능 — 비우면 끔) 순서다.
 코드는 모델 경로(`cfg().extract.ocr.dpi` 등)를 그대로 쓰고, read_settings()가 파일을 읽은 직후 to_model()로 모델 배치로 바꾼다.
-  · required: 칸마다 자리를 적은 표(REQUIRED). tuning: 모델 경로 모음(TUNING) — 자리는 `tuning.` + 역할 자리.
-    역할 절에서 tuning으로 옮긴 칸(TUNING_RARE — 사용자 11-04)은 옛 자리(역할 자리)도 경고 한 번 뒤 읽는다.
-  · PC 전용 칸(LOCAL — 외부 모델 허용·지출 상한·로컬 대체 DB 등): 자리는 `dev.` + 역할 자리(앞 `common.` 뺌). 옛 자리(역할 자리)·
-    옛 required 밖 자리(MOVED)도 경고 한 번 뒤 읽는다 — 사용자 11-04(설정 줄이기).
-  · 그 밖: 접두어 규칙(ROLES — 모델 접두 → 파일 접두, 1:1). 사전 값 칸(lib_env·extra_body 등)도 접두어로 그대로 옮겨진다.
-  · 모델을 모르고도 바꾼다(표준 라이브러리만) — 이미지에 없는 앱의 칸도 자리만 옮기고, 검증은 그 앱 설정 객체가 한다(U-a).
-옛 배치(최상위 common·pipeline·mcp — op-08 전)는 거부하고 `python -m common.config.migrate <옛 settings.yaml>`로 바꾸게 안내한다.
+  · required: 칸마다 자리를 적은 표(REQUIRED). 이름·자리를 바꾼 칸: 표(PLACED — 모델 경로 → 파일 자리).
+  · tuning: 모델 경로 모음(TUNING) — 자리는 `tuning.` + 역할 자리. PC 전용 칸(LOCAL): 자리는 `dev.` + 역할 자리(앞 `common.` 뺌).
+  · 그 밖: 접두어 규칙(ROLES — 모델 접두 → 파일 접두, 1:1). 옛 자리도 ROLES로 모델 칸을 찾아 "옛 자리 → 새 자리"로 거부한다.
+  · 모델을 모르고도 바꾼다(표준 라이브러리만 — 호스트 스크립트도 이 파일을 읽음). 검증은 앱 설정 객체가 한다.
+모르는 절·모르는 칸·자리가 다른 칸은 시작 거부(칸 자리만 알림, 값은 출력 안 함).
 """
 
-import sys
-
 # 파일 최상위 절 — 이 순서로 sample에 낸다.
-SECTIONS = ("required", "common", "extract", "transform", "load", "search", "ops", "tuning", "dev")
-MIGRATE_HINT = "python -m common.config.migrate <옛 settings.yaml> --out <새 파일>"
+SECTIONS = ("required", "common", "extract", "transform", "load", "search", "ops", "tuning", "dev", "option")
 
-# required — (카테고리 열쇠, 제목, 쓰는 곳 표시, [(칸 이름, 모델 경로)]). 표시는 카테고리 제목에 한 번(사용자 10-30 op-08).
+# required — (카테고리 열쇠, 제목, [(칸 이름, 모델 경로, 필수 조건)]). 조건은 sample 주석 머리에 그대로 — "필수 · <언제·어느 앱>" 또는 "선택".
+_PG_NEED = "필수 · dev·prd(pipeline·mcp) — local은 비우면 sqlite 대역"
+_SERVER_NEED = "필수 · dev·prd(pipeline·mcp) — local은 무시(비움)"
 REQUIRED_GROUPS = (
-    ("env", "실행 환경", "PC·서버", (("run_env", "common.run_env"), ("run_mode", "common.store.run_mode"))),
+    ("env", "실행 환경", (("run_env", "common.run_env", "필수 · 모두(local·dev·prd)"),)),
+    (
+        "source",
+        "파싱할 원천",
+        (("source_systems", "pipeline.extract.source.systems", "선택 — DEV-<숫자>는 dev·local만(prd면 시작 거부)"),),
+    ),
     (
         "pg",
-        "PostgreSQL(pgvector · gold)",
-        "PC·서버",
-        tuple((k, f"common.connections.pg.{k}") for k in ("host", "port", "db", "user", "password", "db_schema")),
+        "PostgreSQL(pgvector) — local은 접속 5칸을 모두 비우면 sqlite 대역(일부만 적으면 거부)",
+        (
+            *(
+                (f"pg_{k}", f"common.connections.pg.{m}", _PG_NEED)
+                for k, m in (("host", "host"), ("port", "port"), ("database", "db"), ("user", "user"), ("password", "password"))
+            ),
+            ("pg_schema", "common.connections.pg.db_schema", "선택 — 비우면 data_parsing"),
+        ),
     ),
-    ("embed", "임베딩 모델", "PC·서버", tuple((k, f"common.models.embed.{k}") for k in ("base_url", "model", "api_key"))),
+    (
+        "models",
+        "모델 접속 — 임베딩·LLM·VLM(모델마다 따로)",
+        (
+            "임베딩 모델",
+            ("embed_base_url", "common.models.embed.base_url", "필수 · 모두(pipeline·mcp)"),
+            ("embed_api_key", "common.models.embed.api_key", "선택 — 엔드포인트가 키를 요구할 때"),
+            ("embed_model", "common.models.embed.model", "필수 · 모두(pipeline·mcp)"),
+            *(
+                row
+                for r in ("llm", "vlm")
+                for row in (
+                    r.upper(),
+                    (f"{r}_base_url", f"common.models.{r}.base_url", "필수 · 모두(pipeline)"),
+                    (f"{r}_api_key", f"common.models.{r}.api_key", "선택 — 엔드포인트가 키를 요구할 때"),
+                    (f"{r}_model", f"common.models.{r}.model", "필수 · 모두(pipeline)"),
+                )
+            ),
+        ),
+    ),
     (
         "edw",
-        "EDW(회사 DB) — ParsingMeta 표·접속",
-        "서버: 접속 칸 · PC: sqlite 하나",
+        "EDW(회사 DB) 접속 — 읽기 계정만",
         (
-            ("parsing_meta_table", "common.connections.parsing_meta.table"),
-            ("host", "common.connections.rdb.host"),
-            ("port", "common.connections.rdb.port"),
-            ("database", "common.connections.rdb.database"),
-            ("read_user", "common.connections.rdb.read.user"),
-            ("read_password", "common.connections.rdb.read.password"),
-            ("write_user", "common.connections.rdb.write.user"),
-            ("write_password", "common.connections.rdb.write.password"),
-            ("sqlite", "common.connections.rdb.sqlite"),
+            ("edw_host", "common.connections.rdb.host", _SERVER_NEED),
+            ("edw_port", "common.connections.rdb.port", "선택"),
+            ("edw_database", "common.connections.rdb.database", _SERVER_NEED),
+            ("edw_read_user", "common.connections.rdb.read.user", _SERVER_NEED),
+            ("edw_read_password", "common.connections.rdb.read.password", _SERVER_NEED),
+            ("edw_file_table", "pipeline.connections.rdb.file_table", "필수 · 모두(pipeline) — 기본값 그대로 두면 AI.FileStorageMap"),
         ),
     ),
     (
         "publish",
         "게시(silver 적재) 위치",
-        "PC·서버",
-        (("bucket", "pipeline.load.publish.bucket"), ("prefix", "pipeline.load.publish.prefix")),
+        (
+            ("publish_bucket", "pipeline.load.publish.bucket", "필수 · dev·prd(pipeline) — local은 무시(dev.local.local_publish_dir)"),
+            ("publish_prefix", "pipeline.load.publish.prefix", "선택"),
+        ),
     ),
     (
         "object_storage",
-        "Object Storage 접속(게시 업로드)",
-        "서버만",
-        tuple((k, f"common.connections.object_storage.{k}") for k in ("endpoint", "region", "access_key", "secret_key", "verify_tls")),
-    ),
-    (
-        "models",
-        "LLM·VLM 모델",
-        "PC·서버",
-        tuple((f"{r}_{k}", f"common.models.{r}.{k}") for r in ("llm", "vlm") for k in ("base_url", "model", "api_key")),
-    ),
-    (
-        "source",
-        "원천 위치",
-        "서버만",
+        "Object Storage 접속",
         (
-            ("input_source", "pipeline.extract.input_source"),
-            ("source_bucket", "pipeline.connections.rdb.bucket"),
-            ("source_uri_prefix", "common.text.source_uri_prefix"),
+            (
+                "object_storage_endpoint",
+                "common.connections.object_storage.endpoint",
+                _SERVER_NEED,
+            ),
+            ("object_storage_access_key", "common.connections.object_storage.access_key", _SERVER_NEED),
+            ("object_storage_secret_key", "common.connections.object_storage.secret_key", _SERVER_NEED),
         ),
     ),
     (
         "tokens",
-        "서비스 토큰",
-        "서버만",
+        "서비스 토큰·서명 키",
         (
-            ("trigger", "pipeline.service.trigger.token"),
-            ("parse_mcp", "pipeline.service.parse_mcp.token"),
-            ("mcp", "mcp.server.token"),
-            ("parse_proxy", "mcp.parse_proxy.token"),
-            ("fulltext", "mcp.server.fulltext_secret"),
+            ("mcp_token", "common.tokens.mcp", "필수 · dev·prd(mcp·parse MCP 서비스)"),
+            ("fulltext_sign_key", "mcp.server.fulltext_secret", "필수 · dev·prd(mcp — 원문 도구를 쓸 때)"),
         ),
     ),
     (
         "deploy",
         "서버 배포(이미지·호스트 폴더)",
-        "서버만",
         (
-            ("pipeline_image", "pipeline.host.image"),
-            ("mcp_image", "mcp.host.image"),
-            ("doc_src", "common.host.doc_src"),
-            ("output_root", "common.host.output_root"),
-            ("pg_container", "common.host.pg_container"),
+            ("pipeline_image", "pipeline.host.image", "필수 · dev·prd(호스트 compose)"),
+            ("mcp_image", "mcp.host.image", "필수 · dev·prd(호스트 compose)"),
+            ("host_docs_dir", "common.host.doc_src", "필수 · dev·prd(호스트 compose)"),
+            ("pg_container_name", "common.host.pg_container", "필수 · dev·prd(호스트 run_pipeline·백업)"),
         ),
     ),
 )
-REQUIRED = {m: f"required.{g}.{k}" for g, _t, _w, rows in REQUIRED_GROUPS for k, m in rows}
-# required로 옮긴 칸의 옛 자리(역할 자리 말고) — 경고 한 번 뒤 읽는다(사용자 11-04: 게시·EDW 칸을 required 한곳에).
-ALIASES = {
-    "required.source.publish_bucket": "pipeline.load.publish.bucket",
-    "required.source.publish_prefix": "pipeline.load.publish.prefix",
-    "dev.connections.rdb.sqlite": "common.connections.rdb.sqlite",
-}
-# required로 옮긴 칸(사용자 11-04) — 옛 역할 자리(common.connections.…)도 경고 한 번 뒤 읽는다.
-TO_REQUIRED = frozenset(
-    {
-        "common.connections.object_storage.region",
-        "common.connections.object_storage.verify_tls",
-        "common.connections.parsing_meta.table",
-        "common.connections.rdb.port",
-    }
-)
-RETIRED = frozenset(
-    {
-        "required.deploy.mcp_store",
-        # 11-04 VLM 통일 — tuning 자리에 있던 지운 칸(모델 REMOVED와 같은 칸 — tuning 자리라 여기서 경고)
-        "tuning.ops.services.parse_mcp.vlm_page_sec",
-        "tuning.transform.figures.vlm_parallel",
-        "tuning.transform.vlm.deadline",
-        "tuning.transform.vlm.page_concurrency",
-        "tuning.transform.vlm.page_min_concurrency",
-        "tuning.ops.nightly_run.vlm_concurrency",
-    }
-)  # 지운 파일 자리 — 남아 있으면 경고만(mc-01 11-01: 검색 저장소는 PG 하나, op-09가 필수로 적게 했던 칸)
-
+# 묶음 안 글자 한 줄 = 작은 묶음 제목(sample에 `# ---- 제목 ----`) — 칸 줄은 (파일 이름, 모델 경로, 필수 조건).
+REQUIRED = {r[1]: f"required.{g}.{r[0]}" for g, _t, rows in REQUIRED_GROUPS for r in rows if isinstance(r, tuple)}
+NEED = {r[1]: r[2] for _g, _t, rows in REQUIRED_GROUPS for r in rows if isinstance(r, tuple)}
 # 역할 절 — (모델 접두, 파일 접두). 긴 접두가 먼저 맞는다. 파일 접두도 서로 1:1(거꾸로 바꿀 때 가장 긴 파일 접두).
 ROLES = (
     ("common.runtime.", "ops.runtime."),
     ("common.log.", "ops.log."),
     ("common.paths.", "ops.paths."),
+    ("common.host.devbox.", "option.devbox."),  # 선택 기능(개발 작업 공간) — 파일 맨 아래 option 절
     ("common.host.", "ops.host."),
     ("common.dev.", "dev."),
     ("common.", "common."),
@@ -139,24 +123,254 @@ ROLES = (
     ("pipeline.load.", "load."),
     ("pipeline.paths.", "ops.pipeline_paths."),
     ("pipeline.host.nightly.", "ops.nightly."),
-    ("pipeline.host.run_docs.", "ops.run_docs."),
+    ("pipeline.host.run_pipeline.", "ops.run_pipeline."),
     ("pipeline.host.", "ops.pipeline_host."),
-    ("pipeline.night.", "ops.nightly_run."),
     ("pipeline.service.", "ops.services."),
-    ("pipeline.dev.", "dev.pipeline."),
-    ("pipeline.eval.", "dev.eval."),
     ("mcp.search.", "search."),
     ("mcp.server.", "search.server."),
     ("mcp.edw_meta.", "search.edw_meta."),
     ("mcp.edw_query.", "search.edw_query."),
     ("mcp.output.", "search.output."),
-    ("mcp.parse_proxy.", "search.parse_proxy."),
     ("mcp.audit.", "search.audit."),
     ("mcp.host.", "ops.mcp_host."),
     ("mcp.dev.", "dev.mcp."),
 )
 
-# tuning — 거의 안 바꾸는 값(사용자 10-30 op-08 4차 · 11-04: 코드로 내리지 않고 sample 아래쪽에 분류별로 모음 — 비우면 코드 기본값).
+# 이름·자리를 바꾼 칸 — {모델 경로: 파일 자리}. 모델 경로·옛 env 이름·--set 이름은 그대로(코드는 안 바뀜), 파일 자리만 다르다.
+# 이름은 줄임 없이 뜻이 보이게(단위·꼴을 끝에 — _sec·_file·_dir·max_…). 표에 없는 칸은 LOCAL·TUNING·ROLES 규칙대로.
+PLACED = {
+    # common
+    "common.connections.rdb.connect_kwargs": "common.connections.edw.edw_extra_connect_args",
+    "common.connections.object_storage.region": "common.connections.object_storage.object_storage_region",
+    "common.connections.object_storage.verify_tls": "common.connections.object_storage.object_storage_verify_tls",
+    "common.models.embed.query_cache": "common.models.embed.embed_query_cache_file",
+    "common.models.embed.query_prefix": "common.models.embed.embed_query_instruction",
+    "common.models.llm.extra_body": "common.models.llm.llm_extra_request_body",
+    "common.models.llm.rpm": "common.models.llm.llm_max_calls_per_minute",
+    "common.models.llm.cache_dir": "common.models.llm.llm_response_cache_dir",
+    "common.models.vlm.extra_body": "common.models.vlm.vlm_extra_request_body",
+    "common.models.vlm.max_concurrency": "common.models.vlm.vlm_max_total_requests",
+    "common.models.vlm.concurrency": "common.models.vlm.vlm_requests_per_doc",
+    "common.models.vlm.timeout": "common.models.vlm.vlm_timeout_sec",
+    # extract
+    "pipeline.extract.max_new": "extract.max_new_docs_per_run",
+    "pipeline.extract.max_file_mb": "extract.max_source_file_mb",
+    "pipeline.extract.ocr.max_pages": "extract.ocr.ocr_max_pages_per_doc",
+    "pipeline.extract.ocr.threads": "extract.ocr.ocr_onnx_threads",
+    "pipeline.extract.rapidocr_page_workers": "extract.ocr.rapidocr_page_threads",
+    "pipeline.extract.ocr.dpi": "extract.page_render_dpi",
+    "pipeline.extract.prepare.rotate": "extract.prepare.rotate_pages",
+    "pipeline.connections.secure_doc.passwords_file": "extract.secure_doc.secure_doc_passwords_file",
+    "pipeline.extract.skipped_log": "extract.skipped_docs_log",
+    "pipeline.connections.rdb.bucket": "extract.source.source_default_bucket",
+    "pipeline.extract.source.fetch_workers": "extract.source.source_fetch_threads",
+    "pipeline.extract.input_source": "extract.source.source_input_location",
+    "pipeline.extract.source.staging": "extract.source.source_staging_dir",
+    "common.text.source_uri_prefix": "extract.source.source_uri_prefix",
+    # transform
+    "pipeline.transform.represent.rep_select": "transform.represent.engine_pick",
+    "pipeline.transform.represent.post": "transform.represent.post_steps",
+    "pipeline.extract.doc_parallel": "transform.represent.represent_parallel_docs",
+    "pipeline.transform.represent.qa_light": "transform.represent.skip_full_qa",
+    "pipeline.transform.structure.embed_cache": "transform.structure.embed_cache_file",
+    "pipeline.transform.vlm.figures_max": "transform.vlm.vlm_max_figures_per_doc",
+    "pipeline.transform.vlm.page_max": "transform.vlm.vlm_max_pages_per_doc",
+    # load
+    "pipeline.load.edw_path_prefix": "load.stored_path_prefix",
+    # search
+    "mcp.edw_meta.dir": "search.edw_meta.edw_meta_catalog_dir",
+    "mcp.edw_query.max_rows": "search.edw_query.edw_query_max_rows",
+    "mcp.server.allowed_hosts": "search.server.mcp_allowed_hosts",
+    "mcp.server.host": "search.server.mcp_bind_host",
+    "mcp.server.manifest": "search.server.mcp_manifest_file",
+    "mcp.server.max_concurrency": "search.server.mcp_max_concurrent_tools",
+    "mcp.server.port": "search.server.mcp_port",
+    # ops
+    "pipeline.host.data_parsing_cpu_shares": "ops.containers.data_parsing.data_parsing_cpu_shares",
+    "pipeline.host.data_parsing_cpus": "ops.containers.data_parsing.data_parsing_cpus",
+    "pipeline.host.data_parsing_mem_limit": "ops.containers.data_parsing.data_parsing_mem_limit",
+    "mcp.host.cpus": "ops.containers.mcp.mcp_cpus",
+    "mcp.host.mem_limit": "ops.containers.mcp.mcp_mem_limit",
+    "pipeline.host.parse_cpus": "ops.containers.pipeline.pipeline_cpus",
+    "pipeline.host.parse_mem_limit": "ops.containers.pipeline.pipeline_mem_limit",
+    "common.host.pipeline_container": "ops.containers.pipeline.pipeline_container_name",
+    "common.host.data_parsing_container": "ops.containers.data_parsing.data_parsing_container_name",
+    "common.host.mcp_container": "ops.containers.mcp.mcp_container_name",
+    "common.host.docker": "ops.host.container_cli",
+    "common.host.edw_chain_src": "ops.host.host_edw_chain_file",
+    "common.host.output_root": "ops.host.host_output_dir",
+    "common.host.prune_keep": "ops.host.prune_keep_versions",
+    "common.host.image_stage_dir": "ops.host.prune_stage_dir",
+    "common.log.db_enabled": "ops.log.log_db_enabled",
+    "common.log.fallback_dir": "ops.log.log_fallback_dir",
+    "common.log.dir": "ops.log.log_json_dir",
+    "common.log.level": "ops.log.log_level",
+    "common.log.retention_days": "ops.log.log_retention_days",
+    "pipeline.host.nightly.max_docs": "ops.nightly.nightly_max_docs",
+    "pipeline.host.nightly.time": "ops.nightly.nightly_start_time",
+    "pipeline.host.nightly.deadline": "ops.nightly.nightly_stop_time",
+    "pipeline.paths.out_root": "ops.paths.container_output_dir",
+    "common.paths.edw_chain": "ops.paths.edw_chain_file",
+    "pipeline.paths.images_root": "ops.paths.figure_images_dir",
+    "common.paths.draft_terms_out": "ops.paths.glossary_draft_file",
+    "pipeline.paths.parse_tmp": "ops.paths.parse_temp_dir",
+    "common.paths.doc_dir_prepared": "ops.paths.prepared_docs_dir",
+    "pipeline.paths.raw_root": "ops.paths.raw_cache_dir",
+    "pipeline.paths.soffice_bin": "ops.paths.soffice_path",
+    "common.paths.doc_dir": "ops.paths.source_docs_dir",
+    "common.paths.source_manifest": "ops.paths.source_manifest_file",
+    "pipeline.host.run_pipeline.light_dedicated": "ops.run_pipeline.light_lane.light_lane_dedicated_workers",
+    "pipeline.host.run_pipeline.light_cpu_gate": "ops.run_pipeline.light_lane.light_lane_max_cpu_load",
+    "pipeline.host.run_pipeline.light_shared": "ops.run_pipeline.light_lane.light_lane_shared_workers",
+    "pipeline.host.run_pipeline.medium_dedicated": "ops.run_pipeline.medium_lane.medium_lane_dedicated_workers",
+    "pipeline.host.run_pipeline.medium_shared": "ops.run_pipeline.medium_lane.medium_lane_shared_workers",
+    "pipeline.host.run_pipeline.rep_select": "ops.run_pipeline.parse.batch_engine_pick",
+    "pipeline.host.run_pipeline.pipe_procs": "ops.run_pipeline.parse.batch_engine_processes",
+    "pipeline.host.run_pipeline.cpu_gate": "ops.run_pipeline.parse.batch_max_cpu_load",
+    "pipeline.host.run_pipeline.figures_max": "ops.run_pipeline.parse.batch_max_figures_per_doc",
+    "pipeline.host.run_pipeline.ocr_threads": "ops.run_pipeline.parse.batch_ocr_onnx_threads",
+    "pipeline.host.run_pipeline.parse_post": "ops.run_pipeline.parse.batch_post_steps",
+    "pipeline.host.run_pipeline.rapidocr_page_workers": "ops.run_pipeline.parse.batch_rapidocr_page_threads",
+    "pipeline.host.run_pipeline.scan_rotate": "ops.run_pipeline.parse.batch_rotate_scans",
+    "pipeline.host.run_pipeline.qa_light": "ops.run_pipeline.parse.batch_skip_full_qa",
+    "pipeline.host.run_pipeline.vlm_concurrency": "ops.run_pipeline.parse.batch_vlm_requests_per_doc",
+    "pipeline.host.run_pipeline_dir": "ops.run_pipeline.run_pipeline_work_dir",
+    "pipeline.host.run_pipeline.fetch_workers": "ops.run_pipeline.staging.staging_fetch_threads",
+    "pipeline.host.run_pipeline.staging": "ops.run_pipeline.staging.staging_max_docs",
+    "pipeline.host.run_pipeline.staging_workers": "ops.run_pipeline.staging.staging_workers",
+    "pipeline.host.run_pipeline.bm25_threads": "ops.run_pipeline.structure.batch_bm25_threads",
+    "pipeline.host.run_pipeline.embed_batch": "ops.run_pipeline.structure.batch_embed_batch_size",
+    "pipeline.host.run_pipeline.embed_concurrency": "ops.run_pipeline.structure.batch_embed_concurrency",
+    "pipeline.host.run_pipeline.struct_backlog": "ops.run_pipeline.structure.structure_max_backlog",
+    "pipeline.host.run_pipeline.struct_workers": "ops.run_pipeline.structure.structure_workers",
+    "pipeline.host.run_pipeline.vlm_dedicated": "ops.run_pipeline.vlm_lane.vlm_lane_dedicated_workers",
+    "pipeline.host.run_pipeline.vlm_cap": "ops.run_pipeline.vlm_lane.vlm_lane_max_concurrent_docs",
+    "pipeline.host.run_pipeline.vlm_lane_post": "ops.run_pipeline.vlm_lane.vlm_lane_post_steps",
+    "pipeline.host.run_pipeline.vlm_lane_concurrency": "ops.run_pipeline.vlm_lane.vlm_lane_requests_per_doc",
+    "pipeline.host.run_pipeline.vlm_shared": "ops.run_pipeline.vlm_lane.vlm_lane_shared_workers",
+    "common.runtime.pipe_procs": "ops.runtime.engine_processes",
+    "common.runtime.lib_env": "ops.runtime.library_env",
+    "common.runtime.pipe_workers": "ops.runtime.vlm_parallel_docs",
+    "common.runtime.data_parsing_port": "ops.services.data_parsing.data_parsing_port",
+    "pipeline.service.data_parsing.roots": "ops.services.data_parsing.mcp_parse_allowed_roots",
+    "common.runtime.parse_max_mb": "ops.services.data_parsing.mcp_parse_max_file_mb",
+    # tuning
+    "common.connections.pg.connect_timeout": "tuning.common.connections.pg.pg_connect_timeout_sec",
+    "common.connections.pg.pool_max": "tuning.common.connections.pg.pg_pool_max_connections",
+    "common.models.embed.query_cache_max": "tuning.common.models.embed.embed_query_cache_max_rows",
+    "common.models.embed.timeout": "tuning.common.models.embed.embed_timeout_sec",
+    "common.models.llm.empty_retry_max": "tuning.common.models.llm.llm_empty_retry_max_tokens",
+    "common.models.llm.timeout": "tuning.common.models.llm.llm_timeout_sec",
+    "common.models.transport.connect_timeout": "tuning.common.models.transport.model_connect_timeout_sec",
+    "common.models.transport.down_after": "tuning.common.models.transport.model_down_after_failures",
+    "common.models.transport.down_cooldown": "tuning.common.models.transport.model_down_cooldown_sec",
+    "common.models.vlm.retry": "tuning.common.models.vlm.vlm_retries",
+    "common.text.search_en_stem": "tuning.common.text.english_singularize",
+    "common.text.draft_terms_max": "tuning.common.text.glossary_draft_max_rows",
+    "common.text.token_num_norm": "tuning.common.text.number_unit_normalize",
+    "pipeline.extract.attach.max_n": "tuning.extract.attach.attachment_max_count",
+    "pipeline.extract.attach.max_depth": "tuning.extract.attach.attachment_max_depth",
+    "pipeline.extract.attach.max_mb": "tuning.extract.attach.attachment_max_mb",
+    "pipeline.extract.attach.timeout": "tuning.extract.attach.attachment_timeout_sec",
+    "pipeline.extract.isolate_overhead": "tuning.extract.engine_isolate_startup_sec",
+    "pipeline.extract.engine_retry": "tuning.extract.engine_retries",
+    "pipeline.extract.fill_merged": "tuning.extract.fill_merged_cells",
+    "pipeline.extract.warmup_sec": "tuning.extract.first_doc_min_timeout_sec",
+    "pipeline.extract.low_priority": "tuning.extract.low_priority_engines",
+    "pipeline.extract.hidden_overlap_max": "tuning.extract.max_hidden_overlap_pages",
+    "pipeline.extract.rotated_max": "tuning.extract.max_rotated_pages",
+    "pipeline.extract.ocr.table_grid": "tuning.extract.ocr.table_grid_from_boxes",
+    "pipeline.connections.rdb.columns.content_version": "tuning.extract.source_columns.source_column_content_version",
+    "pipeline.connections.rdb.columns.doc_id": "tuning.extract.source_columns.source_column_doc_id",
+    "pipeline.connections.rdb.columns.size": "tuning.extract.source_columns.source_column_file_size",
+    "pipeline.connections.rdb.columns.filename": "tuning.extract.source_columns.source_column_filename",
+    "pipeline.connections.rdb.increment_col": "tuning.extract.source_columns.source_column_increment",
+    "pipeline.connections.rdb.columns.key": "tuning.extract.source_columns.source_column_storage_key",
+    "pipeline.connections.rdb.columns.source_system": "tuning.extract.source_columns.source_column_source_system",
+    "pipeline.extract.text_page_sec": "tuning.extract.text_engine_page_timeout_sec",
+    "pipeline.load.publish.upload_statuses": "tuning.load.publish.publish_upload_statuses",
+    "common.log.batch_size": "tuning.ops.log.log_batch_size",
+    "common.log.db_timeout_sec": "tuning.ops.log.log_db_timeout_sec",
+    "common.log.flush_sec": "tuning.ops.log.log_flush_sec",
+    "common.log.queue_size": "tuning.ops.log.log_queue_size",
+    "common.log.shutdown_sec": "tuning.ops.log.log_shutdown_sec",
+    "common.runtime.pipe_threads": "tuning.ops.runtime.engine_threads_per_process",
+    "common.runtime.pipe_proc_gb": "tuning.ops.runtime.gb_per_engine_process",
+    "common.runtime.draft_terms_lock_timeout": "tuning.ops.runtime.glossary_lock_timeout_sec",
+    "common.runtime.cpu_max_load": "tuning.ops.runtime.max_cpu_load",
+    "common.runtime.pipe_max_procs": "tuning.ops.runtime.max_engine_processes",
+    "common.runtime.mem_settle_margin": "tuning.ops.runtime.mem_settle_margin_pct",
+    "common.runtime.pipe_reserve_cpus": "tuning.ops.runtime.reserved_cpus",
+    "common.runtime.pipe_reserve_gb": "tuning.ops.runtime.reserved_gb",
+    "pipeline.service.data_parsing.procs": "tuning.ops.services.data_parsing.mcp_parse_engine_processes",
+    "pipeline.service.data_parsing.warmup_sec": "tuning.ops.services.data_parsing.mcp_parse_first_try_min_timeout_sec",
+    "pipeline.service.data_parsing.job_timeout_sec": "tuning.ops.services.data_parsing.mcp_parse_job_timeout_sec",
+    "pipeline.service.data_parsing.queue_max": "tuning.ops.services.data_parsing.mcp_parse_max_queued_jobs",
+    "pipeline.service.data_parsing.text_page_sec": "tuning.ops.services.data_parsing.mcp_parse_text_engine_page_timeout_sec",
+    "mcp.audit.max_input_bytes": "tuning.search.audit.audit_max_input_bytes",
+    "mcp.audit.max_output_bytes": "tuning.search.audit.audit_max_output_bytes",
+    "mcp.audit.max_queue_bytes": "tuning.search.audit.audit_max_queue_bytes",
+    "mcp.edw_meta.max_bytes": "tuning.search.edw_meta.edw_meta_max_response_bytes",
+    "mcp.edw_query.max_bytes": "tuning.search.edw_query.edw_query_max_response_bytes",
+    "mcp.edw_query.timeout_sec": "tuning.search.edw_query.edw_query_timeout_sec",
+    "mcp.output.max_chars": "tuning.search.output.tool_max_response_bytes",
+    "mcp.search.pg.filter_exact_max": "tuning.search.pg.exact_search_max_chunks",
+    "mcp.search.methods": "tuning.search.search_default_methods",
+    "mcp.server.max_queue": "tuning.search.server.mcp_max_queued_tools",
+    "mcp.server.reload_check_sec": "tuning.search.server.mcp_reload_check_sec",
+    "mcp.server.tool_timeout_sec": "tuning.search.server.mcp_tool_timeout_sec",
+    "mcp.search.weights.bm25_table": "tuning.search.weights.bm25_table_weight",
+    "mcp.search.weights.bm25": "tuning.search.weights.bm25_weight",
+    "mcp.search.weights.id": "tuning.search.weights.id_match_weight",
+    "mcp.search.weights.vector": "tuning.search.weights.vector_weight",
+    "pipeline.transform.vlm.fig_ocr_max": "tuning.transform.figures.figure_max_ocr_per_doc",
+    "pipeline.transform.figures.vectors_max": "tuning.transform.figures.figure_max_vector_pages",
+    "pipeline.transform.vlm.fig_min_px": "tuning.transform.figures.figure_min_side_px",
+    "pipeline.transform.figures.ocr_fallback_min_chars": "tuning.transform.figures.figure_ocr_fallback_min_chars",
+    "pipeline.transform.figures.ocr_parallel": "tuning.transform.figures.figure_ocr_threads",
+    "pipeline.transform.vlm.fig_photo_ocr_max": "tuning.transform.figures.figure_photo_max_ocr_chars",
+    "pipeline.transform.vlm.fig_photo_max_tokens": "tuning.transform.figures.figure_photo_max_tokens",
+    "pipeline.transform.vlm.fig_photo_area_min": "tuning.transform.figures.figure_photo_min_area_ratio",
+    "pipeline.transform.vlm.fig_text_ocr_min": "tuning.transform.figures.figure_text_image_min_ocr_chars",
+    "pipeline.transform.figures.pptx_render_max": "tuning.transform.figures.pptx_max_rendered_slides",
+    "pipeline.transform.figures.pptx_shapes_max": "tuning.transform.figures.pptx_max_shape_slides",
+    "pipeline.transform.figures.pptx_smartart_max": "tuning.transform.figures.pptx_max_smartart_slides",
+    "pipeline.transform.figures.pptx_convert_sec": "tuning.transform.figures.soffice_timeout_sec",
+    "pipeline.transform.structure.chunk_size": "tuning.transform.structure.chunk_target_chars",
+    "pipeline.transform.structure.embed_batch": "tuning.transform.structure.embed_batch_size",
+    "pipeline.transform.structure.embed_retry": "tuning.transform.structure.embed_retries",
+    "pipeline.transform.structure.chunk_table": "tuning.transform.structure.split_tables",
+    "pipeline.transform.structure.chunk_table_rows": "tuning.transform.structure.table_rows_per_chunk",
+    # dev
+    "common.dev.docker.smoke_keep": "dev.docker.smoke_keep_pg",
+    "common.dev.docker.smoke_limit": "dev.docker.smoke_max_docs",
+    "common.dev.docker.pg_image": "dev.docker.smoke_pg_image",
+    "common.dev.docker.smoke_settings": "dev.docker.smoke_settings_file",
+    "common.dev.llm_fake": "dev.fake_llm",
+    "common.models.embed.allow_external": "dev.models.embed.embed_allow_external",
+    "common.models.embed.est_usd": "dev.models.embed.embed_est_usd_per_call",
+    "common.models.guard.budget_usd": "dev.models.guard.daily_budget_usd",
+    "common.models.guard.spend_file": "dev.models.guard.spend_ledger_file",
+    "common.models.llm.allow_external": "dev.models.llm.llm_allow_external",
+    "common.models.llm.est_usd": "dev.models.llm.llm_est_usd_per_turn",
+    "common.models.llm.price_in": "dev.models.llm.llm_price_in_usd_per_mtok",
+    "common.models.llm.price_out": "dev.models.llm.llm_price_out_usd_per_mtok",
+    "common.models.vlm.allow_external": "dev.models.vlm.vlm_allow_external",
+    "common.models.vlm.est_usd": "dev.models.vlm.vlm_est_usd_per_call",
+    "common.connections.pg.standin_dir": "dev.pg_standin.pg_standin_dir",
+    "common.connections.pg.standin_schema": "dev.pg_standin.pg_standin_schema",
+    "mcp.dev.mcp_url": "dev.search_ui.search_ui_mcp_url",
+    "mcp.dev.ui_port": "dev.search_ui.search_ui_port",
+    # dev — local(PC) 전용 값(op-14: local은 서버 전용 칸을 무시하고 이 값을 씀)
+    "common.connections.rdb.sqlite": "dev.local.local_edw_sqlite_file",
+    "pipeline.load.publish.local_dir": "dev.local.local_publish_dir",
+    "pipeline.extract.local_source": "dev.local.local_source_dir",
+    "pipeline.extract.local_max_new": "dev.local.local_max_new_docs_per_run",
+}
+# 자리를 옮긴 required 칸 — {옛 파일 자리: 새 파일 자리}. 남아 있으면 "옛 자리 → 새 자리"로 거부(refactor.md C-95 대응표).
+MOVED = {"required.edw.edw_local_sqlite_file": "dev.local.local_edw_sqlite_file"}
+
+# tuning — 거의 안 바꾸는 값(sample 아래쪽에 분류별로 모음 — 비우면 코드 기본값).
 TUNING_INTERNAL = (  # 내부 조정값 — 재시도·내부 대기·묶음 크기·출력 상한
     "common.models.embed.query_cache_max",
     "common.models.llm.empty_retry_max",
@@ -164,12 +378,10 @@ TUNING_INTERNAL = (  # 내부 조정값 — 재시도·내부 대기·묶음 크
     "common.models.transport.connect_timeout",
     "common.models.transport.down_after",
     "common.models.transport.down_cooldown",
-    "common.models.transport.ping_timeout",
     "common.text.draft_terms_max",
     "common.runtime.draft_terms_lock_timeout",
     "pipeline.extract.attach.max_mb",
     "pipeline.extract.cache.parse_cache_max_gb",
-    "pipeline.extract.dedup.fuzzy_max",
     "pipeline.extract.engine_retry",
     "pipeline.extract.isolate_overhead",
     "pipeline.transform.figures.ocr_parallel",
@@ -177,15 +389,10 @@ TUNING_INTERNAL = (  # 내부 조정값 — 재시도·내부 대기·묶음 크
     "pipeline.transform.structure.embed_batch",
     "pipeline.transform.structure.embed_max_chars",
     "pipeline.transform.structure.embed_retry",
-    "pipeline.load.index_lock_stale_sec",
-    "pipeline.service.parse_mcp.job_timeout_sec",
-    "pipeline.service.parse_mcp.queue_max",
-    "pipeline.service.parse_mcp.text_page_sec",
-    "pipeline.service.parse_mcp.warmup_sec",
-    "pipeline.service.trigger.client_timeout",
-    "pipeline.service.trigger.queue_max",
-    "pipeline.service.trigger.shutdown_timeout_sec",
-    "pipeline.service.trigger.socket_timeout_sec",
+    "pipeline.service.data_parsing.job_timeout_sec",
+    "pipeline.service.data_parsing.queue_max",
+    "pipeline.service.data_parsing.text_page_sec",
+    "pipeline.service.data_parsing.warmup_sec",
     "mcp.server.reload_check_sec",
     "mcp.server.tool_timeout_sec",
     "mcp.edw_meta.max_bytes",
@@ -198,7 +405,6 @@ TUNING_RESOURCE = (  # 자원·대기·병렬 세부값 — 자동 계산 내부
     "common.runtime.mem_max_pct",
     "common.runtime.mem_settle_margin",
     "common.runtime.mem_settle_sec",
-    "common.runtime.mem_start_pct",
     "common.runtime.pipe_max_procs",
     "common.runtime.pipe_proc_gb",
     "common.runtime.pipe_reserve_gb",
@@ -208,9 +414,9 @@ TUNING_RESOURCE = (  # 자원·대기·병렬 세부값 — 자동 계산 내부
     "common.models.llm.timeout",
     "common.models.embed.timeout",
     "pipeline.extract.attach.timeout",
-    "pipeline.service.parse_mcp.procs",
+    "pipeline.service.data_parsing.procs",
 )
-TUNING_RARE = (  # 사용자 11-04 — 역할 절에서 옮긴 칸: 결과 파라미터(청크·순위·그림 고르기)·내부 상한·로그 대기열(운영자가 환경마다 정하지 않음)
+TUNING_RARE = (  # 결과 파라미터(청크·순위·그림 고르기)·내부 상한·로그 대기열(운영자가 환경마다 정하지 않음)
     "common.connections.pg.connect_timeout",
     "common.connections.pg.pool_max",
     "common.text.search_en_stem",
@@ -226,7 +432,7 @@ TUNING_RARE = (  # 사용자 11-04 — 역할 절에서 옮긴 칸: 결과 파�
     "pipeline.connections.rdb.columns.filename",
     "pipeline.connections.rdb.columns.key",
     "pipeline.connections.rdb.columns.size",
-    "pipeline.extract.prepare.link",
+    "pipeline.connections.rdb.columns.source_system",
     "pipeline.extract.fill_merged",
     "pipeline.extract.hidden_overlap_max",
     "pipeline.extract.kreuzberg_prose_filter",
@@ -249,11 +455,9 @@ TUNING_RARE = (  # 사용자 11-04 — 역할 절에서 옮긴 칸: 결과 파�
     "pipeline.transform.vlm.fig_photo_max_tokens",
     "pipeline.transform.vlm.fig_photo_ocr_max",
     "pipeline.transform.vlm.fig_text_ocr_min",
-    "pipeline.transform.structure.chunk_overlap",
     "pipeline.transform.structure.chunk_size",
     "pipeline.transform.structure.chunk_table",
     "pipeline.transform.structure.chunk_table_rows",
-    "pipeline.transform.structure.page_chunk_max",
     "pipeline.load.publish.upload_statuses",
     "mcp.server.max_queue",
     "mcp.search.methods",
@@ -267,7 +471,7 @@ TUNING_RARE = (  # 사용자 11-04 — 역할 절에서 옮긴 칸: 결과 파�
 )
 TUNING = frozenset(TUNING_INTERNAL + TUNING_RESOURCE + TUNING_RARE)
 
-# PC 전용 칸(사용자 11-04) — 서버(dev·prd)는 외부 모델·로컬 대체 DB를 거부하므로 비워 둔다. 파일 자리 dev.<역할 자리>(sample 맨 아래 절).
+# PC 전용 칸 — 서버(dev·prd)는 외부 모델·로컬 대체 DB를 거부하므로 비워 둔다. 파일 자리 dev.<역할 자리>(sample 맨 아래 절).
 LOCAL = (
     "common.models.embed.allow_external",
     "common.models.llm.allow_external",
@@ -281,11 +485,7 @@ LOCAL = (
     "common.models.guard.spend_file",
     "common.connections.pg.standin_dir",
     "common.connections.pg.standin_schema",
-    "pipeline.load.pg_create_extension",
 )
-MOVED = (
-    frozenset(LOCAL + TUNING_RARE) | {"mcp.server.fulltext_secret"} | TO_REQUIRED | set(ALIASES.values())
-)  # 자리를 옮긴 칸 — 옛 자리(역할 자리)도 경고 뒤 읽음
 
 
 class LayoutError(ValueError):
@@ -296,7 +496,7 @@ DUP_KEY = "같은 칸 두 번"
 
 
 def reject_dup_keys(loader_cls):
-    """YAML Loader 클래스가 같은 절·칸을 두 번 쓴 파일을 거부하게(앞 것이 조용히 사라지므로 — 값은 안 찍음). 앱(settings)·호스트(run_docs)가 같이 쓴다."""
+    """YAML Loader 클래스가 같은 절·칸을 두 번 쓴 파일을 거부하게(앞 것이 조용히 사라지므로 — 값은 안 찍음). 앱(settings)·호스트(run_pipeline)가 같이 쓴다."""
     import yaml
 
     def no_dup(loader, node):  # 글자 열쇠만 견줌(병합 `<<`·사전 열쇠는 construct_mapping이 처리 — 못 쓰는 열쇠도 YAML 오류로)
@@ -319,10 +519,25 @@ def _role(model_path):
     raise LayoutError(f"역할 절 규칙에 없는 모델 칸: {model_path}")
 
 
+def _lookup(path, table):
+    """표에서 경로 또는 그 앞부분(사전 값 칸 — library_env 아래 TZ 등)을 찾아 바꾼다. 없으면 None."""
+    head, rest = path, ""
+    while head:
+        if head in table:
+            return table[head] + rest
+        head, _, leaf = head.rpartition(".")
+        rest = f".{leaf}{rest}"
+    return None
+
+
+_FWD = REQUIRED | PLACED
+
+
 def to_yaml(model_path):
     """모델 경로 → 파일 자리."""
-    if model_path in REQUIRED:
-        return REQUIRED[model_path]
+    y = _lookup(model_path, _FWD)
+    if y is not None:
+        return y
     if model_path in LOCAL:
         return "dev." + _role(model_path).removeprefix("common.")
     if model_path in TUNING:
@@ -330,22 +545,17 @@ def to_yaml(model_path):
     return _role(model_path)
 
 
-_REQ_BACK = {y: m for m, y in REQUIRED.items()} | {to_yaml(m): m for m in LOCAL}
-# PC 전용 칸이 든 절(dev.models.guard 등) — 그 안의 다른 이름(지운 칸·오타)은 모델 절로 넘겨 모델이 판정(지운 칸 경고·모르는 칸 거부)
-_LOCAL_PARENTS = {to_yaml(m).rpartition(".")[0]: m.rpartition(".")[0] for m in LOCAL}
+_REQ_BACK = {y: m for m, y in _FWD.items()} | {to_yaml(m): m for m in LOCAL}
+_LOCAL_PARENTS = {to_yaml(m).rpartition(".")[0] for m in LOCAL}  # PC 전용 칸이 든 절(dev.models.guard 등) — 그 안의 다른 이름은 모르는 칸
 _ROLES_BACK = sorted(((y, m) for m, y in ROLES), key=lambda r: -len(r[0]))
 
 
 def to_model_path(yaml_path):
     """파일 자리 → 모델 경로. 모르는 절·required/tuning에 없는 칸이면 None. 자리가 바뀐 칸(다른 절에 있어야 함)도 그대로 돌려준다 —
     판정은 to_model이(to_yaml로 되돌려 견줌)."""
-    if yaml_path in _REQ_BACK:
-        return _REQ_BACK[yaml_path]
-    if yaml_path in ALIASES:
-        return ALIASES[yaml_path]
-    head, _, leaf = yaml_path.rpartition(".")
-    if head in _LOCAL_PARENTS:
-        return f"{_LOCAL_PARENTS[head]}.{leaf}"
+    m = _lookup(yaml_path, _REQ_BACK)
+    if m is not None:
+        return m
     rest = yaml_path.removeprefix("tuning.")
     for y, m in _ROLES_BACK:
         if rest.startswith(y):
@@ -375,370 +585,39 @@ def _leaves(doc, prefix=""):
             yield p, v
 
 
-def is_old(doc):
-    """옛 배치(op-08 전 — 최상위 pipeline·mcp, 또는 common 아래 run_env·paths·runtime·host·dev)인가."""
-    if not isinstance(doc, dict):
-        return False
-    common = doc.get("common")
-    return bool({"pipeline", "mcp"} & set(doc)) or (
-        isinstance(common, dict) and bool({"run_env", "paths", "runtime", "host", "dev"} & set(common))
-    )
-
-
-_WARNED: set[str] = set()
-
-
-def warn_removed(name):
-    """지운 칸이 설정 파일에 남았다는 경고 — 프로세스마다 이름 하나에 한 번(F7, 11-03 PC 시험: 설정을 읽을 때마다 5~10번 나오던 것)."""
-    if name not in _WARNED:
-        _WARNED.add(name)
-        sys.stderr.write(f"[settings] 지운 칸 무시: {name} — 설정 파일에서 지울 것(값은 출력 안 함)\n")
-
-
-def _gone(m):
-    """지운 칸인가 — 그 절 모델 클래스의 REMOVED에 있으면 자리(dev·tuning 안 옛 자리 포함)와 상관없이 모델로 넘겨 경고만."""
-    head, _, leaf = m.rpartition(".")
-    return leaf in REMOVED.get("".join(p.title() for p in head.split(".")), ())
-
-
 def to_model(doc, source=""):
-    """파일 사전(새 배치) → 모델 배치 사전. 옛 배치·모르는 절·자리가 바뀐 칸이면 LayoutError(칸 자리만, 값 없음)."""
+    """파일 사전 → 모델 배치 사전. 모르는 절·모르는 칸·자리가 다른 칸이면 LayoutError(칸 자리만, 값 없음)."""
     if not doc:
         return {}
     where = f": {source}" if source else ""
-    if is_old(doc):
-        raise LayoutError(f"옛 설정 배치(최상위 common·pipeline·mcp — op-08 전)는 읽지 않음 — {MIGRATE_HINT}로 바꿈{where}")
     unknown = sorted(set(doc) - set(SECTIONS))
     if unknown:
         raise LayoutError(f"설정 파일에 모르는 최상위 절 {unknown} — {'·'.join(SECTIONS)}만(덮기 파일은 base·overrides){where}")
-    out, bad, moved, seen = {}, [], [], {}
+    out, bad, moved = {}, [], []
     for y, v in _leaves(doc):
-        if y in RETIRED:
-            warn_removed(y)
+        if y in MOVED:
+            moved.append(f"{y} → {MOVED[y]}")
             continue
-        m = to_model_path(y)
+        m = None if y.rpartition(".")[0] in _LOCAL_PARENTS and y not in _REQ_BACK else to_model_path(y)
         if m is None:
             if v not in (None, {}):
                 bad.append(y)
             continue  # 빈 절 머리(`extract:`)
         want = to_yaml(m)
-        if want != y and m in MOVED and (y == _role(m) or y in ALIASES):
-            if y not in _WARNED:
-                _WARNED.add(y)
-                sys.stderr.write(f"[settings] 옛 자리 칸 읽음: {y} — {want}로 옮길 것(값은 출력 안 함)\n")
-        elif want != y and not _gone(m):
-            moved.append(f"{y} → {want}")  # dev·tuning 절 안의 다른 칸도(지운 칸만 모델로 넘겨 경고)
+        if want != y:
+            moved.append(f"{y} → {want}")
             continue
-        if m in MOVED and seen.setdefault(m, y) != y:
-            raise LayoutError(f"같은 칸을 두 자리에 적음: {seen[m]} · {y} — {want} 하나만 남길 것{where}")
         set_path(out, m, v)
     if moved:
-        raise LayoutError(f"자리가 다른 칸 {len(moved)}개: {', '.join(moved)} — 옛 배치면 {MIGRATE_HINT}{where}")
+        raise LayoutError(f"자리가 다른 칸 {len(moved)}개: {', '.join(moved)}{where}")
     if bad:
         raise LayoutError(f"모르는 칸 {len(bad)}개: {', '.join(bad)}{where}")
     return out
 
 
 def to_file(model_doc):
-    """모델 배치 사전 → 파일 사전(새 배치, SECTIONS 순서). migrate·시험이 쓴다."""
+    """모델 배치 사전 → 파일 사전(SECTIONS 순서). sample·시험이 쓴다."""
     out = {}
     for p, v in _leaves(model_doc or {}):
         set_path(out, to_yaml(p), v)
     return {s: out[s] for s in SECTIONS if s in out}
-
-
-# 지운 설정 칸 — 설정 절 클래스 이름 → 칸 이름(0.2.0 — 절마다 두던 Section.REMOVED를 이 표 하나로, pl-46).
-# 설정 파일에 남아 있으면 경고만 하고 무시(시작 거부 막기 — 0.1.0 settings.yaml도 시작됨) · migrate는 "삭제됨"으로 알림.
-REMOVED: dict[str, frozenset[str]] = {
-    # CommonModelsTransport(common/config/settings.py) — 0.2.0(pl-46) 전송은 HTTP 한 길(ADK 장치 지움 — 남으면 경고만)
-    "CommonModelsTransport": frozenset({"transport", "ping_timeout"}),  # ping_timeout — 11-04(op-05) 점검 제한 시간은 코드 상수
-    # CommonConnections(common/config/settings.py) — 사용자 10-29 — 지운 칸·절(남으면 경고만) · edw = EDW 벡터 경로(ops.md#op-03)
-    "CommonConnections": frozenset({"edw", "openviking"}),
-    # CommonConnectionsParsingMeta(common/config/settings.py) — 사용자 10-29 — 접속은 common.connections.rdb(ops.md#op-03)
-    # CommonConnectionsPg(common/config/settings.py) — 사용자 11-04(설정 줄이기 op-05): 접속 정보 파일 — 접속은 required.pg 칸만
-    "CommonConnectionsPg": frozenset({"conn_file"}),
-    "CommonConnectionsParsingMeta": frozenset({"connect_kwargs", "database", "host", "password", "port", "sqlite", "user"}),
-    # CommonDev(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치) — 지운 칸(남으면 경고만)
-    "CommonDev": frozenset({"exp_store", "llm_est_in_tokens", "llm_est_out_tokens", "min_gold_coverage"}),
-    # CommonDevDocker(common/config/settings.py) — 사용자 10-30(op-08) — compose는 PG_DB·PG_USER로 채움 · 0.2.0(pl-46) MinIO·s3 원천·자정 배치 모양 시험 칸(11-01 스모크에서 지움)(남으면 경고만)
-    "CommonDevDocker": frozenset(
-        {
-            "minio_image",
-            "minio_publish_port",
-            "postgres_db",
-            "postgres_user",
-            "smoke_mode",
-            "smoke_nightly",
-            "smoke_pm_bucket",
-            "smoke_source",
-        }
-    ),
-    # CommonModels(common/config/settings.py) — 사용자 10-29 · ocrvlm 10-30(pl-31) — 지운 칸·절(남으면 경고만)
-    "CommonModels": frozenset({"ocrvlm", "rerank"}),
-    # CommonModelsEmbed(common/config/settings.py) — 사용자 10-30(op-08) — ping_models는 받은 차원만 보여 줌(남으면 경고만)
-    "CommonModelsEmbed": frozenset({"dim"}),
-    # CommonModelsGuard(common/config/settings.py) — 사용자 10-29 — 합성 문서 선언 잠금 삭제(옛 migrate C-35가 옮겨 둔 서버 파일 보호)
-    # · 사용자 11-03 — PC 비용 스위치 삭제(지출 상한 budget_usd·외부 허용 스위치·서버의 외부 거부는 남김)
-    "CommonModelsGuard": frozenset(
-        {"external_max_docs", "external_max_questions", "external_scope", "max_calls", "no_paid_calls", "synthetic_truth"}
-    ),
-    # CommonModelsLlm(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(남으면 경고만)
-    "CommonModelsLlm": frozenset({"empty_retry", "max_concurrency"}),
-    # CommonModelsVlm(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(남으면 경고만)
-    "CommonModelsVlm": frozenset({"model_alt"}),
-    # CommonPaths(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치 · op-08) · 0.2.0(pl-46) 이름 있는 색인·원천 목록 파일 — 지운 칸(남으면 경고만)
-    "CommonPaths": frozenset(
-        {
-            "client_roster",
-            "config_dir",
-            "criteria_file",
-            "eval_sets_dir",
-            "glossary_dir",
-            "index_root",
-            "korean_font",
-            "mcp_bundle",
-            "output_root",
-            "runlog_dir",
-            "sources_file",
-        }
-    ),  # runlog_dir — op-13: 실행 기록 파일 없앰 · client_roster·glossary_dir — pl-38(사용자 11-03): 용어집·고객 명부는 PG 마스터 표(<PG_SCHEMA>_master) · mcp_bundle — mc-19(사용자 11-03): 검색은 PG만
-    # CommonRuntime(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치) — 지운 칸(남으면 경고만)
-    "CommonRuntime": frozenset(
-        {"exp_max_workers", "exp_proc_gb_answer", "exp_proc_gb_build", "exp_proc_gb_run", "exp_reserve_gb", "log_retention_days"}
-    ),  # log_retention_days — op-13: 콘솔 기록 파일(output/logs/*.log) 없앰
-    # CommonStore(common/config/settings.py) — 사용자 10-30(pl-32 — 재시도 횟수 없음) · 10-31(pl-12 C10 — 문서 대장·숨김 통째로 지움 · pl-08 — 정형 저장소 통째로 지움) — 옛 파일에 남아도 경고만
-    "CommonStore": frozenset(
-        {"doc_registry", "registry_editions", "registry_etag_md5", "registry_retry_max", "struct_backend", "struct_db"}
-    ),
-    # CommonText(common/config/settings.py) — 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
-    "CommonText": frozenset({"parse_token_norm", "search_recency"}),  # search_recency — pl-38: 판 묶음(family)·최신성 순위 지움
-    # McpDev(mcp_server/config.py) — 11-01(e2-10 — mcp_eval 지움) — 지운 칸(남으면 경고만)
-    "McpDev": frozenset({"eval_s_parts"}),
-    # McpEdwQuery(mcp_server/config.py) — 사용자 10-29 — 접속은 common.connections.rdb 읽기 계정(ops.md#op-03)
-    "McpEdwQuery": frozenset(
-        {"conn_file", "database", "password", "port", "server", "sqlite", "tables", "tables_strict", "user"}
-    ),  # tables·tables_strict — 11-04(op-05): 허용 표 목록 없음(전 스키마)
-    # McpHost(mcp_server/config.py) — 11-01(e2-10 — 검색 도구 컨테이너 retrieval·mcp_eval 지움) — 지운 칸(남으면 경고만)
-    "McpHost": frozenset({"tool_cpus", "tool_mem_limit"}),
-    # McpOutput(mcp_server/config.py) — 사용자 10-29·10-30(e2-18 — 근거 이미지·그림 조회 지움) — 지운 칸·절(남으면 경고만)
-    "McpOutput": frozenset(
-        {
-            "cap_ranked",
-            "evid_local_roots",
-            "evid_max_concurrency",
-            "evid_max_mb",
-            "evid_timeout_sec",
-            "evidence_paths",
-            "images",
-            "list_docs_max",
-            "max_image_px",
-        }
-    ),
-    # McpSearch(mcp_server/config.py) — 사용자 10-29 · ocr_dpi 10-30(op-08) · agg 절·agg_today·data_catalog·struct_context_max 11-01(mc-04 집계 지움) · agg_vocab_file 11-01(사전 파일이 코드 기본값과 같아 지움) · client 절 11-02(본문 고객 라벨 순위·하드 격리 지움 — 고객은 client_edw 거르기만, C6) · query_log 절 op-13(사용자 11-04 — 질의 기록 파일 qa_log 없앰, 질의는 DB applog.mcp_log — 옛 파일의 search.query_log가 역할 절 규칙으로 이 절에 옴) — 지운 칸·절(남으면 경고만)
-    "McpSearch": frozenset(
-        {
-            "agg",
-            "agg_today",
-            "agg_vocab_file",
-            "client",
-            "copy_group",
-            "data_catalog",
-            "decompose",
-            "decompose_llm",
-            "min_score",
-            "entity_split",
-            "evidence_gate",
-            "graph",
-            "ocr_dpi",
-            "ov_search_path",
-            "query_expand",
-            "query_log",
-            "rerank",
-            "struct_context_max",
-            "tie_break",
-            "type_weights",
-            "vector_alias_expand",
-        }
-    ),
-    # McpServer(mcp_server/config.py) — store 11-01(mc-01 — 검색 저장소는 PG 하나) · 사용자 10-30(op-08) — common.models.embed.query_cache로 합침(mcp 이미지 기본은 그 칸에) — 옛 설정 파일에 남아도 경고만
-    "McpServer": frozenset({"instructions", "query_cache", "store"}),  # instructions — 11-04(op-05): 안내문은 코드 기본값
-    # McpSearchPg(mcp_server/config.py) — 11-04(op-05): 벡터 검색은 HNSW 근사(허용 집합이 작을 때만 정확 검색)
-    "McpSearchPg": frozenset({"vector_search"}),
-    # PipelineConnections(pipeline/config.py) — 사용자 10-29 · graphiti 10-30(e2-18 — 외부 KG 어댑터 지움) — 지운 칸·절(남으면 경고만)
-    "PipelineConnections": frozenset({"graphiti", "openviking"}),
-    # PipelineConnectionsRdb(pipeline/config.py) — 사용자 10-29 — 접속은 common.connections.rdb(ops.md#op-03)
-    "PipelineConnectionsRdb": frozenset(
-        {"company", "connect_kwargs", "database", "doc_type", "host", "password", "port", "user"}
-    ),  # company·doc_type — 11-04(op-05) 필터 없음
-    # PipelineConnectionsRdbColumns(pipeline/config.py) — 11-04(op-05): FileStorageMap에 없는 선택 열 — 다섯 열만 읽음
-    "PipelineConnectionsRdbColumns": frozenset(
-        {"bucket", "company", "content_type", "contract", "doc_type", "etag", "is_deleted", "supersedes", "updated", "version"}
-    ),
-    # PipelineConnectionsSecureDoc(pipeline/config.py) — 11-04(op-05): 암호는 passwords_file 하나로
-    "PipelineConnectionsSecureDoc": frozenset({"password"}),
-    # PipelineDev(pipeline/config.py) — 사용자 10-29 · parallel_test_crash 10-30(pl-35) · allow_common_mismatch 11-01(structure·load 모듈의 끝 표시 확인 지움) · test_min_docs·test_per_type 11-01(--mode test 표본 모드 지움) — 지운 칸·절(남으면 경고만)
-    "PipelineDev": frozenset(
-        {"allow_common_mismatch", "parallel_test_crash", "parse_agent_fake", "stream_test_crash", "test_min_docs", "test_per_type"}
-    ),
-    # PipelineEval(pipeline/config.py) — 사용자 10-29 · e2e_* 10-30(op-08) · 정답·질문 초안·표 채점·재순위 모델(op-09가 stages.py용으로 더함) 11-01(e2-10 — PC 평가 도구 지움) · review_max_rounds 11-01(figure_review 지움) — 지운 칸·절(남으면 경고만)
-    "PipelineEval": frozenset(
-        {
-            "diagram_raster_vlm",
-            "e2e_qa_set",
-            "e2e_questions",
-            "gold_draft_max_pages",
-            "gold_draft_mermaid_check",
-            "phase_report_legacy",
-            "qa_draft_max_pages",
-            "qa_draft_per_page",
-            "rerank_model",
-            "review_max_rounds",
-            "score_table_judge",
-        }
-    ),
-    # PipelineExtract(pipeline/config.py) — 사용자 10-29 — phase 없앰 · 10-30 auto_reparse_changed·parallel 지움(pl-35) · dedup_scan·ocr_gt_max·signal_ocr 지움(pl-34) · engine_scope 지움(pl-03 — stack 하나) · 0.2.0 ocr_engine 지움(pl-46)(남으면 경고만)
-    "PipelineExtract": frozenset(
-        {
-            "auto_reparse_changed",
-            "dedup_scan",
-            "disk_free_warn_gb",
-            "engine_cache_warn_gb",
-            "engine_scope",
-            "merge_pages",
-            "ocr_engine",
-            "ocr_gt_max",
-            "page_scan",
-            "parallel",
-            "phase_sec",
-            "phases",
-            "prefetch_workers",  # 11-04 — 미리받기 스레드는 원본 받기와 같은 extract.source.fetch_workers 하나로
-            "scan_fill",
-            "signal_ocr",
-            "stream",
-            "vlm_page_sec",  # 11-04 VLM 통일 — VLM 엔진 제한 = 쪽 수 × common.models.vlm.timeout
-        }
-    ),
-    # PipelineExtractCache(pipeline/config.py) — 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
-    "PipelineExtractCache": frozenset(
-        {"keep_engine_cache", "keep_local_originals", "keep_raw_layer", "parse_keep_max_gb", "parse_tmp_max_gb"}
-    ),
-    # PipelineExtractDedup(pipeline/config.py) — 11-01(pl-02 — 이름·내용 유사 후보 지움, 완전 중복만) — 지운 칸(남으면 경고만)
-    "PipelineExtractDedup": frozenset({"common_max", "fuzzy_max"}),
-    # PipelineExtractPrepare(pipeline/config.py) — 사용자 10-30(op-08) · ocr 11-01(rapidocr 1.x 길 지움 — 늘 3.x) · rotate_lead·rotate_probe_fast·rotate_s0_min 11-02(회전 판단 규칙 지움 — 켬/끔만) — 지운 칸(남으면 경고만)
-    "PipelineExtractPrepare": frozenset({"ocr", "rotate_fast", "rotate_lead", "rotate_probe_fast", "rotate_s0_min"}),
-    # PipelineHost(pipeline/config.py) — 0.2.0(pl-46) — 이름 있는 색인·1회 job 컨테이너(load·publish — #100에서 지움) 칸(남으면 경고만)
-    # CommonHost(common/config/settings.py) — 11-03(사용자) 오버레이 패치 compose 지움(refactor.md C-83) — 남으면 경고만
-    "CommonHost": frozenset({"patch_code"}),
-    "PipelineHost": frozenset(
-        {
-            "gold_dir",
-            "index_conf_dir",
-            "load_cpus",
-            "load_mem_limit",
-            "publish_cpus",
-            "publish_mem_limit",
-            "structure_cpus",
-            "structure_mem_limit",
-        }
-    ),  # structure_* — 11-03(사용자) 상주 컨테이너 하나(data-pipeline — refactor.md C-82)
-    # PipelineHostNightly(pipeline/config.py) — 사용자 10-30(pl-32) — 켬/끔은 time 하나로 · max_new·modules·publish 11-01(night 모듈 배치 지움 — 새벽 배치는 run_docs)
-    "PipelineHostNightly": frozenset({"enabled", "max_new", "modules", "publish"}),
-    # PipelineLoad(pipeline/config.py) — 사용자 10-29(prune_* — 적재가 안 지움, pl-13 · edw_load — EDW 벡터 경로 삭제, ops.md#op-03) · index_lock_stale_sec 11-01(mc-16 — 이름 있는 색인 AD41 지움) — 지운 칸·절(남으면 경고만)
-    "PipelineLoad": frozenset(
-        {"bm25_stat_rebuild", "edw_load", "index_lock_stale_sec", "prune_force", "prune_min_ratio", "structure_target"}
-    ),
-    # PipelineLoadPublish(pipeline/config.py) — 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
-    "PipelineLoadPublish": frozenset({"parse_date", "path_map", "source_system", "upload_raw"}),  # parse_date·path_map — 11-04(op-05)
-    # PipelineNight(pipeline/config.py) — 11-01(night·trigger.sh night 지움) — 지운 칸(남으면 경고만)
-    "PipelineNight": frozenset(
-        {"deadline", "parse_deadline", "vlm_concurrency", "workers"}
-    ),  # workers — 11-04: ops.runtime.pipe_workers 하나로 · vlm_concurrency — 11-04 VLM 통일(common.models.vlm.concurrency)
-    # PipelinePaths(pipeline/config.py) — 0.2.0 index_conf(pl-46 — 이름 있는 색인) · 사용자 10-29 · stack_snapshot 10-30(pl-32) · stack_version 11-01(판 표 없앰 — 엔진 구성은 파일) · report_digest_dir 11-01(e2-10 — run_board 지움) · file_meta_path 11-02(pl-29 — 적재가 EDW 조인) · edw_chain 11-03(pl-52 — 적재·검색이 함께 쓰는 common.paths.edw_chain = ops.paths.edw_chain으로) — 지운 칸·절(남으면 경고만)
-    "PipelinePaths": frozenset(
-        {
-            "edw_chain",
-            "file_meta_path",
-            "gold_dir",
-            "index_conf",
-            "mineru_bin",
-            "paddle_python",
-            "report_digest_dir",
-            "soffice_candidates",
-            "stack_snapshot",
-            "stack_version",
-        }
-    ),
-    # PipelineService(pipeline/config.py) — 11-01(pl-10 — trigger 서버 지움) — 지운 절(남으면 경고만)
-    "PipelineService": frozenset({"trigger"}),
-    # PipelineServiceParseMcp(pipeline/config.py) — 10-29 PARSE_MCP_OCR → extract.ocr_engine으로 합침(그 스위치도 0.2.0에 지움) · max_mb 11-03
-    # (파일 크기 상한은 검색 MCP와 함께 쓰는 common.runtime.parse_max_mb = ops.runtime.parse_max_mb로 옮김, 기본 100) — 남으면 경고만
-    "PipelineServiceParseMcp": frozenset(
-        {"max_mb", "ocr", "vlm_page_sec"}
-    ),  # vlm_page_sec — 11-04 VLM 통일(쪽 수 × common.models.vlm.timeout)
-    # PipelineTransform(pipeline/config.py) — 사용자 10-29 — 지운 칸·절(남으면 경고만)
-    "PipelineTransform": frozenset({"agent"}),
-    # PipelineTransformFigures(pipeline/config.py) — 사용자 10-30(pl-31 — ocr_vlm 엔진과 함께 지움) — 지운 칸(남으면 경고만)
-    "PipelineTransformFigures": frozenset(
-        {
-            "chart_values_det",
-            "diagram_edges_det",
-            "doc_shape_figure",
-            "nested_figure",
-            "ocr_fallback",
-            "ocrvlm_prompt",
-            "overlay_cluster",
-            "page_child_dedup",
-            "pptx_slide_vlm",
-            "vector_box_diagram",
-            "vlm_parallel",  # 11-04 VLM 통일 — common.models.vlm.concurrency
-        }
-    ),
-    # PipelineTransformRepresent(pipeline/config.py) — pl-34(10-30) — 재판독 P2·P3를 모두 지움(사용자 10-30, 남으면 경고만)
-    "PipelineTransformRepresent": frozenset(
-        {
-            "context",
-            "fuse",
-            "fuse_reread",
-            "fuse_reread_p3",
-            "fuse_signals",
-            "qa_carry_forward",
-            "reread",
-            "reread_fallback_best",
-            "shadow",
-            "shadow_max",
-            "standardize",
-            "table_db",
-            "table_inline",
-            "table_std",
-            "table_stitch",
-        }
-    ),
-    # PipelineTransformStructure(pipeline/config.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐 · op-08 edw_embed → embed로 합침) — 지운 칸(남으면 경고만)
-    "PipelineTransformStructure": frozenset(
-        {
-            "bundle_keep_empty_fig",
-            "chunk_head",
-            "client_roster_seed",
-            "draft_terms",
-            "edw_embed",
-            "edw_summary_llm",
-            "embed",
-            "wiki_domain_phrase",
-        }
-    ),
-    # PipelineTransformVlm(pipeline/config.py) — 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
-    # · 11-04 VLM 통일: deadline → common.models.vlm.timeout · global_concurrency → common.models.vlm.max_concurrency ·
-    #   page_concurrency → common.models.vlm.concurrency · page_min_concurrency·page_slow → 코드 상수(vlmcall.PAGE_MIN_CONC·PAGE_SLOW)
-    "PipelineTransformVlm": frozenset(
-        {
-            "deadline",
-            "fig_kind",
-            "fig_select",
-            "fig_text_skip",
-            "global_concurrency",
-            "page_concurrency",
-            "page_min_concurrency",
-            "page_slow",
-        }
-    ),
-}

@@ -31,7 +31,7 @@ def standin_of(bundle):
 
 def load(bundle, schema=SCHEMA, standin=None):
     """bundle (meta.json, docs.jsonl, chunks.jsonl, optional vectors.npy) → new stand-in source schemas `<schema>_<src>` in `standin`
-    (pl-28 — a doc goes to the schema of its source_system: SFDC·CRMS·LAS·FAQ, anything else → other). Doc columns given in the doc dict
+    (pl-28 — a doc goes to the schema of its source_system: SFDC·CRMS·LAS·FAQ·DEV-<n>, anything else → other). Doc columns given in the doc dict
     are written when that schema has them (clients → clients_doc as JSON; attrs = the doc's `attrs` + doc_class — pl-52)."""
     B = Path(bundle)
     meta = json.loads((B / "meta.json").read_text(encoding="utf-8"))
@@ -44,7 +44,8 @@ def load(bundle, schema=SCHEMA, standin=None):
     by_src = {}
     for i, d in enumerate(docs):
         by_src.setdefault(ST.source_of(d.get("source_system")), []).append(i)
-    for src in ST.SOURCES:  # 5벌 모두 만듦(빈 원천도 표는 있음 — 서버의 판 0002와 같게)
+    # 5벌 모두 만듦(빈 원천도 표는 있음 — 서버의 판 0002와 같게) + 문서가 있는 DEV 원천(op-17 — dbtool up이 만든 `_dev_<n>`)
+    for src in [*ST.SOURCES, *ST.dev_order(s for s in by_src if ST.is_dev(s))]:
         idx = by_src.get(src, [])
         s = ST.src_schema(schema, src)
         with mc.senv(PG_STANDIN_DIR=str(standin or standin_of(B))):

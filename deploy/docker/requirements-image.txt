@@ -27,5 +27,3 @@ pillow
 psycopg[binary]==3.3.6     # PostgreSQL + pgvector
 mcp==1.30.0               # 검색 MCP 서버(modules/search/mcp_server.py) — uvicorn·starlette·httpx 포함
 boto3                      # Object Storage(S3 호환) 입력 — 파싱 모듈 --source s3:// (modules/parse/source.py)
-google-adk[mcp]==2.9.2    # 모델 호출(GA) — common/adk.py, 파싱 이미지도 VLM을 부름(figures.py·vlm_page.py)
-litellm==1.101.0

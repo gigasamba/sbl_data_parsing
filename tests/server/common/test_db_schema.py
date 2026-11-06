@@ -1,17 +1,14 @@
 """pl-25 — DB 스키마 명세(docs/architecture/db_schema.md)와 실제 정의가 같은지.
-지금 상태(결정 칸 유지+삭제)가 gold(원천 스키마 5벌의 칸 합집합 — pl-28)는 Alembic 판(모델 common/store/db/models — 판과 같은지는 기존 dbcompare 시험이 봄)과,
-ParsingMeta는 docs/operations/parsing_meta_mssql.sql과 같아야 한다(다르면 실패). 목표 상태와의 차이(새로·삭제)는 일부러 다른 것이라
+지금 상태(결정 칸 유지+삭제)가 gold(원천 스키마 5벌의 칸 합집합 — pl-28)는 Alembic 판(모델 common/store/db/models — 판 파일과 같은지는 test_dbtool이 봄)과
+같아야 한다(다르면 실패). 목표 상태와의 차이(새로·삭제)는 일부러 다른 것이라
 목록으로 찍기만 한다. 문서가 없는 이미지(docs/ 미포함)에서는 건너뜀."""
 
 import re
 
 from common.core.paths import DEPLOY_ROOT
-from common.store import parsing_meta_db as PM
-from common.store.db import dbcompare
 
-ROOT = DEPLOY_ROOT  # 저장소 루트(PC) · 이미지 /app/deploy — op-09 paths 상수
+ROOT = DEPLOY_ROOT  # 저장소 루트(PC) · 이미지 /app/deploy — paths 상수
 DOC = ROOT / "docs" / "architecture" / "db_schema.md"
-PM_SQL = ROOT / "docs" / "operations" / "parsing_meta_mssql.sql"
 DECISIONS = ("유지", "삭제", "새로")
 
 
@@ -33,32 +30,22 @@ def _doc_tables():
     return out
 
 
-def _pm_columns():
-    """parsing_meta_mssql.sql의 CREATE TABLE [AI].[ParsingMeta] 칸 이름."""
-    body = PM_SQL.read_text(encoding="utf-8").split("CREATE TABLE [AI].[ParsingMeta] (", 1)[1].split("\n);", 1)[0]
-    return {m.group(1) for m in re.finditer(r"^\s+(\w+)\s", body, re.M) if m.group(1) != "CONSTRAINT"}
-
-
 def _actual():
-    """gold = dbcompare.expected(판 비교 시험과 같은 모델 — 차원은 칸 이름과 무관) · ParsingMeta = DDL 파일."""
+    """gold = 표 정의 모델(search_metadata — 차원은 칸 이름과 무관)."""
     from common.store.db.models import search_tables as ST
 
     cols = {}
-    for src in ST.SOURCES:  # pl-28 — 원천 스키마 5벌의 같은 표 이름은 칸을 합쳐서(원천 전용 칸은 문서의 "원천" 칸에 적음)
-        for t in dbcompare.expected("search", ST.src_schema("ai", src), 1024)[0].tables.values():
+    for src in ST.SOURCES:  # 원천 스키마 5벌의 같은 표 이름은 칸을 합쳐서(원천 전용 칸은 문서의 "원천" 칸에 적음)
+        for t in ST.search_metadata(ST.src_schema("ai", src), 1024).tables.values():
             cols.setdefault(f"gold.{t.name}", set()).update(c.name for c in t.columns)
-    cols["edw.ParsingMeta"] = _pm_columns()
     return cols
 
 
 def test_schema_doc_matches():
-    if not DOC.is_file() or not PM_SQL.is_file():
+    if not DOC.is_file():
         print("[시험] 건너뜀 — docs/가 없음(이미지)")
         return
     doc, actual = _doc_tables(), _actual()
-    assert set(PM.COLUMNS) <= actual["edw.ParsingMeta"], (
-        f"코드가 쓰는 ParsingMeta 칸이 DDL에 없음: {sorted(set(PM.COLUMNS) - actual['edw.ParsingMeta'])}"
-    )
     missing = sorted(set(actual) - set(doc))
     assert not missing, f"문서에 없는 표: {missing}"
     stale = sorted(
@@ -68,7 +55,7 @@ def test_schema_doc_matches():
     for name, real in sorted(actual.items()):
         now = {c for c, d in doc[name].items() if d != "새로"}
         assert now == real, f"{name} — 문서의 지금 칸과 실제가 다름: 문서에만 {sorted(now - real)} · 실제에만 {sorted(real - now)}"
-    from common.store.db.models.master_tables import master_metadata  # pl-38 — 마스터 표(§4, 결정 모두 새로)는 칸 전부를 모델과 대조
+    from common.store.db.models.master_tables import master_metadata  # 마스터 표(§4, 결정 모두 새로)는 칸 전부를 모델과 대조
 
     for tbl in master_metadata("m").tables.values():
         name = f"master.{tbl.name}"

@@ -11,7 +11,7 @@
   1. `tests/server/`(이미지 반입 관문 — `python -m pipeline.cli selftest`가 `tests/runner.py`로 실행, 외부 접속 없음) · `tests/general/`(PC 전용: PG, Docker, 느린 것 — pytest).
   2. 알려진 실패 목록: 반입 `deploy/release/known_fail.txt`, PC `tests/conftest.py` `GENERAL_KNOWN_FAIL`. 목록에 있는 시험이 통과하면 XPASS 경고(목록에서 지움).
   3. PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕(`run_env: local`만, 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `_PC_SETTINGS_CASES`(지금 빔).
-- 기준선(11-04, feature/extract-trim + develop PR 160, PG 없는 PC): `selftest` 101개 모두 통과 · `pytest tests/` 154 통과 · 3 건너뜀 · 알려진 실패 0(두 목록 모두 빔) · FINGERPRINT `18142592accca442` · code_fp p0 `5c53d13db17f` · p1 `b0be3b670a01` · r `c4dea64a2e39` · s `253f98e4c428`(op-15 — settings.py 칸 하나).
+- 기준선(11-06, feature/release-030 — 0.3.0 묶음: 같은 밤 중복 건너뜀·게시 키 확인·실행 이미지 정리·인계 문서·시험 문서 9건, 엔진 비교 수정(쪽 VLM 되풀이 버림·표 칸 간격 글), pptx·txt·csv 엔진 하나, 벌 폴더·원천 칸·처리 기록 칸·glossary·DEV 원천·컨테이너 이름 설정): `selftest` 108개 모두 통과 · `pytest tests/` 169 통과 · 3 건너뜀 · 알려진 실패 0(두 목록 모두 빔) · FINGERPRINT `18142592accca442` · code_fp p0 `11c5d5580849` · p1 `81c49ffd3f7a` · r `26418e5b95e4` · s `d87abad54f13`(기록용 — 0.2.0과 달라 서버는 다시 처리) · 엔진 지문(`engine_code_fp`, 기록용): anydoc `01d0d7813c77` · docx2python `9ba622227470` · html_stdlib·mhtml·msg_extract `6b86d3b876c3` · hwpx `1ce4058a3a0a` · kreuzberg `f8cf85542789` · markitdown `00fa7c1d36fc` · office `c18d228eb2e6` · plaintext `e61fe9d86b40` · pymupdf `8611e97ce9ec` · qwen_vlm `a0fd63c5062a`(엔진 폴더는 그대로 — 함께 셈하는 `pipeline/shared/vlmcall.py`의 설정 이름이 바뀜) · rapidocr_ko `1e08f27b5ddd`.
 - 지문 확인 명령: [CLAUDE.md](../../CLAUDE.md) §4. 공용·레이어 파일을 고친 커밋은 전후 값을 커밋 메시지에 적는다.
 - QA: `python -m pipeline.cli selftest` · `[판정]` 통과, 기준선보다 나빠지지 않음.
 - Status: done
@@ -31,21 +31,24 @@
 - Status: done
 
 <a id="e2-15"></a>
-## e2-15 · 에이전트 시험 패키지 경로가 없는 갈래를 본다
-- 이유: `common/core/paths.py` `resolve_agent_dir`가 폴더가 없는 갈래 셋(`resources/prompts/mcp`·`validation/e2e`·`dev_tools/unit_test/fixtures`)도 보고, `tests/server/common/test_paths.py`가 그 경로를 단언한다.
-- 할 일: 죽은 갈래와 그 단언을 지운다. `paths.py`는 모든 레이어 code_fp에 들어가므로 다음 지문 배치에서.
+## e2-15 · 에이전트 지시서 폴더는 있는 갈래만 찾는다
+- 이유: 없는 폴더를 찾는 갈래는 읽는 사람만 헷갈리게 한다.
+- 요건: `common/core/paths.py` `resolve_agent_dir`는 `resources/prompts/common` → `resources/prompts/pipeline` → `valid_env/answer_test` 셋만 본다(`tests/server/common/test_paths.py`).
+- 반영: 0.3.0(11-05).
 - Status: todo
 
 <a id="e2-21"></a>
 ## e2-21 · 옛 오버레이 패치 흔적 정리
 - 이유: 오버레이 패치 길은 없어졌는데 그 길만 읽던 것이 남았다.
-- 할 일: ① `common/core/fingerprint.py` `pipeline_version()`의 `common/PATCH_VERSION` 후보(와 `tests/server/common/test_fingerprint.py`의 그 사례·`keyscan.py` `PIPELINE_VERSION` 설명) — code_fp 파일이라 릴리스 지문 배치에서. ② `deploy/docker/IMAGE_BASE`(+ `.gitattributes` 줄) — 읽는 곳 없음, 지울지 사용자가 정한다.
-- Status: todo
+- 요건: ① 버전 표기 `common/core/fingerprint.py` `pipeline_version()`은 저장소 루트 `VERSION` 하나만 읽는다(`common/PATCH_VERSION` 후보 없음 — `tests/server/common/test_fingerprint.py` 사례 표). ② `deploy/docker/IMAGE_BASE`(읽는 곳 없음)와 그 `.gitattributes` 줄은 없다.
+- 반영: 0.3.0(11-05) — 레이어 지문은 그대로(`fingerprint.py`는 레이어 지문에 들지 않음).
+- 비고: `pipeline/load/publish_parse_result.py`의 설명·`--version` 도움말에 `PATCH_VERSION` 글자가 남아 있다(동작 무관).
+- Status: done
 
 <a id="e2-01"></a>
 ## e2-01 · PC 스모크 — 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색
 - 이유: 릴리스 전에 문서 2~3건으로 사슬 전체를 증명한다.
-- 규칙: README §4-4 단계(`pipeline.cli parse` · `build_bundle` · `dbtool up` · `pgvector_load` · `mcp_server.cli.ask`). 실행마다 다른 값은 `--set`. 임베딩 캐시 `output/edw/embed_cache.sqlite`. 시험 문서 `valid_env/object_storage/`.
+- 규칙: README §4-4 단계(`pipeline.cli parse` · `gold_bundle` · `dbtool up` · `pgvector_load` · `mcp_server.cli.search_ask`). 실행마다 다른 값은 `--set`. 임베딩 캐시 `output/edw/embed_cache.sqlite`. 시험 문서 `valid_env/object_storage/`.
 - QA: README §4-4 ①~⑥ · `ask`가 근거를 냄.
 - Status: done
 
@@ -58,7 +61,7 @@
 <a id="e2-09"></a>
 ## e2-09 · `valid_env`의 PC 시험 자료
 - 규칙: 외부 시스템 대역은 서버 배치 그대로 — 문서 `valid_env/object_storage/<시스템>/<uuid>/<파일>`(CRMS·SFDC, 문서 33건 — `object_keys.csv`와 sha256 일치), 합성 EDW `valid_env/edw/`(sql + `edw.sqlite`, `edw/meta_rdb/`), 답변 점검 `valid_env/answer_test/`. 서버 배포 시험은 `valid_env` 없이 돌게 자료를 임시 폴더에 만든다.
-- 파일: `valid_env/README.md`, `tests/server/mcp/test_search_svc.py`, `tests/server/pipeline/test_fetch_docs.py`.
+- 파일: `valid_env/README.md`, `tests/server/mcp/test_search_svc.py`, `tests/server/pipeline/test_candidate.py`.
 - Status: done
 
 <a id="e2-04"></a>
@@ -88,7 +91,7 @@
 
 <a id="e2-07"></a>
 ## e2-07 · 검색 점검 페이지
-- 규칙: MCP 서버와 pgvector에 이어 근거를 보는 로컬 페이지 — `validation/search_ui/start_mcp.sh`·`start_ui.sh`, 포트 `dev.mcp.ui_port`(기본 8790), MCP 주소 `dev.mcp.mcp_url`(기본 `http://127.0.0.1:8765/mcp`).
+- 규칙: MCP 서버와 pgvector에 이어 근거를 보는 로컬 페이지 — `validation/search_ui/start_mcp.sh`·`start_ui.sh`, 포트 `dev.search_ui.search_ui_port`(기본 8790), MCP 주소 `dev.search_ui.search_ui_mcp_url`(기본 `http://127.0.0.1:8765/mcp`).
 - 파일: `validation/search_ui/serve.py`.
 - QA: 수동 — 페이지를 열어 질문 하나에 근거가 나옴.
 - Status: done
@@ -113,4 +116,3 @@
 ### 요건과 다르게 동작
 | 요건 | 코드가 하는 일 | 위치 | ID |
 |---|---|---|---|
-| 에이전트 지시서 폴더는 있는 갈래만 찾음 | 없는 갈래 셋도 봄(시험이 단언) | `common/core/paths.py` | e2-15 |

@@ -1,4 +1,4 @@
-"""common.ai.guard 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.ai.guard --selftest`."""
+"""common.ai.guard 자기 점검."""
 
 import os
 import socket
@@ -18,11 +18,11 @@ from common.ai.guard import (
 
 
 def selftest():
-    # S7b — 시험이 읽는 값은 설정 객체(COMMON.env — os.environ은 안 바뀜). 바깥 env의 값이 시험에 새지 않게 비워 두고 시작
+    # 시험이 읽는 값은 설정 객체(COMMON.env — os.environ은 안 바뀜). 바깥 env의 값이 시험에 새지 않게 비워 두고 시작
     from common.config.settings import COMMON
 
     with COMMON.env(
-        LLM_SPEND_FILE=os.path.join(tempfile.mkdtemp(), "spend.txt"),  # 하루 장부(11-03)는 임시 자리
+        LLM_SPEND_FILE=os.path.join(tempfile.mkdtemp(), "spend.txt"),  # 하루 장부는 임시 자리
         LLM_BUDGET_USD=None,
         INTERNAL_HOST_SUFFIXES=None,
         INTERNAL_IP_RANGES=None,
@@ -59,7 +59,7 @@ def _selftest_body(COMMON):
             assert not is_internal("http://llm.mycompany.co.kr/v1")  # 사설+공인 혼재 → 내부 아님
             socket.getaddrinfo = lambda h, *a, **k: [(0, 0, 0, "", ("10.1.2.3", 0))]
             assert not is_internal("http://evil.com/v1")  # 접미사 미일치 → 영향 없음
-        assert not is_internal("http://147.46.10.10:8000/v1")  # SI21: 사설 밖 사내 대역 — 설정 없으면 외부(불변)
+        assert not is_internal("http://147.46.10.10:8000/v1")  # 사설 밖 사내 대역 — 설정 없으면 외부
         with COMMON.env(INTERNAL_IP_RANGES="147.46.10.0/24, not-a-cidr, 0.0.0.0/0, 2600::/8"):
             assert is_internal("http://147.46.10.10:8000/v1")  # 대역 안 주소 직접 → 내부
             assert not is_internal("http://147.46.11.10:8000/v1")  # 대역 밖 → 외부
@@ -76,7 +76,7 @@ def _selftest_body(COMMON):
             assert is_internal("http://llm.mycompany.co.kr/v1")
     finally:
         socket.getaddrinfo = socket_getaddrinfo
-    # 외부 허용(스위치 + RUN_ENV=local) — 옛 시험은 가짜 접두 X(X_ALLOW_EXTERNAL=1)였으나 설정 객체에는 가짜 접두 칸이 없어 진짜 접두 EMBED로 같은 것을 시험
+    # 외부 허용(스위치 + RUN_ENV=local) — 설정 객체에는 가짜 접두 칸이 없어 진짜 접두 EMBED로 시험
     EXTU = "https://openrouter.ai/api/v1"
     with COMMON.env(EMBED_ALLOW_EXTERNAL=None):  # 허용 없음 → 거부
         try:
@@ -85,7 +85,7 @@ def _selftest_body(COMMON):
         except RuntimeError:
             pass
     with COMMON.env(RUN_ENV="local", EMBED_ALLOW_EXTERNAL="1"):
-        require_internal(EXTU, "EMBED")  # 허용 + RUN_ENV=local → 허용(합성 문서 선언 잠금은 사용자 10-29에 삭제)
+        require_internal(EXTU, "EMBED")  # 허용 + RUN_ENV=local → 허용
         assert external_allowed("EMBED") and not external_allowed("X")  # 칸 없는 접두는 허용 안 됨
     for env in (
         None,
@@ -96,7 +96,7 @@ def _selftest_body(COMMON):
         "PRD",
         "Local",
         " local",
-    ):  # D-028 ⑧ — 서버 환경은 허용이 열려도 거부(내부 주소는 영향 없음) · 없음·모르는 글자도 서버로(VS7b U-1 b)
+    ):  # 서버 환경은 허용이 열려도 거부(내부 주소는 영향 없음) · 없음·모르는 글자도 서버로
         with COMMON.env(RUN_ENV=env, EMBED_ALLOW_EXTERNAL="1"):
             try:
                 require_internal(EXTU, "EMBED")
@@ -105,7 +105,7 @@ def _selftest_body(COMMON):
                 assert ("RUN_ENV 없음" if env is None else f"RUN_ENV={env}") in str(e), str(e)
             assert not external_allowed("EMBED")
             require_internal("http://10.0.0.5:8000/v1", "EMBED")
-    # op-02(사용자 10-29) — 가짜 LLM 응답은 local 전용: 서버·모르는 값에서 켜져 있으면 거부, RUN_ENV 없음(selftest)·local은 허용, 꺼져 있으면 늘 False
+    # 가짜 LLM 응답은 local 전용: 서버·모르는 값에서 켜져 있으면 거부, RUN_ENV 없음(selftest)·local은 허용, 꺼져 있으면 늘 False
     for env, want in (("local", True), (None, True), ("dev", "거부"), ("prd", "거부"), ("prod", "거부")):
         with COMMON.env(RUN_ENV=env, LLM_FAKE="1"):
             try:
@@ -118,7 +118,7 @@ def _selftest_body(COMMON):
     print(
         "[selftest] 내부망 가드 — 외부 허용 잠금·점 없는 이름 주소 확인·리다이렉트 가드·RUN_ENV(없음·dev·prd·모르는 글자 거부, local만 허용) 통과"
     )
-    # 비용 관문(10-05 독립 검토) — 공유 장부 선차감이 동시 호출에도 상한을 넘지 않음(옛 NO_PAID_CALLS 차단은 11-03에 지움)
+    # 비용 관문 — 공유 장부 선차감이 동시 호출에도 상한을 넘지 않음
     import threading
 
     with COMMON.env(LLM_SPEND_FILE=os.path.join(tempfile.mkdtemp(), "spend.txt"), LLM_BUDGET_USD="1.0"):
@@ -141,7 +141,7 @@ def _selftest_body(COMMON):
         assert precheck("https://api.example.com/v1", "EMBED") > 0 and abs(spend_total() - 0.701) < 1e-6, spend_total()
         assert precheck("https://api.example.com/v1", "LLM") == 0.0 and precheck("http://127.0.0.1:9/v1", "VLM") == 0.0
     print("[selftest] 비용 관문 — 공유 장부 선차감(동시 20건 중 상한까지 10건만)·정산·precheck 선차감 통과")
-    # 하루 상한(사용자 11-03 — 기본 0.1달러/하루/PC 사용자): (상한 칸, 날짜, 선차감, 통과?, 그날 합계)
+    # 하루 상한(기본 0.1달러/하루/PC 사용자): (상한 칸, 날짜, 선차감, 통과?, 그날 합계)
     from pathlib import Path
     from unittest import mock
 
@@ -167,7 +167,7 @@ def _selftest_body(COMMON):
                 got = False
             assert got is ok and abs(spend_total() - total) < 1e-9, (budget, day, usd, got, spend_total())
             assert G.ledger_file().name == f"spend-{day}.txt"
-    # 자정을 넘긴 반환은 선차감한 날 장부로(리뷰 11-03 — 다음 날 상한을 늘리지 않게)
+    # 자정을 넘긴 반환은 선차감한 날 장부로(다음 날 상한을 늘리지 않게)
     with COMMON.env(LLM_SPEND_FILE=str(led), LLM_BUDGET_USD=None):
         with mock.patch.object(G.time, "strftime", return_value="2026-11-06"):
             spend_reserve(0.09, "T")
@@ -180,5 +180,5 @@ def _selftest_body(COMMON):
     print("[selftest] 하루 상한 — 기본 0.1·같은 날 누적·새 날짜 0부터·설정한 상한 통과")
 
 
-def test_main():  # 옛 `if __name__ == "__main__":` 몸통
+def test_main():
     selftest()

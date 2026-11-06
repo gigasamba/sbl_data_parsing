@@ -1,4 +1,4 @@
-"""common.core.artifacts 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.core.artifacts --selftest`."""
+"""common.core.artifacts 자기 점검."""
 
 from pathlib import Path
 
@@ -15,8 +15,8 @@ def selftest():
         if not cond:
             failures.append(name)
 
-    with tempfile.TemporaryDirectory() as td:  # 10-13 — 줄바꿈만 다르면 같은 지문, 내용이 다르면 다른 지문
-        f = Path(td) / "pipeline" / "transform" / "represent" / "build_rep.py"
+    with tempfile.TemporaryDirectory() as td:  # 줄바꿈만 다르면 같은 지문, 내용이 다르면 다른 지문
+        f = Path(td) / "pipeline" / "transform" / "represent" / "doc_represent.py"
         f.parent.mkdir(parents=True)
         f.write_bytes(b"a=1\nb=2\n")
         lf = code_fp("p1", root=td)
@@ -29,7 +29,7 @@ def selftest():
         root = Path(td)
         (root / "pipeline" / "transform" / "structure").mkdir(parents=True)
         (root / "common" / "core").mkdir(parents=True)
-        (root / "pipeline" / "transform" / "structure" / "build_bundle.py").write_text(
+        (root / "pipeline" / "transform" / "structure" / "gold_bundle.py").write_text(
             "from common.core import text\nx = 1\n", encoding="utf-8"
         )
         (root / "common" / "core" / "text.py").write_text("y = 1\n", encoding="utf-8")
@@ -37,7 +37,7 @@ def selftest():
 
         fp1 = code_fp("s", root=root)
         check("code_fp: 같은 내용 → 같은 지문", fp1 == code_fp("s", root=root))
-        (root / "pipeline" / "transform" / "structure" / "build_bundle.py").write_text(
+        (root / "pipeline" / "transform" / "structure" / "gold_bundle.py").write_text(
             "from common.core import text\nx = 2\n", encoding="utf-8"
         )
         fp2 = code_fp("s", root=root)
@@ -61,7 +61,7 @@ def selftest():
         stale, reason = is_stale(out, root=root)
         check("is_stale: 갓 만든 저장본은 안 낡음", stale is False and reason == "")
 
-        (root / "pipeline" / "transform" / "structure" / "build_bundle.py").write_text(
+        (root / "pipeline" / "transform" / "structure" / "gold_bundle.py").write_text(
             "from common.core import text\nx = 3\n", encoding="utf-8"
         )
         stale2, reason2 = is_stale(out, root=root)
@@ -75,5 +75,5 @@ def selftest():
         raise SystemExit(1)
 
 
-def test_main():  # 옛 `if __name__ == "__main__":` 의 --selftest 갈래
+def test_main():
     selftest()
