@@ -5,24 +5,23 @@
 순서: pl-32 · pl-25 · pl-28 · pl-52.
 
 <a id="pl-32"></a>
-## pl-32 · 저장 구조 — silver는 Object Storage 문서 폴더, 메타는 EDW, gold는 pgvector
+## pl-32 · 저장 구조 — silver는 Object Storage 문서 폴더, 처리 기록과 gold는 pgvector
 
 ### 무엇·왜
-결과의 저장 자리를 셋으로 한정한다 — 파싱 결과 저장본(silver)은 Object Storage, 파싱 기록은 EDW `AI.ParsingMeta`, 검색 DB(gold)는 pgvector. 로컬에는 로그와 임베딩 캐시만 남긴다.
+결과의 저장 자리를 셋으로 한정한다 — 파싱 결과 저장본(silver)은 Object Storage, 처리 기록과 검색 DB(gold)는 pgvector(`doc` 칸 — [pl-25](#pl-25)). 로컬에는 로그와 임베딩 캐시만 남긴다.
 
 ### 규칙
 1. silver는 Object Storage에만 둔다(PC는 `valid_env/object_storage` — `file://` 대역). 문서마다 폴더 하나 — 이름은 원본 경로(`s3_key`)에서 만든 uuid5(같은 경로 = 같은 uuid), 다시 처리하면 그 폴더를 덮어쓴다.
 2. `AI.FileStorageMap`에 같은 `s3_key` 행이 여럿이면 `created_at`이 가장 늦은 행만 처리한다.
 3. 같은 `s3_key`의 더 새 행이 오면 같은 `doc_id`를 유지한다 — `file_size`가 같으면 다시 파싱하지 않고 기준·메타만 새 행으로, 다르면 다시 파싱·다시 적재한다(원본을 받아 sha256을 비교하지 않는다 — 같은 크기로 덮어쓴 경우는 놓친다).
-4. 밀려난 행은 EDW 예외 이력 표 `SupersededRow`([db_schema.md](../architecture/db_schema.md) §3)에 남긴다.
-5. ParsingMeta는 단계마다 성공했을 때만 쓴다. 실패한 엔진(이름·이유·걸린 시간)은 로컬 로그와 ParsingMeta `engines_failed`에 남긴다. 재시도 횟수는 어디에도 두지 않는다 — 실패한 문서는 성공 행이 없어 다음 실행에서 다시 대상이 된다.
+4. 밀려난 행은 덮어쓰기 이력 표 `applog.superseded_doc_log`([db_schema.md](../architecture/db_schema.md) §6)에 남긴다(EDW는 읽기만 — op-17).
+5. 처리 기록(`doc` 행)은 적재가 성공했을 때만 생긴다. 돈 엔진과 그 상태는 `doc.engines`, 실패 이유·걸린 시간은 로컬 로그에 남긴다. 재시도 횟수는 어디에도 두지 않는다 — 실패한 문서는 `doc` 행이 없어 다음 실행에서 다시 대상이 된다(`applog.except_doc_info` `error`는 기록만).
 6. 실행을 넘어 남는 로컬 완료 표시를 두지 않는다. 문서별 작업 폴더는 문서가 끝나면 지운다(그 안의 `_DONE.json`·`runs.jsonl`은 그 실행의 기록). gold만 다시 만들 때는 Object Storage 문서 폴더에서 silver를 받는다.
-7. PC도 서버와 같은 흐름이다 — 대역만 다르다(Object Storage 폴더, EDW SQLite, PC pgvector).
+7. PC도 서버와 같은 흐름이다 — 대역만 다르다(Object Storage 폴더, EDW SQLite, PC pgvector 대역).
 
 ### 단계
 1. 게시 키를 uuid5 문서 폴더로 바꾼다 — 지금은 [load.md#pl-09](load.md#pl-09) 규칙 2(실행마다 새 날짜 폴더).
-2. 같은 `s3_key` 여러 행 처리(규칙 2·3)와 `SupersededRow` 쓰기 — 표는 DB 담당자가 만든 뒤(refactor.md C-76).
-3. `engines_failed` 쓰기 — 칸이 생긴 뒤.
+2. 같은 `s3_key` 여러 행 처리(규칙 2·3)와 `applog.superseded_doc_log` 쓰기(applog Alembic 판으로 표 추가).
 - Status: todo
 
 <a id="pl-25"></a>
@@ -32,19 +31,18 @@
 이 프로젝트가 쓰는 DB 표·칸(검색 DB gold·EDW·마스터·applog)을 문서 하나 [db_schema.md](../architecture/db_schema.md)에 두고 시험으로 실제 정의와 맞춘다.
 
 ### 규칙
-1. 문서 키는 원본 경로 하나 — gold `doc.file_path` = Object Storage 원본 경로 = EDW `FileStorageMap.s3_key` = ParsingMeta `source_key`(새 이름 `s3_key`). 청크는 `doc_id`만 갖는다. sha256 `doc_key`는 gold에 두지 않는다(ParsingMeta `sha256`만).
-2. ParsingMeta에는 파싱 정보만 쓴다 — 원천 키·파싱 상태·silver 위치·엔진·`parsed_at`·`silver_version`·`gold_version`·`loaded_at`·`gold_status`·`gold_reason`, 예외로 원본 지문 `sha256`. 파일 메타(고객·분류 라벨·`sf_op_id`·`created_at`)는 gold `doc`에만 쓴다.
-3. 파싱이 통째로 실패한 문서는 ParsingMeta에 행을 쓰지 않는다.
-4. 판 칸: `silver_version` = 그 silver를 만든 `VERSION`(게시 때), `gold_version` = gold에 올린 판(적재 때 `loaded_at`과 함께 UPDATE — 꼴은 [load.md#pl-38](load.md#pl-38)).
-5. 끝난 원본 키(새 문서 고르기에서 뺄 것) = `parse_status`가 `skipped_dup`인 행 + `ok`·`partial`이면서 `gold_version`이 있는 행. `gold_version` 칸이 아직 없으면 `ok`·`partial`·`skipped_dup` 모두(`parsing_meta_db.done_source_keys`). 이것이 유일한 대상 선택 규칙이다.
-6. 이름 바꾸기 전후 모두 돈다 — 표에 새 이름만 있으면 새 이름을 쓴다(`parsing_meta_db.RENAMES`: `source_key` → `s3_key`, `pipeline_version` → `silver_version`).
-7. EDW와 문서 본문 양쪽에서 올 수 있는 값은 칸을 둘로 나누고 이름 끝에 출처를 붙인다 — `_edw`·`_doc`(지금은 고객 `client_edw`·`clients_doc`뿐).
+1. 문서 키는 원본 경로 하나 — gold `doc.file_path` = Object Storage 원본 경로 = EDW `FileStorageMap.s3_key`. 청크는 `doc_id`만 갖는다. 원본 sha256은 `doc.sha256`(원문 도구 `doc_key`).
+2. 처리 기록은 원천 스키마 5벌의 `doc` 칸에 둔다(판 `0006_search` — `search_tables.DOC_RECORD`, 모두 NULL 허용): `sha256`·`silver_bucket`·`silver_key`(게시한 대표 `.md` 객체)·`engines`(돈 엔진 전부 — 대표는 `role` `rep`)·`parse_status`(`ok`·`partial`)·`silver_version`·`gold_version`·`parsed_at`(게시 시각)·`loaded_at`(적재 시각). 게시가 `publish/silver.jsonl`에 남긴 값을 적재(`pgvector_load load --silver`)가 원본 키(`source_key` = `doc.file_path`)로 이어 쓴다 — 이미 있는 문서(재게시)는 그 칸만 고치고, `--replace`인데 그 문서 줄이 없으면 옛 값을 그대로 둔다. EDW에는 쓰지 않는다([ops.md#op-17](ops.md#op-17)). 파일 메타(고객·분류 라벨·`sf_op_id`·`created_at`)도 `doc`에 둔다.
+3. 파싱·게시·적재에 실패한 문서는 `doc` 행이 없다 — 기록은 `applog.except_doc_info` `error`.
+4. 판 칸: `silver_version` = 그 silver를 만든 `VERSION`(게시 때), `gold_version` = gold에 올린 판(적재 때 `loaded_at`과 함께 — 꼴은 [load.md#pl-38](load.md#pl-38)).
+5. 끝난 원본 키(새 문서 고르기에서 뺄 것) = 원천 스키마 어디든 `doc` 행이 있는 키(`pipeline/shared/gold_docs.py` `done_keys`) + 영구 뺌(`except_doc_info` `skip`). 내용 중복 = 다른 원본 키의 `doc.sha256`이 같음(`done_by_sha`). 이것이 유일한 대상 선택 규칙이다.
+6. EDW와 문서 본문 양쪽에서 올 수 있는 값은 칸을 둘로 나누고 이름 끝에 출처를 붙인다 — `_edw`·`_doc`(지금은 고객 `client_edw`·`clients_doc`뿐).
 
 ### 단계
-1. DB 담당자 DDL(refactor.md C-76): ParsingMeta 이름 바꾸기·칸 더하기·지우기([db_schema.md](../architecture/db_schema.md) §3 결정 칸 `새로`·`삭제`, §5), 운영이 더한 분류·고객 칸 지우기, `SupersededRow` 만들기.
+1. 서버 판 올리기(`dbtool up --target search`·`--target applog`)와 쌓인 ParsingMeta 기록을 `doc` 칸으로 옮기기 — DB 담당자 승인 뒤 사람이(refactor.md C-107).
 
 ### QA
-- `tests/server/common/test_db_schema.py`(gold ↔ Alembic 모델 · ParsingMeta ↔ `docs/operations/parsing_meta_mssql.sql` · master ↔ 모델) · `tests/server/common/test_pm_versions.py`.
+- `tests/server/common/test_db_schema.py`(gold ↔ Alembic 모델 · master ↔ 모델) · `tests/server/common/test_dbtool.py`(판 0006·0003) · `tests/server/pipeline/test_doc_record.py`(적재가 처리 기록 칸을 씀 · 끝난 문서·내용 중복 판정).
 - Status: dev
 
 <a id="pl-28"></a>

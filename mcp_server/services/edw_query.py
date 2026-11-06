@@ -49,7 +49,7 @@ from common.config import settings as C  # common 칸(connections.rdb — 접속
 from mcp_server import config as mc  # 호출마다 cfg()
 from mcp_server.schemas.edw_result import ColumnMeta, QueryResult  # noqa: F401 — 출력 모양은 schemas/
 
-DEFAULT_TABLES = "AI.FileStorageMap,AI.ParsingMeta,CRMS.RM_MAS_CLIENT,CRMS.RM_MAS_CLIENT_GENERAL,LAS.DIVISION_MAS,LAS.PROD_MAS,LAS.SERVICE_MAS,SFDC.Account,SFDC.Opportunity"  # PC stand-in tables (valid_env/edw — ops.md#op-03)
+DEFAULT_TABLES = "AI.FileStorageMap,CRMS.RM_MAS_CLIENT,CRMS.RM_MAS_CLIENT_GENERAL,LAS.DIVISION_MAS,LAS.PROD_MAS,LAS.SERVICE_MAS,SFDC.Account,SFDC.Opportunity"  # PC stand-in tables (valid_env/edw — ops.md#op-03)
 _CELL_MAX = 2000
 _TRUNC_MARK = " …(truncated)"
 _SYSTEM_SCHEMAS = ("sys", "information_schema")
@@ -136,7 +136,7 @@ def _mssql_conf():
     if not C.cfg().connections.rdb.host:
         return None
     try:
-        kw, miss = mssql.login("read")
+        kw, miss = mssql.login()
     except ValueError:  # malformed port — same clean not_configured instead of a crash
         return None
     return None if miss else kw
@@ -529,7 +529,7 @@ def _connect_mssql(conf, timeout):
     """SQLAlchemy가 연 DBAPI 연결(접속 인자 그대로). 질의 코드는 SQLite 대역과 같은 DBAPI 커서 꼴이라 그대로(도구 출력 같음)."""
     from common.store import mssql
 
-    # conf = mssql.login("read") — 포트 형식은 거기서 이미 검사(_mssql_conf) · 시간 상한·문자셋은 이 도구 값이 이김
+    # conf = mssql.login() — 포트 형식은 거기서 이미 검사(_mssql_conf) · 시간 상한·문자셋은 이 도구 값이 이김
     return mssql.raw(**{**conf, "port": int(conf["port"]), "timeout": timeout, "login_timeout": min(timeout, 10), "charset": "UTF-8"})
 
 

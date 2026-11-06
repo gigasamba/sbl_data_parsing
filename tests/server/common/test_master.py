@@ -152,7 +152,7 @@ def test_gold_version():
     cases = [({"master_hash": "58a24b0258b4a00772"}, f"{v}+m58a24b02"), ({}, v), (None, v)]
     for meta, want in cases:
         assert L.gold_version(meta) == want, (meta, L.gold_version(meta))
-    assert len(f"{v}+m12345678") <= 64  # ParsingMeta gold_version NVARCHAR(64)
+    assert len(f"{v}+m12345678") <= 64  # 판 표기 길이 상한 64자
 
 
 def test_standin_follows_csv_and_mcp_preload():

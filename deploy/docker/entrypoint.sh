@@ -8,7 +8,7 @@
 #
 #   tool <이름> = 고정 표의 도구 하나(check_env·ping_models·check_modules·cli·rdb_discover·gen_roster·glossary_suggest — pipe_exec.sh가 쓰는 자리)
 #     이름만 받는다(다른 형태는 종료 64).
-#   모듈(트리거 1회): parse(= 가져오기(폴더·rdb:csv, PARSE_SOURCE) → dedup → prepare → 파싱·대표 결과) · structure(구조화·임베딩) · load(PostgreSQL) · publish(대표 결과 .md Object Storage 업로드 + EDW 메타 — pipeline.load.publish_parse_result --apply)
+#   모듈(트리거 1회): parse(= 가져오기(폴더·rdb:csv, PARSE_SOURCE) → dedup → prepare → 파싱·대표 결과) · structure(구조화·임베딩) · load(PostgreSQL) · publish(대표 결과 .md Object Storage 업로드 + 처리 기록 파일 — pipeline.load.publish_parse_result --apply)
 #   migrate up|current|check [--target search|all] [--schema S] [--dim N|--bundle B] = pgvector 우리 스키마 판 관리(Alembic,
 #     common.store.db.dbtool) — data-pipeline 이미지만, up은 load와 같은 잠금(current·check는 읽기만 — 잠금 없음). 서버 절차 docs/operations/release-and-patch.md §5-5
 #   show-stack = 지금 엔진 구성(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 코드 폴더 바꾸기) — 두 이미지. docs/architecture/resources.md §1
@@ -121,7 +121,7 @@ case "$cmd" in
       current|check) exec python -m common.store.db.dbtool "$@";;
       *)             preflight; locked python -m common.store.db.dbtool "$@";;
     esac;;
-  publish)    # 대표 결과(.md) Object Storage 업로드 + EDW AI.ParsingMeta 기록(원본은 올리지 않음) — 자동 스케줄 없음, 트리거 전용
+  publish)    # 대표 결과(.md) Object Storage 업로드 + 처리 기록 파일 publish/silver.jsonl(원본은 올리지 않음) — 자동 스케줄 없음, 트리거 전용
     # publish --dry-run = 무엇을 올리고 쓸지 표만(쓰기 0) — 첫 publish 전에. 그 밖은 늘 --apply.
     if [ "${1:-}" = --dry-run ]; then shift; preflight; exec python -m pipeline.load.publish_parse_result "$@"; fi
     preflight; locked python -m pipeline.load.publish_parse_result --apply "$@";;

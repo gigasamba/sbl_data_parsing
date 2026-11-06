@@ -214,7 +214,7 @@
 - LAS 답 ```` ```json {"class": " QAG "} ``` ```` → `QAG`. 답 `{"class": "qag"}` → 집합 밖 → 실패.
 
 ### 데이터·약속
-- 라벨은 gold `<기준>_sfdc.doc.attrs.doc_class`·`<기준>_las.doc.attrs.doc_class`에만 둔다. 모델 이름·분류 시각·낮은 확신 표시는 어디에도 두지 않는다(판은 ParsingMeta `silver_version`·`gold_version`).
+- 라벨은 gold `<기준>_sfdc.doc.attrs.doc_class`·`<기준>_las.doc.attrs.doc_class`에만 둔다. 모델 이름·분류 시각·낮은 확신 표시는 어디에도 두지 않는다(판은 gold `doc.silver_version`·`gold_version`).
 - 감사 기록: `<묶음>/classify_audit.jsonl` — 문서마다 한 줄(`at`·`file_path`·`source`·`doc_class`·`error`).
 - 지시문은 바이트 그대로, LF(지시문 지문). `output_schema`는 두지 않는다(어긋나면 자동으로 한 번 더 묻는 길이 생겨서).
 

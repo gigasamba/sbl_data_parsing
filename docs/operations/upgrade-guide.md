@@ -22,7 +22,7 @@
 | 무엇 | 서버에 미치는 것 | 이 문서의 절 |
 |---|---|---|
 | 네 이미지에 개발 도구·opencode가 들어가고 패키지 목록이 바뀜 | 새 실행 이미지 필요(코드 폴더만으로는 못 바꿈) | §3 |
-| applog 판 `0002_applog` — 영구 건너뜀 표 `skip_doc_info` | 첫 `run_pipeline.py` 전에 `migrate up` | §6 |
+| applog 판 `0003_applog` — 적재 안 된 문서 표 `except_doc_info` · 검색 판 `0006_search` — `doc` 처리 기록 칸 · EDW에 쓰지 않음(쓰기 계정·`parsing_meta_table` 칸 없앰) | 첫 `run_pipeline.py` 전에 `migrate up` · 옛 기록 옮기기 | §6 |
 | settings.yaml 칸 이름 정리 · 맨 아래 선택 절 `option.devbox` | 옛 이름이 남으면 모든 명령이 시작 거부 | §5 |
 | 벌 폴더 = 코드 폴더(`settings.yaml`·`edw_chain.yaml`·`output/`이 코드 폴더 안), 벌 번호 = 폴더 이름 끝 `-<숫자>`, 칸 `ops.host.instance_name` 지움 | 처음 한 번 옛 루트에서 옮김 · 그 칸이 남으면 시작 거부 | §4 · §5 |
 | 개발자별 벌(폴더 이름 끝 번호)·gitea | 개발 서버만, 원할 때 | §9 |
@@ -102,7 +102,7 @@ bash deploy/host/scripts/load_settings.sh common.host >/dev/null && echo 설정-
 $DOCKER run --rm --entrypoint python -v "$PWD:/app/deploy:ro,z" <새 실행 이미지> -m common.config.sample --where <옛 이름>   # 칸의 새 자리(운영 이미지는 -v 없이)
 ```
 - **칸 이름이 바뀌었다** — 옛 → 새 전체 표는 [refactor.md 부록 — 칸 이름 대응표](../refactoring/refactor.md#부록--설정-칸-이름-대응표)(1차 표의 새 이름이 2차 표의 옛 이름 — 둘 다 옮김).
-- **`ops.host.instance_name` 줄을 지운다** — 벌 번호는 코드 폴더 이름 끝 `-<숫자>`라 이 칸은 모르는 칸이다(남으면 시작 거부). PG 스키마·EDW 기록 표·게시 경로에 붙던 `_<벌>`도 없어져 모든 벌이 `required.pg.pg_schema`·`required.edw.parsing_meta_table` 그대로를 쓴다(옛 벌 스키마는 더 쓰지 않음 — 남은 스키마는 DB 담당과 정한다).
+- **`ops.host.instance_name` 줄을 지운다** — 벌 번호는 코드 폴더 이름 끝 `-<숫자>`라 이 칸은 모르는 칸이다(남으면 시작 거부). PG 스키마·게시 경로에 붙던 `_<벌>`도 없어져 모든 벌이 `required.pg.pg_schema` 그대로를 쓴다(옛 벌 스키마는 더 쓰지 않음 — 남은 스키마는 DB 담당과 정한다).
 - **새 선택 절 `option.devbox`**(파일 맨 아래) — 개발 서버의 SSH 작업 공간. 비우면 끔. 쓰는 법은 [README §5-0 "개발 작업 공간"](../../README.md#5-0-배포-단계와-개발-서버-설치).
 - **경로 칸은 컨테이너 안 절대 경로로** 적고, 쓰는 자리는 `/app/output/…` 아래여야 한다 — [env-guide §5](env-guide.md#5-서버-경로-칸--컨테이너-안-절대-경로).
 - 남은 옛 칸은 §6에서 컨테이너가 뜰 때 칸 이름으로 알려 준다 — 고치고 다시 띄운다.
@@ -113,16 +113,17 @@ $DOCKER run --rm --entrypoint python -v "$PWD:/app/deploy:ro,z" <새 실행 이�
 ```bash
 bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline     # 벌 폴더에서 — pipe_exec.sh가 이 안에서 돈다
 bash deploy/host/scripts/pipe_exec.sh migrate current --target all
-# 기대(0.2.0 → 0.3.0): applog applog: 판 낮음 ['0001_applog'] · 코드의 끝 판 0002_applog (search·master는 "끝")
+# 기대(0.2.0 → 0.3.0): applog applog: 판 낮음 ['0001_applog'] · 코드의 끝 판 0003_applog · search도 판 낮음(끝 판 0006_search) (master는 "끝")
 bash deploy/host/scripts/pipe_exec.sh migrate up --target applog
-# 기대: [migrate] applog applog: 판 ['0002_applog'] (끝 0002_applog)
-bash deploy/host/scripts/pipe_exec.sh migrate up --target search                # 판이 그대로면 바뀌는 것 없이 같은 줄
+# 기대: [migrate] applog applog: 판 ['0003_applog'] (끝 0003_applog)
+bash deploy/host/scripts/pipe_exec.sh migrate up --target search                # 0.3.0: 원천 스키마 5벌 doc에 처리 기록 칸(0006_search)
 bash deploy/host/scripts/pipe_exec.sh migrate up --target master
 bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 기대: 갈래마다 "판 끝 [...] · 코드의 끝 판 ...", 종료 코드 0
 ```
 - 갈래(`--target`)마다 따로 올리면 어느 갈래가 바뀌었는지 출력에서 바로 보인다. 한 번에는 `--target all`.
 - 벌이 여럿이면 아무 벌 하나에서 한 번 — 다른 벌은 §4·§5 뒤 §10만 한다.
-- 0.3.0의 applog `0002_applog`는 새 표 `skip_doc_info` 하나만 만든다. **첫 `run_pipeline.py` 전에** 올린다 — 없으면 대상 목록·받기가 표 없음으로 멈춘다.
+- 0.3.0의 applog `0003_applog`는 새 표 `except_doc_info`를 만들고 옛 `skip_doc_info` 행을 `skip`으로 옮긴다. search `0006_search`는 `doc`에 처리 기록 칸(`sha256`·`silver_bucket`·`silver_key`·`engines`·`parse_status`·`silver_version`·`gold_version`·`parsed_at`·`loaded_at`)을 더한다. **첫 `run_pipeline.py` 전에** 둘 다 올린다 — 없으면 대상 목록·받기가 표 없음으로 멈춘다.
+- 0.3.0 사람이 할 일(DB 담당과): EDW `AI.ParsingMeta`에 있던 처리 기록을 `doc` 새 칸으로 손으로 옮긴다(파이프라인은 EDW에 더 쓰지 않고, `doc` 행이 있으면 끝난 문서로 본다). 옮긴 것을 확인한 뒤 옛 표 `applog.skip_doc_info`를 지운다(마이그레이션은 지우지 않음). settings.yaml에 `edw_write_user`·`edw_write_password`·`parsing_meta_table` 칸이 남아 있으면 시작을 거부하므로 지운다.
 - `올린 뒤에도 차이:`가 나오거나 종료 2이면 멈추고 출력(이름만)을 DB 담당과 본다. 오류 분기는 [release-and-patch §5-5](release-and-patch.md#5-5-db-버전-관리--migrate).
 
 ## 7. pgvector가 바뀔 때 — 두 경우
@@ -153,9 +154,9 @@ bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 
 | 청크·임베딩 쪽 코드 · 임베딩 모델 | 구조화 + 적재(모델이면 새 스키마 — §7 (나)) |
 | 파싱 엔진·대표 결과 고르기 | 파싱부터 전부(게시 포함) — `run_pipeline.py` |
 
-**`--skip-done`:** ParsingMeta에 끝난 문서(`ok`·`partial` + `gold_version` 있음, 중복 건너뜀)와 영구 건너뜀 표 `applog.skip_doc_info`의 문서를 대상에서 뺀다. 새 문서만 돌릴 때 쓰고(새벽 배치가 이것), 다시 처리할 때는 주지 않는다.
+**`--skip-done`:** 끝난 문서(원천 스키마 어디든 gold `doc` 행이 있는 원본 키)와 `applog.except_doc_info`의 `skip` 문서를 대상에서 뺀다. 새 문서만 돌릴 때 쓰고(새벽 배치가 이것), 다시 처리할 때는 주지 않는다.
 
-**구조화 + 적재만 다시(게시 없이).** 서버는 문서가 끝나면 작업 폴더(`_docflow/<번호>/`)를 지우므로 묶음이 남아 있지 않다. 그 문서를 파싱해 묶음을 다시 만들고 `--replace`로 적재한다(Object Storage·EDW에는 다시 쓰지 않음).
+**구조화 + 적재만 다시(게시 없이).** 서버는 문서가 끝나면 작업 폴더(`_docflow/<번호>/`)를 지우므로 묶음이 남아 있지 않다. 그 문서를 파싱해 묶음을 다시 만들고 `--replace`로 적재한다(Object Storage에는 다시 쓰지 않음).
 ```bash
 # 1) 다시 할 문서 목록 CSV — EDW AI.FileStorageMap의 다섯 칸(id·s3_key·original_filename·file_size·content_version_id)
 #    query_edw 등으로 뽑아 <결과 폴더>/redo/list.csv 에 둔다(컨테이너에서 /app/output/redo/list.csv)
@@ -192,12 +193,12 @@ bash deploy/host/scripts/pipe_exec.sh publish --dry-run > /tmp/dry.json; grep -c
 $DOCKER exec "$PG_C" psql -U "$PG_U" -d "$PG_D" -c "SELECT tool_name, status, requested_at FROM applog.mcp_log ORDER BY requested_at DESC LIMIT 3"
 # 기대: 방금 부른 search 한 행(status ok) · <벌 폴더>/output/logs/ 가 비어 있음(파일이 있으면 DB 쓰기 실패)
 ```
-- 처음 게시하는 서버면 실제 publish 한 번 뒤 EDW 행과 Object Storage 파일을 본다:
+- 처음 게시하는 서버면 실제 처리(게시·적재) 한 번 뒤 `doc` 처리 기록과 Object Storage 파일을 본다:
 ```bash
-$DOCKER exec data-pipeline python -c "from common.store import mssql as M; kw,_=M.login('read'); c=M.connect(**kw); [print(r) for r in M.rows(c, 'SELECT TOP 5 original_filename, parse_status, rep_bucket, rep_key, parse_date FROM AI.ParsingMeta ORDER BY parse_meta_id DESC')]"
-# 기대: 게시한 문서 수만큼 행 · parse_status ok·partial (표 이름이 다르면 required.edw.parsing_meta_table 값)
-$DOCKER exec data-pipeline python -c "import sys; from common.store.objectstore import client; r=client().list_objects_v2(Bucket=sys.argv[1], Prefix=sys.argv[2]); [print(o['Key'], o['Size']) for o in r.get('Contents', [])]" <rep_bucket> <rep_key>
-# 기대: <파일명>_<parse_date>.md · .json · _meta.json 과 engine/ 아래 파일
+$DOCKER exec "$PG_C" psql -U "$PG_U" -d "$PG_D" -c "SELECT file_path, parse_status, silver_bucket, silver_key, parsed_at, gold_version FROM <pg_schema>_<원천>.doc ORDER BY loaded_at DESC NULLS LAST LIMIT 5"
+# 기대: 처리한 문서 수만큼 행 · parse_status ok·partial · silver_key·gold_version이 채워짐 (<원천> = sfdc·crms·las·faq·other)
+$DOCKER exec data-pipeline python -c "import sys; from common.store.objectstore import client; r=client().list_objects_v2(Bucket=sys.argv[1], Prefix=sys.argv[2]); [print(o['Key'], o['Size']) for o in r.get('Contents', [])]" <silver_bucket> <silver_key의 폴더>
+# 기대: <파일명>_<날짜>.md · .json · _meta.json 과 engine/ 아래 파일
 ```
 - 실제 publish는 한 번만 한다(다시 돌리면 Object Storage에 같은 결과가 새 시각 이름으로 또 올라감).
 - 다 되면 자동 실행을 다시 켠다(단위 틀을 이 코드 폴더로 다시 씀): `bash deploy/host/scripts/host_ctl.sh timers` → `versions.md`에 한 줄([release-and-patch §3](release-and-patch.md#3-배포-판정--selftest)).
@@ -217,7 +218,7 @@ bash deploy/host/scripts/host_ctl.sh timers
 - `$B.new`(새 판 코드)는 확인 뒤 사람이 지운다.
 - 0.2.0에서 처음 올렸다면(§4 마지막) 옛 루트가 그대로 있다 — 새 벌 폴더에서 `host_ctl.sh down` 뒤 `<옛 루트>/sbl_data_parsing-<앞 판>`에서 `host_ctl.sh up -d --force-recreate …` → `host_ctl.sh timers`.
 
-**DB:** 새 판이 DB 판을 올렸으면 옛 코드는 그 판을 모른다 — 적재·`migrate`가 "이 코드가 모르는 판"으로 종료 2(0.3.0의 applog `0002_applog`면 매일 하는 `migrate maintain --target applog`가 멈춘다). 내리는 명령(downgrade)은 없으니 **백업에서 그 스키마를 되살린다** — DB 담당과 함께.
+**DB:** 새 판이 DB 판을 올렸으면 옛 코드는 그 판을 모른다 — 적재·`migrate`가 "이 코드가 모르는 판"으로 종료 2(0.3.0의 applog `0003_applog`면 매일 하는 `migrate maintain --target applog`가 멈춘다). 내리는 명령(downgrade)은 없으니 **백업에서 그 스키마를 되살린다** — DB 담당과 함께.
 ```bash
 SC=applog                                                                     # 판이 바뀐 스키마(검색이면 $S와 ${S}_<원천>…)
 $DOCKER exec "$PG_C" psql -U "$PG_U" -d "$PG_D" -c "ALTER SCHEMA $SC RENAME TO ${SC}_rollback_$(date +%m%d)"   # 지우지 않고 비켜 둠

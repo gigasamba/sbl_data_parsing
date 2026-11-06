@@ -9,6 +9,8 @@ load는 더하고 고치기만 한다 — 이번 묶음에 없는 문서를 지�
 예외 faq-sync --reset: 새 FAQ가 올라오면 gold faq를 통째로 비우고 run_pipeline이 FAQ 전체를 다시 넣는다.
 deploy는 확인(vector 확장·남의 스키마·차원) 뒤 migrate(common.store.db.dbtool up --target search — Alembic 기준판)를 부른다.
 load는 판 기록을 먼저 본다(없으면 경고 뒤 계속, 끝보다 낮거나 모르는 판이면 종료 2).
+처리 기록(op-17): 문서 행에 게시 기록(--silver — publish_parse_result의 silver.jsonl: sha256·silver 위치·엔진·상태·silver 판·게시 시각)과
+적재 판(gold_version)·적재 시각(loaded_at)을 함께 쓴다. 분류에 실패한 문서는 applog.except_doc_info error(다음 실행이 다시 고름).
 """
 
 import argparse
@@ -29,6 +31,10 @@ from pipeline.shared import runtrace  # pipe_run 문서 수·직접 실행 run_i
 
 # DROP/TRUNCATE/DELETE 대상 식별자 화이트리스트(XS3) — 우리 스키마의 우리 표만. 스키마명 자체는 common/pg.conf()가 이미 정규식으로 검증.
 _OUR_TABLES = {"doc", "chunk", "chunk_term", "term_stat", "corpus_stat"}  # 원천 스키마마다 같은 표
+_KST = timezone(timedelta(hours=9))  # loaded_at 표기(created_at과 같은 시간대 — 대역 글자 비교도 맞음)
+# 게시 처리 기록(silver.jsonl)에서 doc 칸으로 옮기는 키(op-17 — 이름 = 칸 이름) · JSONB 칸
+SILVER_COLS = ("sha256", "silver_bucket", "silver_key", "engines", "parse_status", "silver_version", "parsed_at")
+JSON_COLS = ("attrs", "engines")
 
 
 def _tbl(s, name):
@@ -192,11 +198,12 @@ def require_same_model(dbs, meta, bundle):
     raise SystemExit(2)
 
 
-def load(db, bundle, replace=False, rep_dir=None):
+def load(db, bundle, replace=False, rep_dir=None, silver=None):
     """묶음 → 원천 스키마별로(문서의 source_system으로 고름: SFDC·CRMS·LAS·FAQ, 그 밖은 other) 적재. 실 PG는 기준 연결 한 트랜잭션
     (실패하면 5벌 모두 되돌림), 대역은 원천마다 따로. 저장된 문서(file_path 같음)는 건너뜀(replace면 지우고 다시 넣음 — 고치기). 묶음에 없는
-    저장 문서는 그대로 둠. 실행 정보(묶음 meta·건수·시간)는 실행 기록에 남긴다. 적재가 끝나면(커밋 뒤)
-    ParsingMeta.loaded_at을 적는다(실패해도 적재는 그대로, 경고와 건수만)."""
+    저장 문서는 그대로 둠. 실행 정보(묶음 meta·건수·시간)는 실행 기록에 남긴다.
+    silver = 게시 처리 기록 파일(silver.jsonl — 원본 키 source_key = 묶음 문서 file_path로 이음). 그 문서 줄이 있으면 새로 넣는 행에 쓰고
+    이미 있는 행(건너뜀 — 재게시)은 그 칸만 UPDATE. 줄이 없으면 --replace는 옛 행의 처리 기록을 그대로 옮기고, 새 문서는 NULL."""
     from common.store.db.models import search_tables as ST
 
     if replace:
@@ -209,6 +216,11 @@ def load(db, bundle, replace=False, rep_dir=None):
     dbs = src_dbs(db)
     require_same_model(dbs, meta, B)  # EDW 조인·분류·쓰기 전에
     docs, chunks = _nonul(jl(B / "docs.jsonl")), _nonul(jl(B / "chunks.jsonl"))
+    rec = {r["source_key"]: r for r in jl(Path(silver))} if silver and Path(silver).is_file() else {}
+    for d in docs:  # 게시 처리 기록 → doc 칸(op-17) — 이 묶음에서 줄이 있었는지는 _silver
+        r = rec.get(d["file_path"])
+        if r:
+            d.update({k: r.get(k) for k in SILVER_COLS}, _silver=True)
     vecs = np.load(B / "vectors.npy", mmap_mode="r")  # 필요한 청크만 읽음(전체를 메모리에 올리지 않음)
     t0 = time.time()
     from pipeline.load import edw_doc_meta as edw_meta
@@ -219,18 +231,31 @@ def load(db, bundle, replace=False, rep_dir=None):
         d.update({k: m[k] for k in ("created_at", "client_edw") if m.get(k) is not None})
         d["attrs"] = dict(m.get("attrs") or {})
     failed = _classify(db, B, docs, rep_dir, replace)  # SFDC·LAS 라벨(gold 넣기 전 · 이미 있는 라벨은 덮지 않음)
+    if failed:  # 분류 실패 = 적재 실패 — 기록만(다음 실행이 다시 고름)
+        from pipeline.shared import except_docs
+
+        except_docs.note_error(  # 기록만 — 실패해도 적재는 계속
+            [
+                {
+                    "source_key": d["file_path"],
+                    "source_system": d.get("source_system"),
+                    "file_name": d.get("doc_name"),
+                    "reason": "classify_failed",
+                }
+                for d in docs
+                if d["file_path"] in failed
+            ]
+        )
     by_src = {}
     for i, d in enumerate(docs):
         if d["file_path"] in failed:  # 분류 실패 = 이 문서의 적재 실패(gold에 안 넣음 — 다음 정상 실행이 다시 고름)
             continue
         by_src.setdefault(ST.source_of(d.get("source_system")), []).append(i)
     elsewhere = _elsewhere(dbs, docs, by_src)  # 같은 원본 경로가 다른 원천 스키마에 있는지(원천이 바뀐 문서)
-    kept = []  # 이미 gold에 있어 건너뛴 문서 — ParsingMeta gold_version이 비었으면 채움(_mark_loaded)
     if not replace:  # 어디든 이미 있으면 건너뜀(두 스키마에 같은 문서가 생기지 않게)
-        kept = [(d.get("source_system"), d["file_path"]) for d in docs if d["file_path"] in elsewhere]
         by_src = {src: [i for i in idx if docs[i]["file_path"] not in elsewhere] for src, idx in by_src.items()}
     counts = {"docs": 0, "chunks": 0, "terms": 0, "by_source": {}, "meta_missing": meta_missing}
-    loaded = []
+    meta = {**meta, "gold_version": gold_version(meta), "loaded_at": datetime.now(_KST).isoformat(timespec="seconds")}  # 이번 적재의 doc 칸
     if getattr(db, "is_standin", False):
         # 대역은 스키마마다 파일이라 공용 시퀀스가 없음 — 5벌의 가장 큰 doc_id 다음부터 번호를 줘 겹치지 않게(chunk_key·원문 도구 cursor)
         nxt = [1 + max(_max_doc_id(sdb) for sdb in dbs.values())]
@@ -241,21 +266,15 @@ def load(db, bundle, replace=False, rep_dir=None):
         for src, idx in by_src.items():
             sdb = dbs[src]
             with sdb.cn.transaction(), sdb.cn.cursor() as cur:
-                c, ld, kp = _load_src(cur, sdb.schema, src, docs, idx, chunks, vecs, meta, replace, nxt)
+                c = _load_src(cur, sdb.schema, src, docs, idx, chunks, vecs, meta, replace, nxt)
             _add(counts, src, c)
-            loaded += ld
-            kept += kp
     else:
         with db.cn.transaction(), db.cn.cursor() as cur:  # 한 트랜잭션 — 실패하면 5벌 모두 되돌림
             for src, ids in _drop_plan(elsewhere, replace).items():
                 _drop_docs(cur, dbs[src].schema, ids)
             for src, idx in by_src.items():
-                c, ld, kp = _load_src(cur, dbs[src].schema, src, docs, idx, chunks, vecs, meta, replace)
-                _add(counts, src, c)
-                loaded += ld
-                kept += kp
+                _add(counts, src, _load_src(cur, dbs[src].schema, src, docs, idx, chunks, vecs, meta, replace))
     counts["sec"] = round(time.time() - t0, 1)
-    counts["loaded_at_failed"] = _mark_loaded(loaded, kept, gold_version(meta))
     return counts
 
 
@@ -361,24 +380,37 @@ def _attrs(d, src):
     return json.dumps({k: v for k, v in a.items() if v is not None}, ensure_ascii=False, default=lambda v: v.isoformat())
 
 
+def _db_val(col, v):
+    """처리 기록 칸 값 → DB에 넣을 값(JSONB 칸은 JSON 글자 — 옛 행에서 읽은 값은 PG면 목록, 대역이면 이미 글자)."""
+    if col not in JSON_COLS or v is None or isinstance(v, str):
+        return v
+    return json.dumps(v, ensure_ascii=False)
+
+
 def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
-    """원천 스키마 s 하나에 문서 idx(docs.jsonl 줄 번호)를 적재 — 반환 (건수, 새로 넣은 문서, 이미 있어 건너뛴 문서 — 둘 다 [(source_system, file_path)])."""
+    """원천 스키마 s 하나에 문서 idx(docs.jsonl 줄 번호)를 적재 — 반환 건수. 이미 있는 문서는 건너뜀(replace면 지우고 다시)."""
     from common.store.db.models import search_tables as ST
 
     cols = ST.doc_columns(src)[1:]  # doc_id 빼고(실 PG는 공용 시퀀스 기본값)
     if nxt is not None:  # 대역 — 번호를 직접 줌
         cols = ["doc_id", *cols]
     chunk_extra = [n for n, _ in ST.CHUNK_EXTRA.get(src, ())]
-    cur.execute(f"SELECT file_path, doc_id FROM {s}.doc")
-    have = {r[0]: r[1] for r in cur.fetchall()}
-    doc_id, loaded, kept = {}, [], []
+    cur.execute(f"SELECT file_path, doc_id, {', '.join(SILVER_COLS)} FROM {s}.doc")
+    have = {r[0]: (r[1], dict(zip(SILVER_COLS, r[2:]))) for r in cur.fetchall()}  # 원본 경로 → (doc_id, 옛 처리 기록)
+    doc_id = {}
     with SP.span("load.doc", "load", table="doc", source=src) as sp:  # 표별 행 수·rows/sec
         for i in idx:
             d = docs[i]
-            old = have.get(d["file_path"])
+            old, old_rec = have.get(d["file_path"]) or (None, {})
             if old and not replace:
-                kept.append((d.get("source_system"), d["file_path"]))
+                if d.get("_silver"):  # 재게시(--reparse) — 문서는 그대로, 처리 기록만 새 게시로(since/until·parse_date가 맞게)
+                    sets = ", ".join(f"{c} = %s::jsonb" if c in JSON_COLS else f"{c} = %s" for c in SILVER_COLS)
+                    cur.execute(
+                        f"UPDATE {_tbl(s, 'doc')} SET {sets} WHERE doc_id = %s", (*(_db_val(c, d.get(c)) for c in SILVER_COLS), old)
+                    )
                 continue
+            if old and not d.get("_silver"):  # --replace인데 이번 게시 기록이 없음 — 옛 처리 기록을 그대로 옮김
+                d.update(old_rec)
             if old:
                 drop_terms(cur, s, [old])
                 cur.execute(f"DELETE FROM {_tbl(s, 'doc')} WHERE doc_id=%s", (old,))  # chunk는 ON DELETE CASCADE
@@ -390,15 +422,17 @@ def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
                 "content_date": d.get("doc_date"),  # 묶음 doc_date(문서에 적힌 날짜) → gold content_date
                 "embed_model": meta.get("embed_model"),  # 묶음의 임베딩 모델(검색의 질의 모델 확인 · 문서 단위 guard)
                 ST.ATTRS: _attrs(d, src),  # 원천 메타(사슬 fields + 분류 doc_class)
+                "engines": _db_val("engines", d.get("engines")),  # 게시 기록(op-17)
+                "gold_version": meta.get("gold_version"),  # 이번 적재 판·시각(load()가 meta에)
+                "loaded_at": meta.get("loaded_at"),
             }
             cur.execute(
-                f"INSERT INTO {s}.doc({', '.join(cols)}) VALUES ({', '.join('%s::jsonb' if c == ST.ATTRS else '%s' for c in cols)}) RETURNING doc_id",
+                f"INSERT INTO {s}.doc({', '.join(cols)}) VALUES ({', '.join('%s::jsonb' if c in JSON_COLS else '%s' for c in cols)}) RETURNING doc_id",
                 tuple(row[c] for c in cols),
             )
             doc_id[i] = cur.fetchone()[0]
             if nxt is not None:
                 nxt[0] += 1
-            loaded.append((d.get("source_system"), d["file_path"]))
         sp.rows(len(doc_id))
     sel = [ci for ci, c in enumerate(chunks) if c["doc"] in doc_id]
     ci_db = {}
@@ -460,7 +494,7 @@ def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
                 (list(ci_db.values()),),
             )
         cur.execute(_corpus_stat_sql(s))
-    return {"docs": len(doc_id), "chunks": len(sel), "terms": n_terms}, loaded, kept
+    return {"docs": len(doc_id), "chunks": len(sel), "terms": n_terms}
 
 
 def gold_version(meta):
@@ -472,29 +506,6 @@ def gold_version(meta):
     return f"{pipeline_version()}+m{h[:8]}" if h else pipeline_version()
 
 
-def _mark_loaded(loaded, kept=(), version=None):
-    """새로 적재한 문서의 ParsingMeta.loaded_at·gold_version을 적는다(쓰기 계정, PG 커밋 뒤). 못 열거나 실패하면 경고 한 줄과
-    실패 건수만 돌려준다(적재는 그대로 — gold가 검색의 정본, loaded_at은 기록용. DB 담당자가 칸을 더하기 전에도 적재가 멈추지 않게)."""
-    if not loaded and not kept:
-        return 0
-    from common.store import parsing_meta_db as PM
-
-    try:
-        pm = PM.make_db("write")
-    except (Exception, SystemExit) as e:  # make_db는 접속 정보가 없으면 SystemExit
-        print(
-            f"[pgstore] 경고: ParsingMeta loaded_at 못 적음(연결 없음) — {len(loaded)}건: {type(e).__name__}", file=sys.stderr, flush=True
-        )
-        return len(loaded)
-    try:
-        return PM.mark_loaded(pm, loaded, version or gold_version(None), kept)  # gold_version = 적재한 코드 판 + 마스터 해시
-    except Exception as e:
-        print(f"[pgstore] 경고: ParsingMeta loaded_at 못 적음 — {len(loaded)}건: {type(e).__name__}", file=sys.stderr, flush=True)
-        return len(loaded)
-    finally:
-        pm.close()
-
-
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["check", "deploy", "load", "faq-sync"])
@@ -503,6 +514,7 @@ def main(argv=None):
     ap.add_argument("--reset", action="store_true", help="faq-sync — gold faq 문서·청크를 모두 지움(pl-41 — 새 FAQ가 올라온 실행)")
     ap.add_argument("--out", default=None, help="faq-sync 결과 JSON 파일(지운 수·남은 gold faq file_path)")
     ap.add_argument("--rep-dir", default=None, help="대표 결과 폴더(_rep) — 분류 본문을 게시 .md와 같게(pl-33). 비우면 묶음 full_text")
+    ap.add_argument("--silver", default=None, help="게시 처리 기록(publish/silver.jsonl) — doc의 sha256·silver 위치·엔진·상태 칸(op-17)")
     a = ap.parse_args(argv)
     db = pg_connect()
     print(
@@ -540,7 +552,7 @@ def main(argv=None):
         print(f"배포 완료: PostgreSQL 스키마 {db.schema} · vector({meta['dim']}) · {idx} 색인")
     elif a.cmd == "load":
         with SP.span("load.pgvector", "load", cpu=True) as sp:  # 적재 전체 1행(표별 하위 span이 이 밑에)
-            counts = load(db, a.bundle, a.replace, a.rep_dir)
+            counts = load(db, a.bundle, a.replace, a.rep_dir, a.silver)
             sp.add(**{k: v for k, v in counts.items() if k in ("docs", "chunks", "terms", "sec")})
             runtrace.docs(total=counts["docs"])  # pipe_run 문서 수(이번에 새로 넣은 문서)
         print(json.dumps(counts, ensure_ascii=False))

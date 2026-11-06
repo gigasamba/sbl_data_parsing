@@ -699,8 +699,6 @@ LOCAL_IGNORED = (
     "common.connections.rdb.host",
     "common.connections.rdb.read.user",
     "common.connections.rdb.read.password",
-    "common.connections.rdb.write.user",
-    "common.connections.rdb.write.password",
     "common.connections.object_storage.endpoint",
     "common.connections.object_storage.access_key",
     "common.connections.object_storage.secret_key",
@@ -1012,14 +1010,6 @@ def app_classes(names=("pipeline", "mcp")):
 
 # ── 덮기 파일 — 같은 프로세스(put)·자식(child_env)·PC 한 번 실행(common.config.overrides) ─────────────
 _GEN = [0]  # put()이 올림 — 모든 Cache가 다음 get()에서 다시 읽음
-_EDW_READ_ONLY = [False]  # edw_read_only() — 이 프로세스는 EDW 읽기 계정만(CommonConnectionsRdb가 봄)
-
-
-def edw_read_only(on=True):
-    """이 프로세스는 EDW 읽기 계정만 본다 — 공용 settings.yaml에 쓰기 계정이 있어도 설정 객체에서 비운다(검색 MCP
-    시작 때 부름 — 규칙: PRD docs/prd/ops.md#op-03). 파일은 바꾸지 않고, 모든 설정 캐시가 다음 읽기에서 다시 읽는다."""
-    _EDW_READ_ONLY[0] = on
-    _GEN[0] += 1
 
 
 def _all_names():
@@ -1329,24 +1319,15 @@ class CommonConnectionsObjectStorage(Section):
     verify_tls: str | None = F("1", "OS_VERIFY_TLS", "TLS 인증서 검증(1=검증, 0=끔, 그 밖 문자열=CA 파일 경로)", blank="keep")
 
 
-class CommonConnectionsParsingMeta(Section):
-    table: str | None = F("AI.ParsingMeta", "PM_TABLE", "parsing-meta를 쓸 EDW 표 이름(스키마.표, 영문·숫자·_)", blank="keep")
-
-
 class CommonConnectionsRdbRead(Section):
     password: SecretStr | None = F(None, "RDB_READ_PASSWORD", "EDW 읽기 계정 비밀번호")
     user: str | None = F(
-        None, "RDB_READ_USER", "EDW 읽기 계정 이름 — 원천 목록·FileStorageMap·ParsingMeta 조회·query_edw(검색 MCP는 이 계정만)"
+        None, "RDB_READ_USER", "EDW 읽기 계정 이름 — 원천 목록·FileStorageMap·메타 사슬·query_edw(이 프로젝트는 EDW에 쓰지 않음)"
     )
 
 
-class CommonConnectionsRdbWrite(Section):
-    password: SecretStr | None = F(None, "RDB_WRITE_PASSWORD", "EDW 쓰기 계정 비밀번호")
-    user: str | None = F(None, "RDB_WRITE_USER", "EDW 쓰기 계정 이름 — ParsingMeta 게시(INSERT·UPDATE)만")
-
-
 class CommonConnectionsRdb(Section):
-    """EDW(SQL Server) 접속 하나 — 서버·DB는 하나, 계정은 읽기·쓰기 둘(규칙: PRD docs/prd/ops.md#op-03)."""
+    """EDW(SQL Server) 접속 하나 — 읽기 계정만(EDW에 쓰지 않음 — 규칙: PRD docs/prd/ops.md#op-03·op-17)."""
 
     connect_kwargs: SecretStr | None = F(None, "RDB_CONNECT_KWARGS", "EDW pymssql 연결에 더할 추가 인자(JSON 객체 — TLS·로그인 시간 등)")
     database: str | None = F(None, "RDB_DATABASE", "EDW 데이터베이스 이름")
@@ -1360,14 +1341,6 @@ class CommonConnectionsRdb(Section):
         repo=True,
     )
     read: CommonConnectionsRdbRead = Field(default_factory=CommonConnectionsRdbRead)
-    write: CommonConnectionsRdbWrite = Field(default_factory=CommonConnectionsRdbWrite)
-
-    @model_validator(mode="after")
-    def _read_only_process(self):
-        """검색 MCP 프로세스(edw_read_only())는 쓰기 계정 칸을 보지 않는다 — 공용 settings.yaml에 있어도 설정 객체에서 비움."""
-        if _EDW_READ_ONLY[0]:
-            self.write = CommonConnectionsRdbWrite()
-        return self
 
 
 class CommonConnectionsPg(Section):
@@ -1611,7 +1584,6 @@ class CommonText(Section):
 
 class CommonConnections(Section):
     object_storage: CommonConnectionsObjectStorage = Field(default_factory=CommonConnectionsObjectStorage)
-    parsing_meta: CommonConnectionsParsingMeta = Field(default_factory=CommonConnectionsParsingMeta)
     pg: CommonConnectionsPg = Field(default_factory=CommonConnectionsPg)
     rdb: CommonConnectionsRdb = Field(default_factory=CommonConnectionsRdb)
 

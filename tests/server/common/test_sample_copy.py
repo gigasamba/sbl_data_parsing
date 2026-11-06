@@ -41,8 +41,6 @@ DEV = {**MODELS, **PG, **SERVER_ONLY} | {
     "edw_database": "EDW",
     "edw_read_user": "svc_r",
     "edw_read_password": _HEX,
-    "edw_write_user": "svc_w",
-    "edw_write_password": _HEX,
     "object_storage_access_key": _HEX,
     "object_storage_secret_key": _HEX,
     "mcp_token": _HEX,
@@ -57,7 +55,7 @@ _CLS = S.section_class(("common", "pipeline"))[0]
 _ENV = {p: e for e, p in S.env_map(_CLS).items()}
 ALL_SERVER = {_ENV[p]: f"srv-value-{i}-{_HEX}" for i, p in enumerate(S.LOCAL_IGNORED)}
 _LOCAL_BUCKET = f"file://{PROJ_ROOT.as_posix()}/valid_env/object_storage/Parsing_Result"
-# (사례, 채울 칸, 기대 RUN_ENV, 기대 값) — 기대 값: schema = PG 스키마(None = PG 접속 없음 — sqlite 대역), write = login("write")의 빠진 칸,
+# (사례, 채울 칸, 기대 RUN_ENV, 기대 값) — 기대 값: schema = PG 스키마(None = PG 접속 없음 — sqlite 대역), read = login()의 빠진 칸,
 # bucket = 게시 버킷, source = 파싱 원본, max_new = 새 문서 상한, ignored = 경고에 나와야 하는 칸 이름(local이 비운 서버 칸),
 # overlay = 덮기 파일 overrides로 줄 값(env 이름), blank = sample이 기본값을 적어 낸 칸 중 비울 칸, warn = 나와야 하는 경고 글자(없으면 그 경고가 없어야 함 — pg_schema 기본값 알림)
 CASES = (
@@ -92,18 +90,12 @@ CASES = (
         "dev",
         {
             "schema": "data_parsing",
-            "write": [],
+            "read": [],
             "bucket": "rag-silver",
             "ignored": (),
             "warn": "required.pg.pg_schema",
             "blank": "pg_schema",
         },
-    ),
-    (
-        "(d) 개발 서버 — EDW 쓰기 계정을 비워 둠 → 게시 접속이 빠진 칸으로 거부(읽기 계정으로 대신하지 않음)",
-        {k: v for k, v in DEV.items() if not k.startswith("edw_write_")},
-        "dev",
-        {"schema": "data_parsing", "write": ["RDB_WRITE_USER", "RDB_WRITE_PASSWORD"], "bucket": "rag-silver", "ignored": ()},
     ),
 )
 _HOST = PROJ_ROOT / "deploy" / "host" / "scripts" / "settings_to_env.py"  # 호스트 스크립트 — 이미지에는 없음(PC에서만 봄)
@@ -164,8 +156,8 @@ def test_copied_sample_runs_after_filling_blanks():
             err = io.StringIO()
             with S.COMMON.override(file=f, environ={}), contextlib.redirect_stderr(err):
                 assert (pg.conf()["PG_SCHEMA"] if pg.has_conn() else None) == exp["schema"], what
-                if "write" in exp:
-                    assert mssql.login("write")[1] == exp["write"], what
+                if "read" in exp:
+                    assert mssql.login()[1] == exp["read"], what
             warn = [line for line in err.getvalue().splitlines() if "required.pg.pg_schema" in line]
             assert len(warn) == ("warn" in exp) and all(exp["schema"] in line for line in warn), (what, warn)  # 쓰는 기본값도 알림
             if _HOST.is_file():

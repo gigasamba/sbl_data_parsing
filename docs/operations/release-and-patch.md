@@ -59,7 +59,7 @@ bash deploy/release/selftest_gate.sh $DOCKER run --rm <코드 폴더 옵션> <�
 - PATCH인지 MINOR인지 가르기: `git diff v<앞 판>..HEAD -- deploy/docker/`를 본다. `requirements*.txt`가 그대로라 `DEPS_HASH`가 같고, 실행 이미지에 구워지는 파일(`Dockerfile`·`runtime_entry.sh`·`wheels/`)의 동작이 그대로면 PATCH — 서버의 실행 이미지를 그대로 쓰고 코드 폴더만 바꾼다. `entrypoint.sh`·`Dockerfile.bake`는 코드 폴더에서 읽히므로 바뀌어도 PATCH다. `DEPS_HASH`가 다르거나 실행 이미지에 구워지는 파일의 동작이 바뀌면 MINOR(새 실행 이미지 — §5).
 - `release/<버전>` 브랜치에서 `VERSION`을 고치고, main 머지 커밋에 annotated 태그 `v<버전>`을 붙인다. 이미지 태그는 `v` 없이(`data-pipeline:0.2.0`).
 - `build_ship.sh`·`stage_images.sh`는 태그를 안 주면 `VERSION`을 쓴다. 같은 태그가 이미 있으면 `build_ship.sh`가 멈춘다(다시 만들 때만 `FORCE_TAG=1`). 빌드 커밋은 라벨 `org.opencontainers.image.revision`(커밋 안 한 변경이 섞이면 `-dirty`).
-- 회사 DB `AI.ParsingMeta`의 버전 칸(silver를 만든 판·`gold_version`)은 이미지 안 `/app/deploy/VERSION`(코드 폴더면 그 루트 `VERSION`)을 쓴다.
+- 검색 DB gold `doc`의 버전 칸(`silver_version`·`gold_version`)은 이미지 안 `/app/deploy/VERSION`(코드 폴더면 그 루트 `VERSION`)을 쓴다.
 
 ## 5. 새 이미지 버전이 필요할 때
 
@@ -120,7 +120,7 @@ bash deploy/host/scripts/pipe_exec.sh migrate master load                # 마�
 bash deploy/host/scripts/pipe_exec.sh migrate check --target all         # 기대: 갈래마다 "판 끝", 종료 코드 0
 bash deploy/host/scripts/pipe_exec.sh show-stack                         # 엔진 구성 파일(이름·sha·경로) — 못 읽으면 종료 2
 ```
-- `--target`: `search`·`applog`·`master`·`all`(셋 모두). 끝 판: search `0005_search` · applog `0002_applog` · master `0001_master`.
+- `--target`: `search`·`applog`·`master`·`all`(셋 모두). 끝 판: search `0006_search` · applog `0003_applog` · master `0001_master`.
 - 표는 있는데 버전 기록이 없는 스키마(판 관리 전에 만든 것)에는 `up`이 종료 2로 멈춘다 — 새 `db_schema`로 올리고 전체를 다시 적재한다.
 - ⚠ **0.1.0이 만든 스키마에 `up`하면 `0002_search`가 옛 표를 지운다** — 새 `required.pg.pg_schema`로 올린다([upgrade-guide §0](upgrade-guide.md#0-먼저-알-것)).
 - 적재(`pgvector_load`)는 새 스키마면 만들고 기록, 기록이 있으면 `up`, 기록 없는 기존 스키마면 경고만 하고 계속한다. DB 판이 코드보다 낮으면 종료 2(`migrate up` 안내), 코드가 모르는 리비전이 있으면(옛 이미지로 되돌린 뒤 등) 적재·`up` 모두 종료 2. 검색 MCP는 버전을 보지 않는다.

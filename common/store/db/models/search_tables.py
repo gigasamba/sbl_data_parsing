@@ -2,7 +2,7 @@
 (원천 = sfdc·crms·las·faq·other) — 스키마마다 같은 표 doc·chunk·chunk_term·term_stat·corpus_stat + 뷰 v_chunk_source, 그 원천 전용 칸만 다름.
 기준 스키마 `<PG_SCHEMA>`에는 Alembic 판 표와 5벌이 함께 쓰는 doc_id 시퀀스(`doc_id_seq`)만 있다(실행 정보는 실행 기록에).
 임베딩 차원은 실행 값이라 함수로 만든다. 색인 정의 글자(index_defs)·뷰(views_expected — 칸 이름 순서 + 정의 글자)는 PostgreSQL이 돌려주는 꼴
-(pg_get_indexdef·pg_get_viewdef — `{S}` = 원천 스키마). Alembic 판(migrations/versions/0002~0005)이 같은 DDL을 글자로 갖고,
+(pg_get_indexdef·pg_get_viewdef — `{S}` = 원천 스키마). Alembic 판(migrations/versions/0002~0006)이 같은 DDL을 글자로 갖고,
 selftest(test_dbtool)가 판 파일의 칸·뷰를 이 정의와 대조한다."""
 
 from sqlalchemy import Column, ForeignKey, Index, Integer, MetaData, PrimaryKeyConstraint, SmallInteger, String, Table, Text, text
@@ -25,6 +25,20 @@ CHUNK_EXTRA = {"faq": (("faq_group", Text),)}  # faq.chunk만 시트 이름
 #   created_at(원천 등록 시각)과 다르다 — 파일 생성·수정 시각이 아니다.
 # embed_model = 그 문서를 임베딩한 모델(질의 모델 확인 — 나중 guard가 문서 단위로 판단).
 DOC_META = (("content_date", Text), ("embed_model", Text))
+# 5벌 공용 doc 처리 기록 칸(판 0006 — op-17, EDW ParsingMeta 대신): 게시(silver)가 정한 값 + 적재(gold) 시각·판. 모두 NULL 허용.
+# sha256 = 원본 파일 sha256(내용 중복 판정) · silver_bucket·silver_key = 게시한 대표 결과(.md) 객체 · engines = 돈 엔진 전부(JSON — 대표는 role "rep")
+# · parse_status = ok·partial · silver_version = 게시한 코드 판 · gold_version = `<VERSION>+m<마스터 해시 앞 8자>` · parsed_at = 게시 시각 · loaded_at = 적재 시각.
+DOC_RECORD = (
+    ("sha256", Text),
+    ("silver_bucket", Text),
+    ("silver_key", Text),
+    ("engines", JSONB),
+    ("parse_status", Text),
+    ("silver_version", Text),
+    ("gold_version", Text),
+    ("parsed_at", TIMESTAMP(timezone=True)),
+    ("loaded_at", TIMESTAMP(timezone=True)),
+)
 
 
 def source_of(system):
@@ -59,8 +73,8 @@ class Vector(UserDefinedType):
 
 
 def doc_columns(src):
-    """doc 표 칸 이름 순서(고정 칸 + 판 0004 칸 + 판 0005 attrs — 판이 더한 순서, 5벌 같음)."""
-    return [*_DOC_BASE, *(n for n, _ in DOC_META), ATTRS]
+    """doc 표 칸 이름 순서(고정 칸 + 판 0004 칸 + 판 0005 attrs + 판 0006 처리 기록 — 판이 더한 순서, 5벌 같음)."""
+    return [*_DOC_BASE, *(n for n, _ in DOC_META), ATTRS, *(n for n, _ in DOC_RECORD)]
 
 
 _DOC_BASE = ("doc_id", "file_path", "summary", "created_at", "client_edw", "clients_doc")
@@ -84,13 +98,14 @@ def search_metadata(schema, dim, shared_seq=True):
         "doc",
         md,
         doc_id,
-        Column("file_path", Text, nullable=False),  # Object Storage 원본 경로 = EDW FileStorageMap.s3_key(= ParsingMeta 키) — 연결 키
+        Column("file_path", Text, nullable=False),  # Object Storage 원본 경로 = EDW FileStorageMap.s3_key — 연결 키(끝난 문서 판정)
         Column("summary", Text),
         Column("created_at", TIMESTAMP(timezone=True)),  # 원천 등록 시각(FileStorageMap.created_at, KST)
         Column("client_edw", Text),  # EDW 조인 사슬의 고객 하나 — client 거르기는 이 칸 정확 일치만
         Column("clients_doc", Text),  # 본문에서 찾은 고객 라벨(JSON 글자) — 참고만, 거르기·순위에 안 씀
         *(Column(n, t) for n, t in DOC_META),
         Column(ATTRS, JSONB),  # 원천 메타 {키: 값}(pl-52 — 사슬 파일 fields + LOAD_ATTRS) · GIN 색인은 index_defs(판 0005)
+        *(Column(n, t) for n, t in DOC_RECORD),  # 처리 기록(판 0006 — op-17)
     )
     chunk = Table(
         "chunk",

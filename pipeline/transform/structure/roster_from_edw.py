@@ -32,7 +32,7 @@ from pathlib import Path
 
 from common.core import terms as T
 
-TABLE_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")  # parsing_meta_db.py와 같은 화이트리스트
+TABLE_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")  # discover_columns.TABLE_ID_RE와 같은 화이트리스트
 COL_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 ROSTER_COLS = [
     "client_id",

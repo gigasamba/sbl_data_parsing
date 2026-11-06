@@ -9,9 +9,10 @@
    구조화 대기 문서가 STRUCT_BACKLOG(기본 구조화 워커 × 2)개 이상이면 새 파싱을 시작하지 않고 기다림(rn-02).
    레인·대기 길이는 상태가 바뀔 때마다 batch_progress/queue_depth.jsonl에 한 줄(rn-02).
    값은 settings.yaml ops.run_pipeline(비우면 아래 RUN_PIPELINE_DEFAULTS) — --staging·--struct-workers 인자가 그 위를 덮음.
-3) 문서별 순서(pl-24): 파싱 → silver 게시(publish — OS+EDW, 게시 스레드 1개) → 원본 삭제(게시 성공 뒤에만) →
-   gold(gold_bundle → pgvector_load, STRUCT_WORKERS(기본 2)개 스레드) → 임시 삭제. 배치 장벽 없이 끝나는 순서대로 흐름.
-   파싱·게시 실패 = 원본(staging)을 남기고 로그에만, gold로 안 감 · gold 실패 = silver는 그대로(로그 — gold_status 칸은 DB 담당 C-81).
+3) 문서별 순서(pl-24): 파싱 → silver 게시(publish — Object Storage + 처리 기록 파일, 게시 스레드 1개) → 원본 삭제(게시 성공 뒤에만) →
+   gold(gold_bundle → pgvector_load — doc 행에 처리 기록, STRUCT_WORKERS(기본 2)개 스레드) → 임시 삭제. 배치 장벽 없이 끝나는 순서대로 흐름.
+   파싱·게시 실패 = 원본(staging)을 남기고 gold로 안 감 · gold 실패 = silver는 그대로. 실패는 로그와 applog.except_doc_info error
+   (다음 실행이 다시 고름 — op-17).
 4) 종료 코드(pl-18): 0 = 대상 0건·모두 끝 · 1 = 실패 문서 있음 · 75 = 마감 도달(실패 없음) 또는 다른 run_pipeline이 도는 중
    (잠금 batch_progress/run_pipeline.lock — 사람이 돌린 실행과 새벽 배치가 겹치지 않게) · 2 = 설정 문제.
 
@@ -56,8 +57,6 @@ SETTINGS_REQUIRED = (  # (칸 경로, 무엇에 쓰나) — 없으면 시작 거
     ("common.connections.rdb.database", "EDW DB"),
     ("common.connections.rdb.read.user", "EDW 읽기 계정"),
     ("common.connections.rdb.read.password", "EDW 읽기 계정 비밀번호"),
-    ("common.connections.rdb.write.user", "EDW 쓰기 계정 — publish의 ParsingMeta INSERT(컨테이너)"),
-    ("common.connections.rdb.write.password", "EDW 쓰기 계정 비밀번호(컨테이너)"),
     ("common.connections.object_storage.endpoint", "Object Storage 주소 — publish·받기(컨테이너)"),
     ("common.connections.object_storage.access_key", "Object Storage 키(컨테이너)"),
     ("common.connections.object_storage.secret_key", "Object Storage 비밀 키(컨테이너)"),
@@ -294,18 +293,30 @@ def struct_cmd(seq):
         f"python -m pipeline.transform.structure.gold_bundle{st} --parse-dir {inside}/parse --src {inside}/prepared"
         f" --out {inside}/bundle && "
         f"python -m pipeline.load.pgvector_load{st} load --bundle {inside}/bundle --rep-dir {inside}/parse/_rep "
-        f">> {inside}/structure.log 2>&1",
+        f"--silver {inside}/publish/silver.jsonl >> {inside}/structure.log 2>&1",
         seq,
     )
 
 
 def publish_cmd(seq):
-    """문서 1개 publish(OS + EDW)."""
+    """문서 1개 publish(Object Storage + 처리 기록 파일 publish/silver.jsonl — 적재가 doc 칸으로)."""
     inside = _inside(seq)
     return pexec(
         f"python -m pipeline.load.publish_parse_result --out {inside} --source-system FileStorageMap --apply >> {inside}/publish.log 2>&1",
         seq,
     )
+
+
+def error_cmd(seq, reason):
+    """문서 1개 실패 기록 — applog.except_doc_info error(다음 실행이 다시 고름, op-17). 문서 위치 표는 stage_one이 쓴 batch.csv."""
+    return pexec(f"python -m pipeline.shared.except_docs error --csv {_inside(seq)}/batch.csv --reason {reason}")
+
+
+def note_error(seq, reason):
+    """실패 기록(error_cmd) — 기록이 실패해도 흐름은 계속(로그에만 — 다음 실행은 어차피 다시 고름). 임시 폴더를 지우기 전에 부른다."""
+    rc, _, _ = sh(error_cmd(seq, reason), timeout=120)
+    if rc != 0:
+        log(f"doc#{seq} 실패 기록(except_doc_info) 못 씀 — rc {rc}")
 
 
 def sweep_cmd(seq):
@@ -693,7 +704,7 @@ def parse_one(seq, row):
     """문서 1개 파싱 — 공유 상주 컨테이너(PIPE_C) 안에서 워커별 분리(경로 격리).
     문서마다 출력 루트(PIPE_OUT_ROOT·DOC_DIR_PREPARED — --set으로 넘김)를 따로 둔다.
     VLM·OCR·후처리 값은 settings.yaml ops.run_pipeline, 쪽 해상도는 extract.page_render_dpi.
-    → True(성공) · False(실패) · SKIP(받기가 중복·DRM·암호로 빼서 파싱할 것 없음 — 실패 아님, 게시가 skipped_* 상태를 씀 — pl-02)."""
+    → True(성공) · False(실패) · SKIP(받기가 중복·DRM·암호로 빼서 파싱할 것 없음 — 실패 아님, 받기가 except_doc_info skip에 이미 씀 — 게시·gold 없음, pl-02)."""
     d = DOCFLOW / f"{seq}"  # stage_one이 만든 문서 폴더(batch.csv 포함)
     doc_log = PROG / f"doc_{seq}.log"
     t0 = time.time()
@@ -701,7 +712,7 @@ def parse_one(seq, row):
     only = d / "parse" / "_source" / "only.txt"  # stage가 쓴 파싱할 이름 목록(거르기를 지난 것)
     if (d / ".staged").exists() and only.exists() and not only.read_text(encoding="utf-8").strip():
         mark(seq, "parse_end", ok=True, skip=True, rep=0, sec=0)
-        log(f"doc#{seq} 파싱 건너뜀 — 받기가 중복·DRM·암호로 뺌(게시가 상태를 씀) — {row['original_filename'][:44]}")
+        log(f"doc#{seq} 파싱 건너뜀 — 받기가 중복·DRM·암호로 뺌(게시·gold 없음) — {row['original_filename'][:44]}")
         return SKIP
     print(f"[{now():%H:%M:%S}] doc#{seq} 파싱 시작 — {row['original_filename'][:44]}", flush=True)
     chan = _class.get(seq) or "light"
@@ -715,11 +726,11 @@ def parse_one(seq, row):
     return ok
 
 
-SKIP = "skip"  # parse_one — 받기가 뺀 문서(파싱 없이 게시만)
+SKIP = "skip"  # parse_one — 받기가 뺀 문서(파싱·게시·gold 없이 원본·임시 폴더만 지움)
 
 
 def publish_one(seq):
-    """silver 게시(OS + EDW — 파싱 바로 뒤, gold 전). 성공해야 원본을 지우고 gold로 넘어간다."""
+    """silver 게시(Object Storage + 처리 기록 파일 — 파싱 바로 뒤, gold 전). 성공해야 원본을 지우고 gold로 넘어간다."""
     t1 = time.time()
     mark(seq, "pub_start")
     rc = doc_sh(seq, publish_cmd(seq), 900, PROG / f"doc_{seq}.log")
@@ -744,9 +755,6 @@ def gold_one(seq, enq_t=None):
         f"doc#{seq} 구조화+적재 {'OK' if ok else 'FAIL'}(대기 {wait / 60:.1f}분 · 실행 {(time.time() - t0) / 60:.1f}분)"
         + ("" if ok else f" — silver는 남김(게시됨, gold는 silver에서 다시 만듦) · {_fail_note(rc, seq, 'structure.log')}")
     )
-    # TODO(pl-24 · refactor.md C-81): DB 담당자가 AI.ParsingMeta.gold_status(pending·ok·failed)+이유 칸을 더하면 여기서 실패를 적는다.
-    #   지금은 칸이 없어 로그에만. gold_version 칸(C-76 ③)이 있으면 비어 있으므로 다음 --skip-done이 다시 고른다 —
-    #   칸이 없으면 게시한 행(parse_status ok)만 보고 끝난 문서로 친다 → 이 순서는 gold_version 칸이 생긴 뒤에 배포(C-81).
     return ok
 
 
@@ -934,7 +942,7 @@ def main():
     ap.add_argument(
         "--skip-done",
         action="store_true",
-        help="EDW ParsingMeta에 이미 끝난(ok·partial — gold_version도, skipped_dup) 문서는 건너뜀(재실행 시간 절약)",
+        help="gold에 이미 끝난(doc 행이 있는) 문서와 영구 뺌(except_doc_info skip) 문서는 건너뜀(재실행 시간 절약)",
     )
     ap.add_argument("--no-cleanup", action="store_true")
     ap.add_argument("--settings", default=None, help="서버 settings.yaml(기본 SETTINGS_FILE 또는 <루트>/settings.yaml — op-13)")
@@ -991,7 +999,7 @@ def main():
     tf.start()
 
     # 문서별 순서: 파싱 → silver 게시(pub_q, 게시 스레드) → 원본 삭제 → gold(struct_q, 구조화 스레드) → 임시 삭제.
-    # 게시를 따로 두어 구조화가 업로드·EDW 쓰기를 기다리지 않는다. 파싱 실패·게시 실패면 원본을 남기고 gold로 가지 않는다.
+    # 게시를 따로 두어 구조화가 업로드를 기다리지 않는다. 파싱 실패·게시 실패면 원본을 남기고 gold로 가지 않는다.
     cnt = {
         "ok": 0,
         "skipped": 0,
@@ -1021,20 +1029,22 @@ def main():
             finally:
                 q.task_done()
 
-    def _publish(seq, row, skip=False):
+    def _skip(seq, row):  # 받기가 뺀 문서(중복·DRM·암호) — 기록은 받기가 except_doc_info skip에 씀, 게시·gold 없음
+        _safe(drop_original, seq, row)
+        with _flow_lock:
+            cnt["skipped"] += 1
+        _safe(drop_temp, seq)
+        mark(seq, "done")
+
+    def _publish(seq, row):
         ok = _ran("publish", publish_one, seq)
         if not ok:
             with _flow_lock:
                 cnt["pub_fail"] += 1
+            _safe(note_error, seq, "publish_failed")
             _safe(drop_temp, seq)
             return
         _safe(drop_original, seq, row)  # 게시 성공 뒤에만
-        if skip:  # 받기가 뺀 문서 — 게시가 skipped_* 상태를 썼고 gold는 없음
-            with _flow_lock:
-                cnt["skipped"] += 1
-            _safe(drop_temp, seq)
-            mark(seq, "done")
-            return
         _struct_q.put((seq, row, time.time()))
         depth("struct_put")
 
@@ -1043,26 +1053,31 @@ def main():
         with _flow_lock:  # 집계를 기록(mark — 디스크 가득이면 예외)보다 먼저
             cnt["ok" if ok else "gold_fail"] += 1
             report = ok and cnt["ok"] % 5 == 0
+        if not ok:
+            _safe(note_error, seq, "load_failed")
         _safe(drop_temp, seq)
         mark(seq, "done")
         if report:  # psql(최대 60초)은 잠금 밖에서 — 레인·받기 워커를 막지 않게
             nd, nc = pg_count()
             log(f"PG 누적: doc={nd} chunk={nc}")
 
-    # ponytail: 게시 스레드 1개 — 업로드+EDW 한 줄은 파싱·구조화보다 훨씬 짧음, 밀리면 설정 칸(설정 모델 — 핑거프린트 파일)으로
+    # ponytail: 게시 스레드 1개 — 업로드는 파싱·구조화보다 훨씬 짧음, 밀리면 설정 칸(설정 모델 — 핑거프린트 파일)으로
     threading.Thread(target=_queue_loop, args=(_pub_q, "pub", _publish), daemon=True).start()
     for _ in range(max(1, STRUCT_WORKERS)):
         threading.Thread(target=_queue_loop, args=(_struct_q, "struct", _gold), daemon=True).start()
 
     def _one(doc_seq, row_doc):
         res = _ran("파싱", parse_one, doc_seq, row_doc)
-        if res:  # SKIP도 게시로(실패 아님 — 게시가 skipped_dup 등을 써야 다음 밤에 다시 안 고름)
-            _pub_q.put((doc_seq, row_doc, res == SKIP))
+        if res == SKIP:  # 실패 아님 — 다음 밤에는 대상 목록이 except_doc_info skip 키로 뺌
+            _skip(doc_seq, row_doc)
+        elif res:
+            _pub_q.put((doc_seq, row_doc))
             depth("pub_put")
         else:
             with _flow_lock:
                 cnt["parse_fail"] += 1
-            _safe(drop_temp, doc_seq)  # 원본(staging)은 남김 — 로그에만
+            _safe(note_error, doc_seq, "parse_failed")
+            _safe(drop_temp, doc_seq)  # 원본(staging)은 남김
 
     # ── 레인 워커(규칙: rn-01·rn-02): 레인마다 전담(자기 레인만)·공유(자기 레인 먼저, 비면 가장 긴 다른 레인 — pick_lane).
     # 구조화 대기가 STRUCT_BACKLOG 이상이면 새 파싱을 시작하지 않음. MCP 업로드 처리 중에는 medium 전담 워커가 쉼.

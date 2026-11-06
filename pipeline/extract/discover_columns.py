@@ -20,12 +20,13 @@ from common.core.console import utf8_stdout
 import argparse
 import csv
 import json
+import re
 from pathlib import Path
 
 from common.core.paths import PKG_ROOT  # 공용 자산 루트
 
 ROOT = PKG_ROOT
-from common.store.parsing_meta_db import TABLE_ID_RE  # noqa: E402 — 표 이름 화이트리스트
+TABLE_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")  # 표 이름 화이트리스트(스키마.표 — SQL 삽입 방지)
 
 NAME_RULES = (
     (("s3_key", "object_path", "object_key"), "key"),

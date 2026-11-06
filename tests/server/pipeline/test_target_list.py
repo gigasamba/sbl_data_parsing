@@ -1,6 +1,6 @@
 """rn-05 — 대상 목록 `python -m pipeline.extract.candidate_pick list`(run_pipeline이 컨테이너 안에서 한 번 부름): EDW FileStorageMap에서
-이름 키워드로 고르고(--filter — 없으면 모든 문서, 파일 크기 오름차순, 크기 없는 행 뺌) → 시작 자리·시험 개수·골라 돌리기 → 끝난 문서 빼기(ok·partial은 gold_version도,
-skipped_dup) → FAQ 먼저(새 FAQ면 교체 + 전체, 아니면 gold에 없는 것만, 결과 없으면 전체) → 앞 max-docs개. 임시 SQLite EDW 대역만 — 외부 접속 없음.
+이름 키워드로 고르고(--filter — 없으면 모든 문서, 파일 크기 오름차순, 크기 없는 행 뺌) → 시작 자리·시험 개수·골라 돌리기 → 끝난 문서(gold doc)·영구 뺌(except_doc_info skip)
+빼기 → FAQ 먼저(새 FAQ면 교체 + 전체, 아니면 gold에 없는 것만, 결과 없으면 전체) → 앞 max-docs개. 임시 SQLite EDW·gold 대역만 — 외부 접속 없음.
 op-17 — 원천 목록(required.source.source_systems)이 있으면 그 원천 행만(대소문자 무관 — FAQ가 없으면 FAQ 교체도 안 함), 목록 파일 docs는
 FileStorageMap.source_system 값을 그대로 든다(키 첫 마디와 달라도)."""
 
@@ -11,9 +11,9 @@ from pathlib import Path
 from unittest import mock
 
 from common.config.settings import COMMON
-from common.store.parsing_meta_db import SqliteStore
 from pipeline import config as pc
 from pipeline.extract import candidate_pick as CP
+from tests.server.pipeline.goldseed import seed
 
 # FileStorageMap 행 (id, s3_key, original_filename, file_size, source_system)
 FSM = [
@@ -29,14 +29,8 @@ FSM = [
     (10, "SFDC/h/dev_note.pdf", "dev_note.pdf", 30, "dev-1"),  # 원천은 칸 값(키 첫 마디 SFDC와 다름) — 키워드 없음
 ]
 SRC = {k: src.upper() for _i, k, _n, size, src in FSM if size is not None}  # 키 → 원천(칸 값을 대문자로)
-# ParsingMeta (원본 키, parse_status, gold_version 있음?)
-PM = [
-    ("SFDC/e/rfp_ok.pdf", "ok", True),  # 끝남
-    ("SFDC/f/rfp_dup.pdf", "skipped_dup", False),  # 끝남(완전 중복)
-    ("SFDC/g/rfp_nogold.pdf", "ok", False),  # gold에 안 올라감 — 다시 고름
-    ("FAQ/u2/rfp_faq.xlsx", "ok", True),
-    ("FAQ/u1/q.xlsx", "skipped_dup", False),
-]
+GOLD = ["SFDC/e/rfp_ok.pdf", "FAQ/u2/rfp_faq.xlsx"]  # gold doc 행 — 끝남
+NEVER = {"SFDC/f/rfp_dup.pdf", "FAQ/u1/q.xlsx"}  # except_doc_info skip(내용 중복) — 영구 뺌 · rfp_nogold는 둘 다 아님(실패 — 다시 고름)
 # 키워드 목록(크기순) = rfp_faq · prop · rfp_ok · rfp_dup · rfp_nogold · rfp_big (자리 0~5), FAQ 덧붙임 q.xlsx = 자리 6
 K = {
     "faq2": "FAQ/u2/rfp_faq.xlsx",
@@ -76,7 +70,7 @@ CASES = [
     ([*KW, "--start-offset", "2", "--limit", "2"], [], None, ["ok", "dup"], [], None),  # 시험 개수 — FAQ 교체 건너뜀
     ([*KW, "--seqs", "5,1"], [], None, ["prop", "big"], [], None),  # 골라 돌리기(자리 정렬) — FAQ 건너뜀
     ([*KW, "--start-offset", "9"], None, None, [], None, None),  # 시작 자리가 목록 밖 — 빈 목록
-    ([*KW, "--skip-done"], None, None, ["prop", "nogold", "big"], None, None),  # ok+gold·skipped_dup 뺌, gold 없는 ok는 남음
+    ([*KW, "--skip-done"], None, None, ["prop", "nogold", "big"], None, None),  # gold·영구 뺌 키를 뺌, 실패한 문서는 남음
     ([*KW, "--skip-done"], [], {"faq_reset": 1, "gold": []}, ["faq1", "faq2", "prop", "nogold", "big"], BOTH, True),  # 새 FAQ — 교체+전체
     (
         [*KW, "--skip-done"],
@@ -85,7 +79,7 @@ CASES = [
         ["prop", "nogold", "big"],
         BOTH,
         False,
-    ),  # gold에 없는 q는 skipped_dup — 안 채움
+    ),  # gold에 없는 q는 영구 뺌 — 안 채움
     ([*KW, "--skip-done"], BOTH, {"faq_reset": 0, "gold": []}, ["faq2", "prop", "nogold", "big"], BOTH, False),  # gold에 없는 FAQ만 채움
     (
         [*KW, "--skip-done"],
@@ -100,15 +94,10 @@ CASES = [
 
 
 def _edw(tmp):
-    """EDW 대역 sqlite 하나 — FileStorageMap(스키마 AI로 붙여 읽음)과 ParsingMeta."""
+    """EDW 대역 sqlite 하나(FileStorageMap — 스키마 AI로 붙여 읽음) + gold 대역 doc 행(GOLD)."""
     path = Path(tmp) / "edw.sqlite"
-    db = SqliteStore(str(path))
-    db.insert_new(
-        [{"source_system": k.split("/")[0], "source_key": k, "doc_key": f"d{i}", "parse_status": st} for i, (k, st, _) in enumerate(PM)]
-    )
-    db.cn.executemany("UPDATE ParsingMeta SET gold_version = '0.2.0' WHERE source_key = ?", [(k,) for k, _, g in PM if g])
-    db.cn.commit()
-    db.close()
+    with COMMON.env(RUN_ENV="local", PG_STANDIN_DIR=str(Path(tmp) / "pg")):
+        seed([{"file_path": k, "source_system": k.split("/")[0]} for k in GOLD])
     cn = sqlite3.connect(path)
     cn.execute("CREATE TABLE FileStorageMap (id INTEGER, s3_key TEXT, original_filename TEXT, file_size INTEGER, source_system TEXT)")
     cn.executemany("INSERT INTO FileStorageMap VALUES (?, ?, ?, ?, ?)", FSM)
@@ -128,10 +117,10 @@ def test_target_list():
                 seen_f.write_text("".join(f"{k}\n" for k in seen), encoding="utf-8")
                 argv += ["--faq-seen", str(seen_f)]
             with (
-                COMMON.env(RUN_ENV="local", RDB_SQLITE=str(edw)),
+                COMMON.env(RUN_ENV="local", RDB_SQLITE=str(edw), PG_STANDIN_DIR=str(Path(tmp) / "pg")),
                 pc.PIPE.env(SOURCE_SYSTEMS=(systems or [None])[0]),
                 mock.patch.object(CP, "faq_sync", lambda r, _p, so=sync_out, rs=resets: rs.append(r) or so),
-                mock.patch("pipeline.extract.skip_docs.skipped_keys", set),  # 영구 건너뜀 없음 — 빼기는 test_skip_docs
+                mock.patch("pipeline.shared.except_docs.skipped_keys", lambda: set(NEVER)),  # 기록 자체는 test_skip_docs
             ):
                 assert CP._list_cmd(argv) == 0
             got = json.loads(out.read_text(encoding="utf-8"))

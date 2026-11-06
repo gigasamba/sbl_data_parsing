@@ -2,7 +2,7 @@
 # 새벽 배치 — 새벽 배치 타이머(deploy/host/systemd/data-pipeline-nightly.*)가 부름. parse·publish 한 번 실행은 pipe_exec.sh.
 #   bash deploy/host/scripts/nightly_batch.sh scheduled [run_pipeline 인자…]   (코드 폴더 루트에서)
 #   scheduled = 타이머용 — NIGHTLY_TIME 시각(5분 창)에만 run_pipeline.py(문서별 flow — 서버 입구 하나)
-#     run_pipeline 인자: --start-offset 0 --skip-done(EDW ParsingMeta에 끝난 문서는 건너뜀) --max-docs NIGHTLY_MAX_DOCS --deadline NIGHTLY_DEADLINE
+#     run_pipeline 인자: --start-offset 0 --skip-done(gold에 끝난 문서·영구 뺌 문서는 건너뜀) --max-docs NIGHTLY_MAX_DOCS --deadline NIGHTLY_DEADLINE
 #     (시작 시각·문서 수 상한·마감 시각 셋이 모두 있어야 돈다, 하나라도 비면 조용히 끝)
 #     run_pipeline 앞에 applog 월 파티션 정리(pipe_exec.sh migrate maintain --target applog) — 실패해도 경고만, 배치는 계속
 #   구조화·적재는 run_pipeline이 문서마다 부른다.

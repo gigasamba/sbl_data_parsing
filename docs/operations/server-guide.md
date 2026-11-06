@@ -57,12 +57,12 @@ README §5-3 ④ 연결 점검과 ⑤ 이미지 점검, 또는 한 번에 `bash 
 
 ## 2. 일상 실행 — run_pipeline(문서별 흐름)
 
-서버 입구는 `run_pipeline.py` 하나다 — 문서마다 파싱 → publish(Object Storage + EDW) → 원본 삭제 → 구조화·적재를 상주 컨테이너 안에서 `exec`로 돌린다. 자리·설정: [release-and-patch §5-4](release-and-patch.md#5-4-run_pipelinepy-자리와-설정).
+서버 입구는 `run_pipeline.py` 하나다 — 문서마다 파싱 → publish(Object Storage) → 원본 삭제 → 구조화·적재(PG — 처리 기록 포함)를 상주 컨테이너 안에서 `exec`로 돌린다. 자리·설정: [release-and-patch §5-4](release-and-patch.md#5-4-run_pipelinepy-자리와-설정).
 - **대상:** 기본은 FileStorageMap의 모든 문서를 처음(`--start-offset` 기본 0)부터. 이름으로 좁힐 때만 `--filter <키워드,…>`(하나라도 들면).
 - 파싱·publish·구조화가 실패하거나 시간 제한을 넘기면 그 문서의 컨테이너 안 프로세스도 끈다(다음 문서와 CPU·메모리를 다투지 않게).
-- publish는 EDW에 같은 키(원천·원본 전체 키)가 이미 있는 문서를 Object Storage에 올리지 않는다(EDW 행 없는 객체를 남기지 않음 — `--reparse` 목록만 새 날짜 폴더).
-- 원본(`_staging/*.bin`·그 ETag 파일 `*.etag`·`_docflow/<seq>/_source_files`)은 **publish가 성공한 뒤에만** 지운다. 파싱·publish가 실패한 문서는 원본이 남고 `batch_progress/progress.log`에만 적힌다(EDW에 안 씀 — 다음 `--skip-done` 실행이 다시 고름). 구조화·적재가 실패하면 publish한 결과·EDW 행은 그대로이고 로그에만 적힌다.
-- **게시·EDW 설정**(settings.yaml `required` — 빠지면 run_pipeline이 칸 이름을 찍고 종료 2): 게시 위치 `required.publish.publish_bucket`·`publish_prefix`, Object Storage 접속 `required.object_storage.object_storage_endpoint`·`object_storage_access_key`·`object_storage_secret_key`(`object_storage_region` 비우면 `us-east-1`, `object_storage_verify_tls` 비우면 검증 켬 — 사내 CA면 CA 파일 경로), EDW 접속 `required.edw.edw_host`·`edw_database`·`edw_read_*`·`edw_write_*`(`edw_port` 비우면 1433 · 쓰기 계정은 게시에 필수), 게시 표 `required.edw.parsing_meta_table`(비우면 `AI.ParsingMeta`). `dev.local.*`(가짜 EDW 등)은 PC 전용이라 서버에서는 읽지 않는다(`local_edw_sqlite_file`은 비운다).
+- publish는 gold(PG 원천 스키마 `doc`)에 이미 끝난 문서를 Object Storage에 올리지 않는다(`--reparse` 목록만 새 날짜 폴더). 올린 문서의 처리 기록은 문서 폴더 `publish/silver.jsonl`에 쓰고, 적재가 그 값을 `doc` 칸으로 옮긴다.
+- 원본(`_staging/*.bin`·그 ETag 파일 `*.etag`·`_docflow/<seq>/_source_files`)은 **publish가 성공한 뒤에만** 지운다. 파싱·publish가 실패한 문서는 원본이 남고 `batch_progress/progress.log`와 `applog.except_doc_info`(`error` 행)에 적힌다(다음 `--skip-done` 실행이 다시 고름). 구조화·적재가 실패하면 publish한 결과는 그대로이고 `doc` 행이 없으므로 다음 `--skip-done` 실행이 다시 고른다(`error` 행도 남김).
+- **게시·EDW 설정**(settings.yaml `required` — 빠지면 run_pipeline이 칸 이름을 찍고 종료 2): 게시 위치 `required.publish.publish_bucket`·`publish_prefix`, Object Storage 접속 `required.object_storage.object_storage_endpoint`·`object_storage_access_key`·`object_storage_secret_key`(`object_storage_region` 비우면 `us-east-1`, `object_storage_verify_tls` 비우면 검증 켬 — 사내 CA면 CA 파일 경로), EDW 접속 `required.edw.edw_host`·`edw_database`·`edw_read_*`(`edw_port` 비우면 1433 · EDW는 읽기만 하므로 쓰기 계정 칸은 없음). `dev.local.*`(가짜 EDW 등)은 PC 전용이라 서버에서는 읽지 않는다(`local_edw_sqlite_file`은 비운다).
 - **종료 코드**(PRD [pl-18](../prd/ops.md#pl-18)): `0` 대상 0건·모두 끝 · `1` 실패 문서가 하나라도 · `75` 마감(`--deadline`) 도달(실패 없음) 또는 다른 run_pipeline이 도는 중 · `2` 설정 문제. 실패와 마감이 함께면 `1`. 새벽 배치 unit은 `75`를 성공으로 친다.
 - **겹침 잠금:** run_pipeline은 `batch_progress/run_pipeline.lock`을 `flock`으로 잡는다 — 새벽 배치와 사람이 직접 돌린 run_pipeline이 함께 돌지 않는다(뒤에 온 쪽이 75). 죽으면 잠금은 저절로 풀린다. 작업 폴더(`ops.run_pipeline.run_pipeline_work_dir`)가 같아야 같은 잠금이다.
 - 파싱·게시만 따로:
@@ -124,8 +124,8 @@ bash deploy/host/scripts/host_ctl.sh check                                # 기�
 ```bash
 grep -E 'doc#[0-9]+ (파싱|publish|구조화\+적재) FAIL' <작업 폴더>/batch_progress/progress.log | grep -oE 'doc#[0-9]+' | sort -u | tr -d 'doc#' | paste -sd, -
 ```
-- **다시 돌리기:** 원인을 고친 뒤(설정·EDW·모델 등) 그 번호만 — `nohup python3 deploy/host/scripts/run_pipeline.py --seqs <번호,번호,…> > <작업 폴더>/rerun.out 2>&1 &`(코드 폴더에서). 파싱·게시가 실패한 문서는 EDW에 쓰지 않았으므로 다음 `--skip-done` 실행도 다시 고른다. 구조화·적재만 실패한 문서는 게시가 끝났으므로 `--skip-done`이 다시 고르지 않는다 — `--seqs`로 부른다.
-- 같은 문서가 같은 이유로 계속 실패하면(DRM·암호·지원 안 함) 영구 건너뜀 표 `applog.skip_doc_info`에 들어간다(§8 ④).
+- **다시 돌리기:** 원인을 고친 뒤(설정·EDW·모델 등) 그 번호만 — `nohup python3 deploy/host/scripts/run_pipeline.py --seqs <번호,번호,…> > <작업 폴더>/rerun.out 2>&1 &`(코드 폴더에서). 실패한 문서는 gold `doc` 행이 없으므로 다음 `--skip-done` 실행도 다시 고른다.
+- 다시 받아도 같은 결과인 문서(DRM·암호·지원 안 함·확장자 없음)와 내용 중복은 `applog.except_doc_info`에 `skip` 행으로 들어가 다음 실행이 고르지 않는다(§8 ④).
 - 검색 결과 품질은 PC의 검증 페이지(`validation/search_ui`)와 답변 점검(`valid_env/answer_test`)으로 본다.
 
 ## 4. 검색 MCP 사용
@@ -147,8 +147,7 @@ grep -E 'doc#[0-9]+ (파싱|publish|구조화\+적재) FAIL' <작업 폴더>/bat
 1. **EDW 읽기 계정**(`required.edw.edw_read_user`·`edw_read_password` — 파이프라인 원천 조회와 같은 계정):
    - `SELECT` 권한만 준다(DDL·DML·`EXEC`·시스템 프로시저 없음).
    - DBA가 추가로: `DENY VIEW DEFINITION` · 다른 데이터베이스·연결 서버(linked server) 권한 없음 · 가능하면 Resource Governor 등으로 질의 시간·CPU 상한.
-   - 검색 MCP는 시작할 때 쓰기 계정 칸을 설정 객체에서 비운다. 파일 자체는 컨테이너가 읽을 수 있으므로, 완전히 떼려면 mcp-server에 쓰기 칸이 없는 설정 파일을 따로 붙인다.
-   - 같은 계정이라 `query_edw`도 `AI.FileStorageMap`·`AI.ParsingMeta`를 읽을 수 있다 — 막으려면 2.
+   - 같은 계정이라 `query_edw`도 `AI.FileStorageMap`을 읽을 수 있다 — 막으려면 2.
 2. **표 범위** — 읽기 계정이 볼 수 있는 모든 표(`sys.*`·`INFORMATION_SCHEMA.*`는 늘 거부). 좁히려면 DBA가 읽기 계정의 `SELECT` 권한을 줄인다(설정의 허용 목록은 없다).
 3. 확인: `query_edw({"sql": "DROP TABLE ..."})`·`sys.*`를 읽는 호출이 `rejected:*`로 막히는지 한 번 본다.
 
@@ -232,7 +231,7 @@ bash deploy/host/scripts/pipe_exec.sh migrate master load --dir /app/output/glos
 |---|---|---|
 | `check`가 "컨테이너 안의 PG_HOST는 컨테이너 자신" 경고 | `required.pg.pg_host`가 `127.0.0.1` | compose로 띄웠으면 무시(`network_mode: host`). `docker run`으로 따로 띄울 때만 `--network host`(+`-e NETWORK_HOST=1`) 또는 서버 IP |
 | 적재·검색이 PostgreSQL에 못 붙음 | `required.pg` 칸이 비었거나 틀림 | 호스트·포트·계정 확인 |
-| 파싱이 종료 4 | 서버에서 EDW `AI.ParsingMeta`를 못 읽음(전체 재파싱을 막으려고 멈춤) | `required.edw`(주소·읽기 계정)·EDW 연결 확인 |
+| 파싱이 종료 4 | 서버에서 끝난 문서 기록(PG 원천 스키마 `doc`)을 못 읽음(전체 재파싱을 막으려고 멈춤) | `required.pg` 접속·PG 상태 확인 |
 | 구조화·적재가 "인계 형식(핑거프린트) 다름"으로 거부 | 핑거프린트가 바뀐 옛 파싱 결과 | 그 문서를 다시 파싱 |
 | 같은 결과 폴더에서 종료 75 | 다른 실행이 `.pipeline.lock`을 잡고 있음 | 끝날 때까지 기다리거나 다음 트리거에서 재시도 |
 | 메모리 터짐(OOM), 큰 스캔 PDF | 쪽 이미지를 한꺼번에 올림 | `extract.page_render_dpi`(기본 150 — 더 낮추면 VLM 글 품질을 먼저 확인)·VLM 쪽 상한 `transform.vlm.vlm_max_pages_per_doc`·OCR 엔진 쪽 상한 `extract.ocr.ocr_max_pages_per_doc`·`extract.max_source_file_mb`·컨테이너 메모리 상한 확인 |
@@ -269,7 +268,7 @@ bash deploy/host/scripts/pipe_exec.sh migrate master load --dir /app/output/glos
 
 ## 8. 로그 DB 살펴보기 — applog SQL(읽기만)
 
-실행 기록은 PG `applog` 스키마에 있다(`pipe_run` 실행 1건 · `pipe_event` 단계 1건 · `mcp_log` MCP 호출 1건 · `skip_doc_info` 영구 건너뜀 문서). 읽기 전용 거래 안에서만 본다:
+실행 기록은 PG `applog` 스키마에 있다(`pipe_run` 실행 1건 · `pipe_event` 단계 1건 · `mcp_log` MCP 호출 1건 · `except_doc_info` 적재 안 된 문서 — `skip` 영구 뺌·`error` 실패). 읽기 전용 거래 안에서만 본다:
 ```bash
 $DOCKER exec -it <required.deploy.pg_container_name> psql -U <required.pg.pg_user> -d <required.pg.pg_database>
 # psql 안에서 먼저:  BEGIN READ ONLY;      끝나면:  ROLLBACK;
@@ -319,13 +318,13 @@ GROUP BY tool_name, status, error_code ORDER BY n DESC;
 ```
 `status`: `ok` · `error` · `denied` · `unauthorized`(토큰) · `busy`(동시 상한) · `timeout`.
 
-**④ 영구 건너뜀 문서 — 이유별**
+**④ 적재 안 된 문서 — 종류·이유별**
 ```sql
-SELECT reason, source_system, count(*) AS docs, sum(count) AS times_seen, max(last_seen) AS last_seen
-FROM applog.skip_doc_info
-GROUP BY reason, source_system ORDER BY docs DESC;
+SELECT except_type, reason, source_system, count(*) AS docs, sum(count) AS times_seen, max(last_seen) AS last_seen
+FROM applog.except_doc_info
+GROUP BY except_type, reason, source_system ORDER BY docs DESC;
 ```
-풀어 주는 법(행 지우기 — DB 담당 승인)은 [env-guide 실행 기록](env-guide.md#0-0-실행-기록json-로그db-감사성능).
+`skip` 풀어 주는 법(행 지우기 — DB 담당 승인)은 [env-guide 실행 기록](env-guide.md#0-0-실행-기록json-로그db-감사성능).
 
 ## 9. 건드리면 안 되는 것
 

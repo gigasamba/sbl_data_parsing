@@ -250,7 +250,7 @@ def _folder_tree(src, files, out, state):
 
 def finish(state, rep_index):
     """Object Storage에서 받은 원본: 대표 결과가 나온 문서를 처리 완료로 기록한다(processed.jsonl). sha256은 받기(`_hashed`)가
-    manifest에 이미 남겼다(publish_parse_result `plan()`이 로컬 원본 없이도 그 값으로 EDW 행을 씀).
+    manifest에 이미 남겼다(publish_parse_result `plan()`이 로컬 원본 없이도 그 값을 gold 처리 기록으로 넘김).
     파일은 지우지 않는다 — 원본 삭제는 게시가 끝난 뒤 run_pipeline `drop_original()` 한 곳."""
     man = _read_manifest(state)
     if not man:
@@ -271,12 +271,12 @@ def stage_batch(source, out, prepared, limit, run_step, done=frozenset(), scan_r
     """파싱 전 extract 한 번 — 세 단계를 이 순서로 한 번씩:
     1. 받기 — `resolve`: 고르기(처리 기록·지원 안 함·done) → rdb:csv는 staging에 받아(`download`) 파싱 원본 폴더에 놓음.
        받은 파일의 sha256은 여기서 한 번 구해 manifest에 둔다(뒤 단계는 그 값을 씀).
-    2. 중복 제외 — `_dedup`: 받은 파일의 sha256으로 같은 묶음 안 같은 내용은 대표 하나만, 남은 것 중 ParsingMeta에 끝난 다른 원본과
+    2. 중복 제외 — `_dedup`: 받은 파일의 sha256으로 같은 묶음 안 같은 내용은 대표 하나만, 남은 것 중 gold에 끝난 다른 원본과
        sha256이 같으면 뺀다. seen(이번 실행의 받은 sha256 표지 폴더 — 문서마다 stage를 부르는 서버 흐름)을 주면 이번 실행에서 다른 원본이
-       먼저 받은 sha256도 뺀다(`skip_doc_info`에도 `duplicate_sha256`). <out>/dedup/keep.txt = 남은 이름(게시가 빠진 문서를 skipped_dup로 씀).
+       먼저 받은 sha256도 뺀다. 뺀 중복은 모두 except_doc_info skip(`duplicate_sha256`). <out>/dedup/keep.txt = 남은 이름.
     3. 거르기 — filter_and_rotate(only.txt의 이름만 → prepared/): DRM·암호·지원 안 함은 건너뜀 기록만(처리하지 않음), 방향 보정.
     건너뛴 문서는 문서마다 `skip_event` 1행(applog.pipe_event — status=skip, err_kind=doc). 거르기가 뺀 영구 이유(지원 안 함·DRM·암호)는
-    applog.skip_doc_info에도(`_record_filtered` — 다음 대상 목록이 뺌, pl-58).
+    applog.except_doc_info skip에도(`_record_filtered` — 다음 대상 목록이 뺌, op-17).
     → (원본 폴더, 남은 이름 목록(받은 순서), 상태 폴더, 남은 이름 목록 파일 only.txt). run_step(args) → 종료 코드(자식 프로세스).
     scan_rotate=False면 이미지 PDF는 돌리지 않는다(run_pipeline의 스캔 문서 정책)."""
     out = Path(out)
@@ -300,11 +300,11 @@ def stage_batch(source, out, prepared, limit, run_step, done=frozenset(), scan_r
 
 def _dedup(local, names, dedup_dir, state, seen=None):
     """받은 파일의 sha256으로 중복 제외 → 남은 이름(names 순서). 같은 묶음 안(이번 names만 — 폴더에 남은 앞 실행 파일은 안 봄)은
-    deduplication.run_folder(대표 하나 — 1건 이하면 해시만), 그다음 ParsingMeta에 파싱된 원본 행(ok·partial —
-    candidate_pick.done_by_sha)이 같은 sha256을 다른 원본 키로 가지면 뺀다(같은 키면 그 문서의 재처리라 남김), seen이 있으면 이번 실행에서
-    다른 원본이 먼저 받은 sha256이면 뺀다(`_claim` — skip_doc_info에도). 원본 키 = manifest의 "key"(없으면 이름 — 게시와 같은 규칙).
+    deduplication.run_folder(대표 하나 — 1건 이하면 해시만), 그다음 gold 문서(candidate_pick.done_by_sha — doc.sha256)가 같은 sha256을
+    다른 원본 키로 가지면 뺀다(같은 키면 그 문서의 재처리라 남김), seen이 있으면 이번 실행에서 다른 원본이 먼저 받은 sha256이면 뺀다(`_claim`).
+    뺀 중복(dup_batch·dup_done·dup_run)은 모두 except_doc_info skip(`duplicate_sha256` — op-17). 원본 키 = manifest의 "key"(없으면 이름 — 게시와 같은 규칙).
     sha256은 받기가 manifest에 남긴 값(srcsha.sha_of — 없으면 한 번 구함).
-    keep.txt = 폴더 파일 중 이번에 중복으로 뺀 것만 없는 목록(게시가 빠진 것만 skipped_dup로 쓰고, 앞 실행의 남은 문서는 그대로 둠)."""
+    keep.txt = 폴더 파일 중 이번에 중복으로 뺀 것만 없는 목록(게시는 빠진 것을 올리지 않고, 앞 실행의 남은 문서는 그대로 둠)."""
     from pipeline.extract import deduplication as dedup
 
     if len(names) <= 1:  # 묶을 것이 없음(서버 stage는 문서 하나씩) — 해시만, 지문 캐시·groups.csv 안 씀
@@ -312,33 +312,35 @@ def _dedup(local, names, dedup_dir, state, seen=None):
     else:
         keep, rows, _ = dedup.run_folder(local, dedup_dir, set(names), write_keep=False)  # keep.txt는 아래에서 한 번
     rep = {r["group"]: r["file"] for r in rows if r["representative"]}
-    dropped = set()
+    man = _read_manifest(state)
+    key_of = {n: r.get("key") or n for n, r in man.items()}
+    dropped, dups = set(), []
     for r in rows:
         if not r["representative"]:
             skip_event(r["file"], "dup_batch", dup_of=rep[r["group"]])
             dropped.add(r["file"])
-    man = _read_manifest(state)
-    key_of = {n: r.get("key") or n for n, r in man.items()}
+            dups.append(r["file"])
     picked = [n for n in names if n in keep]
     done = CP.done_by_sha({keep[n] for n in picked})
-    left, run_dup = [], []
+    left = []
     for n in picked:
         key, hit = key_of.get(n, n), done.get(keep[n])
         if hit and hit[0] != key:
             skip_event(n, "dup_done", dup_of=hit[0])
             dropped.add(n)
+            dups.append(n)
             continue
         first = _claim(seen, keep[n], key) if seen is not None else None
         if first:
             skip_event(n, "dup_run", dup_of=first)
             dropped.add(n)
-            run_dup.append((n, key))
+            dups.append(n)
         else:
             left.append(n)
-    if run_dup:  # 같은 내용을 이미 파싱하는 원본이 있음 — 다음 대상 목록에서도 뺌
-        from pipeline.extract import skip_docs
+    if dups:  # 같은 내용의 원본이 이미 있음(같은 묶음·gold·이번 실행) — 다음 대상 목록에서도 뺌
+        from pipeline.shared import except_docs
 
-        skip_docs.record([_skip_row(k, n, "duplicate_sha256", man.get(n)) for n, k in run_dup])
+        except_docs.record([_skip_row(key_of.get(n, n), n, "duplicate_sha256", man.get(n)) for n in dups])
     Path(dedup_dir).mkdir(parents=True, exist_ok=True)
     rest = sorted(
         f.name for f in Path(local).iterdir() if f.is_file() and not CP._hidden(f) and f.name != ".gitkeep" and f.name not in dropped
@@ -367,16 +369,16 @@ def _claim(seen, sha, key):
 
 
 def _skip_row(key, name, reason, man_row):
-    """skip_docs.record 행 하나 — 원천은 manifest 행의 source_system(없으면 None)."""
+    """except_docs.record 행 하나 — 원천은 manifest 행의 source_system(없으면 None)."""
     return {"source_key": key, "source_system": (man_row or {}).get("source_system"), "file_name": name, "reason": reason}
 
 
 def _record_filtered(prepared, state):
-    """거르기(filter_and_rotate)가 이번에 뺀 문서(`prepared/_records/skipped.csv`)를 skip_doc_info에(영구 이유만 — skip_docs.record).
+    """거르기(filter_and_rotate)가 이번에 뺀 문서(`prepared/_records/skipped.csv`)를 except_doc_info skip에(영구 이유만 — except_docs.record).
     원본 키 = manifest의 "key"(없으면 이름 — 게시와 같은 규칙)."""
     import csv
 
-    from pipeline.extract import skip_docs
+    from pipeline.shared import except_docs
 
     f = Path(prepared) / "_records" / "skipped.csv"
     if not f.exists():
@@ -385,7 +387,7 @@ def _record_filtered(prepared, state):
         rows = list(csv.DictReader(fh))
     man = _read_manifest(state)
     keys = {r["file"]: (man.get(r["file"]) or {}).get("key") or r["file"] for r in rows}
-    skip_docs.record([_skip_row(keys[r["file"]], r["file"], r["reason"], man.get(r["file"])) for r in rows])
+    except_docs.record([_skip_row(keys[r["file"]], r["file"], r["reason"], man.get(r["file"])) for r in rows])
 
 
 def _stage_cmd(argv):

@@ -82,7 +82,7 @@ def _selftest_rdb_cols():
     M.objectstore.client = lambda: _FakeS3({("rag-docs", f"clients/d{i}.pdf"): ("unused", b"docA") for i in range(3)})  # type: ignore[misc]  # 시험 — 가짜 클라이언트로 바꿔 끼움
     try:
         with pc.PIPE.env(RDB_COL_DOC_ID="doc_id", RDB_COL_KEY="object_key", RDB_COL_SIZE="size_bytes", SOURCE_STAGING=str(d / "staging")):
-            # ParsingMeta에 끝난 키는 받기 전에 빠짐(다운로드·manifest 없음)
+            # gold에 끝난 키는 받기 전에 빠짐(다운로드·manifest 없음)
             assert resolve(f"rdb:csv:{p}", d / "pre", done={"clients/d1.pdf"})[1] == ["d0", "d2"]
             _, names, state = resolve(f"rdb:csv:{p}", d)
             assert names == ["d0", "d1", "d2"], names
@@ -267,7 +267,7 @@ def test_folder_tree():
 
 
 def test_stage_batch():
-    """파싱 전 extract 한 번 — ParsingMeta에 끝난 문서(done)는 고를 때(받기 전) 빠지고, 같은 내용은 하나만, 거르기(filter_and_rotate)를 지난 것만
+    """파싱 전 extract 한 번 — gold에 끝난 문서(done)는 고를 때(받기 전) 빠지고, 같은 내용은 하나만, 거르기(filter_and_rotate)를 지난 것만
     only.txt에 남음 · pick_new는 상한·목록 안에서만."""
     import tempfile
     from unittest import mock
@@ -289,7 +289,7 @@ def test_stage_batch():
                 (prepared / n).write_text("x", encoding="utf-8")
         return 0
 
-    with mock.patch.object(CP, "done_by_sha", lambda shas: {}):  # ParsingMeta 읽기 없음
+    with mock.patch.object(CP, "done_by_sha", lambda shas: {}):  # gold 읽기 없음
         local, left, state, only = M.stage_batch(str(src), root / "out", prepared, 0, run_step, done={"c.txt"})
     assert steps == ["pipeline.extract.filter_and_rotate"] and Path(local) == src
     assert (state / "selected.txt").read_text(encoding="utf-8").split() == ["a.txt", "b.txt", "d.zip"]  # 끝난 c.txt는 고를 때 빠짐

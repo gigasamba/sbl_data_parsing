@@ -79,22 +79,6 @@ def test_load_keeps_docs_not_in_run():
 
 
 def _run_twice(S, tmp):
-    from common.store import parsing_meta_db as PMDB
-
-    pm_path = tmp / "pm.sqlite"
-    st = PMDB.SqliteStore(str(pm_path))
-    st.insert_new(
-        [
-            {
-                "source_system": "SFDC",
-                "source_key": "SFDC/u/a.txt",
-                "doc_key": "a" * 64,
-                "status": "active",
-                "parse_date": "2025-01-01_000000",
-            }
-        ]
-    )
-    st.close()
     with COMMON.env(PG_STANDIN_DIR=str(tmp / "pg")):
         db = PS.StandinPG(S)
         sf = PS.StandinPG(f"{S}_sfdc")  # 원천 스키마(pl-28) — SFDC 문서가 들어감
@@ -103,19 +87,19 @@ def _run_twice(S, tmp):
         la = PS.StandinPG(f"{S}_las")  # 원천이 바뀐 문서가 옮겨 갈 곳
         with la.cn.cursor() as cur:
             cur.execute(standin_script(f"{S}_las", DIM))
-        with patch.object(M, "pg_connect", return_value=db), patch.object(PMDB, "make_db", lambda role: PMDB.SqliteStore(str(pm_path))):
+        with patch.object(M, "pg_connect", return_value=db):
             M.main(["load", "--bundle", str(_bundle(["SFDC/u/a.txt", "SFDC/u/b.txt"], tmp))])
             M.main(
                 ["load", "--bundle", str(_bundle(["SFDC/u/c.txt", "SFDC/u/a.txt"], tmp))]
             )  # b는 이번 묶음에 없음 · a는 이미 있음(건너뜀)
-            with patch.object(PMDB, "make_db", side_effect=SystemExit("no write account")):  # 쓰기 계정 없음 — 적재는 그대로, 실패 건수만
-                counts = M.load(db, _bundle(["SFDC/u/d.txt"], tmp))
+            counts = M.load(db, _bundle(["SFDC/u/d.txt"], tmp))
             S2 = f"{S}_sfdc"
             docs = sorted(str(r["file_path"]) for r in sf.q(f"SELECT file_path FROM {S2}.doc"))
             meta = {
                 (r["doc_class"], str(r["created_at"]), r["clients_doc"])
                 for r in sf.q(f"SELECT attrs->>'doc_class' AS doc_class, created_at, clients_doc FROM {S2}.doc")  # pl-52 — attrs 키
             }
+            loaded = sf.q(f"SELECT loaded_at, gold_version FROM {S2}.doc WHERE file_path = 'SFDC/u/a.txt'")[0]  # op-17 — 적재 시각·판
             n_chunks = _count(sf, f"SELECT COUNT(*) AS n FROM {S2}.chunk")
             b_terms = _count(
                 sf,
@@ -132,15 +116,12 @@ def _run_twice(S, tmp):
                 raise AssertionError("--prune이 아직 받아짐(지우는 길이 남음)")
             except SystemExit as e:
                 assert e.code == 2, e.code  # argparse — 모르는 인자
-    loaded = PMDB.SqliteStore(str(pm_path)).cn.execute("SELECT loaded_at FROM ParsingMeta").fetchone()[0]
     assert docs == ["SFDC/u/a.txt", "SFDC/u/b.txt", "SFDC/u/c.txt", "SFDC/u/d.txt"], docs  # 묶음에 없던 b도 남음
     assert n_chunks == 4 and b_terms > 0, (n_chunks, b_terms)  # b의 청크·키워드 색인도 그대로
     assert meta == {("RFP", "2025-03-01T10:00:00+09:00", '["A사"]')}, meta  # 분류·등록 시각(시간대 없는 값은 KST)·본문 고객 라벨
-    assert loaded and counts["loaded_at_failed"] == 1 and counts["by_source"]["sfdc"]["docs"] == 1, (loaded, counts)  # C10 예외 — loaded_at
+    assert loaded["loaded_at"] and loaded["gold_version"] and counts["by_source"]["sfdc"]["docs"] == 1, (loaded, counts)
     assert counts["meta_missing"] == 1, counts
     assert moved == [("replace 없음 — 어디든 있으면 건너뜀", True, False), ("--replace — 옛 스키마에서 지우고 새 스키마에", False, True)], (
         moved
     )  # pl-29 — EDW 계정 없음: 메타를 비운 채 적재(건수만)
-    print(
-        "[시험] 적재 — 원천 스키마로 · 묶음에 없는 저장 문서는 지우지 않음 · --prune 없음 · ParsingMeta loaded_at(쓰기 계정 없으면 건수만)"
-    )
+    print("[시험] 적재 — 원천 스키마로 · 묶음에 없는 저장 문서는 지우지 않음 · --prune 없음 · doc loaded_at·gold_version")

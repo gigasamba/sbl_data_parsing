@@ -1,8 +1,8 @@
 # 운영 — 실행 관리·러너·계정·종료·로그
 
-[PRD.md](../PRD.md) 카테고리. 실행 관리(pl-10·pl-23·pl-54·pl-24·pl-55·pl-18), 서버 러너 `run_pipeline.py` 레인·대기열(rn-01~04), 종료 정리(pl-27), EDW 계정(op-03), 모델 호출 가드(pl-11), 로그(op-01). 설정 파일은 [ops-settings.md](ops-settings.md).
+[PRD.md](../PRD.md) 카테고리. 실행 관리(pl-10·pl-23·pl-54·pl-24·pl-18), 서버 러너 `run_pipeline.py` 레인·대기열(rn-01~04), 종료 정리(pl-27), EDW 계정(op-03), 모델 호출 가드(pl-11), 로그(op-01). 설정 파일은 [ops-settings.md](ops-settings.md).
 
-순서: pl-10 · pl-23 · pl-54 · pl-24 · pl-55 · pl-18 · rn-01 · rn-02 · rn-03 · rn-04 · pl-27 · op-03 · pl-11 · op-01 · rn-09 · rn-10.
+순서: pl-10 · pl-23 · pl-54 · pl-24 · pl-18 · rn-01 · rn-02 · rn-03 · rn-04 · pl-27 · op-03 · pl-11 · op-01 · rn-09 · rn-10.
 
 <a id="pl-10"></a>
 ## pl-10 · 실행 관리 — 서버 입구는 `run_pipeline.py` 하나
@@ -30,12 +30,12 @@
 ## pl-23 · 새 문서만 처리, 전체 재파싱은 사람이 시작
 - 이유: 핑거프린트가 바뀌어도 밤 작업이 전체 재파싱으로 시간을 넘기지 않게.
 - 규칙:
-  1. "새 문서" = `AI.FileStorageMap`에 있고 `AI.ParsingMeta`에 끝난 행이 없는 것. 키 = `s3_key`(갱신 시각은 보지 않음).
-  2. "끝난 행" = `parse_status`가 `skipped_dup`, 또는 `ok`·`partial`이면서 `gold_version`이 있음(`gold_version` 칸이 없는 EDW에서는 `parse_status`만 봄). `not_parsed`·실패·행 없음(옛 값 `skipped_disk_cap` 행 포함 — 더 쓰지 않음)은 다시 고른다. 목록은 `common/store/parsing_meta_db.DONE_STATUSES` 한 곳.
-  3. 끝난 문서 빼기는 `pipeline/extract/candidate_pick.py` `done_keys` 하나 — 서버는 `candidate_pick list --skip-done`, PC 직접 파싱(`pipeline.cli parse --source`)은 고르기 때. EDW를 한 번 읽는다(읽기 계정, PC는 sqlite 대역). 못 읽으면 RUN_ENV가 local이 아니면 종료 4, 그 밖은 받은 목록 그대로 + 로그 한 줄. 키 = 수집 manifest의 `key`(없으면 이름).
+  1. "새 문서" = `AI.FileStorageMap`에 있고 gold `doc`에 행이 없는 것. 키 = `s3_key` = `doc.file_path`(갱신 시각은 보지 않음).
+  2. "끝난 문서" = 원천 스키마 5벌 어디든 `doc` 행이 있는 원본 키([op-17](#op-17) 규칙 15). 파싱·게시·적재에 실패한 문서는 `doc` 행이 없어 다시 고른다. 영구 뺌(`applog.except_doc_info` `skip`)도 뺀다.
+  3. 끝난 문서 빼기는 `pipeline/extract/candidate_pick.py` `done_keys` 하나(읽기는 `pipeline/shared/gold_docs.py`) — 서버는 `candidate_pick list --skip-done`, PC 직접 파싱(`pipeline.cli parse --source`)은 고르기 때. PG를 한 번 읽는다(PC는 sqlite 대역). 못 읽으면 RUN_ENV가 local이 아니면 종료 4, 그 밖은 받은 목록 그대로 + 로그 한 줄. 키 = 수집 manifest의 `key`(없으면 이름).
   4. 전체 재파싱은 사람이 전체 e2e를 시작할 때만([pl-54](#pl-54)).
   5. 새벽 배치: settings.yaml `ops.nightly.nightly_start_time`(시작 HH:MM)·`nightly_max_docs`(새 문서 수 상한, 1 이상)·`nightly_stop_time`(마감 HH:MM, 시작보다 5분 넘게 뒤) — 하나라도 비면 돌지 않는다. systemd `data-pipeline-nightly.timer`(`OnCalendar=*:0/5`)가 `nightly_batch.sh scheduled`를 부르고, 시작 시각부터 5분 안이면 applog 파티션 정리(`pipe_exec.sh migrate maintain --target applog` — 실패해도 경고만, 배치는 계속) 뒤 `run_pipeline.py --start-offset 0 --skip-done --max-docs <n> --deadline <hh:mm>`. 형식 오류면 종료 2. 서비스 `TimeoutStartSec=6h`.
-- 파일: `pipeline/extract/candidate_pick.py`(`done_keys`·`list_targets`·`unparsed`), `common/store/parsing_meta_db.py`, `deploy/host/scripts/{run_pipeline.py,nightly_batch.sh}`, `deploy/host/systemd/data-pipeline-nightly.{timer,service}`.
+- 파일: `pipeline/extract/candidate_pick.py`(`done_keys`·`list_targets`·`unparsed`), `pipeline/shared/gold_docs.py`, `deploy/host/scripts/{run_pipeline.py,nightly_batch.sh}`, `deploy/host/systemd/data-pipeline-nightly.{timer,service}`.
 - QA: `tests/general/deploy/test_trigger_gate.py`·`tests/server/pipeline/test_nightly_time.py`·`test_run_pipeline`(`deadline_at`) · `tests/server/pipeline/test_target_list.py`·`test_parse_pick.py` · 통과. 서버 확인 refactor.md C-72.
 - Status: done
 
@@ -50,23 +50,16 @@
 ## pl-24 · `run_pipeline` 문서별 순서: 파싱 → silver 게시 → 원본 삭제 → gold
 - 이유: 게시가 gold를 기다리지 않고, 원본은 게시가 성공했을 때만 지운다.
 - 규칙:
-  1. 파싱 성공 → 게시 대기열(게시 스레드 1개 — Object Storage 업로드 + ParsingMeta INSERT).
+  1. 파싱 성공 → 게시 대기열(게시 스레드 1개 — Object Storage 업로드 + 처리 기록 파일 `publish/silver.jsonl`).
   2. 게시 성공 → 원본(staging `.bin`·`_docflow/<seq>/_source_files`) 삭제(`drop_original()` — 원본을 지우는 곳은 여기 하나, 파싱 끝 `candidate_ready.finish()`는 처리 기록·sha256만 남김) → 구조화 대기열(`ops.run_pipeline.structure.structure_workers` 스레드 — gold_bundle·pgvector_load) → `_docflow/<seq>` 삭제(`--no-cleanup`이면 남김).
-  3. 파싱 실패·게시 실패 → 원본을 남기고 로그에만(gold로 안 감, EDW에 안 씀). 파싱 실패면 그 문서 표지(`RUN_PIPELINE_DOC`)가 붙은 컨테이너 안 프로세스를 끈다.
-  4. 받기가 뺀 문서(`_docflow/<seq>/parse/_source/only.txt`가 빔 — 중복·DRM·암호, pl-02) → 파싱 없이 건너뜀(`parse_one`이 `SKIP`) → 게시(중복은 ParsingMeta `skipped_dup`, DRM·암호는 보고서로만) → 원본 삭제 → `_docflow/<seq>` 삭제. gold로 안 간다. 실패가 아니다 — 끝 요약에 `건너뜀`으로 따로 세고 종료 코드를 1로 만들지 않는다(pl-18).
+  3. 파싱 실패·게시 실패 → 원본을 남기고 로그와 `applog.except_doc_info` `error`(`parse_failed`·`publish_failed`)에(gold로 안 감). 파싱 실패면 그 문서 표지(`RUN_PIPELINE_DOC`)가 붙은 컨테이너 안 프로세스를 끈다.
+  4. 받기가 뺀 문서(`_docflow/<seq>/parse/_source/only.txt`가 빔 — 중복·DRM·암호, pl-02) → 파싱 없이 건너뜀(`parse_one`이 `SKIP` — 영구 뺌 기록은 받기가 `except_doc_info` `skip`에 이미 씀) → 게시 없이 원본 삭제 → `_docflow/<seq>` 삭제. gold로 안 간다. 실패가 아니다 — 끝 요약에 `건너뜀`으로 따로 세고 종료 코드를 1로 만들지 않는다(pl-18).
   5. 미리 받기(`stage_one`)는 문서마다 늘 컨테이너 `candidate_ready stage`를 부른다 — ETag 확인·같은 밤 중복 표시는 stage 안에 있고, staging 원본의 ETag가 같으면 stage가 다시 받지 않는다. 앞 실행의 `_docflow/<seq>`는 지우고 새로 만든다(seq는 실행마다 바뀜). 게시 뒤 원본 삭제(`drop_original`)는 staging `<sha1>.bin`과 그 ETag 파일 `<sha1>.etag`를 함께 지운다.
-  6. gold 실패 → 게시한 silver·ParsingMeta 행은 그대로, 로그에만. `gold_version`이 비어 다음 `--skip-done`이 다시 고른다(파싱·게시부터 다시).
+  6. gold 실패 → 게시한 silver는 그대로, 로그와 `except_doc_info` `error`(`load_failed`)에. `doc` 행이 없어 다음 `--skip-done`이 다시 고른다(파싱·게시부터 다시).
 - 파일: `deploy/host/scripts/run_pipeline.py`(`stage_one`, `parse_one`, `drop_original`, `drop_temp`, `main`) · `pipeline/extract/candidate_ready.py`(`finish`).
-- 비고: PC에서 `pipeline.cli parse --source rdb:csv:…`로 돌리면 `drop_original`이 없어 받은 원본(`_source_files`·`prepared`·staging `.bin`)이 남는다 — 지금은 손으로 지운다. DRM·암호로 건너뛴 문서는 게시가 EDW 행을 쓰지 않아(보고서로만) 다음 실행이 다시 고른다(다시 받고 다시 건너뜀).
+- 비고: PC에서 `pipeline.cli parse --source rdb:csv:…`로 돌리면 `drop_original`이 없어 받은 원본(`_source_files`·`prepared`·staging `.bin`)이 남는다 — 지금은 손으로 지운다. 
 - QA: `tests/general/deploy/test_docs_flow.py`(`test_doc_order_and_exit_code` 표 — 건너뜀 → 게시·원본 삭제·gold 없음·종료 0) · `tests/general/deploy/test_run_pipeline.py`(`test_parse_one_skips_stage_dropped`·`test_stage_always_calls_stage`·`test_drop_original_removes_etag` 표) · 통과.
 - Status: done
-
-<a id="pl-55"></a>
-## pl-55 · gold 실패를 ParsingMeta `gold_status`에 적기
-- 이유: gold가 실패해도 ParsingMeta 행은 남는다 — EDW에서 실패를 볼 칸이 필요하다.
-- 할 일: DB 담당자가 `AI.ParsingMeta`에 `gold_status`(pending · ok · failed)·이유 칸을 더하면(회사 DB DDL — Alembic 아님, 등급 A), `run_pipeline.py` `gold_one()` 옆 TODO 자리에서 failed·이유를 쓴다.
-- 파일: `deploy/host/scripts/run_pipeline.py`, `docs/operations/parsing_meta_mssql.sql`.
-- Status: todo — 칸이 생긴 뒤(refactor.md C-81).
 
 <a id="pl-18"></a>
 ## pl-18 · `run_pipeline` 종료 코드와 겹침 잠금
@@ -124,14 +117,14 @@
 - 이유(사용자 11-04): 같은 판단이 서버 러너와 파이프라인 두 곳에 있으면 어긋난다. PC E2E가 서버와 다른 길을 타면 PC 결과가 서버를 증명하지 못한다.
 - 요건(되어야 할 모습):
   1. 서버 러너 `run_pipeline.py`는 지휘만 한다 — 레인·워커·임시 폴더 관리와 컨테이너 안 파이프라인 명령 호출(`docker exec`). 원천 목록 읽기, 끝난 문서 빼기, 중복, 레인 판정, FAQ 교체 판단, 게시 판단은 파이프라인(extract·transform·load) 함수가 한다.
-  2. 대상 목록은 컨테이너 명령 하나 `python -m pipeline.extract.candidate_pick list`가 만든다 — EDW `FileStorageMap`에서 이름 키워드(`--filter`)·파일 크기 오름차순(크기 없는 행 뺌), `--start-offset`·`--limit`·`--seqs`, `--skip-done`이면 끝난 문서(`ok`·`partial`은 `gold_version`도, `skipped_dup` — `done_keys()` 한 곳)를 빼고, FAQ를 앞에(교체를 마친 키 `<결과 폴더>/_faq_seen.txt`), 앞 `--max-docs`개. 결과는 목록 파일 `--out`(JSON `total`·`start`·`docs`[`seq`·`id`·`s3_key`·`original_filename`·`file_size`·`source_system`])이고 러너는 그 파일만 읽는다. 러너의 이 호출 시간 제한(2400초)은 안쪽 FAQ 맞추기 시간 제한(`candidate_pick` — 1800초)보다 길다(안쪽이 먼저 끊겨 원인이 로그에 남음). EDW 접속은 `parsing_meta_db`·`mssql`을 다시 쓴다.
-  3. 원본 받기는 한 길이다 — `python -m pipeline.extract.candidate_ready stage`가 문서를 `_staging/`(`extract.source.source_staging_dir`)에 한 번 받고, 같은 실행에서 바로 중복 제외(받은 파일 SHA-256 — 같은 묶음·ParsingMeta에 끝난 다른 원본, pl-02)와 형식·DRM·암호·미지원 거르기(`filter_and_rotate`)를 이 순서로 한다. 살아남은 문서만 파싱하고, 파싱(`parse --staged`)은 받아 둔 파일만 읽는다 — 받지 못한 문서는 파싱 실패, 받기가 뺀 문서(중복·DRM·암호)는 건너뜀이고 게시가 상태를 쓴다(pl-24). DRM 문서는 표시만 하고 건너뛴다(처리 단계 없음). 회전은 기본 꺼짐 그대로다. 원본은 게시가 성공한 뒤 `drop_original()`만 지운다(pl-24).
+  2. 대상 목록은 컨테이너 명령 하나 `python -m pipeline.extract.candidate_pick list`가 만든다 — EDW `FileStorageMap`에서 이름 키워드(`--filter`)·파일 크기 오름차순(크기 없는 행 뺌), `--start-offset`·`--limit`·`--seqs`, `--skip-done`이면 끝난 문서(gold `doc` 행 — `done_keys()` 한 곳)와 영구 뺌(`except_doc_info` `skip`)을 빼고, FAQ를 앞에(교체를 마친 키 `<결과 폴더>/_faq_seen.txt`), 앞 `--max-docs`개. 결과는 목록 파일 `--out`(JSON `total`·`start`·`docs`[`seq`·`id`·`s3_key`·`original_filename`·`file_size`·`source_system`])이고 러너는 그 파일만 읽는다. 러너의 이 호출 시간 제한(2400초)은 안쪽 FAQ 맞추기 시간 제한(`candidate_pick` — 1800초)보다 길다(안쪽이 먼저 끊겨 원인이 로그에 남음). EDW 접속은 `mssql`을 다시 쓴다.
+  3. 원본 받기는 한 길이다 — `python -m pipeline.extract.candidate_ready stage`가 문서를 `_staging/`(`extract.source.source_staging_dir`)에 한 번 받고, 같은 실행에서 바로 중복 제외(받은 파일 SHA-256 — 같은 묶음·gold에 끝난 다른 원본, pl-02)와 형식·DRM·암호·미지원 거르기(`filter_and_rotate`)를 이 순서로 한다. 살아남은 문서만 파싱하고, 파싱(`parse --staged`)은 받아 둔 파일만 읽는다 — 받지 못한 문서는 파싱 실패, 받기가 뺀 문서(중복·DRM·암호)는 건너뜀이고 받기가 `except_doc_info` `skip`에 쓴다(pl-24). DRM 문서는 표시만 하고 건너뛴다(처리 단계 없음). 회전은 기본 꺼짐 그대로다. 원본은 게시가 성공한 뒤 `drop_original()`만 지운다(pl-24).
   4. PC(`RUN_ENV=local`)도 같은 `run_pipeline`로 E2E를 돈다 — 가짜 대상만(EDW sqlite·`file://` 게시 폴더·상대 경로, op-14). PC만의 분기는 접속 대상을 고르는 한 곳이다.
   5. 커밋 전 점검 스크립트는 점검 도구 자리 `common/check/`에 있다(`.githooks/pre-commit`·CLAUDE.md §5-2·README가 그 경로를 부른다).
 - 비고(현재와 다른 점, 11-05 확인):
   - `configure()`가 `run_env`가 dev·prd가 아니면 거부하고, CLAUDE.md §4가 "run_pipeline은 PC에서 실행하지 않는다"고 적는다 — PC는 `python -m pipeline.cli parse`를 바로 부른다. 바꾸는 것은 등급 A(운영 접속 가드).
   - 점검 스크립트가 `deploy/release/lint_changed.sh`에 있다.
-- QA: 바꾸기 전후 같은 문서 묶음의 결과(대표 결과·ParsingMeta 행·게시 파일)가 같음 · 대상 목록 고르기 사례 표 `tests/server/pipeline/test_target_list.py`(키워드·크기순·시작 자리·골라 돌리기·끝난 문서·FAQ 교체·max-docs) · 받기·중복·거르기 `tests/server/pipeline/test_stage_batch.py`·`test_candidate.py::test_stage_batch` · PC에서 run_pipeline 한 번으로 가짜 EDW `ParsingMeta` 행과 `file://` 폴더 결과가 생김.
+- QA: 바꾸기 전후 같은 문서 묶음의 결과(대표 결과·gold `doc` 처리 기록·게시 파일)가 같음 · 대상 목록 고르기 사례 표 `tests/server/pipeline/test_target_list.py`(키워드·크기순·시작 자리·골라 돌리기·끝난 문서·FAQ 교체·max-docs) · 받기·중복·거르기 `tests/server/pipeline/test_stage_batch.py`·`test_candidate.py::test_stage_batch` · PC에서 run_pipeline 한 번으로 gold 대역 `doc` 행과 `file://` 폴더 결과가 생김.
 - Status: todo
 
 <a id="rn-06"></a>
@@ -145,7 +138,7 @@
   5. 공용 모듈(`common/**`)과 `pipeline/shared/**`는 이 규칙으로 이름·자리를 바꾸지 않는다(레이어 코드 핑거프린트 유지). 파이프라인 폴더 배치는 [rn-08](#rn-08).
   6. 스캔 PDF 규칙 둘은 목적이 달라 따로 둔다 — 레인 분류 `doc_lane_group`(앞 3쪽 평균 300자 미만)·엔진 선택 `pdf_kind`(쪽당 평균 20자 미만). 각 자리에 역할 주석.
   7. run_pipeline은 EDW를 읽지 않는다 — 문서 목록·끝난 문서·FAQ 순서는 컨테이너 안 `candidate_pick list` 한 곳([rn-05](#rn-05)). 호스트에 남은 사본은 staging 파일 이름 규칙 하나이고 컨테이너 쪽과 같은지 시험으로 견준다(`test_run_pipeline.py::test_staging_name_same`).
-- QA: 바꾸기 전후 같은 문서 묶음의 대표 결과·ParsingMeta 행·게시 파일이 같음 · selftest·pytest 기준선 유지 · `check_modules` 통과.
+- QA: 바꾸기 전후 같은 문서 묶음의 대표 결과·gold `doc` 처리 기록·게시 파일이 같음 · selftest·pytest 기준선 유지 · `check_modules` 통과.
 - Status: done
 
 <a id="rn-07"></a>
@@ -172,7 +165,7 @@
   4. 요건 행에 닿지 않는 코드(부르는 곳이 없거나 시험만 부르는 함수, 쓰지 않는 설정 칸·반환 칸)와 같은 일을 하는 두 번째 코드는 두지 않는다. `rep.meta`와 `parse_document` 출력(MCP 계약)은 그대로.
 - 비고(남은 것, 11-05):
   - 보호 파일 `common/core/contract.py`의 설명 글에 옛 이름 `build_bundle`이 남음(핸드오프 지문 때문에 그대로).
-  - 엔진 폴더를 옮겨 엔진 핑거프린트(상대 경로 포함)와 code_fp가 바뀜 — 기록용([test.md#e2-02](test.md#e2-02), 재처리는 ParsingMeta 끝난 상태로만). 사람 검토 필요.
+  - 엔진 폴더를 옮겨 엔진 핑거프린트(상대 경로 포함)와 code_fp가 바뀜 — 기록용([test.md#e2-02](test.md#e2-02), 재처리는 gold `doc` 행으로만). 사람 검토 필요.
   - 이번에 하지 않음: 그림 부가 기능(pl-05), 글자 파싱 뒤 레인 나누기.
 - QA: selftest·pytest 기준선 유지 · `check_modules`·`keyscan --check`·`sample --check` 통과 · 저장소 전체 ruff·mypy 0 · FINGERPRINT 그대로 · 비고의 옛 이름(`extract/engines`·`engine_stack`·`run_one_engine`·`fetch_docs`·`build_bundle`) 0건(docs/history 제외).
 - Status: done
@@ -191,15 +184,14 @@
 - Status: done
 
 <a id="op-03"></a>
-## op-03 · EDW 접속 하나, 공용 계정 둘(읽기·쓰기)
-- 이유: ParsingMeta·FileStorageMap·RDB 원천 표·`query_edw`가 같은 EDW 서버·DB에 있다.
+## op-03 · EDW 접속 하나, 읽기 계정만
+- 이유: FileStorageMap·RDB 원천 표·`query_edw`가 같은 EDW 서버·DB에 있다. 이 프로젝트는 EDW에 쓰지 않는다([op-17](#op-17) 규칙 18).
 - 규칙:
   1. 벡터는 pgvector에만, EDW에는 넣지 않는다.
-  2. 접속 블록 하나 — settings.yaml `required.edw`(`edw_host`·`edw_port`·`edw_database`·`edw_read_user`·`edw_read_password`·`edw_write_user`·`edw_write_password`, 모델 `common.connections.rdb` · 게시 표 `parsing_meta_table` — 비우면 `AI.ParsingMeta`). 서버는 접속 칸을 채우고, PC는 아무것도 채우지 않는다(가짜 EDW — 5). 드라이버는 pymssql만(`common.store.mssql.login(role)`).
-  3. 읽기 계정: RDB 원천 목록·discover·고객 목록·FileStorageMap·ParsingMeta 상태·`run_pipeline.py` 읽기·MCP 전부. 쓰기 계정: ParsingMeta 게시(INSERT/UPDATE)·`loaded_at` UPDATE — 서버(dev·prd) 파이프라인 필수. 비우면 `login("write")`가 빠진 칸(`RDB_WRITE_USER`·`RDB_WRITE_PASSWORD`)을 알리고 게시가 거부되며, `run_pipeline.py`도 시작하지 않는다. 읽기 계정으로 대신하지 않는다(질의 도구 `query_edw` 계정에 쓰기 권한이 열리지 않게 — 사용자 11-05).
-  4. MCP 프로세스는 `settings.edw_read_only()`를 먼저 불러 설정 객체의 쓰기 계정을 비운다.
-  5. PC 대역: `dev.local.local_edw_sqlite_file`의 sqlite 파일 하나(비우면 `valid_env/edw/edw_copy.sqlite` — 없으면 `valid_env/edw/edw.sqlite`를 복사, 원본 생성: `python -m validation.e2e.edw_standin`, `local`에서만 열림)를 `AI`·`CRMS`·`LAS`·`SFDC` 별칭으로 ATTACH(`mssql.standin`, 기본 읽기 전용). `query_edw`는 읽기 전용으로 연다.
-- 파일: `common/store/{mssql,parsing_meta_db}.py`, `common/config/settings.py`.
+  2. 접속 블록 하나 — settings.yaml `required.edw`(`edw_host`·`edw_port`·`edw_database`·`edw_read_user`·`edw_read_password`, 모델 `common.connections.rdb`). 서버는 접속 칸을 채우고, PC는 아무것도 채우지 않는다(가짜 EDW — 5). 드라이버는 pymssql만(`common.store.mssql.login(role)`).
+  3. 읽기 계정: RDB 원천 목록·discover·고객 목록·FileStorageMap·`run_pipeline.py` 읽기·MCP 전부. 쓰기 계정 칸은 없다 — `mssql.login()`은 읽기 계정만 낸다(질의 도구 `query_edw` 계정에 쓰기 권한을 두지 않음 — 사용자 11-05).
+  4. PC 대역: `dev.local.local_edw_sqlite_file`의 sqlite 파일 하나(비우면 `valid_env/edw/edw_copy.sqlite` — 없으면 `valid_env/edw/edw.sqlite`를 복사, 원본 생성: `python -m validation.e2e.edw_standin`, `local`에서만 열림)를 `AI`·`CRMS`·`LAS`·`SFDC` 별칭으로 ATTACH(`mssql.standin`, 기본 읽기 전용). `query_edw`는 읽기 전용으로 연다.
+- 파일: `common/store/mssql.py`, `common/config/settings.py`.
 - QA: `tests/server/common/test_edw_login.py`·`tests/general/common/test_edw_standin.py` · 통과.
 - Status: done
 
@@ -329,19 +321,20 @@
 9. 원천은 EDW `AI.FileStorageMap.source_system` 칸으로 정한다(시험 행은 `dev-1`·`dev-2`). Object Storage 경로도 `DEV-1/…`.
 10. MCP `search`의 `source_system`: dev는 `DEV-<숫자>`도, prd는 지금처럼 5개 값.
 11. `AI.ParsingMeta`는 더 쓰지 않는다(우리만 씀). 처리 정보는 원천 스키마마다 `doc` 표에 칸을 더해 둔다.
-12. 적재되지 않은 문서(파싱 실패·내용 중복·DRM 등)의 기록은 `applog.error_doc_info` 하나 — `skip_doc_info`를 합친다.
+12. 적재되지 않은 문서(파싱 실패·내용 중복·DRM 등)의 기록은 applog 표 하나 — 규칙 16.
 13. 서버에 쌓인 ParsingMeta 기록은 사람이 옮긴다(도구 없음).
 
-14. `doc`에 더할 칸: `sha256`(내용 중복 판정) · silver 위치(버킷·키) · `engines`(수행한 엔진 전부 + 대표 표시) · `parse_status`(`ok`·`partial`) · `silver_version` · `gold_version` · `parsed_at`(silver — 파싱·게시 시각) · `loaded_at`(gold — 적재 시각). `gold_status`·`gold_reason`(pl-55 — EDW에서 gold 실패를 보려던 칸)은 두지 않는다.
+14. `doc`에 더할 칸: `sha256`(내용 중복 판정) · silver 위치(버킷·키) · `engines`(수행한 엔진 전부 + 대표 표시) · `parse_status`(`ok`·`partial`) · `silver_version` · `gold_version` · `parsed_at`(silver — 파싱·게시 시각) · `loaded_at`(gold — 적재 시각). `gold_status`·`gold_reason`(EDW에서 gold 실패를 보려던 칸)은 두지 않는다.
 15. 끝난 문서 = 원천 스키마 어디든 `doc`에 행이 있는 원본 키. 내용 중복 = 다른 원본 키의 `doc.sha256`이 같음.
 16. 적재되지 않은 문서 기록은 `applog.except_doc_info` 하나(`skip_doc_info`를 바꿈) — `except_type` `skip`(영구 뺌 — 미지원·DRM·암호·내용 중복) · `error`(기록만, 다음 실행이 다시 고름 — 파싱·적재 실패). 처음·마지막 시각·횟수 유지.
 17. 원천은 FileStorageMap `source_system` 값 하나로 고르기·구조화·적재·게시가 모두 정한다(목록 파일·manifest로 넘김). Object Storage 경로 = `<원천>/…`, PC = `valid_env/object_storage/<원천>/`. 원본 경로 첫 마디 규칙(pl-28 규칙 3)은 없앤다.
-18. EDW는 읽기만(FileStorageMap·메타 사슬) — 쓰기 계정은 다시 선택.
+18. EDW는 읽기만(FileStorageMap·메타 사슬) — 쓰기 계정 칸은 없앤다.
 19. 마스터 표는 `glossary` 하나(melt — 유사값마다 한 줄): 칸 = 구분(`client`·`term`·`id`) · 원본 값 · 유사값 · 유사 종류(동의어·약어·약한 동의어 — 용어 사전이 구분해 씀) · 설명 + 용어의 문맥 필요·대소문자 구분 표시. 고객 명부(`client_roster`)·용어 사전(`domain_terms`)·ID 꼴(`id_patterns`)을 합친다. `id` 줄은 원본 값 = 종류(`contract_no`·`product_code`), 유사값 = 정규식 — ID 우선 찾기·동점 순서는 그대로.
 20. 안 쓰는 마스터 표 `client_master`·`contract_master`·`units`는 없앤다. `master_meta`(해시 1행)도 없애고 해시는 glossary를 읽을 때 계산한다(`gold_version` 꼴 그대로).
 21. 핸드오프 파일 `common/core/terms.py`는 고치지 않는다 — `common/store/master.py`가 glossary를 읽어 지금과 같은 행 모양으로 넘긴다.
 
 ### 사람 검토
-DB 스키마(마이그레이션 — `doc` 칸·`error_doc_info`·DEV 스키마), MCP 계약(dev 값), 비밀값 파일 권한(init), EDW 쓰기 중단.
+DB 스키마(마이그레이션 — `doc` 칸·`except_doc_info`·DEV 스키마), MCP 계약(dev 값), 비밀값 파일 권한(init), EDW 쓰기 중단.
 
+- 비고: 규칙 1~5·8·9·11·12·14~18 반영 — 처리 기록 `doc` 칸(판 `0006_search` — `search_tables.DOC_RECORD`, 게시 `publish/silver.jsonl` → 적재 `--silver`), 끝난 문서·내용 중복 `pipeline/shared/gold_docs.py`, `applog.except_doc_info`(판 `0003_applog` — `pipeline/shared/except_docs.py`), 원문 도구는 `doc` 칸에서 읽음, EDW 쓰기 없음. 남은 것: 규칙 6·7·10(DEV 원천 스키마 — 지금 DEV 원천은 `other`로 적재), 13(서버의 ParsingMeta 기록 옮기기 — 사람, refactor.md C-107), 19~21(glossary). 쓰기 계정·`parsing_meta_table` 칸은 없앴다(남은 settings.yaml은 시작 거부 — C-107).
 - Status: todo

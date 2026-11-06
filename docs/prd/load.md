@@ -94,14 +94,14 @@
 ## pl-09 · 파싱 결과 게시(silver)
 
 ### 무엇·왜
-다른 팀은 파싱 결과를 Object Storage와 EDW `AI.ParsingMeta`에서 읽는다.
+다른 팀은 파싱 결과를 Object Storage에서 읽는다(위치는 원문 도구 — gold `doc` 칸).
 
 ### 규칙
 1. 올리는 것: 대표 결과 `.md`(`render_md` — 본문 + 표) + 같은 폴더에 대표 결과 JSON(`<이름>_<날짜>.json`)·엔진별 원결과(`engine/<엔진>_<판>_<이름>.json`)·그림 기록(`engine/vlm_<모델>_<이름>.jsonl`). 원본 파일은 올리지 않는다. `.md`를 마지막에 써서 완료 표시로 삼는다.
-2. 대표 결과 키 = `<required.publish.publish_prefix>/<source_system>/<원본 키 폴더들>/<원본 파일 이름(확장자 뺌)>_<parse_date>.md`. 원본 키 첫 마디가 이미 `<source_system>`이면(대소문자 무시 — PC 폴더 원천 `CRMS/<uuid>/<파일>`) 원천 이름을 한 번만 쓴다(`CRMS/CRMS/…` 아님). 조각마다 파일 이름에 쓸 수 없는 글자를 정리하고, 정리로 원본 키와 달라지면 마지막 조각에 `__h<원본 키 sha1 앞 10자>`를 붙인다. `parse_date` = `YYYY-MM-DD_HHMMSS`. 같은 키가 이미 있으면 `<parse_date>-2`, `-3` …으로 새 폴더 — 덮어쓰지 않는다. ParsingMeta `rep_key`는 그 폴더(끝 `/`).
-3. ParsingMeta에는 INSERT만 한다 — 키(`source_system`, `source_key` = 원본 전체 키)가 이미 있으면 건너뛴다. UPDATE 예외는 [pl-12](#pl-12) 규칙 3뿐.
-4. 상태 `parse_status` = `ok` · `partial`(교차 정확도 < 0.95 — [transform.md#pl-04](transform.md#pl-04)) · `failed` · `skipped_drm` · `skipped_dup` · `not_parsed`(옛 값 `skipped_disk_cap`은 더 쓰지 않는다 — EDW에 남은 행만 있을 수 있음). 올리는 상태는 `tuning.load.publish.publish_upload_statuses`(기본 `ok`·`partial`).
-5. `skipped_drm`·`failed`는 EDW에 쓰지 않고 `output/publish/excluded_<날짜>.md` 보고서에만.
+2. 대표 결과 키 = `<required.publish.publish_prefix>/<source_system>/<원본 키 폴더들>/<원본 파일 이름(확장자 뺌)>_<parse_date>.md`. 원본 키 첫 마디가 이미 `<source_system>`이면(대소문자 무시 — PC 폴더 원천 `CRMS/<uuid>/<파일>`) 원천 이름을 한 번만 쓴다(`CRMS/CRMS/…` 아님). 조각마다 파일 이름에 쓸 수 없는 글자를 정리하고, 정리로 원본 키와 달라지면 마지막 조각에 `__h<원본 키 sha1 앞 10자>`를 붙인다. `parse_date` = `YYYY-MM-DD_HHMMSS`. 같은 키가 이미 있으면 `<parse_date>-2`, `-3` …으로 새 폴더 — 덮어쓰지 않는다. 처리 기록 `silver_key`는 그 `.md` 객체 키(폴더 = 끝 `/` 앞까지).
+3. 게시는 EDW에 쓰지 않는다 — 올린 문서마다 처리 기록 한 줄(`doc_name`·`source_key`·`sha256`·`silver_bucket`·`silver_key`·`engines`·`parse_status`·`silver_version`·`parsed_at`)을 `<문서 폴더>/publish/silver.jsonl`에 남기고, 적재(`--silver`)가 gold `doc` 칸으로 쓴다([load-schema.md#pl-25](load-schema.md#pl-25)). gold에 이미 있는 원본 키는 올리지 않는다([pl-61](#pl-61)).
+4. 상태 `parse_status` = `ok` · `partial`(교차 정확도 < 0.95 — [transform.md#pl-04](transform.md#pl-04)) · `failed` · `skipped_drm` · `skipped_dup` · `not_parsed`. 올리는 상태는 `tuning.load.publish.publish_upload_statuses`(기본 `ok`·`partial`).
+5. `skipped_drm`·`failed`는 올리지 않고 `output/publish/excluded_<날짜>.md` 보고서에만(`failed`는 `applog.except_doc_info` `error` `parse_failed`도).
 6. 게시 버킷이 원천 원본 버킷과 같은지는 검사하지 않는다(rn-07 — `run_pipeline`가 늘 끄던 검사를 지움). `required.publish.publish_bucket`을 원천 버킷과 다르게 두는 것은 운영자 몫.
 
 ### QA
@@ -112,9 +112,9 @@
 ## pl-26 · 늘 게시하고 게시 대상은 필수
 
 ### 규칙
-1. 게시(silver → Object Storage + EDW)는 기본이자 유일한 방식이다 — 끄는 선택지가 없다. `run_pipeline`는 문서마다 늘 게시한다([ops.md#pl-24](ops.md#pl-24) — gold 전).
-2. 게시·EDW 칸은 settings.yaml `required` 한곳에 있다 — 게시 위치 `required.publish.publish_bucket`·`publish_prefix`, Object Storage 접속 `required.object_storage`(`object_storage_endpoint`·`object_storage_region`·`object_storage_access_key`·`object_storage_secret_key`·`object_storage_verify_tls`), EDW `required.edw`(`parsing_meta_table`·`edw_host`·`edw_port`·`edw_database`·`read_*`·`write_*`). 칸마다 주석에 서버·PC에 넣을 값을 적는다. PC 전용 값은 `dev.local`(op-14).
-3. 서버(`run_pipeline`)는 게시 버킷·접두, Object Storage 주소·키, EDW 주소·읽기 계정·쓰기 계정이 비면 칸 이름을 찍고 시작을 거부한다(종료 2 — 쓰기 계정을 읽기 계정으로 대신하지 않음, op-03). `object_storage_region`·`object_storage_verify_tls`·`edw_port`·`parsing_meta_table`은 비우면 코드 기본값(`us-east-1`·`1`·1433·`AI.ParsingMeta`).
+1. 게시(silver → Object Storage + 처리 기록 파일)는 기본이자 유일한 방식이다 — 끄는 선택지가 없다. `run_pipeline`는 문서마다 늘 게시한다([ops.md#pl-24](ops.md#pl-24) — gold 전).
+2. 게시·EDW 칸은 settings.yaml `required` 한곳에 있다 — 게시 위치 `required.publish.publish_bucket`·`publish_prefix`, Object Storage 접속 `required.object_storage`(`object_storage_endpoint`·`object_storage_region`·`object_storage_access_key`·`object_storage_secret_key`·`object_storage_verify_tls`), EDW `required.edw`(`edw_host`·`edw_port`·`edw_database`·`read_*`). 칸마다 주석에 서버·PC에 넣을 값을 적는다. PC 전용 값은 `dev.local`(op-14).
+3. 서버(`run_pipeline`)는 게시 버킷·접두, Object Storage 주소·키, EDW 주소·읽기 계정이 비면 칸 이름을 찍고 시작을 거부한다(종료 2 — 쓰기 계정은 쓰지 않음, op-17). `object_storage_region`·`object_storage_verify_tls`·`edw_port`는 비우면 코드 기본값(`us-east-1`·`1`·1433).
 4. PC(`local`)는 로컬 대역만 쓴다 — 게시 폴더 `dev.local.local_publish_dir`(기본 `valid_env/object_storage/Parsing_Result`), EDW `dev.local.local_edw_sqlite_file`(비우면 `valid_env/edw/edw_copy.sqlite`). 서버 게시 버킷·Object Storage·EDW 접속 칸은 적혀 있어도 비우고 경고한다(op-14). 가짜 EDW는 `local`에서만 열린다(서버 설정에 있으면 EDW를 쓸 때 거부). PC에서는 운영 EDW·Object Storage에 접속하지 않는다(CLAUDE.md §4).
 
 ### QA
@@ -128,10 +128,10 @@
 FAQ는 판을 잇지 않는다. 새 FAQ가 오면 gold faq를 비우고 FAQ 전체를 다시 넣는다 — [pl-13](#pl-13)("지우지 않음")의 FAQ 한정 예외. 검토 등급 A.
 
 ### 규칙
-1. 새 FAQ = FileStorageMap에서 `source_system`이 `FAQ`(대소문자 무관)인 행의 키 중 결과 폴더의 `_faq_seen.txt`(교체를 마친 키 목록)에 없는 것. ParsingMeta는 판정에 쓰지 않는다. 파일이 없으면(처음) FAQ 전체를 한 번 교체한다.
+1. 새 FAQ = FileStorageMap에서 `source_system`이 `FAQ`(대소문자 무관)인 행의 키 중 결과 폴더의 `_faq_seen.txt`(교체를 마친 키 목록)에 없는 것. 파일이 없으면(처음) FAQ 전체를 한 번 교체한다.
 2. 컨테이너 안 `candidate_pick list --faq-seen <파일>`의 `faq_first`(처리 순서를 정한 뒤 — `--skip-done` 뒤, `--max-docs` 앞): FAQ 목록은 `--filter`와 상관없이 FileStorageMap에서 따로 읽는다(대상에 없는 FAQ는 목록 뒤에 덧붙임). `--start-offset`이 대상 수보다 커도 확인한다.
 3. 새 FAQ가 있으면 → 자식 프로세스 `pgvector_load faq-sync --reset`으로 gold faq의 문서·청크·키워드 색인을 한 트랜잭션에서 지우고, FAQ 전체를 이번 처리 맨 앞에 넣는다(이미 끝난 FAQ도). `_faq_seen.txt`는 `faq-sync` 결과(`--out` JSON — 목록 파일 옆 `faq_sync.json` — 지운 수·남은 `file_path`)를 읽은 **뒤에만** 적는다.
-4. 새 FAQ가 없으면 → 지우지 않고 gold에 없는 FAQ만 넣는다(`skipped_dup`은 뺌) — 중간에 멈춘 교체와 파싱 실패를 다음 실행이 채운다.
+4. 새 FAQ가 없으면 → 지우지 않고 gold에 없는 FAQ만 넣는다(영구 뺌 `except_doc_info` `skip`은 뺌) — 중간에 멈춘 교체와 파싱 실패를 다음 실행이 채운다.
 5. 만약 `faq-sync` 결과를 못 읽으면(실패·시간 초과 1,800초) → 경고와 함께 FAQ 전체를 넣고 `_faq_seen.txt`는 그대로 둔다.
 6. `--seqs`·`--limit` 실행과 원천 목록(`required.source.source_systems`)에 `FAQ`가 없는 실행에서는 FAQ 교체를 하지 않는다(로그 한 줄).
 7. 한계: 같은 실행 안에서 지우고 다시 넣는 사이에는 검색에 FAQ가 일부만 보인다. FileStorageMap에서 사라진 FAQ는 다음 교체 때 함께 빠진다.
@@ -154,12 +154,11 @@ FAQ는 판을 잇지 않는다. 새 FAQ가 오면 gold faq를 비우고 FAQ 전�
 빼야 할 문서는 원천에서 지우거나 사람이 SQL로 지운다. 대장·숨김 표와 그 처리 길을 두지 않는다.
 
 ### 규칙
-1. 게시·적재는 EDW에 `deleted`를 쓰지 않는다.
+1. 게시·적재는 EDW에 쓰지 않는다(`deleted`도 — [ops.md#op-17](ops.md#op-17) 규칙 18).
 2. 서버(`dev`·`prd`)는 PG가 없으면 로컬 대체 DB(SQLite 대역)로 바꿔 타지 않고 멈춘다.
-3. ParsingMeta UPDATE는 적재 때 `loaded_at`·`gold_version` 두 칸뿐이다(`parsing_meta_db.LOADED_COLS`).
 
 ### QA
-- `tests/server/common/test_no_deleted.py`(UPDATE 칸 포함).
+- `tests/server/common/test_no_deleted.py`.
 - Status: done
 
 <a id="pl-38"></a>
@@ -173,7 +172,7 @@ FAQ는 판을 잇지 않는다. 새 FAQ가 오면 gold faq를 비우고 FAQ 전�
 2. 스키마 `<PG_SCHEMA>_master`, 표·칸은 Alembic 갈래 `master`로만(`dbtool up --target master`, `--target all`에 포함). 칸·해시 규칙은 [db_schema.md](../architecture/db_schema.md) §4.
 3. `dbtool master load`가 CSV로 표 내용을 한 트랜잭션에 통째로 바꾸고 내용 해시를 `master_meta`에 적는다. 초기화 순서: `dbtool up`(search·applog·master) → `dbtool master load`.
 4. 읽는 곳: `common/core/terms.py`의 용어 사전·ID 모양·고객 명부 로더(프로세스마다 한 번, 마스터 해시가 바뀌면 다시) — 구조화 고객 판별(`infer_clients`)과 검색. PC·시험은 같은 CSV로 채운 SQLite 대역. 서버(`dev`·`prd`)는 마스터를 못 읽으면 시작하지 않는다.
-5. `gold_version` = `<VERSION>+m<마스터 해시 앞 8자>` — 구조화가 읽은 해시를 묶음 `meta.json` `master_hash`로 넘기고 적재가 ParsingMeta에 쓴다(`master_hash`가 없는 묶음은 `<VERSION>`만). `silver_version`에는 붙이지 않는다. 마스터 해시는 캐시 열쇠·code_fp에 넣지 않는다(마스터가 바뀌어도 자동 재처리 없음).
+5. `gold_version` = `<VERSION>+m<마스터 해시 앞 8자>` — 구조화가 읽은 해시를 묶음 `meta.json` `master_hash`로 넘기고 적재가 gold `doc.gold_version`에 쓴다(`master_hash`가 없는 묶음은 `<VERSION>`만). `silver_version`에는 붙이지 않는다. 마스터 해시는 캐시 열쇠·code_fp에 넣지 않는다(마스터가 바뀌어도 자동 재처리 없음).
 
 ### 예시
 - `VERSION` `0.2.0`, 마스터 해시 `58a24b02…` → `gold_version` `0.2.0+m58a24b02`.
@@ -190,14 +189,14 @@ FAQ는 판을 잇지 않는다. 새 FAQ가 오면 gold faq를 비우고 FAQ 전�
 - Status: todo
 
 <a id="pl-61"></a>
-## pl-61 · 게시는 EDW 키를 먼저 본다
+## pl-61 · 게시는 gold를 먼저 본다
 
 ### 무엇·왜
-Object Storage에 EDW 행 없는 고아 객체를 남기지 않는다.
+끝난 문서의 결과를 Object Storage에 또 쌓지 않는다.
 
 ### 규칙
-1. 게시(`publish_parse_result.apply`)는 올리기 전에 EDW `AI.ParsingMeta`에 같은 키(`source_system`, `source_key`)가 있는지 본다(올릴 문서의 키를 한 번에 — `rows_where`). 있으면 → 올리지 않고 건너뜀으로 센다(결과 `upload_skip_existing`). `--reparse` 목록의 키만 예외(새 날짜 폴더).
+1. 게시(`publish_parse_result.apply`)는 올리기 전에 gold `doc`에 같은 원본 키가 있는지 본다(`gold_docs.done_keys` 한 번). 있으면 → 올리지 않고 건너뜀으로 센다(결과 `upload_skip_existing`). `--reparse` 목록의 키만 예외(새 날짜 폴더).
 
 ### QA
-- `tests/server/pipeline/test_publish_parse.py` — 같은 문서 다시 게시 → 업로드 0·`upload_skip_existing` 1·EDW 행 그대로 · `--reparse`는 새 날짜 폴더로 올림 · 통과.
+- `tests/server/pipeline/test_publish_parse.py` — gold에 있는 문서 다시 게시 → 업로드 0·`upload_skip_existing` 1·처리 기록 없음 · `--reparse`는 새 날짜 폴더로 올림 · 통과.
 - Status: done

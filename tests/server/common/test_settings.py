@@ -235,10 +235,10 @@ def selftest():
             and bl.common.models.embed.timeout == 60
             and bl.common.models.guard.internal_ip_ranges == [],
         )
-        bk = load(_TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"OS_VERIFY_TLS": "", "PM_TABLE": ""})
+        bk = load(_TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"OS_VERIFY_TLS": ""})
         check(
-            "빈 글자: blank=keep 칸(옛 os.environ.get(X, 기본) — OS_VERIFY_TLS·PM_TABLE)은 '' 유지(S7a2 (b))",
-            (bk.common.connections.object_storage.verify_tls, bk.common.connections.parsing_meta.table) == ("", ""),
+            "빈 글자: blank=keep 칸(옛 os.environ.get(X, 기본) — OS_VERIFY_TLS)은 '' 유지(S7a2 (b))",
+            bk.common.connections.object_storage.verify_tls == "",
         )
         check(
             "PG_HOST·PG_PORT 기본값 None(필수 칸 — 비면 pg.conf가 거부, op-09)",

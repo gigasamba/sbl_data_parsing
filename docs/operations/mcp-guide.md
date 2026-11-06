@@ -168,7 +168,7 @@
 | `batch.next_cursor` | 다음 쪽 손잡이, 마지막 쪽이면 `null` |
 | `batch.files_total_bytes` | 이번 쪽 파일 크기 합 — 받기 계획(합계 24MB)에 씀 |
 | `documents[].file_name` | 원본 파일 이름 |
-| `documents[].doc_key` | 원본 sha256(64자, ParsingMeta `sha256`) — 같은 이름 문서가 여럿이면 이것이나 원본 전체 경로로 하나를 고름 |
+| `documents[].doc_key` | 원본 sha256(64자, gold `doc.sha256`) — 같은 이름 문서가 여럿이면 이것이나 원본 전체 경로로 하나를 고름 |
 | `documents[].source_system` | 원천 |
 | `documents[].doc_class` | 분류(없으면 null) |
 | `documents[].sf_op_id` | 영업 기회 id(없으면 null) |
@@ -180,7 +180,7 @@
 | `ms` | 걸린 시간(밀리초) |
 <!-- /guide:list-output -->
 
-**⚠ 운영과 다름:** ① 운영 목록에 있는 대표 엔진 칸 `rep_engine`은 없다. ② `source_system`은 저장값(`SFDC`)으로 나간다 — 운영은 EDW 값(`SFDC-test`). ③ 문서 고르기는 검색 DB(gold `doc` — 분류·영업 기회·등록 시각·원본 경로)에서, 결과 위치·파싱 시각·`doc_key`는 그때 EDW ParsingMeta에서 읽는다 — 적재 전 문서는 나오지 않고, ParsingMeta 행이 없는 적재 문서는 `no_files`로 나온다(운영은 ParsingMeta에서 고름). ParsingMeta를 못 읽으면 `registry_unavailable`.
+**⚠ 운영과 다름:** ① 운영 목록에 있는 대표 엔진 칸 `rep_engine`은 없다. ② `source_system`은 저장값(`SFDC`)으로 나간다 — 운영은 EDW 값(`SFDC-test`). ③ 문서 고르기·결과 위치·파싱 시각·`doc_key`는 모두 검색 DB(gold `doc` — 분류·영업 기회·등록 시각·원본 경로·`silver_bucket`·`silver_key`·`sha256`)에서 읽는다 — 적재 전 문서는 나오지 않고, 결과 위치가 비었거나 저장소에 파일이 없는 문서는 `no_files`로 나온다. 검색 DB를 못 읽으면 `registry_unavailable`.
 
 ### 5-3. `get_doc_fulltext` 입력
 
@@ -291,4 +291,4 @@ EDW 표·칸의 한글 설명을 정적 자료에서 3단으로 찾는다(DB 접
 - **SQL 전에:** `edw_meta`로 표·칸을 확인한다.
 - `sfid`는 받자마자 쓰고 오래 저장하지 않는다. 서버 서명 키가 바뀌면 모두 `bad_sfid`가 된다 — 그때는 목록을 다시 부른다.
 - `source_system`은 두 표기를 다 받지만, search와 원문 도구 사이를 이을 때는 값을 바꾸지 말고 `file_name`이나 `doc_key`로 잇는다.
-- 도구 오류는 HTTP 200 + JSON `error` 칸으로 온다(원문 도구의 `bad_request`는 `detail`도). 원문 도구의 다른 오류: `not_configured`(서버 서명 키 없음) · `source_storage_unavailable`(저장소 접속 없음·실패) · `registry_unavailable`(EDW ParsingMeta나 검색 DB를 못 읽음 — 목록은 늘, 받기는 등록 시각 가드를 줬을 때만 읽는다. 확인을 못 하면 조용히 통과시키지 않음).
+- 도구 오류는 HTTP 200 + JSON `error` 칸으로 온다(원문 도구의 `bad_request`는 `detail`도). 원문 도구의 다른 오류: `not_configured`(서버 서명 키 없음) · `source_storage_unavailable`(저장소 접속 없음·실패) · `registry_unavailable`(검색 DB를 못 읽음 — 목록은 늘, 받기는 등록 시각 가드를 줬을 때만 읽는다. 확인을 못 하면 조용히 통과시키지 않음).

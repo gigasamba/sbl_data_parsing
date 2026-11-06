@@ -14,10 +14,10 @@ def selftest():
     assert base.HNSW_MAX == ST.HNSW_MAX  # 판 파일이 굳혀 둔 숫자 = 지금 pg.HNSW_MAX
     assert (
         TARGETS == ("search", "applog", "master")
-        and head("search") == "0005_search"
-        and known("search") == ["0005_search", "0004_search", "0003_search", "0002_search", "0001_search"]
+        and head("search") == "0006_search"
+        and known("search") == ["0006_search", "0005_search", "0004_search", "0003_search", "0002_search", "0001_search"]
     )
-    assert head("applog") == "0002_applog" and known("applog") == ["0002_applog", "0001_applog"]
+    assert head("applog") == "0003_applog" and known("applog") == ["0003_applog", "0002_applog", "0001_applog"]
     assert head("master") == "0001_master" and known("master") == ["0001_master"]
     assert not list((MIGRATIONS / "versions").glob("*struct*"))  # struct 갈래 없음(엔진 구성·원천 목록은 파일)
     print("[selftest] dbtool — 판 폴더 갈래 search 하나·끝 판·HNSW 2000 같음 통과")
@@ -47,9 +47,16 @@ def selftest():
         extra = [n for n, _ in m5.OLD_EXTRA.get(src, ())]
         assert extra == m2.DOC_EXTRA_COLS[src] and [n for n, _ in m5.OLD_HINTS.get(src, ())] == m3.DOC_HINTS_COLS.get(src, []), src
         assert flat(m5.view(src, ("attrs",))) == flat(ST.view_sql(src)) and flat(m5.view(src, extra)) == flat(m2.view(src)), src
-        assert ST.doc_columns(src) == ["doc_id", "file_path", *m5.VIEW_DOC, *m4.DOC_META_COLS, "attrs"], src
     assert ST.index_defs(768)["ix_{S}_doc_attrs"].endswith("USING gin (attrs)")
-    print("[selftest] dbtool — 판 0005 attrs(지우는 칸·뷰·되돌린 뷰·doc 칸 순서·GIN) = 표 정의 통과")
+    print("[selftest] dbtool — 판 0005 attrs(지우는 칸·뷰·되돌린 뷰·GIN) = 표 정의 통과")
+    # 판 0006(op-17) — doc 처리 기록 칸 = 표 정의 DOC_RECORD · doc 칸 순서(판이 더한 순서)
+    sp = importlib.util.spec_from_file_location("s_0006", MIGRATIONS / "versions" / "0006_doc_record.py")
+    m6 = importlib.util.module_from_spec(sp)
+    sp.loader.exec_module(m6)
+    assert m6.SOURCES == ST.SOURCES and m6.down_revision == m5.revision and m6.DOC_RECORD_COLS == [n for n, _ in ST.DOC_RECORD]
+    for src in ST.SOURCES:
+        assert ST.doc_columns(src) == ["doc_id", "file_path", *m5.VIEW_DOC, *m4.DOC_META_COLS, "attrs", *m6.DOC_RECORD_COLS], src
+    print("[selftest] dbtool — 판 0006 처리 기록 칸·doc 칸 순서 = 표 정의 통과")
     # 원천 스키마 SQLite 대역 — 표 정의에서 만든 DDL을 pg_standin이 받음(칸 순서·차원 글자 vector(n) 그대로)
     import tempfile
 
@@ -84,13 +91,14 @@ def selftest():
     for have, want in (
         (None, "없음"),
         ([], "없음"),
-        (["0005_search"], "끝"),
+        (["0006_search"], "끝"),
+        (["0005_search"], "낮음"),
         (["0004_search"], "낮음"),
         (["0003_search"], "낮음"),
         (["0002_search"], "낮음"),
         (["0001_search"], "낮음"),
         (["9999_x"], "모름"),
-        (["0005_search", "9999_x"], "모름"),
+        (["0006_search", "9999_x"], "모름"),
     ):
         fq = (
             lambda h: lambda sql, p=None: ([{"x": 1}] if h is not None else []) if "to_regclass" in sql else [{"version_num": v} for v in h]

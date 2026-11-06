@@ -456,7 +456,7 @@ def main(argv=None):
         # clients는 main의 infer_clients(docs)가 이후에 채움. file_name은 file_path에서 유도.
         docs.append(
             {
-                "file_path": _s3_key or path,  # Object Storage 원본 경로 = EDW s3_key(ParsingMeta와 잇는 키) — 개발 서버 로컬 경로는 안 씀
+                "file_path": _s3_key or path,  # Object Storage 원본 경로 = EDW s3_key(문서 키) — 개발 서버 로컬 경로는 안 씀
                 "doc_name": doc,  # doc_name은 번들 JSONL 로컬용(파일명) — db 적재 안 함
                 "summary": ab,
                 "full_text": text,  # full_text는 본문 매칭(client) 내부용 — db 적재 안 함

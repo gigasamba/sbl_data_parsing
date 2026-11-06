@@ -292,7 +292,7 @@ def apply(docs, reps, existing, audit_path=None, chat=None, now=None):
 
 def rep_inputs(docs, rep_dir):
     """대표 결과 폴더(_rep/<이름>.json) → {file_path: {text: 게시가 올리는 .md(render_md — silver와 같은 글), format, engine}}
-    (format·engine = ParsingMeta file_format·rep_engine과 같은 값). 대표 결과가 없으면 묶음의 full_text(형식·엔진 비움)."""
+    (format·engine = 대표 결과 index의 형식·대표 엔진). 대표 결과가 없으면 묶음의 full_text(형식·엔진 비움)."""
     from pipeline.load.publish_parse_result import render_md
 
     out = {}
