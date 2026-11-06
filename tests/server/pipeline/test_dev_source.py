@@ -142,7 +142,8 @@ def test_up_sql_dev():
         "ALTER TABLE demo_dev_1.doc ADD COLUMN IF NOT EXISTS attrs JSONB",
         "ALTER TABLE demo_dev_1.doc ADD COLUMN IF NOT EXISTS sha256 TEXT",
         "-- 수동: DB에 이미 있는 다른 demo_dev_*",
-        "SET version_num='0006_search'",
+        "CREATE INDEX IF NOT EXISTS ix_demo_dev_1_doc_path ON demo_dev_1.doc (file_path)",
+        "SET version_num='0007_search'",
     ):
         assert s in part, s
     for s in ("DROP TABLE", "demo.load_run", "demo_sfdc", "demo.alembic_version", "approvalname"):

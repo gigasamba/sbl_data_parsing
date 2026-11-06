@@ -116,7 +116,7 @@ pgvector의 표는 코드가 실행 중에 만들지 않는다. 모두 Alembic �
 
 | 갈래(`--target`) | 스키마 | 끝 판 |
 |---|---|---|
-| `search` | 기준 스키마(`required.pg.pg_schema`) + 원천 스키마 5벌 `<기준>_{sfdc,crms,las,faq,other}` + (개발 서버·PC) DEV 원천 스키마 `<기준>_dev_<숫자>` — settings.yaml `required.source.source_systems`의 `DEV-<숫자>`를 만들고 DB에 이미 있는 `_dev_*`도 올림 | `0006_search`(0001→0006 차례로 — 0006은 `doc` 처리 기록 칸) |
+| `search` | 기준 스키마(`required.pg.pg_schema`) + 원천 스키마 5벌 `<기준>_{sfdc,crms,las,faq,other}` + (개발 서버·PC) DEV 원천 스키마 `<기준>_dev_<숫자>` — settings.yaml `required.source.source_systems`의 `DEV-<숫자>`를 만들고 DB에 이미 있는 `_dev_*`도 올림 | `0007_search`(0001→0007 차례로 — 0006은 `doc` 처리 기록 칸, 0007은 `doc` 찾기 색인) |
 | `applog` | `applog`(고정 이름 — 다른 `--schema`는 종료 2, PC 시험 스키마 `test_*`만 예외) | `0004_applog`(0001→0004 — 0003은 적재 안 된 문서 표 `except_doc_info`, 0004는 `pipe_event` 원천·`except_doc_info` 확장자·크기 칸) |
 | `master` | `<기준>_master` | `0002_master`(0001→0002 — 0002는 표 `glossary` 하나로 바꿈) — 채우기는 `master load` |
 
@@ -294,7 +294,7 @@ cp valid_env/edw/edw.sqlite output/demo/edw.sqlite   # EDW 대역 사본(원본 
 ```bash
 .venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle output/demo/bundle --create-extension
 .venv/bin/python -m common.store.db.dbtool master load --schema demo
-.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0006_search · applog 0004_applog · master 0002_master
+.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0007_search · applog 0004_applog · master 0002_master
 .venv/bin/python -m common.store.db.dbtool check --target all      # 기대: 갈래마다 판 끝, 종료 코드 0
 ```
 

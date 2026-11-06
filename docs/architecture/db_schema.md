@@ -20,7 +20,7 @@
 
 ## 2. gold — 검색 스키마 (pgvector — 원천별 스키마 5벌 + 개발 서버의 DEV 원천 스키마)
 
-판: `common/store/db/migrations/versions/0001_search_base.py` … `0006_doc_record.py` · 모델: `common/store/db/models/search_tables.py`(`SOURCES`·`DOC_META`·`ATTRS`·`DOC_RECORD`·`LOAD_ATTRS`·`CHUNK_EXTRA`) · 적재: `pipeline/load/pgvector_load.py`(`load`·`_load_src`·`deploy`) · 값 만드는 곳: `pipeline/transform/structure/gold_bundle.py`(`main`)·EDW 조인 `pipeline/load/edw_doc_meta.py`·게시 처리 기록 `pipeline/load/publish_parse_result.py`(`apply` → `publish/silver.jsonl`).
+판: `common/store/db/migrations/versions/0001_search_base.py` … `0007_doc_index.py` · 모델: `common/store/db/models/search_tables.py`(`SOURCES`·`DOC_META`·`ATTRS`·`DOC_RECORD`·`DOC_INDEX`·`LOAD_ATTRS`·`CHUNK_EXTRA`) · 적재: `pipeline/load/pgvector_load.py`(`load`·`_load_src`·`deploy`) · 값 만드는 곳: `pipeline/transform/structure/gold_bundle.py`(`main`)·EDW 조인 `pipeline/load/edw_doc_meta.py`·게시 처리 기록 `pipeline/load/publish_parse_result.py`(`apply` → `publish/silver.jsonl`).
 
 - **스키마 배치:** 기준 스키마 `<PG_SCHEMA>`(예 `ai`)에는 판 표 `alembic_version`과 공용 시퀀스 `doc_id_seq`만. 원천 스키마 `<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`에 아래 표 다섯 개와 뷰 `v_chunk_source`가 같은 꼴로 있다(원천 전용 칸은 `faq.chunk.faq_group`뿐 — 그 밖의 원천 메타는 `doc.attrs` 키).
 - **DEV 원천 스키마(개발 서버·PC만 — [op-17](../prd/ops.md#op-17)):** 원천 `DEV-<1~99>`(대소문자 무관)는 `<PG_SCHEMA>_dev_<숫자>`에 들어간다 — 표·뷰는 `_other`와 같고 메타가 없다(EDW 사슬 없음). 판 기록 표는 그 스키마 안(`<PG_SCHEMA>_dev_<숫자>.alembic_version`), `doc_id`는 기준 스키마의 `doc_id_seq`를 함께 쓴다. `dbtool up --target search`가 settings.yaml `required.source.source_systems`의 DEV 원천 스키마를 만들고, DB에 이미 있는 `_dev_*` 스키마도 끝 판까지 올린다(`dbtool check`도 함께 봄). 운영(prd)에는 없다.
@@ -48,6 +48,13 @@
 | gold_version | TEXT | `0.3.0+m3f9a1c2e` | 이 문서를 gold에 올린 코드 판 — `<VERSION>+m<마스터 해시 앞 8자>`(§4, 해시가 없는 묶음은 `<VERSION>`만) | 모두 | 적재 `gold_version` | (운영자) | 유지 |
 | parsed_at | TIMESTAMPTZ | `2026-11-06 01:30:00+09` | 대표 결과를 게시한 시각(silver) | 모두 | 게시 `apply` → 적재 | 원문 도구 `since`·`until` 거르기 | 유지 |
 | loaded_at | TIMESTAMPTZ | `2026-11-06 01:31:12+09` | gold에 적재한 시각 | 모두 | 적재 | (운영자) | 유지 |
+
+**색인(판 0007 — `search_tables.DOC_INDEX`):** 기본 키 `doc_id` 말고는 제약이 없어(`file_path`에도 UNIQUE 없음) 찾기용 btree 색인을 둔다 — 원천 스키마마다(DEV 원천 포함), 이름 `ix_<원천 스키마>_<키>`(63바이트를 넘으면 판 올리기가 멈춤 — 기준 스키마 이름을 줄인다). 색인을 만드는 동안 그 doc에 쓰기가 막히므로 파이프라인이 돌지 않을 때 올린다.
+
+- `ix_<스키마>_doc_sha256` (`sha256`) — 내용 중복 판정(고르기 `gold_docs.done_by_sha`), 원문 도구 `docs`의 `doc_key`(sha256)로 찾기.
+- `ix_<스키마>_doc_silver` (`silver_bucket`, `silver_key`) — 게시한 대표 결과 위치로 행 찾기(원문 도구 `get_doc_fulltext`의 등록 시각 가드 — `fulltext_svc`).
+- `ix_<스키마>_doc_path` (`file_path`) — 원본 경로로 찾기: 적재(재게시면 그 행만 고침 — `pgvector_load`), `--skip-done` 끝난 문서(`gold_docs.done_keys`), 원문 도구 `docs` 경로(파일 이름만 준 `LIKE '%/이름'` 찾기는 이 색인을 못 씀), `search` 범위·`attrs` 읽기.
+- 그 밖: `ix_<스키마>_doc_attrs`(GIN `attrs` — 판 0005).
 
 #### gold.doc.attrs 키(기본 사슬 파일 `resources/config/edw_chain.yaml` 기준 — 서버 사본이 바꾸면 그쪽이 맞음)
 

@@ -120,7 +120,7 @@ bash deploy/host/scripts/pipe_exec.sh migrate master load                # 마�
 bash deploy/host/scripts/pipe_exec.sh migrate check --target all         # 기대: 갈래마다 "판 끝", 종료 코드 0
 bash deploy/host/scripts/pipe_exec.sh show-stack                         # 엔진 구성 파일(이름·sha·경로) — 못 읽으면 종료 2
 ```
-- `--target`: `search`·`applog`·`master`·`all`(셋 모두). 끝 판: search `0006_search` · applog `0004_applog` · master `0002_master`. `up --sql <파일>`(+ 있는 DB는 `--from <지금 판>`)은 DB에 붙지 않고 실행할 SQL만 파일로 — DB 담당 검토용([upgrade-guide §6](upgrade-guide.md#6-db-판-올리기--migrate-up)).
+- `--target`: `search`·`applog`·`master`·`all`(셋 모두). 끝 판: search `0007_search` · applog `0004_applog` · master `0002_master`. `up --sql <파일>`(+ 있는 DB는 `--from <지금 판>`)은 DB에 붙지 않고 실행할 SQL만 파일로 — DB 담당 검토용([upgrade-guide §6](upgrade-guide.md#6-db-판-올리기--migrate-up)).
 - 표는 있는데 버전 기록이 없는 스키마(판 관리 전에 만든 것)에는 `up`이 종료 2로 멈춘다 — 새 `db_schema`로 올리고 전체를 다시 적재한다.
 - ⚠ **0.1.0이 만든 스키마에 `up`하면 `0002_search`가 옛 표를 지운다** — 새 `required.pg.pg_schema`로 올린다([upgrade-guide §0](upgrade-guide.md#0-먼저-알-것)).
 - 적재(`pgvector_load`)는 새 스키마면 만들고 기록, 기록이 있으면 `up`, 기록 없는 기존 스키마면 경고만 하고 계속한다. DB 판이 코드보다 낮으면 종료 2(`migrate up` 안내), 코드가 모르는 리비전이 있으면(옛 이미지로 되돌린 뒤 등) 적재·`up` 모두 종료 2. 검색 MCP는 버전을 보지 않는다.

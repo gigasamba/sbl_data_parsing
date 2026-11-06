@@ -2,7 +2,7 @@
 (원천 = sfdc·crms·las·faq·other + 개발 서버의 DEV 원천 dev_<n> — op-17) — 스키마마다 같은 표 doc·chunk·chunk_term·term_stat·corpus_stat + 뷰 v_chunk_source, 그 원천 전용 칸만 다름.
 기준 스키마 `<PG_SCHEMA>`에는 Alembic 판 표와 5벌이 함께 쓰는 doc_id 시퀀스(`doc_id_seq`)만 있다(실행 정보는 실행 기록에).
 임베딩 차원은 실행 값이라 함수로 만든다. 색인 정의 글자(index_defs)·뷰(views_expected — 칸 이름 순서 + 정의 글자)는 PostgreSQL이 돌려주는 꼴
-(pg_get_indexdef·pg_get_viewdef — `{S}` = 원천 스키마). Alembic 판(migrations/versions/0002~0006)이 같은 DDL을 글자로 갖고,
+(pg_get_indexdef·pg_get_viewdef — `{S}` = 원천 스키마). Alembic 판(migrations/versions/0002~0007)이 같은 DDL을 글자로 갖고,
 selftest(test_dbtool)가 판 파일의 칸·뷰를 이 정의와 대조한다."""
 
 import re
@@ -46,6 +46,10 @@ DOC_RECORD = (
     ("parsed_at", TIMESTAMP(timezone=True)),
     ("loaded_at", TIMESTAMP(timezone=True)),
 )
+
+# doc 찾기용 btree 색인(판 0007 — op-17): 이름 `ix_<원천 스키마>_<키>` → 칸. attrs GIN 색인(판 0005)은 index_defs에만 둔다(SQLite 대역은 GIN 없음).
+# sha256 = 내용 중복 판정 · silver_bucket·silver_key = 게시한 대표 결과 위치 · file_path = 게시·--skip-done 끝난 문서·get_doc_fulltext가 원본 경로로 찾음.
+DOC_INDEX = {"doc_sha256": ("sha256",), "doc_silver": ("silver_bucket", "silver_key"), "doc_path": ("file_path",)}
 
 
 def source_of(system):
@@ -187,6 +191,9 @@ def search_metadata(schema, dim, shared_seq=True):
         Column("n_chunks", Integer, nullable=False),
         Column("avg_len", DOUBLE_PRECISION, nullable=False),  # 차원(dim)은 판 0004에 지움 — chunk.embedding 칸 형식에서 읽음
     )
+    doc = md.tables[f"{schema}.doc"]
+    for name, cols in DOC_INDEX.items():  # 찾기용 색인(판 0007)
+        Index(f"ix_{schema}_{name}", *(doc.c[c] for c in cols))
     Index(f"ix_{schema}_chunk_doc", chunk.c.doc_id, chunk.c.seq)
     Index(f"ix_{schema}_chunk_term_chunk", chunk_term.c.chunk_id)
     return md
@@ -196,6 +203,9 @@ def index_defs(dim):
     """색인 이름 → pg_get_indexdef 글자(`{S}` = 원천 스키마) — 기본 키 색인 빼고. 차원 ≤2,000이면 HNSW 코사인, 넘으면 이진 양자화 HNSW."""
     out = {
         "ix_{S}_doc_attrs": "CREATE INDEX ix_{S}_doc_attrs ON {S}.doc USING gin (attrs)",  # 판 0005(pl-52)
+        **{
+            f"ix_{{S}}_{n}": f"CREATE INDEX ix_{{S}}_{n} ON {{S}}.doc USING btree ({', '.join(c)})" for n, c in DOC_INDEX.items()
+        },  # 판 0007
         "ix_{S}_chunk_doc": "CREATE INDEX ix_{S}_chunk_doc ON {S}.chunk USING btree (doc_id, seq)",
         "ix_{S}_chunk_term_chunk": "CREATE INDEX ix_{S}_chunk_term_chunk ON {S}.chunk_term USING btree (chunk_id)",
     }

@@ -14,8 +14,8 @@ def selftest():
     assert base.HNSW_MAX == ST.HNSW_MAX  # 판 파일이 굳혀 둔 숫자 = 지금 pg.HNSW_MAX
     assert (
         TARGETS == ("search", "applog", "master")
-        and head("search") == "0006_search"
-        and known("search") == ["0006_search", "0005_search", "0004_search", "0003_search", "0002_search", "0001_search"]
+        and head("search") == "0007_search"
+        and known("search") == ["0007_search", "0006_search", "0005_search", "0004_search", "0003_search", "0002_search", "0001_search"]
     )
     assert head("applog") == "0004_applog" and known("applog") == ["0004_applog", "0003_applog", "0002_applog", "0001_applog"]
     assert head("master") == "0002_master" and known("master") == ["0002_master", "0001_master"]
@@ -57,6 +57,14 @@ def selftest():
     for src in ST.SOURCES:
         assert ST.doc_columns(src) == ["doc_id", "file_path", *m5.VIEW_DOC, *m4.DOC_META_COLS, "attrs", *m6.DOC_RECORD_COLS], src
     print("[selftest] dbtool — 판 0006 처리 기록 칸·doc 칸 순서 = 표 정의 통과")
+    # 판 0007(op-17) — doc 찾기용 색인 이름·칸 = 표 정의 DOC_INDEX
+    sp = importlib.util.spec_from_file_location("s_0007", MIGRATIONS / "versions" / "0007_doc_index.py")
+    m7 = importlib.util.module_from_spec(sp)
+    sp.loader.exec_module(m7)
+    assert m7.SOURCES == ST.SOURCES and m7.down_revision == m6.revision
+    assert m7.DOC_INDEX == ST.DOC_INDEX
+    assert ST.index_defs(768)["ix_{S}_doc_silver"] == "CREATE INDEX ix_{S}_doc_silver ON {S}.doc USING btree (silver_bucket, silver_key)"
+    print("[selftest] dbtool — 판 0007 doc 색인(sha256·silver 위치·file_path) = 표 정의 통과")
     # 원천 스키마 SQLite 대역 — 표 정의에서 만든 DDL을 pg_standin이 받음(칸 순서·차원 글자 vector(n) 그대로)
     import tempfile
 
@@ -85,20 +93,29 @@ def selftest():
     assert ST.split_schema("ai_las") == ("ai", "las") and ST.split_schema("ai") == ("ai", None)
     print("[selftest] dbtool — 원천 스키마 SQLite 대역 5벌(표 5·뷰 1·칸 순서·vector(4096))·원천 이름 통과")
     assert index_kind(2000) == "HNSW 코사인" and index_kind(4096).startswith("이진")
-    assert set(ST.index_defs(768)) == {"ix_{S}_doc_attrs", "ix_{S}_chunk_doc", "ix_{S}_chunk_term_chunk", "ix_{S}_chunk_emb"}
+    assert set(ST.index_defs(768)) == {
+        "ix_{S}_doc_attrs",
+        "ix_{S}_doc_sha256",
+        "ix_{S}_doc_silver",
+        "ix_{S}_doc_path",
+        "ix_{S}_chunk_doc",
+        "ix_{S}_chunk_term_chunk",
+        "ix_{S}_chunk_emb",
+    }
     assert "ix_{S}_chunk_embq" in ST.index_defs(4096) and "bit(4096)" in ST.index_defs(4096)["ix_{S}_chunk_embq"]
     # 판 상태 판정(가짜 q)
     for have, want in (
         (None, "없음"),
         ([], "없음"),
-        (["0006_search"], "끝"),
+        (["0007_search"], "끝"),
+        (["0006_search"], "낮음"),
         (["0005_search"], "낮음"),
         (["0004_search"], "낮음"),
         (["0003_search"], "낮음"),
         (["0002_search"], "낮음"),
         (["0001_search"], "낮음"),
         (["9999_x"], "모름"),
-        (["0006_search", "9999_x"], "모름"),
+        (["0007_search", "9999_x"], "모름"),
     ):
         fq = (
             lambda h: lambda sql, p=None: ([{"x": 1}] if h is not None else []) if "to_regclass" in sql else [{"version_num": v} for v in h]
@@ -165,7 +182,14 @@ UP_SQL = [
     ),
     (
         ["--target", "search", "--schema", "demo", "--dim", "768"],
-        ["CREATE SCHEMA IF NOT EXISTS demo;", "demo_sfdc.chunk", "vector(768)", "SET version_num='0006_search'", "-- 수동: vector 확장"],
+        [
+            "CREATE SCHEMA IF NOT EXISTS demo;",
+            "demo_sfdc.chunk",
+            "vector(768)",
+            "SET version_num='0007_search'",
+            "CREATE INDEX IF NOT EXISTS ix_demo_sfdc_doc_sha256 ON demo_sfdc.doc (sha256);",
+            "-- 수동: vector 확장",
+        ],
         ["applog."],
     ),
     (["--target", "master", "--schema", "demo"], ["CREATE TABLE demo_master.master_meta", "demo_master.alembic_version"], []),
