@@ -5,6 +5,7 @@ import threading
 import time
 import types
 
+from common.store.db.models import search_tables as ST
 from common.store.pg import PGPool, _standin_schema, _warn_standin, conf, has_conn  # 시험이 has_conn을 바꿔 끼움
 from mcp_server import config as mc
 
@@ -75,8 +76,16 @@ def _build_retriever():
 
     cur = cfgfile.active("stack")  # 엔진 구성 파일(서버·PC 같음 — 프로세스 시작 때 읽은 것)
     st = cur.named()
-    dbs = connect_sources()  # 원천 스키마 5벌 — 실 PG는 풀 하나를 함께 씀
-    Rs = {src: RT.Retriever(st.get("retrieve", "hybrid"), pg=db) for src, db in dbs.items()}  # 색인 정보는 원천마다 PG에서
+    dbs = connect_sources()  # 원천 스키마 5벌 + 있는 DEV 원천 — 실 PG는 풀 하나를 함께 씀
+    Rs, bad = {}, set()
+    for src, db in list(dbs.items()):  # 색인 정보는 원천마다 PG에서
+        R = _dev_retriever(src, db, st) if ST.is_dev(src) else RT.Retriever(st.get("retrieve", "hybrid"), pg=db)
+        if R is None:  # 깨진 DEV 스키마는 싣지 않음 — 5벌은 그대로
+            dbs.pop(src)
+            bad.add(src)
+        else:
+            Rs[src] = R
+    _STATE["bad_dev"] = bad
     _STATE["Rs"], _STATE["dbs"], _STATE["stack"] = Rs, dbs, st
     _STATE["version"], _STATE["checked_at"] = _version_of(dbs), time.time()
     old_pool, _STATE["pool"] = _STATE.get("pool"), getattr(next(iter(dbs.values())), "pool_obj", None)
@@ -85,7 +94,7 @@ def _build_retriever():
 
 
 def _retriever(src):
-    """원천(sfdc·crms·las·faq·other)의 Retriever. 처음엔 만들고, 이후엔 최소 MCP_RELOAD_CHECK_SEC(기본 30초) 간격으로 적재 버전이
+    """원천(sfdc·crms·las·faq·other·있는 dev_<n>)의 Retriever. 처음엔 만들고, 이후엔 최소 MCP_RELOAD_CHECK_SEC(기본 30초) 간격으로 적재 버전이
     바뀌었는지만 확인해 바뀌었으면 다시 만든다. 재생성 중인 동시 요청은 기다리지 않고 기존 객체로 바로 응답(비차단 잠금)."""
     if "Rs" not in _STATE:
         with _RELOAD_LOCK:
@@ -103,6 +112,59 @@ def _retriever(src):
         finally:
             _RELOAD_LOCK.release()
     return _STATE["Rs"][src]
+
+
+def _dev_retriever(src, db, st):
+    """DEV 원천 하나의 Retriever — 표가 없는 등 깨진 스키마면 경고 한 줄 + None(그 원천만 안 실음, op-17)."""
+    from mcp_server.services.search import retriever as RT
+
+    try:
+        return RT.Retriever(st.get("retrieve", "hybrid"), pg=db)
+    except Exception as e:
+        print(f"[mcp] DEV 원천 스키마 {db.schema} 못 실음(그 원천만 뺌): {type(e).__name__}: {str(e)[:120]}", file=sys.stderr, flush=True)
+        return None
+
+
+def dev_served():
+    """지금 검색하는 DEV 원천(번호 순) — "어떤 DEV 원천이 있나"의 답은 여기 하나(search·원문 도구·edw_meta). 처음이면 검색기를 만들고,
+    부를 때마다 DB(PC는 대역 폴더)를 한 번 찾아 그사이 생긴 스키마(dbtool up)는 그 원천만 더하고 사라진 것은 뺀다 — 재시작 없이.
+    prd는 ST.dev_sources가 빈 목록(DEV 없음). 깨진 스키마는 한 번 경고하고 다음 전체 재생성까지 다시 시도하지 않는다."""
+    _retriever("other")  # 처음이면 만듦 · 재적재 확인
+    if "dbs" not in _STATE:  # 시험이 Retriever를 직접 넣은 경우
+        return [s for s in _STATE["Rs"] if ST.is_dev(s)]
+    other = _STATE["dbs"]["other"]
+    standin = getattr(other, "is_standin", False)
+    found = ST.dev_sources(ST.split_schema(other.schema)[0], None if standin else other.q)
+    gone = [s for s in _STATE["Rs"] if ST.is_dev(s) and s not in found]
+    new = {}
+    for src in found:
+        if src not in _STATE["Rs"] and src not in _STATE.get("bad_dev", ()):
+            schema = ST.src_schema(ST.split_schema(other.schema)[0], src)
+            if standin:
+                from common.store.pg_standin import StandinPG
+
+                db = StandinPG(schema)
+            else:
+                db = SchemaView(other.pool_obj, schema)
+            new[src] = (db, _dev_retriever(src, db, _STATE["stack"]))
+    if gone or new:
+        ver = dict((v[0], v) for v in _version_of({s: db for s, (db, R) in new.items() if R}))
+        with _RELOAD_LOCK:  # 바꿔 끼우기만(질의는 위에서) — 다른 요청이 도는 dict는 고치지 않고 새 dict로
+            Rs = {s: R for s, R in _STATE["Rs"].items() if s not in gone}
+            dbs = {s: db for s, db in _STATE["dbs"].items() if s not in gone}
+            for src, (db, R) in new.items():
+                if R is None:
+                    _STATE["bad_dev"] = {*_STATE.get("bad_dev", ()), src}
+                else:
+                    Rs[src], dbs[src] = R, db
+            old = {v[0]: v for v in _STATE.get("version") or () if v[0] not in gone}
+            _STATE["Rs"], _STATE["dbs"], _STATE["version"] = Rs, dbs, tuple(sorted({**old, **ver}.values()))
+    return [s for s in found if s in _STATE["Rs"]]
+
+
+def dev_hint(found):
+    """원천 값 오류 글 꼬리 — 있는 DEV 원천을 알림(없으면 빈 글자 — prd는 늘 비어 모르는 값과 같은 오류)."""
+    return f" — 개발 서버 원천: {', '.join(map(ST.label, found))}" if found else ""
 
 
 def _warmup(R):
@@ -180,14 +242,13 @@ class SchemaView:
 
 
 def connect_sources():
-    """원천 이름 → 그 원천 스키마 연결(`<PG_SCHEMA>_<원천>`). 실 PG는 풀 하나 + SchemaView, 대역은 스키마마다 파일 하나(StandinPG)."""
-    from common.store.db.models import search_tables as ST
-
+    """원천 이름 → 그 원천 스키마 연결(`<PG_SCHEMA>_<원천>`) — 5벌 + 있는 DEV 원천(op-17 — prd는 5벌만). 실 PG는 풀 하나 + SchemaView,
+    대역은 스키마마다 파일 하나(StandinPG)."""
     if has_conn():
         pool = PGPool(conf())
-        return {src: SchemaView(pool, ST.src_schema(pool.schema, src)) for src in ST.SOURCES}
+        return {src: SchemaView(pool, ST.src_schema(pool.schema, src)) for src in ST.all_sources(pool.schema, pool.q)}
     _warn_standin()
     from common.store.pg_standin import StandinPG
 
     base = _standin_schema(None)
-    return {src: StandinPG(ST.src_schema(base, src)) for src in ST.SOURCES}
+    return {src: StandinPG(ST.src_schema(base, src)) for src in ST.all_sources(base)}

@@ -244,9 +244,8 @@ if __name__ == "__main__":
     utf8_stdout()
     if "--stdio" in sys.argv:
         call_log.configure_stdio()
-    from common.config.settings import edw_read_only, require_run_env
+    from common.config.settings import require_run_env
 
-    edw_read_only()  # 검색 MCP는 EDW 읽기 계정만 — 공용 설정 파일의 쓰기 계정 칸은 이 프로세스에서 비움(사용자 10-29, ops.md#op-03)
     require_run_env("mcp_server.main", sections=("mcp",))  # S7a(D-028 ②) — 실행 환경 없으면 시작 거부(서버면 설정 검증 실패도 — S7e2 U-1)
     from common.store.db import cfgfile
 
@@ -267,6 +266,7 @@ if __name__ == "__main__":
             mc.token_text(mc.common_cfg().tokens.mcp),
         )  # 공백뿐인 토큰 = 토큰 없음(사용자 결정 10-27)
         if host == "auto":  # 브리지 네트워크 컨테이너: 자기 사설 IP(포트 게시로 밖에서 부름) — 토큰 필수
+            # 같은 풀이: compose.mcp-server.yml healthcheck 한 줄·mcp_keepalive.sh(컨테이너 안 exec) — 바꾸면 함께
             import socket
 
             host = socket.gethostbyname(socket.gethostname())

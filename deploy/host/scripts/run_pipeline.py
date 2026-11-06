@@ -9,15 +9,16 @@
    구조화 대기 문서가 STRUCT_BACKLOG(기본 구조화 워커 × 2)개 이상이면 새 파싱을 시작하지 않고 기다림(rn-02).
    레인·대기 길이는 상태가 바뀔 때마다 batch_progress/queue_depth.jsonl에 한 줄(rn-02).
    값은 settings.yaml ops.run_pipeline(비우면 아래 RUN_PIPELINE_DEFAULTS) — --staging·--struct-workers 인자가 그 위를 덮음.
-3) 문서별 순서(pl-24): 파싱 → silver 게시(publish — OS+EDW, 게시 스레드 1개) → 원본 삭제(게시 성공 뒤에만) →
-   gold(gold_bundle → pgvector_load, STRUCT_WORKERS(기본 2)개 스레드) → 임시 삭제. 배치 장벽 없이 끝나는 순서대로 흐름.
-   파싱·게시 실패 = 원본(staging)을 남기고 로그에만, gold로 안 감 · gold 실패 = silver는 그대로(로그 — gold_status 칸은 DB 담당 C-81).
+3) 문서별 순서(pl-24): 파싱 → silver 게시(publish — Object Storage + 처리 기록 파일, 게시 스레드 1개) → 원본 삭제(게시 성공 뒤에만) →
+   gold(gold_bundle → pgvector_load — doc 행에 처리 기록, STRUCT_WORKERS(기본 2)개 스레드) → 임시 삭제. 배치 장벽 없이 끝나는 순서대로 흐름.
+   파싱·게시 실패 = 원본(staging)을 남기고 gold로 안 감 · gold 실패 = silver는 그대로. 실패는 로그와 applog.except_doc_info error
+   (다음 실행이 다시 고름 — op-17).
 4) 종료 코드(pl-18): 0 = 대상 0건·모두 끝 · 1 = 실패 문서 있음 · 75 = 마감 도달(실패 없음) 또는 다른 run_pipeline이 도는 중
    (잠금 batch_progress/run_pipeline.lock — 사람이 돌린 실행과 새벽 배치가 겹치지 않게) · 2 = 설정 문제.
 
 사용: python3 run_pipeline.py [--start-offset N](기본 0) [--staging 20] [--struct-workers 2]
                   [--filter RFP,proposal](기본 모든 문서 — 이름 키워드로 좁힐 때만) [--limit N](시험: N건만) [--no-cleanup](임시 유지)
-로그: test_space/batch_progress/progress.log · 문서별 파싱 로그 progress/doc_<seq>.log
+로그: test_space/batch_progress/progress.log · 문서별 파싱 로그 test_space/batch_progress/doc_<seq>.log
 """
 
 import argparse
@@ -40,13 +41,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 # 운영 접속 값·비밀·운영 고정값은 코드에 두지 않고 서버 settings.yaml에서 읽는다(configure() — 시작 때 한 번).
-#   파일: --settings 또는 SETTINGS_FILE, 없으면 <루트>/settings.yaml(루트 = 코드 폴더의 부모). 호스트 python에 PyYAML이 있어야 한다(pymssql처럼 —
+#   파일: --settings 또는 SETTINGS_FILE, 없으면 <루트>/settings.yaml(루트 = 코드 폴더 자체). 호스트 python에 PyYAML이 있어야 한다(pymssql처럼 —
 #   refactor.md C-09). 필요한 칸이 없으면 칸 경로만 찍고 종료 코드 2(값은 찍지 않음). required.env.run_env가 dev·prd가 아니면 거부(로컬 실행 금지 — CLAUDE.md 3절).
 #   docker exec로 부르는 상주 컨테이너(data-pipeline)는 같은 파일을 붙여 읽으므로(compose x-settings) 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
 #   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.run_pipeline.run_pipeline_work_dir(비우면 이 스크립트 옆 test_space/), 결과 공유 폴더는
 #   ops.host.host_output_dir(RAG_OUT — 컨테이너 /app/output의 원본 그대로), 비우면 <루트>/output(load_settings.sh와 같음).
 TEST = PROG = DOCSPACE = DOCFLOW = STAGING = None  # configure()가 채움
-PIPE_C = "data-pipeline"  # docker exec 대상 상주 컨테이너(목록·받기·파싱·게시·구조화·정리) — configure()가 ops.host.instance_name을 붙임
+PIPE_C = None  # docker exec 대상 상주 컨테이너(목록·받기·파싱·게시·구조화·정리) — configure()가 밑 이름 + 벌 번호로 채움
 DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.container_cli(없으면 podman, 그것도 없으면 docker)로 채움
 CODE_DIR = None  # --code(설정 배치 모듈 layout.py·이미지 경로 표를 찾을 코드 폴더 — 운영자 폴더에서 돌릴 때, 기본 배치 경로 없음)
 SOURCE_BUCKET = PG_CONTAINER = PG_USER = PG_DB = PG_SCHEMA = None  # staging 파일 이름의 원천 버킷 · 문서 수 세기(psql)
@@ -56,8 +57,6 @@ SETTINGS_REQUIRED = (  # (칸 경로, 무엇에 쓰나) — 없으면 시작 거
     ("common.connections.rdb.database", "EDW DB"),
     ("common.connections.rdb.read.user", "EDW 읽기 계정"),
     ("common.connections.rdb.read.password", "EDW 읽기 계정 비밀번호"),
-    ("common.connections.rdb.write.user", "EDW 쓰기 계정 — publish의 ParsingMeta INSERT(컨테이너)"),
-    ("common.connections.rdb.write.password", "EDW 쓰기 계정 비밀번호(컨테이너)"),
     ("common.connections.object_storage.endpoint", "Object Storage 주소 — publish·받기(컨테이너)"),
     ("common.connections.object_storage.access_key", "Object Storage 키(컨테이너)"),
     ("common.connections.object_storage.secret_key", "Object Storage 비밀 키(컨테이너)"),
@@ -79,9 +78,14 @@ def _code_root():
 
 
 def _root():
-    """서버 루트(settings.yaml·edw_chain.yaml·output/이 바로 아래): load_settings.sh load_settings가 낸 RAG_ROOT, 없으면 같은 규칙(코드 폴더의 부모)."""
-    r = os.environ.get("RAG_ROOT")  # env 남김 — 호스트 도구(load_settings.sh load_settings가 냄)
-    return Path(r) if r else _code_root().resolve().parent
+    """서버 루트(settings.yaml·edw_chain.yaml·output/이 바로 아래) = 코드 폴더 자체 — 셸에 남은 다른 벌의 RAG_ROOT는 보지 않는다."""
+    return _code_root().resolve()
+
+
+def instance_of(root):
+    """벌 번호 — 루트(코드 폴더) 이름 끝 -<1~99>(예 sbl_data_parsing-main-2 → "2"), 없으면 ""(한 벌 — 날짜 꼴 숫자도). load_settings.sh와 같은 규칙."""
+    m = re.search(r"-([1-9][0-9]?)$", Path(root).name)
+    return m.group(1) if m else ""
 
 
 def _inside(seq, sub=""):
@@ -177,24 +181,26 @@ def configure(settings_file=None):
         or _host().get(doc, "common.host.docker")
         or ("podman" if shutil.which("podman") else "docker")
     )
-    inst = _host().get(doc, "common.host.instance") or ""
-    if not re.fullmatch(r"([a-z0-9][a-z0-9-]*)?", str(inst)):
-        return [f"{_host().layout().to_yaml('common.host.instance')}는 영소문자·숫자·-만(앞은 글자·숫자)"]
+    inst = instance_of(_root())
     if inst and run_env == "prd":
-        return [f"{_host().layout().to_yaml('common.host.instance')}는 개발 서버(dev)에서만 — 운영(prd)은 한 벌"]
+        return [f"코드 폴더 이름 끝 -{inst}(벌 번호)는 개발 서버(dev)에서만 — 운영(prd)은 한 벌(폴더 이름을 바꿀 것)"]
     if inst:  # 여러 벌 — 포트가 코드 기본값 그대로면 다른 벌과 겹침(load_settings.sh·앱과 같은 거부)
         for p in ("mcp.server.port", "common.runtime.data_parsing_port"):
             d = _const(f"default.{p}")
             if str(_host().get(doc, p) or d) == d:
                 return [f"여러 벌 — {_host().layout().to_yaml(p)}가 기본값({d}) 그대로: 벌마다 다른 포트를 적음"]
-    # 여러 벌 — host_ctl.sh가 띄운 이 루트의 컨테이너(load_settings.sh NAME_SUFFIX와 같은 규칙)
-    PIPE_C = "data-pipeline" + (f"-{inst}" if inst else "")
+    # 컨테이너 이름 — load_settings가 낸 PIPELINE_CNAME, 없으면 같은 규칙으로: 밑 이름(ops.containers.pipeline.pipeline_container_name > 코드 기본값) + 벌 번호
+    PIPE_C = os.environ.get("PIPELINE_CNAME") or (  # env 남김 — 호스트 도구(load_settings.sh load_settings가 냄)
+        (_host().get(doc, "common.host.pipeline_container") or _const("default.common.host.pipeline_container"))
+        + (f"-{inst}" if inst else "")
+    )
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", PIPE_C):  # 명령 줄에 그대로 들어감 — 설정 모델과 같은 꼴
+        return [f"{_host().layout().to_yaml('common.host.pipeline_container')}: 컨테이너 이름 꼴이 아님(영문·숫자·_.-)"]
     MCP_JOBS_DIR = DOCSPACE / "_mcp_parse" / "jobs"  # mcp-data-parsing의 작업 폴더(같은 결과 폴더 — run_mcp_parsing.JOBS_DIR)
     SOURCE_BUCKET = _host().get(doc, "pipeline.connections.rdb.bucket")
     PG_CONTAINER = _host().get(doc, "common.host.pg_container")
     PG_USER, PG_DB = _host().get(doc, "common.connections.pg.user"), _host().get(doc, "common.connections.pg.db")
-    schema = _host().get(doc, "common.connections.pg.db_schema") or "data_parsing"  # 앱 설정 모델 기본값과 같음
-    PG_SCHEMA = _host().layout().per_instance(schema, inst)  # 앱과 같은 규칙(settings 여러 벌)
+    PG_SCHEMA = _host().get(doc, "common.connections.pg.db_schema") or "data_parsing"  # 앱 설정 모델 기본값과 같음
     return []
 
 
@@ -292,18 +298,30 @@ def struct_cmd(seq):
         f"python -m pipeline.transform.structure.gold_bundle{st} --parse-dir {inside}/parse --src {inside}/prepared"
         f" --out {inside}/bundle && "
         f"python -m pipeline.load.pgvector_load{st} load --bundle {inside}/bundle --rep-dir {inside}/parse/_rep "
-        f">> {inside}/structure.log 2>&1",
+        f"--silver {inside}/publish/silver.jsonl >> {inside}/structure.log 2>&1",
         seq,
     )
 
 
 def publish_cmd(seq):
-    """문서 1개 publish(OS + EDW)."""
+    """문서 1개 publish(Object Storage + 처리 기록 파일 publish/silver.jsonl — 적재가 doc 칸으로)."""
     inside = _inside(seq)
     return pexec(
         f"python -m pipeline.load.publish_parse_result --out {inside} --source-system FileStorageMap --apply >> {inside}/publish.log 2>&1",
         seq,
     )
+
+
+def error_cmd(seq, reason):
+    """문서 1개 실패 기록 — applog.except_doc_info error(다음 실행이 다시 고름, op-17). 문서 위치 표는 stage_one이 쓴 batch.csv."""
+    return pexec(f"python -m pipeline.shared.except_docs error --csv {_inside(seq)}/batch.csv --reason {reason}")
+
+
+def note_error(seq, reason):
+    """실패 기록(error_cmd) — 기록이 실패해도 흐름은 계속(로그에만 — 다음 실행은 어차피 다시 고름). 임시 폴더를 지우기 전에 부른다."""
+    rc, _, _ = sh(error_cmd(seq, reason), timeout=120)
+    if rc != 0:
+        log(f"doc#{seq} 실패 기록(except_doc_info) 못 씀 — rc {rc}")
 
 
 def sweep_cmd(seq):
@@ -534,8 +552,8 @@ def log(msg):
 def write_doc_csv(row, path):
     with path.open("w", newline="", encoding="utf-8-sig") as fp:
         w = csv.writer(fp)
-        w.writerow(["id", "s3_key", "original_filename", "file_size"])
-        w.writerow([row["id"], row["s3_key"], row["original_filename"], row["file_size"]])
+        w.writerow(["id", "s3_key", "original_filename", "file_size", "source_system"])  # 원천 = FileStorageMap.source_system(op-17)
+        w.writerow([row["id"], row["s3_key"], row["original_filename"], row["file_size"], row["source_system"]])
 
 
 def stage_one(seq, row):
@@ -691,7 +709,7 @@ def parse_one(seq, row):
     """문서 1개 파싱 — 공유 상주 컨테이너(PIPE_C) 안에서 워커별 분리(경로 격리).
     문서마다 출력 루트(PIPE_OUT_ROOT·DOC_DIR_PREPARED — --set으로 넘김)를 따로 둔다.
     VLM·OCR·후처리 값은 settings.yaml ops.run_pipeline, 쪽 해상도는 extract.page_render_dpi.
-    → True(성공) · False(실패) · SKIP(받기가 중복·DRM·암호로 빼서 파싱할 것 없음 — 실패 아님, 게시가 skipped_* 상태를 씀 — pl-02)."""
+    → True(성공) · False(실패) · SKIP(받기가 중복·DRM·암호로 빼서 파싱할 것 없음 — 실패 아님, 받기가 except_doc_info skip에 이미 씀 — 게시·gold 없음, pl-02)."""
     d = DOCFLOW / f"{seq}"  # stage_one이 만든 문서 폴더(batch.csv 포함)
     doc_log = PROG / f"doc_{seq}.log"
     t0 = time.time()
@@ -699,7 +717,7 @@ def parse_one(seq, row):
     only = d / "parse" / "_source" / "only.txt"  # stage가 쓴 파싱할 이름 목록(거르기를 지난 것)
     if (d / ".staged").exists() and only.exists() and not only.read_text(encoding="utf-8").strip():
         mark(seq, "parse_end", ok=True, skip=True, rep=0, sec=0)
-        log(f"doc#{seq} 파싱 건너뜀 — 받기가 중복·DRM·암호로 뺌(게시가 상태를 씀) — {row['original_filename'][:44]}")
+        log(f"doc#{seq} 파싱 건너뜀 — 받기가 중복·DRM·암호로 뺌(게시·gold 없음) — {row['original_filename'][:44]}")
         return SKIP
     print(f"[{now():%H:%M:%S}] doc#{seq} 파싱 시작 — {row['original_filename'][:44]}", flush=True)
     chan = _class.get(seq) or "light"
@@ -713,11 +731,11 @@ def parse_one(seq, row):
     return ok
 
 
-SKIP = "skip"  # parse_one — 받기가 뺀 문서(파싱 없이 게시만)
+SKIP = "skip"  # parse_one — 받기가 뺀 문서(파싱·게시·gold 없이 원본·임시 폴더만 지움)
 
 
 def publish_one(seq):
-    """silver 게시(OS + EDW — 파싱 바로 뒤, gold 전). 성공해야 원본을 지우고 gold로 넘어간다."""
+    """silver 게시(Object Storage + 처리 기록 파일 — 파싱 바로 뒤, gold 전). 성공해야 원본을 지우고 gold로 넘어간다."""
     t1 = time.time()
     mark(seq, "pub_start")
     rc = doc_sh(seq, publish_cmd(seq), 900, PROG / f"doc_{seq}.log")
@@ -742,9 +760,6 @@ def gold_one(seq, enq_t=None):
         f"doc#{seq} 구조화+적재 {'OK' if ok else 'FAIL'}(대기 {wait / 60:.1f}분 · 실행 {(time.time() - t0) / 60:.1f}분)"
         + ("" if ok else f" — silver는 남김(게시됨, gold는 silver에서 다시 만듦) · {_fail_note(rc, seq, 'structure.log')}")
     )
-    # TODO(pl-24 · refactor.md C-81): DB 담당자가 AI.ParsingMeta.gold_status(pending·ok·failed)+이유 칸을 더하면 여기서 실패를 적는다.
-    #   지금은 칸이 없어 로그에만. gold_version 칸(C-76 ③)이 있으면 비어 있으므로 다음 --skip-done이 다시 고른다 —
-    #   칸이 없으면 게시한 행(parse_status ok)만 보고 끝난 문서로 친다 → 이 순서는 gold_version 칸이 생긴 뒤에 배포(C-81).
     return ok
 
 
@@ -834,13 +849,28 @@ PG_SOURCES = (
 )  # 원천 스키마 <스키마>_<원천>(search_tables.SOURCES와 같음 — 호스트 python은 common을 못 읽음)
 
 
-def pg_count():
-    """(문서 수, 청크 수) — 원천 스키마 5벌의 합. 못 세면 (0, 0)."""
-    doc, chunk = (" + ".join(f"(SELECT count(*) FROM {PG_SCHEMA}_{s}.{t})" for s in PG_SOURCES) for t in ("doc", "chunk"))
-    rc, out, _ = sh(
-        f"{DOCKER} exec {PG_CONTAINER} psql -U {PG_USER} -d {PG_DB} -Atc 'SELECT {doc}, {chunk}'",
-        timeout=60,
+def _psql(sql):
+    return sh(
+        f"{DOCKER} exec {PG_CONTAINER} psql -U {PG_USER} -d {PG_DB} -Atc {shlex.quote(sql)}", timeout=60
     )  # 설정 칸(PG 컨테이너·DB·스키마)
+
+
+def pg_sources():
+    """원천 이름 — 5벌 + DB에 있는 DEV 원천 스키마 `<스키마>_dev_<n>`(op-17 — 설정에 넣은 DEV 원천은 dbtool up이 만든 뒤 여기 잡힘). 못 읽으면 5벌만."""
+    rc, out, _ = _psql(f"SELECT schema_name FROM information_schema.schemata WHERE schema_name ~ '^{PG_SCHEMA}_dev_[1-9][0-9]?$'")
+    dev = (
+        [n[len(PG_SCHEMA) + 1 :] for n in (out or "").split() if re.fullmatch(rf"{re.escape(PG_SCHEMA)}_dev_[1-9][0-9]?", n)]
+        if rc == 0
+        else []
+    )
+    return (*PG_SOURCES, *sorted(dev, key=lambda s: int(s[len("dev_") :])))
+
+
+def pg_count():
+    """(문서 수, 청크 수) — 원천 스키마(5벌 + 있는 DEV 원천)의 합. 못 세면 (0, 0)."""
+    srcs = pg_sources()
+    doc, chunk = (" + ".join(f"(SELECT count(*) FROM {PG_SCHEMA}_{s}.{t})" for s in srcs) for t in ("doc", "chunk"))
+    rc, out, _ = _psql(f"SELECT {doc}, {chunk}")
     try:
         parts = out.replace("|", " ").split()
         return int(parts[0]), int(parts[1])
@@ -932,7 +962,7 @@ def main():
     ap.add_argument(
         "--skip-done",
         action="store_true",
-        help="EDW ParsingMeta에 이미 끝난(ok·partial — gold_version도, skipped_dup) 문서는 건너뜀(재실행 시간 절약)",
+        help="gold에 이미 끝난(doc 행이 있는) 문서와 영구 뺌(except_doc_info skip) 문서는 건너뜀(재실행 시간 절약)",
     )
     ap.add_argument("--no-cleanup", action="store_true")
     ap.add_argument("--settings", default=None, help="서버 settings.yaml(기본 SETTINGS_FILE 또는 <루트>/settings.yaml — op-13)")
@@ -989,7 +1019,7 @@ def main():
     tf.start()
 
     # 문서별 순서: 파싱 → silver 게시(pub_q, 게시 스레드) → 원본 삭제 → gold(struct_q, 구조화 스레드) → 임시 삭제.
-    # 게시를 따로 두어 구조화가 업로드·EDW 쓰기를 기다리지 않는다. 파싱 실패·게시 실패면 원본을 남기고 gold로 가지 않는다.
+    # 게시를 따로 두어 구조화가 업로드를 기다리지 않는다. 파싱 실패·게시 실패면 원본을 남기고 gold로 가지 않는다.
     cnt = {
         "ok": 0,
         "skipped": 0,
@@ -1019,20 +1049,22 @@ def main():
             finally:
                 q.task_done()
 
-    def _publish(seq, row, skip=False):
+    def _skip(seq, row):  # 받기가 뺀 문서(중복·DRM·암호) — 기록은 받기가 except_doc_info skip에 씀, 게시·gold 없음
+        _safe(drop_original, seq, row)
+        with _flow_lock:
+            cnt["skipped"] += 1
+        _safe(drop_temp, seq)
+        mark(seq, "done")
+
+    def _publish(seq, row):
         ok = _ran("publish", publish_one, seq)
         if not ok:
             with _flow_lock:
                 cnt["pub_fail"] += 1
+            _safe(note_error, seq, "publish_failed")
             _safe(drop_temp, seq)
             return
         _safe(drop_original, seq, row)  # 게시 성공 뒤에만
-        if skip:  # 받기가 뺀 문서 — 게시가 skipped_* 상태를 썼고 gold는 없음
-            with _flow_lock:
-                cnt["skipped"] += 1
-            _safe(drop_temp, seq)
-            mark(seq, "done")
-            return
         _struct_q.put((seq, row, time.time()))
         depth("struct_put")
 
@@ -1041,26 +1073,31 @@ def main():
         with _flow_lock:  # 집계를 기록(mark — 디스크 가득이면 예외)보다 먼저
             cnt["ok" if ok else "gold_fail"] += 1
             report = ok and cnt["ok"] % 5 == 0
+        if not ok:
+            _safe(note_error, seq, "load_failed")
         _safe(drop_temp, seq)
         mark(seq, "done")
         if report:  # psql(최대 60초)은 잠금 밖에서 — 레인·받기 워커를 막지 않게
             nd, nc = pg_count()
             log(f"PG 누적: doc={nd} chunk={nc}")
 
-    # ponytail: 게시 스레드 1개 — 업로드+EDW 한 줄은 파싱·구조화보다 훨씬 짧음, 밀리면 설정 칸(설정 모델 — 핑거프린트 파일)으로
+    # ponytail: 게시 스레드 1개 — 업로드는 파싱·구조화보다 훨씬 짧음, 밀리면 설정 칸(설정 모델 — 핑거프린트 파일)으로
     threading.Thread(target=_queue_loop, args=(_pub_q, "pub", _publish), daemon=True).start()
     for _ in range(max(1, STRUCT_WORKERS)):
         threading.Thread(target=_queue_loop, args=(_struct_q, "struct", _gold), daemon=True).start()
 
     def _one(doc_seq, row_doc):
         res = _ran("파싱", parse_one, doc_seq, row_doc)
-        if res:  # SKIP도 게시로(실패 아님 — 게시가 skipped_dup 등을 써야 다음 밤에 다시 안 고름)
-            _pub_q.put((doc_seq, row_doc, res == SKIP))
+        if res == SKIP:  # 실패 아님 — 다음 밤에는 대상 목록이 except_doc_info skip 키로 뺌
+            _skip(doc_seq, row_doc)
+        elif res:
+            _pub_q.put((doc_seq, row_doc))
             depth("pub_put")
         else:
             with _flow_lock:
                 cnt["parse_fail"] += 1
-            _safe(drop_temp, doc_seq)  # 원본(staging)은 남김 — 로그에만
+            _safe(note_error, doc_seq, "parse_failed")
+            _safe(drop_temp, doc_seq)  # 원본(staging)은 남김
 
     # ── 레인 워커(규칙: rn-01·rn-02): 레인마다 전담(자기 레인만)·공유(자기 레인 먼저, 비면 가장 긴 다른 레인 — pick_lane).
     # 구조화 대기가 STRUCT_BACKLOG 이상이면 새 파싱을 시작하지 않음. MCP 업로드 처리 중에는 medium 전담 워커가 쉼.

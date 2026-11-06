@@ -57,3 +57,5 @@ tessdata_best/
 # pr-reviewer scratch notes (never commit)
 /comment.md
 /findings.md
+/edw_chain.yaml
+/home/

@@ -212,9 +212,8 @@ def test_load_table_spans():
         np.save(bundle / "vectors.npy", np.ones((2, 3), dtype=np.float32))
         rows, patched = _capture()
         db = _DB()
-        no_edw = mock.patch.object(edw_meta, "fetch", lambda docs: ({}, 0))  # EDW 조인·ParsingMeta 쓰기는 이 시험 밖(pl-29)
-        no_pm = mock.patch.object(pgvector_load, "_mark_loaded", lambda loaded, kept=(), version=None: 0)
-        with patched, no_edw, no_pm, jsonlog.context(run_id=str(uuid.uuid4())):
+        no_edw = mock.patch.object(edw_meta, "fetch", lambda docs: ({}, 0))  # EDW 조인은 이 시험 밖(pl-29)
+        with patched, no_edw, jsonlog.context(run_id=str(uuid.uuid4())):
             with span.span("load.pgvector", "load") as top:
                 counts = pgvector_load.load(db, bundle)
     assert counts["docs"] == 2 and counts["chunks"] == 2

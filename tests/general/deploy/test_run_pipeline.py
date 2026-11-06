@@ -4,6 +4,7 @@ PC 일반 시험: `PYTHONPATH=$PWD .venv/bin/python -m pytest tests/general`."""
 
 import argparse
 import importlib.util
+import os
 import re
 import shlex
 from unittest import mock
@@ -25,14 +26,16 @@ def _load():
 
 
 RD = _load()
+RD.PIPE_C = "data-pipeline"  # configure()가 채우는 값(코드 기본 밑 이름 · 한 벌) — 아래 고정 명령 글자용
 
 GOLDEN = {
     "staging": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && mkdir -p /app/output/_staging && python -m pipeline.extract.candidate_ready --set SOURCE_STAGING=/app/output/_staging --set SOURCE_FETCH_WORKERS=2 stage --csv /app/output/_docflow/9/batch.csv --out /app/output/_docflow/9 --prepared /app/output/_docflow/9/prepared --no-scan-rotate'",
     "parse_light": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/7 && echo [envcheck] gate=9 채널=light; python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/_docflow/7 --set DOC_DIR_PREPARED=/app/output/_docflow/7/prepared --set PARSE_IMAGES_ROOT=/app/output/_docflow/7/parse/_images --set PARSE_RAW_ROOT=/app/output/_docflow/7/parse --set VLM_MAX_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set CPU_MAX_LOAD=9 parse --staged'",
     "parse_vlm": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/9 && echo [envcheck] gate=1.3 채널=vlm; python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/_docflow/9 --set DOC_DIR_PREPARED=/app/output/_docflow/9/prepared --set PARSE_IMAGES_ROOT=/app/output/_docflow/9/parse/_images --set PARSE_RAW_ROOT=/app/output/_docflow/9/parse --set VLM_MAX_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set VLM_MAX_CONCURRENCY=6 --set VLM_CONCURRENCY=6 --set PARSE_POST=supsub,charts,figures,context,attachments,vlm_page --set VLM_PAGE_MAX= --set CPU_MAX_LOAD=1.3 parse --staged'",
-    "struct": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/9 && python -m pipeline.transform.structure.gold_bundle --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --parse-dir /app/output/_docflow/9/parse --src /app/output/_docflow/9/prepared --out /app/output/_docflow/9/bundle && python -m pipeline.load.pgvector_load --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 load --bundle /app/output/_docflow/9/bundle --rep-dir /app/output/_docflow/9/parse/_rep >> /app/output/_docflow/9/structure.log 2>&1'",
+    "struct": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/9 && python -m pipeline.transform.structure.gold_bundle --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --parse-dir /app/output/_docflow/9/parse --src /app/output/_docflow/9/prepared --out /app/output/_docflow/9/bundle && python -m pipeline.load.pgvector_load --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 load --bundle /app/output/_docflow/9/bundle --rep-dir /app/output/_docflow/9/parse/_rep --silver /app/output/_docflow/9/publish/silver.jsonl >> /app/output/_docflow/9/structure.log 2>&1'",
     "list": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && python -m pipeline.extract.candidate_pick list --filter RFP,proposal --start-offset 0 --skip-done --max-docs 30 --faq-seen /app/output/_faq_seen.txt --out /app/output/_docflow/targets.json'",
     "publish": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/9 && python -m pipeline.load.publish_parse_result --out /app/output/_docflow/9 --source-system FileStorageMap --apply >> /app/output/_docflow/9/publish.log 2>&1'",
+    "error": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && python -m pipeline.shared.except_docs error --csv /app/output/_docflow/9/batch.csv --reason load_failed'",
     "sweep": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && for p in /proc/[0-9]*; do grep -aqzx \"RUN_PIPELINE_DOC=/app/output/_docflow/9\" $p/environ 2>/dev/null && kill ${p##*/} 2>/dev/null; done'",
     "list_all": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && python -m pipeline.extract.candidate_pick list --start-offset 0 --faq-seen /app/output/_faq_seen.txt --out /app/output/_docflow/targets.json'",
 }
@@ -51,6 +54,7 @@ def _built():
         "list": RD.list_cmd(LIST_ARGS),
         "list_all": RD.list_cmd(LIST_ALL),
         "publish": RD.publish_cmd(9),
+        "error": RD.error_cmd(9, "load_failed"),
         "sweep": RD.sweep_cmd(9),
     }
 
@@ -234,31 +238,43 @@ def test_read_settings_new_layout(tmp_path):
 
 
 def test_instance_names(tmp_path):
-    """여러 벌 — 러너도 앱과 같은 규칙으로 컨테이너·PG 스키마가 갈리고, prd에서 벌 이름·기본 포트는 거부(EDW 기록 표는 컨테이너가 읽음)."""
+    """여러 벌 — 러너도 load_settings.sh와 같은 규칙(루트 = 코드 폴더, 벌 번호 = 그 이름 끝 -<숫자>)으로 컨테이너가 갈리고 PG 스키마는 그대로.
+    prd에서 벌 번호·기본 포트는 거부."""
     req = {p: "x" for p, _ in RD.SETTINGS_REQUIRED}
     ports = {"mcp.server.port": "8775", "common.runtime.data_parsing_port": "8776"}
-    # (run_env, 벌, 더 적는 칸, 기대 (컨테이너, 스키마) — None이면 거부)
-    for run, inst, extra, want in (
-        ("dev", "", {}, ("data-pipeline", "rag")),
-        ("dev", "hong", ports, ("data-pipeline-hong", "rag_hong")),
-        ("dev", "kim-a", ports, ("data-pipeline-kim-a", "rag_kim_a")),  # 스키마 접미는 -를 _로
-        ("prd", "hong", ports, None),
-        ("dev", "hong", {"mcp.server.port": "8775"}, None),  # 파싱 포트가 기본값 그대로
-        ("dev", "hong", {"common.runtime.data_parsing_port": "8776"}, None),  # 검색 포트가 기본값 그대로
-        ("dev", "", {"common.connections.rdb.write.user": ""}, None),  # EDW 쓰기 계정 없음 — 게시 못 함(읽기 계정으로 대신하지 않음, op-03)
+    # (run_env, 루트 이름, 더 적는 칸, 기대 컨테이너 — None이면 거부)
+    for run, name, extra, want in (
+        ("dev", "sbl_data_parsing-main", {}, "data-pipeline"),
+        ("dev", "sbl_data_parsing-0.3.0", {}, "data-pipeline"),  # 판 번호(점)는 벌 번호가 아님
+        ("dev", "sbl_data_parsing-main-2", ports, "data-pipeline-2"),
+        ("prd", "sbl_data_parsing-main-2", ports, None),
+        ("dev", "sbl_data_parsing-main-2", {"mcp.server.port": "8775"}, None),  # 파싱 포트가 기본값 그대로
+        ("dev", "sbl_data_parsing-main-2", {"common.runtime.data_parsing_port": "8776"}, None),  # 검색 포트가 기본값 그대로
+        ("dev", "sbl_data_parsing-main", {"common.host.pipeline_container": "rag-pipe"}, "rag-pipe"),  # 밑 이름 바꿈(한 벌)
+        ("dev", "sbl_data_parsing-main-2", {**ports, "common.host.pipeline_container": "rag-pipe"}, "rag-pipe-2"),  # 밑 이름 + 벌 번호
+        ("dev", "sbl_data_parsing-main", {"common.host.pipeline_container": "a b;ls"}, None),  # 명령 줄에 들어가는 이름 — 꼴 거부
+        ("dev", "sbl_data_parsing-main", {"env:PIPELINE_CNAME": "from-shell-4"}, "from-shell-4"),  # load_settings가 낸 이름이 먼저
+        ("dev", "sbl_data_parsing-main", {"env:PIPELINE_CNAME": "a b"}, None),
     ):
         rd = _load()  # 모듈 값을 바꾸므로 따로 읽음
         model = {}
         base = {**req, "common.run_env": run, "common.connections.pg.db_schema": "rag", "common.connections.rdb.port": "1433"}
-        for p, v in {**base, "common.host.instance": inst, **extra}.items():
-            rd._host().layout().set_path(model, p, v)
-        f = tmp_path / "settings.yaml"
+        env = {k[4:]: v for k, v in extra.items() if k.startswith("env:")}  # 호스트 셸 env(load_settings가 냄)
+        for p, v in {**base, **extra}.items():
+            if not p.startswith("env:"):
+                rd._host().layout().set_path(model, p, v)
+        root = tmp_path / name
+        root.mkdir(exist_ok=True)
+        f = root / "settings.yaml"
         f.write_text(yaml.safe_dump(rd._host().layout().to_file(model)), encoding="utf-8")
-        probs = rd.configure(f)
+        with mock.patch.object(rd, "_root", return_value=root), mock.patch.dict(os.environ, env):  # env 남김 — 시험(호스트 셸 env)
+            if not env:
+                os.environ.pop("PIPELINE_CNAME", None)  # env 남김 — 시험(부른 셸 값이 끼지 않게)
+            probs = rd.configure(f)
         if want is None:
-            assert probs, (run, inst, extra)
+            assert probs, (run, name, extra)
             continue
-        assert probs == [] and (rd.PIPE_C, rd.PG_SCHEMA) == want, (run, inst, probs)
+        assert probs == [] and (rd.PIPE_C, rd.PG_SCHEMA) == (want, "rag"), (run, name, probs)
 
 
 def test_staging_name_same():
@@ -352,24 +368,33 @@ def test_classify_cache_skips_probe():
             ), name
 
 
+# (DB에 있는 스키마 목록 — psql 출력, 더해 세는 DEV 원천) — op-17: 5벌 + 있는 `<스키마>_dev_<n>`
+PG_DEV = [("", []), ("rag_dev_2\nrag_dev_10\nrag_dev_1\n", ["dev_1", "dev_2", "dev_10"]), ("ragx_dev_1\nrag_dev_x\n", [])]
+
+
 def test_pg_count_sums_source_schemas():
-    """문서·청크 수는 원천 스키마(<스키마>_<원천>) 5벌의 합 — 원천 목록은 검색 표 정의와 같다."""
+    """문서·청크 수는 원천 스키마(<스키마>_<원천>) 5벌 + DB에 있는 DEV 원천 스키마의 합 — 원천 목록은 검색 표 정의와 같다."""
     from common.store.db.models.search_tables import SOURCES
 
     assert RD.PG_SOURCES == SOURCES
-    seen = []
-    with mock.patch.object(RD, "sh", lambda cmd, timeout=0: seen.append(cmd) or (0, "3|7\n", "")):
-        with mock.patch.object(RD, "PG_SCHEMA", "rag"):
-            assert RD.pg_count() == (3, 7)
-    assert all(f"rag_{s}.doc" in seen[0] and f"rag_{s}.chunk" in seen[0] for s in SOURCES) and "rag.doc" not in seen[0], seen
+    for listed, dev in PG_DEV:
+        seen = []
+        out = iter([listed, "3|7\n"])
+        with mock.patch.object(RD, "sh", lambda cmd, timeout=0, seen=seen, out=out: seen.append(cmd) or (0, next(out), "")):
+            with mock.patch.object(RD, "PG_SCHEMA", "rag"):
+                assert RD.pg_count() == (3, 7)
+        cnt = seen[-1]
+        assert all(f"rag_{s}.doc" in cnt and f"rag_{s}.chunk" in cnt for s in (*SOURCES, *dev)) and "rag.doc" not in cnt, seen
+        assert cnt.count("rag_dev_") == 2 * len(dev), (listed, cnt)
 
 
 def test_stage_always_calls_stage(tmp_path):
     """미리 받기는 늘 컨테이너 stage를 부른다(ETag 확인·같은 밤 중복 표시는 stage 안 — 다시 받을지도 stage가 ETag로 정함).
-    앞 실행의 _docflow/<seq>는 어느 문서 것이든 지우고 새로 만든다(seq는 실행마다 바뀜)."""
+    앞 실행의 _docflow/<seq>는 어느 문서 것이든 지우고 새로 만든다(seq는 실행마다 바뀜). batch.csv는 목록 행의 원천(source_system) 칸을 그대로 든다(op-17)."""
+    import csv
     import json
 
-    row = {"id": "1", "s3_key": "SFDC/a/new.pdf", "original_filename": "new.pdf", "file_size": 3}
+    row = {"id": "1", "s3_key": "SFDC/a/new.pdf", "original_filename": "new.pdf", "file_size": 3, "source_system": "dev-1"}
     cases = [  # (폴더의 manifest 원본 키(None = 폴더 없음), .staged, staging 원본 있음, stage 종료 코드)
         ("SFDC/a/new.pdf", True, True, 0),  # 같은 문서를 받아 둔 폴더 — 그래도 stage(ETag 확인)
         ("SFDC/b/old.pdf", True, True, 0),  # seq가 밀려 다른 문서의 폴더
@@ -400,6 +425,8 @@ def test_stage_always_calls_stage(tmp_path):
         ):
             assert RD.stage_one(4, row) is (rc == 0), key
         assert not (d / "stale.txt").exists(), key  # 앞 실행 흔적은 지움
+        with (d / "batch.csv").open(encoding="utf-8-sig", newline="") as fp:
+            assert list(csv.DictReader(fp)) == [{k: str(v) for k, v in row.items()}], key
         assert (d / ".staged").exists() is (rc == 0), key
         staged_logs = [lg for c, lg in calls if "candidate_ready" in c]
         assert staged_logs == [d / "stage.log"], (key, calls)  # 늘 한 번 · 받기 기록은 문서 폴더마다

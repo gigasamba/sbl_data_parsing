@@ -1,7 +1,7 @@
 """회사 DB(SQL Server — EDW·RDB) 연결 — SQLAlchemy `mssql+pymssql`. 우리 소유가 아니라 DDL·
-Alembic 없음(DDL은 EDW 담당 — docs/operations/parsing_meta_mssql.sql).
+Alembic 없음(DDL은 EDW 담당 — 이 프로젝트는 읽기만, op-17).
 · 연결 인자는 지금 pymssql.connect 그대로(creator) — 연결 풀 없음(NullPool — 지금처럼 쓰고 닫음). 비밀은 설정 객체에서 받아 넘기기만.
-· session_sql(parsing_meta의 세션 옵션 7개)은 그 엔진의 연결마다 **첫 실행문**(creator 안 — 방언의 첫 연결 카탈로그 질의보다 먼저, 지금처럼 commit).
+· session_sql(세션 옵션)은 그 엔진의 연결마다 **첫 실행문**(creator 안 — 방언의 첫 연결 카탈로그 질의보다 먼저, 지금처럼 commit).
 · 엔진은 접속 인자마다 하나(캐시) — 방언이 첫 연결 때 카탈로그 질의 6개(@@version·schema_name()·sys.system_views·격리 수준·NVARCHAR(max)·
   fn_listextendedproperty)를 한 번만 낸다. 권한이 없어 격리 수준 질의가 실패해도 방언이 넘어간다(서버 계정 확인 — refactor.md C-49).
 · 질의: rows(conn, sql, params) — SQL 글자·%s 자리 그대로(exec_driver_sql). DBAPI 커서를 그대로 쓰는 곳(여러 결과 집합 · SQLite 대역과 같은
@@ -29,7 +29,7 @@ def engine(session_sql=None, **connect_kw):
 
             cn = pymssql.connect(**connect_kw)
             if session_sql:
-                cn.cursor().execute(session_sql)  # 이 세션의 첫 실행문(필터 유일 색인 표 쓰기 조건 — parsing_meta_db)
+                cn.cursor().execute(session_sql)  # 이 세션의 첫 실행문
                 cn.commit()
             return cn
 
@@ -58,34 +58,25 @@ def clear():
     _ENGINES.clear()
 
 
-def login(role, extra=True):
-    """EDW 접속 인자(pymssql.connect 그대로)와 빠진 칸 이름 목록 — common.connections.rdb의 서버·DB + role 계정
-    ("read" | "write" — docs/prd/ops.md#op-03). extra=False면 connect_kwargs를 안 넘김(gen_roster).
+def login(extra=True):
+    """EDW 접속 인자(pymssql.connect 그대로)와 빠진 칸 이름 목록 — common.connections.rdb의 서버·DB + 읽기 계정
+    (이 프로젝트는 EDW에 쓰지 않음 — docs/prd/ops.md#op-03·op-17). extra=False면 connect_kwargs를 안 넘김(gen_roster).
     형식 틀린 포트는 연결 전에 실패(checked — 1433으로 조용히 붙지 않게). 값은 출력하지 않는다.
-    role은 둘 중 하나만(오타가 쓰기 계정으로 새지 않게) · connect_kwargs는 계정·서버 칸을 덮지 못함.
-    쓰기 계정이 비면 빠진 칸으로 알린다(읽기 계정으로 대신하지 않음 — op-03)."""
+    connect_kwargs는 계정·서버 칸을 덮지 못함."""
     import json
 
     from common.config.settings import cfg, checked, reveal
 
-    if role not in ("read", "write"):
-        raise ValueError(f"EDW 계정 역할은 read·write만 — {role!r}")
     c = cfg().connections.rdb
-    acct = c.read if role == "read" else c.write
     checked("RDB_PORT")
     kw = {
         "server": c.host,
         "port": str(c.port),  # 포트는 글자로(pymssql)
-        "user": acct.user,
-        "password": reveal(acct.password),
+        "user": c.read.user,
+        "password": reveal(c.read.password),
         "database": c.database,
     }
-    names = {
-        "server": "RDB_HOST",
-        "database": "RDB_DATABASE",
-        "user": f"RDB_{role.upper()}_USER",
-        "password": f"RDB_{role.upper()}_PASSWORD",
-    }
+    names = {"server": "RDB_HOST", "database": "RDB_DATABASE", "user": "RDB_READ_USER", "password": "RDB_READ_PASSWORD"}
     miss = [names[k] for k in names if not kw[k]]
     if extra:
         kw = {**json.loads(reveal(c.connect_kwargs) or "{}"), **kw}  # 추가 인자가 계정·서버를 덮지 못함
@@ -96,8 +87,8 @@ def rdb_connect(extra_kwargs=True):
     """RDB(mssql) 연결 — SQLAlchemy `mssql+pymssql`(연결 풀 없음). 접속은 common.connections.rdb의
     **읽기 계정** + RDB_CONNECT_KWARGS(JSON — extra_kwargs=False면 안 넘김).
     discover_columns·roster_from_edw가 쓴다."""
-    kw, miss = login("read", extra=extra_kwargs)
-    if miss:  # 없으면 KeyError(parsing_meta_db와 같은 꼴)
+    kw, miss = login(extra=extra_kwargs)
+    if miss:  # 없으면 KeyError
         raise KeyError(miss[0])
     return connect(**kw)
 
@@ -145,7 +136,7 @@ class EdwReader:
         if p:
             self.cn, self.ph = standin(p, readonly=True), "?"
         else:
-            kw, miss = login("read")
+            kw, miss = login()
             if miss:
                 raise RuntimeError(f"EDW 읽기 계정 없음: {', '.join(miss)}")
             self.cn, self.ph = raw(**kw), "%s"

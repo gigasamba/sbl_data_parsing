@@ -28,7 +28,7 @@ def register(m):
     ) -> dict:
         """Natural-language top-k evidence search inside hard filters (vector + bm25 + id, fused server-side).
         question is required (empty -> {"error"}). k: default 8, max 50 (larger is clamped).
-        source_system is required: exactly one of SFDC/CRMS/LAS/FAQ/Other ('-test' suffix accepted); each call searches that one
+        source_system is required: exactly one of SFDC/CRMS/LAS/FAQ/Other ('-test' suffix accepted) (개발 서버: DEV-<숫자>); each call searches that one
         source only (call again for another source; missing -> {"error"}). Other filters are optional; different filters AND
         together, a list inside one filter is OR, all exact match: client (account name; client_like=true -> substring),
         project_id, division, service_type, FAQ_group, doc_class (within its source system's taxonomy), sf_op_id, sf_op_name,

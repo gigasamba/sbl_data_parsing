@@ -61,6 +61,9 @@ IMAGE_PATHS = {
     "image_env": "/app/docker/image_env.txt",  # 빌드 때 이미지 ENV를 적어 둔 파일(common.config.boot — 라이브러리 env가 이미지 값만 덮게)
     "docs_mount": "/data/docs",  # 원본 폴더를 읽기 전용으로 붙이는 자리(compose DOC_SRC → 이 자리 · pipeline DOC_DIR 기본값)
 }
+# 코드가 읽지 않는 약속 자리(compose·Dockerfile·dev_entry.sh에만 같은 글자 — 바꾸면 그 파일들을 함께):
+#   /etc/rag/settings.yaml(설정 파일 — compose x-settings·SETTINGS_FILE) · /etc/rag/edw_chain.yaml(EDW 사슬 사본 — 호스트 ops.host.host_edw_chain_file)
+#   · /home/rag(개발 작업 공간 홈 — 호스트 option.devbox.home_dir) · /etc/devbox(작업 공간 부품 — git_cred.py·compose.opencode.yml)
 IMAGE_PATHS["prepared_out"] = IMAGE_PATHS["output_root"] + "/prepared"  # 원본 사본(prepare) 자리(pipeline DOC_DIR_PREPARED 기본값)
 # 이미지 안 모델 기본값 — 규칙은 "settings.yaml > 코드 기본값" 하나라 Dockerfile ENV로 굽지 않고 여기 둔다.
 # 이미지 신호 RAG_MODULE로 그 이미지 값만 고른다. PC·시험 하위 프로세스(RAG_MODULE 없음)는 PC 기본값.
@@ -699,8 +702,6 @@ LOCAL_IGNORED = (
     "common.connections.rdb.host",
     "common.connections.rdb.read.user",
     "common.connections.rdb.read.password",
-    "common.connections.rdb.write.user",
-    "common.connections.rdb.write.password",
     "common.connections.object_storage.endpoint",
     "common.connections.object_storage.access_key",
     "common.connections.object_storage.secret_key",
@@ -856,7 +857,7 @@ def resolve_run_env(environ=None, file=None):
 def require_run_env(app="", environ=None, sections=None):
     """앱 시작 관문 — RUN_ENV가 없거나 모르는 값이면 안내를 찍고 종료 코드 2. 값을 돌려준다.
     설정 파일을 읽고 sections(앱 절 — 없으면 이 이미지 절, image_sections)를 검증한다 — 모르는 칸·자리가 다른 칸·형식 오류면 이유(칸 경로·
-    오류 종류만, 값 없음)를 찍고 종료 2. 서버(dev·prd)는 파일이 없어도 거부하고 비밀 칸 길이·가짜 LLM·여러 벌도 본다, local은 서버 전용 칸을 비우고 경고(op-14)."""
+    오류 종류만, 값 없음)를 찍고 종료 2. 서버(dev·prd)는 파일이 없어도 거부하고 비밀 칸 길이·가짜 LLM·여러 벌·(prd) DEV 원천도 본다, local은 서버 전용 칸을 비우고 경고(op-14)."""
     environ = os.environ if environ is None else environ  # env 남김 — RUN_ENV 신호
     tag = f"[설정] {app + ': ' if app else ''}"
     try:
@@ -896,38 +897,15 @@ def require_run_env(app="", environ=None, sections=None):
         if st.common.dev.llm_fake:  # 가짜 LLM 응답은 local에서만, 서버는 시작 거부
             print(f"{tag}서버(RUN_ENV={value}) — {L.to_yaml('common.dev.llm_fake')}가 켜져 있어 시작하지 않음(local 전용)", file=sys.stderr)
             raise SystemExit(2)
-        bad = instance_problems(st)
-        if bad:
-            print(f"{tag}서버(RUN_ENV={value}) — 여러 벌 설정이 맞지 않아 시작하지 않음: {'; '.join(bad)}", file=sys.stderr)
+        pipe = getattr(st, "pipeline", None)  # 파싱할 원천 DEV-<숫자>는 dev·local만(op-17)
+        dev_src = [s for s in (pipe.extract.source.systems or []) if s.startswith("DEV-")] if pipe is not None else []
+        if value == "prd" and dev_src:
+            print(
+                f"{tag}서버(RUN_ENV=prd) — {L.to_yaml('pipeline.extract.source.systems')}에 {dev_src}가 있어 시작하지 않음(dev·local 전용)",
+                file=sys.stderr,
+            )
             raise SystemExit(2)
     return value
-
-
-def instance_problems(st):
-    """여러 벌(ops.host.instance_name) 시작 거부 사유 — prd에 벌 이름, 벌 이름이 있는데 포트가 코드 기본값(다른 벌과 겹침)."""
-    c = st.common
-    if not c.host.instance:
-        return []
-    if c.run_env == "prd":
-        return [f"{L.to_yaml('common.host.instance')}는 개발 서버(dev)에서만 — 운영(prd)은 한 벌"]
-    ports = [("common.runtime.data_parsing_port", c.runtime, "data_parsing_port")]
-    mcp = getattr(st, "mcp", None)
-    if mcp is not None:
-        ports.append(("mcp.server.port", mcp.server, "port"))
-    return [
-        f"{L.to_yaml(p)}가 기본값 그대로 — 벌마다 다른 포트를 적음"
-        for p, sec, name in ports
-        if getattr(sec, name) == type(sec).model_fields[name].default
-    ]
-
-
-def publish_prefix(prefix):
-    """게시 경로 접두 — 개발 서버(dev)에 벌 이름이 있으면 `<접두>/<벌>`(벌마다 게시 자리가 갈림), 그 밖은 그대로."""
-    c = cfg()
-    inst = c.host.instance
-    if c.run_env != "dev" or not inst:
-        return prefix
-    return f"{prefix.rstrip('/')}/{inst}" if prefix else inst
 
 
 def section_class(names):
@@ -1035,14 +1013,6 @@ def app_classes(names=("pipeline", "mcp")):
 
 # ── 덮기 파일 — 같은 프로세스(put)·자식(child_env)·PC 한 번 실행(common.config.overrides) ─────────────
 _GEN = [0]  # put()이 올림 — 모든 Cache가 다음 get()에서 다시 읽음
-_EDW_READ_ONLY = [False]  # edw_read_only() — 이 프로세스는 EDW 읽기 계정만(CommonConnectionsRdb가 봄)
-
-
-def edw_read_only(on=True):
-    """이 프로세스는 EDW 읽기 계정만 본다 — 공용 settings.yaml에 쓰기 계정이 있어도 설정 객체에서 비운다(검색 MCP
-    시작 때 부름 — 규칙: PRD docs/prd/ops.md#op-03). 파일은 바꾸지 않고, 모든 설정 캐시가 다음 읽기에서 다시 읽는다."""
-    _EDW_READ_ONLY[0] = on
-    _GEN[0] += 1
 
 
 def _all_names():
@@ -1352,24 +1322,15 @@ class CommonConnectionsObjectStorage(Section):
     verify_tls: str | None = F("1", "OS_VERIFY_TLS", "TLS 인증서 검증(1=검증, 0=끔, 그 밖 문자열=CA 파일 경로)", blank="keep")
 
 
-class CommonConnectionsParsingMeta(Section):
-    table: str | None = F("AI.ParsingMeta", "PM_TABLE", "parsing-meta를 쓸 EDW 표 이름(스키마.표, 영문·숫자·_)", blank="keep")
-
-
 class CommonConnectionsRdbRead(Section):
     password: SecretStr | None = F(None, "RDB_READ_PASSWORD", "EDW 읽기 계정 비밀번호")
     user: str | None = F(
-        None, "RDB_READ_USER", "EDW 읽기 계정 이름 — 원천 목록·FileStorageMap·ParsingMeta 조회·query_edw(검색 MCP는 이 계정만)"
+        None, "RDB_READ_USER", "EDW 읽기 계정 이름 — 원천 목록·FileStorageMap·메타 사슬·query_edw(이 프로젝트는 EDW에 쓰지 않음)"
     )
 
 
-class CommonConnectionsRdbWrite(Section):
-    password: SecretStr | None = F(None, "RDB_WRITE_PASSWORD", "EDW 쓰기 계정 비밀번호")
-    user: str | None = F(None, "RDB_WRITE_USER", "EDW 쓰기 계정 이름 — ParsingMeta 게시(INSERT·UPDATE)만")
-
-
 class CommonConnectionsRdb(Section):
-    """EDW(SQL Server) 접속 하나 — 서버·DB는 하나, 계정은 읽기·쓰기 둘(규칙: PRD docs/prd/ops.md#op-03)."""
+    """EDW(SQL Server) 접속 하나 — 읽기 계정만(EDW에 쓰지 않음 — 규칙: PRD docs/prd/ops.md#op-03·op-17)."""
 
     connect_kwargs: SecretStr | None = F(None, "RDB_CONNECT_KWARGS", "EDW pymssql 연결에 더할 추가 인자(JSON 객체 — TLS·로그인 시간 등)")
     database: str | None = F(None, "RDB_DATABASE", "EDW 데이터베이스 이름")
@@ -1383,14 +1344,6 @@ class CommonConnectionsRdb(Section):
         repo=True,
     )
     read: CommonConnectionsRdbRead = Field(default_factory=CommonConnectionsRdbRead)
-    write: CommonConnectionsRdbWrite = Field(default_factory=CommonConnectionsRdbWrite)
-
-    @model_validator(mode="after")
-    def _read_only_process(self):
-        """검색 MCP 프로세스(edw_read_only())는 쓰기 계정 칸을 보지 않는다 — 공용 settings.yaml에 있어도 설정 객체에서 비움."""
-        if _EDW_READ_ONLY[0]:
-            self.write = CommonConnectionsRdbWrite()
-        return self
 
 
 class CommonConnectionsPg(Section):
@@ -1400,7 +1353,7 @@ class CommonConnectionsPg(Section):
     password: SecretStr | None = F(None, "PG_PASSWORD", "PostgreSQL 비밀번호")
     pool_max: int | None = F(8, "PG_POOL_MAX", "검색 MCP PostgreSQL 연결 풀 최대 연결 수")
     port: Port | None = F(None, "PG_PORT", "PostgreSQL 포트(필수 — op-09)")
-    db_schema: str | None = F("data_parsing", "PG_SCHEMA", "pgvector 기본 스키마 이름(소문자·숫자·_ — 여러 벌이면 끝에 _<벌>, op-09)")
+    db_schema: str | None = F("data_parsing", "PG_SCHEMA", "pgvector 기본 스키마 이름(소문자·숫자·_ — 여러 벌도 같은 스키마, op-09·op-17)")
     standin_dir: str | None = F(None, "PG_STANDIN_DIR", "PG 접속 정보가 없을 때 쓰는 로컬 대체 DB(sqlite) 폴더", repo=True)
     standin_schema: str | None = F(
         "data_parsing", "PG_STANDIN_SCHEMA", "로컬 대체 DB(sqlite)의 스키마 이름 — PG_SCHEMA가 비었을 때(PC 전용, op-09)"
@@ -1531,25 +1484,66 @@ class CommonHostDevbox(Section):
         "DEVBOX_OPENCODE_CONFIG",
         "개발 작업 공간의 opencode 설정 파일(호스트 경로, 선택) — 읽기 전용으로 붙이고 OPENCODE_CONFIG로 가리킴. 비우면 이미지의 틀(홈의 ~/.config/opencode/opencode.json)",
     )
+    home_dir: str | None = F(
+        None,
+        "DEVBOX_HOME",
+        "개발 작업 공간 홈 폴더(호스트 경로) — 컨테이너 /home/rag로 붙임(SSH 열쇠·opencode 설정·작업 기록). 비우면 <루트>/home(host_ctl.sh init이 만듦 — 10001, 700)",
+    )
+    gitea_url: str | None = F(
+        None,
+        "DEVBOX_GITEA_URL",
+        "개발 작업 공간의 내부망 gitea 주소(선택 — http(s)://호스트[:포트][/경로]) · 예 https://gitea.corp.local:3000 — http는 토큰이 암호화 없이 감."
+        " 주소·계정·토큰을 모두 적으면 시작할 때 ~/.git-credentials(권한 600)에 그 호스트 줄을 씀",
+        pattern=r"^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/\S*)?$",
+    )
+    gitea_user: str | None = F(None, "DEVBOX_GITEA_USER", "개발 작업 공간의 gitea 계정 이름(선택)")
+    gitea_token: SecretStr | None = F(None, "DEVBOX_GITEA_TOKEN", "개발 작업 공간의 gitea 접근 토큰(선택 — gitea 설정 > 응용 > 토큰)")
+    git_user_name: str | None = F(None, "DEVBOX_GIT_USER_NAME", "개발 작업 공간의 git 커밋 이름(git config user.name, 선택)")
+    git_user_email: str | None = F(None, "DEVBOX_GIT_USER_EMAIL", "개발 작업 공간의 git 커밋 메일(git config user.email, 선택)")
+
+
+_CONTAINER_NAME = r"^[A-Za-z0-9][A-Za-z0-9_.-]*$"  # docker·podman 컨테이너 이름 꼴(명령 줄에 그대로 들어감)
+
+
+def _cname(default, env, what):
+    return F(
+        default,
+        env,
+        f"{what} 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>가 붙음). host_ctl.sh·mcp_keepalive.sh·pipe_exec.sh·run_pipeline.py가 이 이름으로 찾음",
+        pattern=_CONTAINER_NAME,
+    )
 
 
 class CommonHost(Section):
+    compose_project: str = F(
+        "compose",
+        "COMPOSE_PROJECT",
+        "compose 묶음(project) 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>). host_ctl.sh·mcp_keepalive.sh가 -p로 줌 — 바꾸면 옛 묶음은 down으로 먼저 내림",
+        pattern=r"^[a-z0-9][a-z0-9_-]*$",
+    )
+    data_parsing_container: str = _cname("mcp-data-parsing", "DATA_PARSING_CONTAINER", "parse_document 작업 서비스 전용")
     devbox: CommonHostDevbox = Field(default_factory=CommonHostDevbox)
     doc_src: str | None = F(None, "DOC_SRC", "호스트 원본 문서 폴더 — compose가 컨테이너 /data/docs에 읽기 전용으로 붙임")
     docker: str | None = F(None, "DOCKER", "호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등 — op-10)")
-    instance: str | None = F(
+    edw_chain_src: str | None = F(
         None,
-        "INSTANCE",
-        "한 서버에 여러 벌(개발자별 등) 띄울 때 이 루트의 이름(영소문자·숫자·-) — 컨테이너 이름·compose 묶음·systemd 타이머 이름 끝에 -<이름>으로 붙음."
-        " 비우면 이름 그대로(한 벌). 적으면 PG 스키마·EDW 기록 표 끝에 _<이름>(-는 _로), 개발 서버(dev) 게시 경로에 <접두>/<이름>."
-        " 포트(search.server.mcp_port · ops.services.data_parsing.data_parsing_port)는 벌마다 다르게(기본값 그대로면 시작 거부) · prd에서는 쓰지 않음(시작 거부)",
+        "EDW_CHAIN_SRC",
+        "호스트의 EDW 조인 사슬 사본 파일 — compose가 컨테이너 /etc/rag/edw_chain.yaml로 읽기 전용으로 붙이는 원본. 비우면 <루트>/edw_chain.yaml(host_ctl.sh init이 없을 때만 만듦)",
+    )
+    extra_compose: CsvList | None = F(
+        None,
+        "EXTRA_COMPOSE",
+        "더 붙일 compose 파일 목록(볼륨·env 더하기 — 틀 deploy/host/compose/extra.example.yml — 예 compose.extra.yml = <루트>/compose.extra.yml). 상대 경로는 루트(코드 폴더) 기준."
+        " host_ctl.sh·mcp_keepalive.sh가 늘 맨 뒤에 -f로 더함",
     )
     image_stage_dir: str | None = F(None, "IMAGE_STAGE_DIR", "prune_images.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값)")
+    mcp_container: str = _cname("mcp-server", "MCP_CONTAINER", "검색 MCP")
     output_root: str | None = F(
         None,
         "RAG_OUT",
         "호스트의 결과(output) 폴더(서버 경로) — compose가 컨테이너 /app/output으로 마운트하는 원본. 비우면 <루트>/output",
     )
+    pipeline_container: str = _cname("data-pipeline", "PIPELINE_CONTAINER", "일괄 상주 파이프라인")
     pg_container: str | None = F(
         None,
         "PG_CONTAINER",
@@ -1641,7 +1635,6 @@ class CommonText(Section):
 
 class CommonConnections(Section):
     object_storage: CommonConnectionsObjectStorage = Field(default_factory=CommonConnectionsObjectStorage)
-    parsing_meta: CommonConnectionsParsingMeta = Field(default_factory=CommonConnectionsParsingMeta)
     pg: CommonConnectionsPg = Field(default_factory=CommonConnectionsPg)
     rdb: CommonConnectionsRdb = Field(default_factory=CommonConnectionsRdb)
 
@@ -1694,18 +1687,6 @@ class CommonSettings(Section):
     runtime: CommonRuntime = Field(default_factory=CommonRuntime)
     text: CommonText = Field(default_factory=CommonText)
     tokens: CommonTokens = Field(default_factory=CommonTokens)
-
-    @model_validator(mode="after")
-    def _per_instance(self):
-        """여러 벌 — 벌 이름이 있으면 PG 스키마·EDW 기록 표 끝에 `_<벌>`(`-`는 `_`로 — 읽는 곳 모두 이 값을 씀). 이름 꼴은 load_settings.sh와 같음."""
-        inst = self.host.instance
-        if inst and not re.fullmatch(r"[a-z0-9][a-z0-9-]*", inst):
-            raise ValueError(f"{L.to_yaml('common.host.instance')}는 영소문자·숫자·-만(앞은 글자·숫자)")
-        if inst:
-            pg, pm = self.connections.pg, self.connections.parsing_meta
-            pg.db_schema = L.per_instance(pg.db_schema, inst)
-            pm.table = L.per_instance(pm.table, inst)
-        return self
 
 
 class CommonAppSettings(AppSettings):

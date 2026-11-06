@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""파싱 대상 고르기(받기 전) — 원천 목록(폴더 또는 rdb:csv 문서 위치 표)에서 이미 처리한 판·ParsingMeta에 끝난 문서·
+"""파싱 대상 고르기(받기 전) — 원천 목록(폴더 또는 rdb:csv 문서 위치 표)에서 이미 처리한 판·gold에 끝난 문서(op-17)·
 지원 안 하는 형식을 뺀다. 받기·미리 받기·끝 정리는 candidate_ready.
 
-열: 실 EDW `AI.FileStorageMap`의 다섯 열만 읽는다 — doc_id=id · key=s3_key · size=file_size ·
-filename=original_filename · content_version=content_version_id(열 이름이 다른 csv는 extract.connections.rdb.columns로 — 식별자 화이트리스트만).
+열: 실 EDW `AI.FileStorageMap`의 여섯 열만 읽는다 — doc_id=id · key=s3_key · size=file_size ·
+filename=original_filename · content_version=content_version_id · source_system=source_system(원천 — 고르기·구조화·적재·게시가 이 값 하나, op-17)(열 이름이 다른 csv는 extract.connections.rdb.columns로 — 식별자 화이트리스트만).
 버킷 — key가 `s3://버킷/…` 꼴이면 그 안의 버킷, 아니면 RDB_BUCKET.
 이미 처리됐는지는 (key, 증분값) 쌍으로(`_rdb_is_done` — 같은 s3_key의 새 판을 "이미 처리됨"으로 오판하지 않게). 증분값 = RDB_INCREMENT_COL 열(비우면 doc_id 열).
 문서 이름 — original_filename을 그대로(없으면 doc_id), 같은 이름이 여럿이면 doc_id 접두(`<doc_id>__<이름>`)로 구분.
@@ -35,7 +35,14 @@ def _rdb_cols():
     """RDB 표의 열 이름(실 EDW `AI.FileStorageMap` 기본값 — 설정 extract.connections.rdb.columns). 열 이름도 식별자이므로
     화이트리스트로 확인(독립 검토 BLOCK 3 — SQL 삽입)."""
     c = pc.cfg().connections.rdb.columns
-    cols = {"doc_id": c.doc_id, "key": c.key, "size": c.size, "filename": c.filename, "content_version": c.content_version}
+    cols = {
+        "doc_id": c.doc_id,
+        "key": c.key,
+        "size": c.size,
+        "filename": c.filename,
+        "content_version": c.content_version,
+        "source_system": c.source_system,
+    }
     bad = {k: v for k, v in cols.items() if v and not COL_ID_RE.match(v)}
     if bad:
         raise ValueError(f"[source] RDB_COL_* 값이 올바르지 않음(영문·숫자·_ 만) — {bad}")
@@ -139,11 +146,25 @@ def _rdb_rows(table):
                 "size": int(r[cols["size"]]) if r.get(cols["size"]) not in (None, "") else None,
                 "filename": r.get(cols["filename"]) or None,
                 "content_version": r.get(cols["content_version"]) or None,
+                "source_system": src_name(r.get(cols["source_system"])),  # 원천(FileStorageMap.source_system — 대문자)
                 "updated_at": _inc_value(r, inc_col),
                 "created_at": r.get("created_at") or None,  # 원천 등록 시각 — 표에 칸이 있을 때만
             }
         )
     return mapped
+
+
+def src_name(v):
+    """원천 칸 값 → 대문자 이름(들어오는 자리에서 한 번 — 뒤 단계는 'FAQ'·'DEV-1'만 봄), 비면 None."""
+    return (str(v).strip().upper() or None) if v is not None else None
+
+
+def picked(system, systems):
+    """원천 칸 값(대문자)이 파싱할 원천인가 — 원천 목록(extract.source.systems)이 있으면 그 안, 비면 운영 5개 원천(DEV-<n>이 아닌 모든 값 —
+    op-17 규칙 8)."""
+    from common.store.db.models import search_tables as ST
+
+    return system in systems if systems else not ST.is_dev(ST.source_of(system))
 
 
 def _filter_unsupported_rows(rows, name_of):
@@ -166,15 +187,21 @@ def _record_source_skipped(state, skipped):
     """건너뛴 행 기록(state/source_skipped.jsonl, {file,key,reason} — filter_and_rotate.py skipped.jsonl과 같은 사유 말) +
     다시 받을 길이 없으므로(지원 안 하는 형식) 바로 처리 완료로 표시(watermark가 이 파일 때문에 영영 안 전진하는
     것을 막음 — finish()가 파싱 성공분을 기록하는 것과 같은 자리 `_processed_path`) + 문서마다 extract.skip 1행(skip_event) +
-    applog.skip_doc_info(skip_docs.record — 다음 대상 목록이 뺌, pl-58)."""
-    from pipeline.extract import skip_docs
+    applog.except_doc_info skip(except_docs.record — 다음 대상 목록이 뺌, op-17)."""
+    from pipeline.shared import except_docs
     from pipeline.shared.runtrace import skip_event
 
     for s in skipped:
-        skip_event(s["file"], s["reason"])
-    skip_docs.record(
+        skip_event(s["file"], s["reason"], s["row"]["source_system"])
+    except_docs.record(
         [
-            {"source_key": s["row"]["key"], "source_system": source_of(s["row"]["key"]), "file_name": s["file"], "reason": s["reason"]}
+            {
+                "source_key": s["row"]["key"],
+                "source_system": s["row"]["source_system"],
+                "file_name": s["file"],
+                "file_size": s["row"]["size"],
+                "reason": s["reason"],
+            }
             for s in skipped
         ]
     )
@@ -191,16 +218,12 @@ def _hidden(p):
     return p.name.startswith(".") or p.name == "__MACOSX"
 
 
-def source_of(key):
-    """원본 키 → 원천 이름(첫 마디가 원천 이름일 때만, 아니면 None) — skip_doc_info.source_system."""
-    return _known_source(str(key).split("/", 1)[0]) if key else None
-
-
 def _known_source(seg):
-    """원본 키 첫 마디가 원천 이름(SFDC·CRMS·LAS·FAQ — 검색 스키마 원천 목록, other 빼고)이면 대문자 이름, 아니면 None."""
-    from common.store.db.models.search_tables import SOURCES
+    """PC 폴더 원천의 맨 위 폴더 이름이 원천 이름(SFDC·CRMS·LAS·FAQ — 검색 스키마 원천 목록, other 빼고 · DEV-<n> — op-17)이면 대문자 이름,
+    아니면 None."""
+    from common.store.db.models import search_tables as ST
 
-    return seg.upper() if seg.lower() in set(SOURCES) - {"other"} else None
+    return seg.upper() if seg.lower() in set(ST.SOURCES) - {"other"} or ST.DEV_SYSTEM.fullmatch(seg) else None
 
 
 def _publish_dirs():
@@ -217,7 +240,9 @@ def _tree_files(src):
     """폴더가 원천별 하위 폴더 모양(`<원천>/<id>/<파일>`)이면 그 아래 파일 목록, 아니면 None(평평한 폴더로).
     모양 = 맨 위에 파일이 없고(숨김 파일 빼고), 맨 위 폴더가 모두 원천 이름(_known_source)이며 그 아래 파일이 있음.
     숨김(점으로 시작)·__MACOSX는 어디서나 뺀다 — 흘린 sub/.DS_Store 하나로 평평한 폴더가 바뀌지 않게.
-    맨 위의 설명 파일(*.md)과 게시 폴더(file:// 게시 버킷 — PC valid_env/object_storage/Parsing_Result)는 원본이 아니라 뺀다(op-14)."""
+    맨 위의 설명 파일(*.md)과 게시 폴더(file:// 게시 버킷 — PC valid_env/object_storage/Parsing_Result)는 원본이 아니라 뺀다(op-14).
+    원천 목록(extract.source.systems — required.source.source_systems)에 드는 원천 폴더의 파일만(비면 운영 5개 원천 — DEV-<n> 폴더 뺌, picked) —
+    모양 판정은 모든 폴더로(다 빠지면 빈 목록)."""
     out = _publish_dirs()
     top = [
         p
@@ -233,12 +258,15 @@ def _tree_files(src):
         for p in d.rglob("*")
         if p.is_file() and not any(_hidden(q) for q in p.relative_to(src).parents if q.name) and not _hidden(p)
     )
-    return files or None
+    if not files:
+        return None
+    systems = pc.cfg().extract.source.systems
+    return [p for p in files if picked(_known_source(p.relative_to(src).parts[0]), systems)]
 
 
 def pick_new(src, out, max_new, only=None):
-    """이번 실행에서 처음 파싱할 문서(ParsingMeta에 성공 행이 없는 것)를 max_new개까지 → 목록 파일 경로. only(목록 파일 — stage_batch가
-    이미 끝난 문서를 뺀 목록)가 있으면 그 안에서만(EDW를 다시 읽지 않음)."""
+    """이번 실행에서 처음 파싱할 문서(gold doc 행이 없는 것)를 max_new개까지 → 목록 파일 경로. only(목록 파일 — stage_batch가
+    이미 끝난 문서를 뺀 목록)가 있으면 그 안에서만(PG를 다시 읽지 않음)."""
     names = sorted(p.name for p in Path(src).iterdir() if p.is_file())
     if only:
         sel = set(Path(only).read_text(encoding="utf-8").splitlines())
@@ -254,41 +282,34 @@ def pick_new(src, out, max_new, only=None):
 
 
 def done_keys():
-    """EDW ParsingMeta에 끝난 행(parsing_meta_db.done_source_keys — ok·partial 등)이 있는 원본 키 집합. EDW를 한 번 읽는다
-    (읽기 계정, PC는 EDW 대역 sqlite `RDB_SQLITE`). 통째 실패는 ParsingMeta에 안 쓰므로 실패한 문서는 행이 없어 다음 실행이 다시 고른다.
-    못 읽으면: 서버(RUN_ENV dev·prd·모르는 값)는 종료 4(전체 재파싱 안 함), PC는 빈 집합(받은 목록 그대로) + 로그 한 줄."""
-    return _read_done(lambda db: db.done_source_keys(), set())
+    """끝난 원본 키 집합 — 원천 스키마 어디든 gold doc 행이 있는 키(pipeline.shared.gold_docs, op-17). 실패한 문서는 doc 행이 없어 다음 실행이
+    다시 고른다. 못 읽으면: 서버(RUN_ENV dev·prd·모르는 값)는 종료 4(전체 재파싱 안 함), PC는 빈 집합(받은 목록 그대로) + 로그 한 줄."""
+    from pipeline.shared import gold_docs
+
+    return _read_done(gold_docs.done_keys, set())
 
 
 def done_by_sha(shas):
-    """EDW ParsingMeta에서 원본이 될 수 있는 행(ok·partial — gold_version 칸이 있으면 그 값도, skipped_dup 행은 아님) 중 원본 sha256이
-    shas에 있는 것 → {sha256: (원본 키, parse_status)}.
-    못 읽을 때는 done_keys와 같다(서버 종료 4, PC는 빈 사전)."""
-    return _read_done(lambda db: db.done_by_sha(shas), {}) if shas else {}
+    """원본 sha256이 shas에 있는 gold 문서 → {sha256: (원본 키, parse_status)}. 못 읽을 때는 done_keys와 같다(서버 종료 4, PC는 빈 사전)."""
+    from pipeline.shared import gold_docs
+
+    return _read_done(lambda: gold_docs.done_by_sha(shas), {}) if shas else {}
 
 
 def _read_done(read, empty):
-    from common.store import parsing_meta_db as PMDB
-
     try:
-        db = PMDB.make_db("read")
-        try:
-            return read(db)
-        finally:
-            db.close()
-    except (Exception, SystemExit) as ex:  # make_db는 접속 정보가 없으면 SystemExit
+        return read()
+    except (Exception, SystemExit) as ex:  # 서버에 PG 접속 정보가 없으면 SystemExit(대역 거부)
         if C.guard_run_env() not in (None, "local"):  # pl-12 — 서버(dev·prd·모르는 값)
-            print(
-                f"[parse] EDW ParsingMeta를 읽지 못함 — 멈춤(종료 4, 전체 재파싱 안 함): {type(ex).__name__}", file=sys.stderr, flush=True
-            )
+            print(f"[parse] gold doc을 읽지 못함 — 멈춤(종료 4, 전체 재파싱 안 함): {type(ex).__name__}", file=sys.stderr, flush=True)
             raise SystemExit(4) from None
-        print(f"[parse] EDW ParsingMeta 못 읽음({type(ex).__name__}) — 이력 없이 받은 목록 그대로 처리", flush=True)
+        print(f"[parse] gold doc 못 읽음({type(ex).__name__}) — 이력 없이 받은 목록 그대로 처리", flush=True)
         return empty
 
 
 def unparsed(names, out):
-    """이름 목록 중 새 문서 후보(FileStorageMap ∖ ParsingMeta). 키 = manifest의 "key"(없으면 이름 그대로 — publish의
-    source_key와 같은 규칙, parsing_meta.plan). out = 결과 루트(파싱 입구 pipeline.cli의 OUT). 순서는 받은 이름 순서 그대로."""
+    """이름 목록 중 새 문서 후보(FileStorageMap ∖ gold doc). 키 = manifest의 "key"(없으면 이름 그대로 — publish의
+    source_key와 같은 규칙). out = 결과 루트(파싱 입구 pipeline.cli의 OUT). 순서는 받은 이름 순서 그대로."""
     done = done_keys()
     man = Path(out) / "parse" / "_source" / "manifest.jsonl"
     key_of = {r["file_name"]: r.get("key") for r in jl(man)} if man.exists() else {}
@@ -297,9 +318,11 @@ def unparsed(names, out):
 
 def rdb_pick(table, state, limit=0, done=frozenset()):
     """문서 위치 표(csv:)에서 이번에 받을 행 → {문서 이름: 행}(받기 전 — 다운로드 없음). 처리 기록(processed.jsonl)에 있는 판·
-    ParsingMeta에 끝난 원본 키(done — done_keys())·압축·엔진 없는 확장자를 뺀다. 반환: (by_name, 이번에 뺀 행 수)."""
+    gold에 끝난 원본 키(done — done_keys())·압축·엔진 없는 확장자를 뺀다. 원천 목록(extract.source.systems)의 원천 행만(비면 운영 5개 원천 — picked).
+    반환: (by_name, 이번에 뺀 행 수 — 원천 목록 밖 행은 세지 않음)."""
     seen = _load_done(state)
-    every = _rdb_rows(table)
+    systems = pc.cfg().extract.source.systems
+    every = [r for r in _rdb_rows(table) if picked(r["source_system"], systems)]  # 원천 목록 밖 행은 고르지 않음(건너뜀 기록 없음)
     rows = [r for r in every if not _rdb_is_done(seen, r["key"], r["etag"], r["updated_at"]) and r["key"] not in done]
     name_of = _rdb_names(rows)  # original_filename(또는 doc_id) — 충돌하면 doc_id 접두로 구분
     rows, skipped = _filter_unsupported_rows(rows, name_of)  # 압축·엔진 없는 확장자는 받기 전에 걸러냄
@@ -315,32 +338,33 @@ def rdb_pick(table, state, limit=0, done=frozenset()):
 #  [--max-docs N] [--faq-seen <파일>] --out <목록 파일>` — EDW FileStorageMap 목록(파일 크기 오름차순, --filter가 없으면 모든 문서) →
 #  끝난 문서 빼기(--skip-done) →
 # FAQ 먼저(--faq-seen, --seqs·--limit 실행은 건너뜀) → 앞 --max-docs개. 목록 파일(JSON): {"total": 목록 행 수, "start": 시작 자리,
-# "docs": [{"seq", "id", "s3_key", "original_filename", "file_size"}, …]} — 처리 순서대로, seq = 목록 안 자리(FAQ 덧붙임 포함).
+# "docs": [{"seq", "id", "s3_key", "original_filename", "file_size", "source_system"}, …]} — 처리 순서대로, seq = 목록 안 자리(FAQ 덧붙임 포함).
+# 원천 목록(extract.source.systems — required.source.source_systems)이 있으면 그 원천 행만(UPPER(source_system) — 대소문자 무관),
+# 비면 운영 5개 원천(DEV-<n> 행 뺌 — picked, op-17 규칙 8).
 FSM_SQL = (
-    "SELECT id, s3_key, original_filename, file_size FROM AI.FileStorageMap WHERE ({cond}) AND file_size IS NOT NULL ORDER BY file_size ASC"
+    "SELECT id, s3_key, original_filename, file_size, source_system FROM {table} "
+    "WHERE ({cond}){src} AND file_size IS NOT NULL ORDER BY file_size ASC"
 )
 FAQ_PREFIX = "FAQ/"
+DOC_COLS = ("id", "s3_key", "original_filename", "file_size", "source_system")  # 목록 파일 docs 칸
 
 
-def edw_rows(edw, keywords=(), faq=False):
-    """FileStorageMap 행(파일 크기 오름차순) — 이름 키워드(대소문자 무시, 하나라도 들면 — 없으면 모든 행) 또는 faq=True면 FAQ 전체."""
+def edw_rows(edw, keywords=(), faq=False, systems=()):
+    """FileStorageMap 행(파일 크기 오름차순) — 이름 키워드(대소문자 무시, 하나라도 들면 — 없으면 모든 행) 또는 faq=True면 FAQ 전체
+    (원천 칸 FAQ). systems(대문자 원천 목록)가 있으면 그 원천 행만, 비면 DEV-<n> 행을 뺀다(picked). 원천 칸은 대문자로 바꿔 돌려준다."""
+    src = f" AND UPPER(source_system) IN ({', '.join('?' * len(systems))})" if systems else ""
     if faq:
-        return edw.q(FSM_SQL.format(cond="s3_key LIKE ?"), [FAQ_PREFIX + "%"])
-    if not keywords:
-        return edw.q(FSM_SQL.format(cond="1=1"), [])
-    cond = " OR ".join(["LOWER(original_filename) LIKE ?"] * len(keywords))
-    return edw.q(FSM_SQL.format(cond=cond), [f"%{k.lower()}%" for k in keywords])
-
-
-def faq_status():
-    """ParsingMeta의 FAQ 키 → parse_status(읽기 계정)."""
-    from common.store import parsing_meta_db as PMDB
-
-    db = PMDB.make_db("read")
-    try:
-        return db.status_like(FAQ_PREFIX)
-    finally:
-        db.close()
+        cond, args = "UPPER(source_system) = ?", ["FAQ"]
+    elif not keywords:
+        cond, args = "1=1", []
+    else:
+        cond, args = " OR ".join(["LOWER(original_filename) LIKE ?"] * len(keywords)), [f"%{k.lower()}%" for k in keywords]
+    pc.checked("RDB_FILE_TABLE")  # 덮은 값(--set)이 꼴이 틀리면 여기서 실패(조용히 기본 표로 돌지 않게)
+    # 설정 모델이 <스키마>.<표> 식별자만 받음(SQL 삽입 막기) — [스키마].[표]로 감쌈(MSSQL·SQLite 대역 둘 다)
+    table = ".".join(f"[{p}]" for p in pc.cfg().connections.rdb.file_table.split("."))
+    rows = edw.q(FSM_SQL.format(table=table, cond=cond, src=src), [*args, *systems])
+    rows = [{**r, "source_system": src_name(r["source_system"])} for r in rows]
+    return [r for r in rows if picked(r["source_system"], systems)]  # 목록이 비면 DEV 행 빼기는 파이썬에서(MSSQL·대역 같은 SQL)
 
 
 def faq_sync(reset, out):
@@ -364,12 +388,12 @@ def faq_sync(reset, out):
         return None
 
 
-def faq_first(rows, order, faq_rows, status, seen_f, sync):
+def faq_first(rows, order, faq_rows, never, seen_f, sync):
     """FAQ는 판을 잇지 않고 통째로 교체. 새 FAQ(교체를 마친 키 목록 seen_f에 없는 키)가 있으면 sync(reset=True)로 gold faq를 비우고
     FAQ 전체를 맨 앞에 넣는다(--filter·--skip-done과 상관없이 — 목록에 없는 FAQ 행은 rows 뒤에 덧붙임). 새 FAQ가 없으면 지우지 않고
-    gold에 없는 FAQ만 넣는다(중간에 멈춘 교체·파싱 실패를 채움 — 완전 중복 skipped_dup은 gold에 안 올라가므로 뺌). sync 결과를 못 읽으면
+    gold에 없는 FAQ만 넣는다(중간에 멈춘 교체·파싱 실패를 채움 — 영구 뺌 never(except_doc_info skip — 내용 중복 등)는 gold에 안 올라가므로 뺌). sync 결과를 못 읽으면
     FAQ 전체를 넣고 seen_f는 그대로 둬 다음 실행이 교체를 다시 시도한다(적재는 이미 있는 문서를 건너뜀).
-    ParsingMeta는 새 FAQ 판정에 쓰지 않는다(--seqs·--limit 실행이 교체 없이 기록할 수 있어서)."""
+    gold 기록은 새 FAQ 판정에 쓰지 않는다(--seqs·--limit 실행이 교체 없이 적재할 수 있어서)."""
     seen = set(seen_f.read_text(encoding="utf-8").splitlines()) if seen_f.exists() else set()
     seq = {r["s3_key"]: i for i, r in enumerate(rows)}
     for r in faq_rows:
@@ -392,7 +416,7 @@ def faq_first(rows, order, faq_rows, status, seen_f, sync):
         want = faq
     else:
         gold = set(got["gold"])
-        want = [seq[r["s3_key"]] for r in faq_rows if r["s3_key"] not in gold and status.get(r["s3_key"]) != "skipped_dup"]
+        want = [seq[r["s3_key"]] for r in faq_rows if r["s3_key"] not in gold and r["s3_key"] not in never]
         if want:
             print(f"FAQ 채움: gold에 없는 FAQ {len(want)}건을 다시 처리(지우지 않음)", flush=True)
     keep = set(want)
@@ -400,16 +424,17 @@ def faq_first(rows, order, faq_rows, status, seen_f, sync):
 
 
 def list_targets(keywords, start, limit=0, seqs=(), skip_done=False, max_docs=0, faq_seen=None, sync=None):
-    """이번 실행의 대상 → (rows, order, start, total). skip_done이면 ParsingMeta에 끝난 키와 영구 건너뜀 키(skip_doc_info — pl-58)를 뺀다.
+    """이번 실행의 대상 → (rows, order, start, total). skip_done이면 gold에 끝난 키와 영구 뺌 키(except_doc_info skip — op-17)를 뺀다.
     rows = 목록 행(FAQ 덧붙임 포함), order = 처리할 rows 자리 순서,
     total = 키워드 목록 행 수. faq_seen(교체를 마친 FAQ 키 파일)을 주면 FAQ 먼저 — sync(reset) = faq_sync 자리."""
     from common.store import mssql
 
-    use_faq = faq_seen is not None and not (seqs or limit)
+    systems = pc.cfg().extract.source.systems or []
+    use_faq = faq_seen is not None and not (seqs or limit) and (not systems or "FAQ" in systems)  # FAQ를 고르지 않으면 교체 확인도 안 함
     edw = mssql.EdwReader()
     try:
-        rows = edw_rows(edw, keywords)
-        faq_rows = edw_rows(edw, faq=True) if use_faq else []
+        rows = edw_rows(edw, keywords, systems=systems)
+        faq_rows = edw_rows(edw, faq=True, systems=systems) if use_faq else []
     finally:
         edw.close()
     total = len(rows)
@@ -417,24 +442,28 @@ def list_targets(keywords, start, limit=0, seqs=(), skip_done=False, max_docs=0,
         print(f"start-offset {start} ≥ 대상 {len(rows)}건", flush=True)
         start = len(rows)
     order = sorted(seqs) if seqs else list(range(start, len(rows) if not limit else min(len(rows), start + limit)))
+    never = None
     if skip_done:
-        from common.store.parsing_meta_db import DONE_STATUSES
-        from pipeline.extract import skip_docs
+        from pipeline.shared import except_docs
 
-        done, never = done_keys(), skip_docs.skipped_keys()
+        done, never = done_keys(), except_docs.skipped_keys()
         before = len(order)
         order = [s for s in order if rows[s]["s3_key"] not in done]
         n_done = before - len(order)
         order = [s for s in order if rows[s]["s3_key"] not in never]
         print(
-            f"skip-done: {n_done}건 이미 완료({'·'.join(DONE_STATUSES)}) · {before - n_done - len(order)}건 영구 건너뜀(skip_doc_info) — "
+            f"skip-done: {n_done}건 이미 완료(gold doc) · {before - n_done - len(order)}건 영구 뺌(except_doc_info skip) — "
             f"남은 {len(order)}건 처리",
             flush=True,
         )
     if use_faq:
-        order = faq_first(rows, order, faq_rows, faq_status(), Path(faq_seen), sync)
+        if never is None:
+            from pipeline.shared import except_docs
+
+            never = except_docs.skipped_keys()
+        order = faq_first(rows, order, faq_rows, never, Path(faq_seen), sync)
     elif faq_seen is not None:
-        print("FAQ 교체 확인(pl-41) 건너뜀 — --seqs·--limit 실행", flush=True)
+        print("FAQ 교체 확인(pl-41) 건너뜀 — --seqs·--limit 실행 또는 원천 목록에 FAQ 없음", flush=True)
     if max_docs and len(order) > max_docs:
         print(f"max-docs: {len(order)}건 중 앞 {max_docs}건만(나머지는 다음 실행)", flush=True)
         order = order[:max_docs]
@@ -452,7 +481,7 @@ def _list_cmd(argv):
     ap.add_argument(
         "--skip-done",
         action="store_true",
-        help="ParsingMeta에 끝난(ok·partial — gold_version도, skipped_dup) 문서와 영구 건너뜀(skip_doc_info) 문서 뺌",
+        help="gold에 끝난(doc 행이 있는) 문서와 영구 뺌(except_doc_info skip) 문서 뺌",
     )
     ap.add_argument("--max-docs", type=int, default=0, help="앞에서 이 개수만(0 = 상한 없음)")
     ap.add_argument("--faq-seen", default=None, help="교체를 마친 FAQ 키 파일 — 주면 FAQ 먼저(--seqs·--limit 실행은 건너뜀)")
@@ -465,7 +494,7 @@ def _list_cmd(argv):
     shutil.rmtree(out.parent / RUN_SEEN, ignore_errors=True)  # 새 실행 — 앞 실행이 받은 sha256 표지를 비움
     sync = lambda reset: faq_sync(reset, out.with_name("faq_sync.json"))  # 결과는 목록 파일 옆
     rows, order, start, total = list_targets(keywords, a.start_offset, a.limit, seqs, a.skip_done, a.max_docs, a.faq_seen, sync)
-    docs = [{"seq": s, **{k: rows[s][k] for k in ("id", "s3_key", "original_filename", "file_size")}} for s in order]
+    docs = [{"seq": s, **{k: rows[s][k] for k in DOC_COLS}} for s in order]
     out.write_text(json.dumps({"total": total, "start": start, "docs": docs}, ensure_ascii=False, default=str), encoding="utf-8")
     print(f"[list] 대상 {len(docs)}건 → {out}", flush=True)
     return 0

@@ -8,7 +8,7 @@
 # 설정 파일(SETTINGS_FILE 또는 <루트>/settings.yaml)이 있으면 ops.host.prune_stage_dir·prune_keep_versions·container_cli를 거기서 읽는다.
 set -uo pipefail
 # 부른 자리 그대로(cd 안 함 — 상대 --stage-dir·SETTINGS_FILE은 부른 자리 기준). 설정 파일을 못 읽어도 멈추지 않는다(기본값으로).
-. "$(dirname "$0")/load_settings.sh"   # 루트 RAG_ROOT(코드 폴더의 부모)·load_settings·docker_default
+. "$(dirname "$0")/load_settings.sh"   # 루트 RAG_ROOT(코드 폴더 자체)·load_settings·docker_default
 if [ -n "${SETTINGS_FILE:-}" ] || [ -f "$RAG_ROOT/settings.yaml" ]; then
   load_settings || echo "[prune_images] 설정 파일을 읽지 못함 — 기본값으로 계속" >&2
 fi
@@ -28,7 +28,15 @@ while [ $# -gt 0 ]; do
 done
 case "$KEEP" in ""|*[!0-9]*|0) echo "[prune_images] --keep은 1 이상 정수(지금 판은 항상 남김): $KEEP" >&2; exit 2 ;; esac
 
-REPOS="data-pipeline mcp-server data-pipeline-runtime mcp-server-runtime"
+# 저장소 = 설정의 이미지(required.deploy.pipeline_image·mcp_image — 태그 뗌)와 그 짝(실행 이미지 <이름>-runtime ↔ 코드가 든 이미지 <이름>)
+#   설정에 이미지가 없으면(설정 파일 없이 부름) 기본 이름(data-pipeline·mcp-server — image_names.sh와 같은 이름)
+REPOS=
+for img in "${DATA_PIPELINE_IMAGE:-data-pipeline}" "${MCP_SERVER_IMAGE:-mcp-server}"; do
+  img=${img%@*}                                      # 다이제스트(@sha256:…) 뗌
+  case "${img##*/}" in *:*) img=${img%:*} ;; esac   # 태그 뗌(레지스트리 주소의 :포트는 둠)
+  REPOS="$REPOS ${img%-runtime} ${img%-runtime}-runtime"
+done
+REPOS=${REPOS# }
 USED=" $($DOCKER ps -a --format '{{.Image}}' 2>/dev/null | tr '\n' ' ') "   # 컨테이너가 쓰는 이미지(멈춘 것 포함)
 echo "== 이미지($REPOS) — 최신 ${KEEP}개(지금 판 + 직전 판) + 컨테이너가 쓰는 태그 유지 =="
 for repo in $REPOS; do

@@ -278,3 +278,46 @@ def test_cpu_ms_null_when_cpu_spans_overlap():
     if span.resource is not None:
         assert by_stage["outer"]["cpu_ms"] is not None and by_stage["inner"]["cpu_ms"] is not None
     assert not span._CPU_OPEN
+
+
+# 판 0004 — (사건, manifest 행, 기대 (source_system, ext, file_bytes) — 그 span 행, 안에서 부른 모델 호출 행)
+# 문서 사건만: 부른 쪽이 준 원천·ext·file_bytes가 먼저, 빈 칸만 manifest(원천·size — 없으면 sha256_stat[0])·이름(ext)에서. 실행 사건은 NULL.
+# 모델 호출 행은 부모의 문서·확장자·원천·크기를 이어받음.
+_MAN = {"source_system": "SFDC", "size": 9}
+DOC_COLS = [
+    (lambda: span.span("extract.parse", doc_id="A.PDF", ext=".pdf", file_bytes=7), _MAN, ("SFDC", ".pdf", 7), ("SFDC", ".pdf", 7)),
+    (lambda: span.span("transform.structure", doc_id="A.PDF"), _MAN, ("SFDC", ".pdf", 9), ("SFDC", ".pdf", 9)),
+    (
+        lambda: span.span("extract.skip", doc_id="A.PDF", source_system="CRMS"),
+        _MAN,
+        ("CRMS", ".pdf", 9),
+        ("CRMS", ".pdf", 9),
+    ),  # 준 원천이 먼저
+    (
+        lambda: span.span("transform.structure", doc_id="A.PDF"),
+        {"source_system": "LAS", "sha256_stat": [11, 0]},
+        ("LAS", ".pdf", 11),
+        ("LAS", ".pdf", 11),
+    ),  # 폴더 원천
+    (lambda: span.span("transform.structure", doc_id="noext"), None, (None, None, None), (None, None, None)),  # manifest 없음·확장자 없음
+    (lambda: span.span("run.progress", "run", seq=1, total=2), _MAN, (None, None, None), (None, None, None)),  # 실행 사건
+]
+
+
+def test_doc_event_columns():
+    import json
+    import tempfile
+    from pathlib import Path
+
+    from common.config.settings import COMMON
+
+    for make, man_row, want, model_want in DOC_COLS:
+        rows, patched = _capture()
+        with tempfile.TemporaryDirectory() as d:
+            man = Path(d) / "manifest.jsonl"
+            man.write_text(json.dumps({"file_name": "A.PDF", **man_row}) + "\n" if man_row else "", encoding="utf-8")
+            with patched, COMMON.env(SOURCE_MANIFEST=str(man)), jsonlog.context(run_id=str(uuid.uuid4())):
+                with make():
+                    span.call_event("model.llm", 5)
+        got = [(r["source_system"], r["ext"], r["file_bytes"]) for r in rows]
+        assert got == [model_want, want], (want, got)

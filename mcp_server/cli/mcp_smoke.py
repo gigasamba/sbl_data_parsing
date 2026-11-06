@@ -63,7 +63,9 @@ def main(argv=None):
     ap.add_argument("--url", help="MCP 주소 — 비우면 설정 mcp.dev.mcp_url")
     ap.add_argument("--token", default="")
     ap.add_argument("--q", default="계약 단가")
-    ap.add_argument("--source", required=True, help="원천 하나(SFDC·CRMS·LAS·FAQ·Other — search의 source_system과 같음)")
+    ap.add_argument(
+        "--source", required=True, help="원천 하나(SFDC·CRMS·LAS·FAQ·Other, 개발 서버는 DEV-<숫자>도 — search의 source_system과 같음)"
+    )
     a = ap.parse_args(argv)
     if not a.url:  # 주소를 주면 설정 파일 없이도(호스트·다른 서버에서 부름)
         from mcp_server import config as mc

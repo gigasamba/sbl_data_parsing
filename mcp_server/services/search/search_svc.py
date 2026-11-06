@@ -12,7 +12,7 @@ from mcp_server.config import CFG
 from mcp_server.schemas.evidence import EVIDENCE_KEYS, K_MAX, SEARCH_FILTERS
 from mcp_server.services.search.evidence_shape import _evidence, cap, evidence_status
 from mcp_server.services.search.internal_docs import _manifest_by_name
-from mcp_server.services.search.server_state import _retriever
+from mcp_server.services.search.server_state import _retriever, dev_hint, dev_served
 
 KST = timezone(timedelta(hours=9))  # 시간대 없는 등록 시각은 KST(운영 계약)
 _SYSTEMS = tuple(s.upper() for s in ST.SOURCES)
@@ -195,15 +195,18 @@ def do_search(question=None, k=8, **filters):
         return {"error": NO_SOURCE}
     if isinstance(sysv, list):
         hard["source_system"] = sysv = sysv[0]
-    if str(sysv).upper() not in _SYSTEMS:  # 다섯 값 밖은 거부(조용히 other로 찾지 않음)
-        return {"error": NO_SOURCE}
-
     src = ST.source_of(sysv)
+    if str(sysv).upper() not in _SYSTEMS:  # 다섯 값·있는 DEV 원천 밖은 거부(조용히 other로 찾지 않음 — DEV 꼴이 아니면 DB도 안 봄)
+        found = dev_served() if ST.is_dev(src) else []
+        if src not in found:
+            return {"error": NO_SOURCE + dev_hint(found)}
+    if ST.is_dev(src):
+        hard["source_system"] = ST.label(src)  # 메아리는 DEV-<n> 꼴로(op-17)
     try:
         ch = chain()
     except ValueError as bad:  # 틀린 사슬 파일 — 거르기·근거 attrs를 정할 수 없음
         return {"error": str(bad)}
-    fmap = EC.filters(ch, src)
+    fmap = EC.filters(ch, src) if src in ch else {}  # DEV 원천은 사슬이 없음(메타 없음 — op-17)
     attrs, bad_attrs = _norm_attrs(filters.get("attrs"), sysv, fmap)
     if bad_attrs:
         return {"error": bad_attrs}
@@ -242,7 +245,8 @@ def do_search(question=None, k=8, **filters):
         evidence = [e for e in evidence if (e.get("file_path") or "") in scope]
     evidence = evidence[:user_k]
     # 근거 attrs = evidence: true 키 · contract_no = contract_id 거르기의 키 값 — 문서 attrs는 여기서 한 번에 읽음(검색 층 r 코드는 그대로)
-    ev_keys, cno, by_doc = EC.evidence(ch, src), fmap.get("contract_id"), _doc_attrs(src, {e.get("file_path") for e in evidence})
+    ev_keys = EC.evidence(ch, src) if src in ch else []
+    cno, by_doc = fmap.get("contract_id"), _doc_attrs(src, {e.get("file_path") for e in evidence})
     for i, e in enumerate(evidence):
         e["rank"] = i + 1
         a = by_doc.get(e.get("file_path")) or {}

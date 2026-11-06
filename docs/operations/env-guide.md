@@ -20,7 +20,7 @@
 | 기계 | 파일 | 적용 | 모델 엔드포인트 |
 |---|---|---|---|
 | PC(개발) | 저장소 루트 `settings.yaml`(git 밖, 권한 600) | `RUN_ENV`가 없거나 `local`이면 코드가 이 파일을 찾음. 한 번만 몇 칸 바꿀 때는 오버레이 설정 파일 `SETTINGS_FILE=$(python -m common.config.overrides PIPE_OUT_ROOT=… EMBED_ALLOW_EXTERNAL=1 …)`(**PC 전용**) | 내부망 또는 OpenRouter(기능 시험만 — CLAUDE.md §7) |
-| 수집·개발 서버 | `<루트>/settings.yaml`(루트 = 코드 폴더의 부모 — 코드 폴더 밖, README §5). **주인 UID 10001·그룹 운영 그룹·권한 640**(운영 계정 UID가 10001이면 600) | 컨테이너: compose가 `/etc/rag/settings.yaml`에 읽기 전용(`:ro,z`)으로 붙이고 env는 `SETTINGS_FILE`·`RUN_ENV`만 준다. **값을 바꿀 때는 이 파일을 직접 고친다.** 셸·systemd: `deploy/host/scripts/load_settings.sh`의 `load_settings`가 호스트 칸(이미지·자원·포트·`RAG_OUT`·`DOC_SRC`·`NIGHTLY_*` 등)을 셸 env로 내보내 compose가 치환한다 | 내부망만 |
+| 수집·개발 서버 | `<루트>/settings.yaml`(루트 = 코드 폴더 자체 — git·코드 zip에 없는 파일이라 새 판을 덮어써도 남음, README §5). **주인 UID 10001·그룹 운영 그룹·권한 640**(운영 계정 UID가 10001이면 600) | 컨테이너: compose가 `/etc/rag/settings.yaml`에 읽기 전용(`:ro,z`)으로 붙이고 env는 `SETTINGS_FILE`·`RUN_ENV`만 준다. **값을 바꿀 때는 이 파일을 직접 고친다.** 셸·systemd: `deploy/host/scripts/load_settings.sh`의 `load_settings`가 호스트 칸(이미지·자원·포트·`RAG_OUT`·`DOC_SRC`·`NIGHTLY_*` 등)을 셸 env로 내보내 compose가 치환한다 | 내부망만 |
 
 ### 0-0. 실행 기록(JSON 로그·DB 감사·성능)
 
@@ -34,12 +34,12 @@
 | `tuning.ops.log.log_shutdown_sec` | 5 | 종료 때 남은 기록을 쓰는 상한(초) |
 | `tuning.search.audit.audit_max_input_bytes` · `audit_max_output_bytes` | 16384 · 65536 | MCP 감사 원문 저장 상한(바이트) |
 
-- `applog.skip_doc_info`(영구 건너뜀 문서)는 `ops.log.log_db_enabled`와 관계없이 쓰고 읽는다(대상 목록이 그 키를 뺌). 서버는 `migrate up --target applog`(판 `0002_applog`)가 먼저다 — 없으면 대상 목록·받기가 멈춘다. PG 접속 칸을 채운 PC도 파싱 전에 `dbtool up --target applog`. 보존 정리 대상이 아니다.
-- **영구 건너뜀 풀기(기한 없음 — 사람이 지움).** 한 번 들어간 키는 `candidate_pick list --skip-done`이 계속 뺀다. 다시 고르게 할 때 — 새 엔진이 확장자를 받게 됐을 때(그 이유 전체), DRM 오탐·고친 파일이 같은 `s3_key`로 다시 올라왔을 때(그 키만) — DB 담당자 승인을 받고 행을 지운다. 지운 키는 다음 실행이 다시 고른다(다시 못 읽으면 다시 들어감):
+- `applog.except_doc_info`(적재 안 된 문서 — `skip` 영구 뺌·`error` 실패 기록)는 `ops.log.log_db_enabled`와 관계없이 쓰고 읽는다(대상 목록이 `skip` 키를 뺌, `error` 행은 다음 실행이 다시 고름). 서버는 `migrate up --target applog`(판 `0004_applog`)가 먼저다 — 없으면 대상 목록·받기가 멈춘다. PG 접속 칸을 채운 PC도 파싱 전에 `dbtool up --target applog`. 보존 정리 대상이 아니다.
+- **영구 뺌 풀기(기한 없음 — 사람이 지움).** 한 번 들어간 `skip` 키는 `candidate_pick list --skip-done`이 계속 뺀다. 다시 고르게 할 때 — 새 엔진이 확장자를 받게 됐을 때(그 이유 전체), DRM 오탐·고친 파일이 같은 `s3_key`로 다시 올라왔을 때(그 키만) — DB 담당자 승인을 받고 `skip` 행을 지운다. 지운 키는 다음 실행이 다시 고른다(다시 못 읽으면 다시 들어감):
   ```sql
-  SELECT reason, count(*) FROM applog.skip_doc_info GROUP BY reason;          -- 먼저 대상 확인
-  DELETE FROM applog.skip_doc_info WHERE reason = 'unsupported_format';      -- 이유 단위(새 엔진이 받는 확장자 — 필요하면 AND file_name LIKE '%.hwpx')
-  DELETE FROM applog.skip_doc_info WHERE source_key = '<s3_key>';            -- 키 단위(DRM 오탐·고친 파일)
+  SELECT reason, count(*) FROM applog.except_doc_info WHERE except_type = 'skip' GROUP BY reason;   -- 먼저 대상 확인
+  DELETE FROM applog.except_doc_info WHERE except_type = 'skip' AND reason = 'unsupported_format';   -- 이유 단위(새 엔진이 받는 확장자 — 필요하면 AND file_name LIKE '%.hwpx')
+  DELETE FROM applog.except_doc_info WHERE except_type = 'skip' AND source_key = '<s3_key>';         -- 키 단위(DRM 오탐·고친 파일)
   ```
 - 서버는 매일 `bash deploy/host/scripts/pipe_exec.sh migrate maintain --target applog`(PC: `python -m common.store.db.dbtool maintain --target applog`)를 돌린다 — 앞으로 2개월 파티션 준비, 보존 기한이 지난 파티션 삭제. 새벽 배치(`nightly_batch.sh scheduled`)가 run_pipeline 앞에 부르고(실패하면 경고만), 새벽 배치를 켜지 않은 서버는 따로 예약한다.
 - ⚠️ MCP 감사 행(`applog.mcp_log`)과 대체 파일에는 문서 원문이 들어간다(`get_doc_fulltext` 결과는 파일당 `audit_max_output_bytes`까지). `applog` DB·표와 `ops.log.log_fallback_dir`은 원본 문서와 같은 수준으로 접근을 제한한다. 대체 파일은 지우지 않으므로 디스크 회수도 운영에서 정한다.
@@ -55,7 +55,7 @@
 - `run_pipeline.py`(서버 전용)도 같은 파일을 읽는다 — 필요한 칸이 없으면 칸 경로만 찍고 종료 2.
 - **모드마다 꼭 채울 칸**(sample 주석 `[필수 · …]`와 같음):
   - `local`(PC): `required.env.run_env`, 모델 접속 `required.models`(`embed_base_url`·`embed_model`·`llm_base_url`·`llm_model`·`vlm_base_url`·`vlm_model`). PG(`required.pg` 접속 다섯 칸)는 채우면 그 PG, 모두 비우면 sqlite 대역. EDW·Object Storage·토큰·배포 칸은 채우지 않는다 — 적혀 있어도 EDW 주소·계정, Object Storage 주소·키, 원천 버킷, 서버 게시 버킷은 비우고 `[settings] local(PC) — 서버 전용 칸을 무시함(비움): <칸 이름>` 한 줄을 찍는다(값 없음). 대신 `dev.local`(가짜 EDW `local_edw_sqlite_file` · 게시 폴더 `local_publish_dir` · 원본 폴더 `local_source_dir` · 새 문서 상한 `local_max_new_docs_per_run`)의 기본값을 쓴다.
-  - `dev`·`prd`(서버): 위에 더해 PG 접속 다섯 칸, EDW(`edw_host`·`edw_database`·`edw_read_user`·`edw_read_password`·`edw_write_user`·`edw_write_password`), `publish_bucket`, Object Storage 세 칸, 토큰(`mcp_token`·원문 도구를 쓰면 `fulltext_sign_key`), 배포 네 칸(`pipeline_image`·`mcp_image`·`host_docs_dir`·`pg_container_name`). `pg_schema`는 비우면 `data_parsing`. EDW 쓰기 계정은 파이프라인(게시)에 필수다(읽기 계정으로 대신하지 않음 — 검색 MCP는 쓰지 않음).
+  - `dev`·`prd`(서버): 위에 더해 PG 접속 다섯 칸, EDW(`edw_host`·`edw_database`·`edw_read_user`·`edw_read_password`), `publish_bucket`, Object Storage 세 칸, 토큰(`mcp_token`·원문 도구를 쓰면 `fulltext_sign_key`), 배포 네 칸(`pipeline_image`·`mcp_image`·`host_docs_dir`·`pg_container_name`). `pg_schema`는 비우면 `data_parsing`. EDW는 읽기만 하므로 쓰기 계정 칸은 없다.
 - 라이브러리가 읽는 env(`TZ`·`OMP_NUM_THREADS`·`HF_HUB_OFFLINE`·`TESSDATA_PREFIX` 등 — 허용 목록 `common.config.settings.LIB_ENV_NAMES`)는 `ops.runtime.library_env` 사전에 적는다. 목록 밖 이름은 검증 오류.
 
 ### 0-2. 한 번 실행에만 다른 값 — `--set 이름=값`(서버 포함)
@@ -80,6 +80,7 @@
 | 이름 | 뜻 | 필수? |
 |---|---|---|
 | `RUN_ENV`(`required.env.run_env`) | `local`(PC) · `dev`·`prd`(서버 — 내부망 전용 · 가짜 LLM 거부) | **필수** — 없으면 compose가 멈추고 앱 명령이 종료 2. `selftest`·`check`·`help`·`tool check_env`는 없어도 돎 |
+| `SOURCE_SYSTEMS`(`required.source.source_systems`) | 파싱할 원천 목록 — EDW `AI.FileStorageMap.source_system` 값(대소문자 무관). `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`·`DEV-<1~99>`. 목록에 `FAQ`가 없으면 FAQ 교체 확인도 하지 않는다 | 선택 — 비우면 운영 5개 원천(`SFDC`·`CRMS`·`LAS`·`FAQ`·`Other` — `DEV-<숫자>` 행은 뺌). `DEV-…`는 dev·local만(prd면 종료 2), 모르는 값이면 종료 2. `DEV-<숫자>`를 새로 넣으면 `migrate up --target search`로 검색 스키마 `<기준>_dev_<숫자>`를 먼저 만든다(없으면 적재가 멈춤) |
 
 ### 사내망 판정
 | 이름 | 뜻 | 기본 | 언제 채우나 |
@@ -97,7 +98,7 @@
 ### 저장소 (PostgreSQL + pgvector)
 | 이름 | 메모 |
 |---|---|
-| `PG_HOST`·`PG_PORT`·`PG_DB`·`PG_USER`·`PG_PASSWORD`·`PG_SCHEMA` | 서버는 접속 다섯 칸 필수(자동 탐지 없음 — 비면 채울 자리를 적고 멈춤) · `PG_SCHEMA`(`pg_schema`)는 비우면 `data_parsing`(여러 벌이면 끝에 `_<벌>`) · PC(local)는 접속 칸을 모두 비우면 sqlite 대역. compose는 `network_mode: host`라 `127.0.0.1`이 서버 자신. 계정은 우리 스키마 권한만 |
+| `PG_HOST`·`PG_PORT`·`PG_DB`·`PG_USER`·`PG_PASSWORD`·`PG_SCHEMA` | 서버는 접속 다섯 칸 필수(자동 탐지 없음 — 비면 채울 자리를 적고 멈춤) · `PG_SCHEMA`(`pg_schema`)는 비우면 `data_parsing`(여러 벌도 같은 스키마) · PC(local)는 접속 칸을 모두 비우면 sqlite 대역. compose는 `network_mode: host`라 `127.0.0.1`이 서버 자신. 계정은 우리 스키마 권한만 |
 
 ### 검색 MCP
 | 이름 | 기본 | 메모 |
@@ -106,7 +107,6 @@
 | `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 토큰은 `required.tokens.mcp_token` 하나 — 검색 MCP·`parse_document` 작업 서비스가 함께 쓴다(호출 쪽은 같은 값을 `Authorization: Bearer`로) · 공백만인 토큰은 없음과 같음 |
 | `FULLTEXT_SIGN_SECRET`(`required.tokens.fulltext_sign_key`) | 비움 | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키(비밀). 비면 두 도구가 `not_configured`. 바꾸면 이미 발급된 `sfid`가 모두 무효 |
 | `DATA_PARSING_PORT`(`ops.services.data_parsing.data_parsing_port`) | `8766` | `parse_document` 작업 서비스 포트(127.0.0.1) — 작업 서비스가 듣고 검색 MCP가 이 값으로 부름(칸 하나). 여러 벌이면 벌마다 다르게(기본값이면 시작 거부) |
-| `INSTANCE`(`ops.host.instance_name`) | 비움(한 벌) | 개발 서버 여러 벌 — 컨테이너 이름 끝 `-<벌>`, PG 스키마·EDW 기록 표 끝 `_<벌>`(`-`는 `_`로 — `dbtool --schema`로 직접 준 이름에도), dev 게시 경로 `<prefix>/<벌>`. prd면 시작 거부. settings.yaml에서만(셸 env로 덮지 않음) — server-guide §1-3 |
 | `DATA_PARSING_MAX_MB`(`ops.services.data_parsing.mcp_parse_max_file_mb`) | `100` | `parse_document` 파일 1건 크기 상한(MB) — 검색 MCP와 파싱 서비스가 같은 칸을 읽음 |
 | `MCP_METHODS` | `vector,bm25,id` | 이 셋만 있음 |
 | `MCP_ALLOWED_HOSTS` | 비움 | 루프백이 아닐 때, 리버스 프록시 등 다른 Host로도 부르면 쉼표로 추가 |
@@ -117,6 +117,7 @@
 | 이름 | 기본 | 메모 |
 |---|---|---|
 | `RDB_HOST`·`RDB_PORT`·`RDB_DATABASE`·`RDB_READ_USER`·`RDB_READ_PASSWORD` | 비움·`1433`·비움 | `required.edw`(`edw_host`·`edw_port`·`edw_database`·`edw_read_user`·`edw_read_password`) — 서버만. PC(local)는 적혀 있어도 주소·계정을 비우고 경고(칸 이름만) |
+| `RDB_FILE_TABLE`(`required.edw.edw_file_table`) | `AI.FileStorageMap` | 파싱 대상 파일 목록을 읽을 EDW 표 — `<스키마>.<표>`(영문·숫자·_만, SQL에 그대로 들어가므로 꼴이 틀리면 시작 거부). 대상 목록(`candidate_pick list`)만 쓴다 — 적재 메타 사슬의 표 이름은 `edw_chain.yaml` |
 | `RDB_SQLITE`(`dev.local.local_edw_sqlite_file`) | 비움 | PC(local) 전용 가짜 EDW 파일 — 비우면 `valid_env/edw/edw_copy.sqlite`(없으면 git의 `valid_env/edw/edw.sqlite`를 복사해 만듦 — 원본은 다시 만들기 `python -m validation.e2e.edw_standin`). local은 늘 이 대역을 쓴다 · 서버 설정에 있으면 EDW를 쓸 때 실패 |
 | `EDW_QUERY_MAX_ROWS` | `1000` | 도구 `max_rows`의 상한 |
 | `EDW_QUERY_TIMEOUT_SEC` | `20` | 넘으면 `timeout` |
@@ -129,6 +130,10 @@
 | `DATA_PIPELINE_IMAGE`·`MCP_SERVER_IMAGE`(`required.deploy.pipeline_image`·`mcp_image`) | dev `*-runtime:<판>` · prd `*:<판>` |
 | `RAG_OUT`(`ops.host.host_output_dir`) | 결과 폴더(컨테이너 `/app/output`) |
 | `DOC_SRC`(`required.deploy.host_docs_dir`) | 원본 문서 폴더(컨테이너 `/data/docs:ro`) |
+| `EDW_CHAIN_SRC`(`ops.host.host_edw_chain_file`) | EDW 사슬 사본(컨테이너 `/etc/rag/edw_chain.yaml:ro`) — 비우면 `<루트>/edw_chain.yaml`, 상대 경로는 루트 기준 |
+| `EXTRA_COMPOSE`(`ops.host.extra_compose`) | 더 붙일 compose 파일 목록(볼륨·env 더하기 — 틀 `deploy/host/compose/extra.example.yml`) — `host_ctl.sh`·`mcp_keepalive.sh`가 맨 뒤에 붙임. 상대 경로는 루트 기준(예 `compose.extra.yml` = `<루트>/compose.extra.yml`) · 없는 파일이면 `host_ctl.sh` 종료 2 |
+| `COMPOSE_PROJECT`(`ops.host.compose_project`) | compose 묶음 밑 이름(기본 `compose`) — 실제 이름은 끝에 벌 번호(`-<숫자>`) |
+| `PIPELINE_CONTAINER`·`DATA_PARSING_CONTAINER`·`MCP_CONTAINER`(`ops.containers.<pipeline·data_parsing·mcp>.<…>_container_name`) | 컨테이너 밑 이름(기본 `data-pipeline`·`mcp-data-parsing`·`mcp-server`) — 실제 이름은 끝에 벌 번호. 바꾸기 전에 `host_ctl.sh down` |
 
 ### 원천·경로 묶음
 코드 주석의 "env-guide 1-2"가 이 절이다.
@@ -146,9 +151,7 @@
 |---|---|
 | `OS_ENDPOINT`·`OS_REGION`·`OS_ACCESS_KEY`·`OS_SECRET_KEY`·`OS_VERIFY_TLS` | `required.object_storage`(`object_storage_endpoint`·`object_storage_region`·`object_storage_access_key`·`object_storage_secret_key`·`object_storage_verify_tls`) — 서버만. PC(local)는 적혀 있어도 주소·키를 비우고 경고(게시는 `dev.local.local_publish_dir` 폴더). `object_storage_region` 비우면 `us-east-1` · `object_storage_verify_tls` 비우면 `1`, 사내 CA면 CA 파일 경로(`0`이면 검증 끔 — 경고) |
 | `RDB_CONNECT_KWARGS` | EDW 연결 추가 인자(JSON — 비밀) |
-| `RDB_WRITE_USER`·`RDB_WRITE_PASSWORD`(`required.edw.edw_write_user`·`edw_write_password`) | 쓰기 계정 — ParsingMeta 게시(INSERT·UPDATE)만, 파이프라인 이미지에만. 서버(dev·prd) 필수 — 비우면 게시 접속이 빠진 칸으로 거부되고 `run_pipeline`이 시작하지 않는다(검색 MCP는 늘 읽기 계정만) · PC는 무시 |
-| `PM_BUCKET`·`PM_PREFIX`(`required.publish.publish_bucket`·`publish_prefix`) | silver 게시 위치 — 서버: 버킷 이름(원천 원본 버킷과 달라야 함) · PC(local): 이 칸은 무시하고 `dev.local.local_publish_dir`(`LOCAL_PM_DIR` — 폴더 경로, 기본 `valid_env/object_storage/Parsing_Result`, 처음 게시할 때 만듦)에 쓴다. `publish_prefix`는 버킷(폴더) 안 경로 접두(비우면 맨 위). ⚠ **첫 게시 전 EDW 표를 DBA가 한 번 만든다**: [`parsing_meta_mssql.sql`](parsing_meta_mssql.sql)(코드는 표를 만들지 않음 — 없으면 첫 INSERT에서 실패) |
-| `PM_TABLE`(`required.edw.parsing_meta_table`) | 게시할 EDW 표(비우면 `AI.ParsingMeta`) — PC 가짜 EDW는 표 이름 `ParsingMeta` 고정(이 칸 안 봄) |
+| `PM_BUCKET`·`PM_PREFIX`(`required.publish.publish_bucket`·`publish_prefix`) | silver 게시 위치 — 서버: 버킷 이름(원천 원본 버킷과 달라야 함) · PC(local): 이 칸은 무시하고 `dev.local.local_publish_dir`(`LOCAL_PM_DIR` — 폴더 경로, 기본 `valid_env/object_storage/Parsing_Result`, 처음 게시할 때 만듦)에 쓴다. `publish_prefix`는 버킷(폴더) 안 경로 접두(비우면 맨 위). |
 | `EDW_CHAIN_FILE`(`ops.paths.edw_chain_file`) | EDW 조인 사슬 파일 — 적재와 검색 MCP가 같은 칸을 읽는다. 비우면 코드의 `resources/config/edw_chain.yaml`, 서버 사본을 쓰려면 `/etc/rag/edw_chain.yaml`. 쓰는 법: [release-and-patch §8](release-and-patch.md#8-edw-조인-사슬-파일-고쳐-쓰기서버) |
 
 ### 새벽 배치 (systemd `data-pipeline-nightly`)
@@ -161,12 +164,15 @@
 | `NIGHTLY_DEADLINE`(`ops.nightly.nightly_stop_time`) | 마감 HH:MM(시작보다 이르면 다음 날, 시작보다 5분 넘게 뒤) — 지나면 새 문서를 받지 않고 받은 문서는 끝까지 |
 
 ### 선택 기능 — 개발 작업 공간 (`option`, 파일 맨 아래)
-앱은 이 절을 읽지 않는다 — 호스트 스크립트(`host_ctl.sh`)만 쓴다. 비우면 끔. 쓰는 법: README §5-0 "개발 작업 공간".
+앱은 이 절을 읽지 않는다 — 호스트 스크립트(`host_ctl.sh`)와 작업 공간 시작 스크립트(`dev_entry.sh` → `git_cred.py`)만 쓴다. 비우면 끔. 쓰는 법: README §5-0 "개발 작업 공간".
 
 | 이름 | 기본 | 뜻 |
 |---|---|---|
-| `DEVBOX_SSH_PORT`(`option.devbox.ssh_port`) | 비움(끔) | 적으면 `data-pipeline`을 SSH 작업 공간(`devbox`)으로 띄움 — 그 포트에서 sshd(호스트 네트워크 그대로, 개발자마다 다르게) · 코드 폴더 쓰기 가능 · 홈 `<루트>/home`. 개발 서버(dev)의 실행 이미지에서만 — prd·코드가 든 이미지면 `host_ctl.sh` 종료 2 |
+| `DEVBOX_SSH_PORT`(`option.devbox.ssh_port`) | 비움(끔) | 적으면 `data-pipeline`을 SSH 작업 공간(`devbox`)으로 띄움 — 그 포트에서 sshd(호스트 네트워크 그대로, 개발자마다 다르게) · 코드 폴더 쓰기 가능 · 홈 `<루트>/home`(포트를 적은 뒤 `host_ctl.sh init`이 만듦 — 없으면 `host_ctl.sh up` 종료 2). 개발 서버(dev)의 실행 이미지에서만 — prd·코드가 든 이미지면 `host_ctl.sh` 종료 2 |
+| `DEVBOX_HOME`(`option.devbox.home_dir`) | 비움(`<루트>/home`) | 작업 공간 홈의 호스트 폴더 — `/home/rag`로 붙임. `host_ctl.sh init`이 만듦(UID 10001, 700) · 상대 경로는 루트 기준 |
 | `DEVBOX_OPENCODE_CONFIG`(`option.devbox.opencode_config`) | 비움(이미지의 틀) | opencode 설정 파일의 호스트 경로 — 읽기 전용으로 붙이고 `OPENCODE_CONFIG`로 가리킴. 비우면 홈의 `~/.config/opencode/opencode.json`(첫 시작에 틀 복사 — 내부망 모델만) |
+| `DEVBOX_GITEA_URL`·`DEVBOX_GITEA_USER`·`DEVBOX_GITEA_TOKEN`(`option.devbox.gitea_url`·`gitea_user`·`gitea_token` — 토큰은 비밀) | 비움(설정 안 함) | 셋 다 적으면 작업 공간 시작 때 `~/.git-credentials`(권한 600)에서 그 호스트 줄 `<scheme>://<계정>:<토큰>@<호스트[:포트]>`만 바꾸고(다른 줄 그대로) `git config --global credential.helper store` — 하나라도 비우면 전에 쓴 줄(`~/.devbox/gitea_host`)을 지움. 주소는 `http(s)://호스트[:포트][/경로]`(`https://` 권장 — http면 토큰이 암호화 없이 감). 컨테이너 안에서 붙인 settings.yaml을 직접 읽는다(토큰은 env로 안 넘김) |
+| `DEVBOX_GIT_USER_NAME`·`DEVBOX_GIT_USER_EMAIL`(`option.devbox.git_user_name`·`git_user_email`) | 비움 | 적으면 작업 공간 시작 때 `git config --global user.name`·`user.email` |
 
 ## 2. 자원·병렬 (보통 안 건드림)
 

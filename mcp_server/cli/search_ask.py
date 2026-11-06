@@ -55,7 +55,9 @@ def main(argv=None):
     p.add_argument("--pg", action="store_true", help=argparse.SUPPRESS)  # 호출 호환 — 받기만(검색은 늘 PG)
     p.add_argument("--k", type=int, default=8, help="근거 수 — MCP search 기본과 같게 8(AR5 측정: k=8이 k=10과 같거나 나음, 잘림 적음)")
     p.add_argument("--q", required=True)
-    p.add_argument("--source", required=True, help="원천 하나(SFDC·CRMS·LAS·FAQ·Other — search의 source_system과 같음)")
+    p.add_argument(
+        "--source", required=True, help="원천 하나(SFDC·CRMS·LAS·FAQ·Other, 개발 서버는 DEV-<숫자>도 — search의 source_system과 같음)"
+    )
     p.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
     ask(a)

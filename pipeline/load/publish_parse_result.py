@@ -1,38 +1,34 @@
 #!/usr/bin/env python3
-"""게시: 파싱이 끝난 문서의 대표 결과(.md)와 엔진별 원결과를 Object Storage에 올리고 EDW `AI.ParsingMeta`에 행을 쓴다.
+"""게시: 파싱이 끝난 문서의 대표 결과(.md)와 엔진별 원결과를 Object Storage에 올리고, 올린 위치·엔진·상태를 처리 기록 파일
+`<out>/publish/silver.jsonl`에 남긴다 — 적재(pgvector_load `--silver`)가 그 값을 gold `doc` 칸으로 쓴다(op-17 — EDW에는 쓰지 않음).
 
-규칙: 원본 파일은 올리지 않는다 · 겹침 키 = (source_system, 원본 전체 키) — 있으면 건너뜀, `--reparse` 목록만 새 날짜 폴더 ·
-EDW는 INSERT만 · 게시 버킷이 원천 원본 버킷과 같으면 거부 · DRM·실패 문서는 EDW에 안 쓰고 `output/publish/excluded_<날짜>.md`에만.
+규칙: 원본 파일은 올리지 않는다 · gold에 이미 끝난 원본 키(doc 행이 있음)는 올리지 않음, `--reparse` 목록만 새 날짜 폴더 ·
+DRM·실패 문서는 올리지 않고 `output/publish/excluded_<날짜>.md`에만(실패는 applog.except_doc_info error에도).
 
 사용: python -m pipeline.load.publish_parse_result [--out output] [--parse-date YYYY-MM-DD] [--reparse <키 목록 파일>] [--apply]
-기본은 dry-run(표만 출력, 업로드·EDW 쓰기 0). 설정은 settings.yaml(게시 버킷·접두·표, EDW 쓰기 계정, Object Storage 접속 —
-settings.sample.yaml `load.publish`·`required`). PC는 버킷 `file://<폴더>`·`RDB_SQLITE`로 로컬 대역을 쓴다.
-DDL은 실행하지 않는다(표는 사람이 만듦). SQL은 식별자 화이트리스트·값 바인딩, 비밀값은 출력하지 않는다.
+기본은 dry-run(표만 출력, 업로드·기록 0). 설정은 settings.yaml(게시 버킷·접두, Object Storage 접속 —
+settings.sample.yaml `load.publish`·`required`). PC는 버킷 `file://<폴더>`로 로컬 대역을 쓴다. 비밀값은 출력하지 않는다.
 
 세부 규칙:
 ① 올릴 것 = **대표 결과(.md)** — `render_md()`가 `_rep/<doc>.json`(text·tables_std)에서 만든다. 같은 날짜 폴더에 파싱 결과
    원본도 함께(`raw_artifacts()` — <파일명>_<날짜>.json·<엔진>_<판>_<파일명>.json·vlm_<모델>_<파일명>.jsonl, rep.md를
    마지막에 써서 완료 표시). 원천 원본은 읽기만(수정·삭제·업로드 금지).
-② 겹침/건너뜀 키(KEY) = (source_system, source_key) — source_key는 **원본 Object Storage 전체 키**(경로 포함,
-   manifest의 "key" — 키가 없으면 상대 경로인 file_name). 두 폴더의 같은 이름 파일이 서로 안 겹친다.
+② 원본 키(source_key) = **원본 Object Storage 전체 키**(경로 포함, manifest의 "key" — 키가 없으면 상대 경로인 file_name) = gold `doc.file_path`.
 ③ Object Storage 키 = `rep_md_key()` → `<PM_PREFIX>/<source_system>/<원본 키 세그먼트별 safe_name>/<파일명>_<parse_date>.md`
    (원본 키가 이미 `<source_system>/`로 시작하면 원천 이름을 한 번만). 같은 이름이 있으면 덮어쓰지 않고 접미사를
    붙여(`_unique_parse_date`) 새 폴더를 만든다. 정리로 키가 바뀌면 원본 키의 짧은 해시를 덧붙인다(`rep_md_key()`).
-④ EDW = INSERT만(KEY가 이미 있으면 건너뜀, 재파싱 행은 예외). UPDATE 없음. KEY가 이미 있는 문서는 올리기 전에 걸러
-   아예 올리지 않는다(`apply()` — EDW 행 없는 고아 객체를 만들지 않게). `--reparse` 목록만 예외(새 날짜 폴더).
-⑥ DRM·파싱 실패(`EDW_EXCLUDED_STATUSES`)는 EDW에 넣지 않고 `render_excluded_report()`로 마크다운 보고서만.
+④ gold에 이미 끝난 문서는 올리기 전에 걸러 아예 올리지 않는다(`apply()` — 같은 문서의 결과 폴더가 쌓이지 않게). `--reparse` 목록만 예외(새 날짜 폴더).
+⑥ DRM·파싱 실패(`EXCLUDED_STATUSES`)는 `render_excluded_report()`로 마크다운 보고서만.
 
 상태(parse_status) = ok · partial(교차 정확도 < criteria.json run.cross_acc_full) · failed · skipped_drm(DRM·암호 래핑) ·
 skipped_dup(dedup keep.txt에서 빠짐) · not_parsed(이번 파싱 대상 아님). 원본은 게시 뒤 지워지므로 ok·partial도 로컬 원본이 없을 수
 있다 — 그때는 manifest의 "sha256"(candidate_ready가 남김)으로 대체한다(parse_status는 그대로).
 
-쓰기 대상: PM_TABLE(기본 AI.ParsingMeta) · PM_BUCKET(업로드 버킷, "file://<폴더>"면 로컬 폴더를 가짜 Object Storage로) ·
-PM_PREFIX(버킷 안 경로 접두, 선택) · common.connections.rdb 쓰기 계정(RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_WRITE_USER·
-RDB_WRITE_PASSWORD) · RDB_SQLITE(설정하면 SQLite를 가짜 EDW로, 접속 칸 안 봄).
+쓰기 대상: PM_BUCKET(업로드 버킷, "file://<폴더>"면 로컬 폴더를 가짜 Object Storage로) · PM_PREFIX(버킷 안 경로 접두, 선택).
 업로드 접속은 Object Storage 읽기와 같은 설정(OS_ENDPOINT·OS_ACCESS_KEY·OS_SECRET_KEY·OS_REGION·OS_VERIFY_TLS).
 
 업로드 대상 상태(안전 기본값): 기본은 **ok·partial만 업로드**(DEFAULT_UPLOAD_STATUSES) — PM_UPLOAD_STATUSES(콤마 목록)로
-넓힐 수 있다. DRM·실패는 ⑥로 EDW에도 안 들어간다(업로드 대상 여부와 별개 축).
+넓힐 수 있다. 처리 기록(silver.jsonl)은 실제로 올린 문서만.
 """
 
 import argparse
@@ -50,25 +46,14 @@ from common.core.paths import APP_ROOT, CRITERIA_FILE
 from pipeline import config as pc
 
 ROOT = APP_ROOT  # output/ 등 런타임 경로용
+_KST = datetime.timezone(datetime.timedelta(hours=9))  # parsed_at 표기(적재 created_at과 같은 시간대 — 대역 글자 비교도 맞음)
 _CROSS_ACC_FULL = json.loads(CRITERIA_FILE.read_text(encoding="utf-8"))["run"][
     "cross_acc_full"
 ]  # partial 사유 글자도 같은 정본(판정은 parse_scoring이 이미 함)
-# EDW AI.ParsingMeta 저장소 클래스(MssqlStore·SqliteStore)는 검색과 함께 쓰므로 common.store.parsing_meta_db에 있다.
-from common.store.parsing_meta_db import (  # noqa: E402,F401
-    _SQLITE_TYPE,
-    COLUMNS,
-    DEFAULT_TABLE,
-    KEY,
-    TABLE_ID_RE,
-    MssqlStore,
-    SqliteStore,
-    _insert_new_rows,
-    make_db,
-)
-
 STATUSES = ("ok", "partial", "failed", "skipped_drm", "skipped_dup", "not_parsed")
-DEFAULT_UPLOAD_STATUSES = ("ok", "partial")  # 안전 기본값 — DRM·실패·중복·미파싱은 EDW 행만(업로드 안 함)
-EDW_EXCLUDED_STATUSES = ("skipped_drm", "failed")  # ⑥ EDW에 안 넣고 render_excluded_report()로만(소음 방지)
+DEFAULT_UPLOAD_STATUSES = ("ok", "partial")  # 안전 기본값 — DRM·실패·중복·미파싱은 올리지 않음
+EXCLUDED_STATUSES = ("skipped_drm", "failed")  # ⑥ render_excluded_report()로(실패는 except_doc_info error에도)
+SILVER_FILE = "silver.jsonl"  # <out>/publish/ 아래 처리 기록 — 적재가 gold doc 칸으로(pgvector_load --silver)
 
 
 sha256_of = file_hash
@@ -106,8 +91,8 @@ def rep_md_key(prefix, source_system, source_key, parse_date):
     붙여 구분한다 — 정리가 필요 없는 흔한 경로(사용자가 읽는 대부분)는 그대로 둔다. 원본 키 자체가 이미 이
     해시 접미사 모양으로 끝나면(드물지만 가능) 그것도 해시를 붙여 "해시 붙은 키"와 "우연히 그렇게 생긴
     원본 키"가 서로 안 겹치게 한다. ponytail: 남는 이론상 충돌(sha1 10자 충돌)은 막지 않음.
-    원본 키 첫 마디가 이미 원천 이름이면(대소문자 무시 — PC 폴더 원천 `CRMS/<uuid>/<파일>` + source_system CRMS) 원천 이름을
-    한 번만 쓴다(`CRMS/CRMS/…` 아님). 첫 마디가 원천 이름이 아니면(서버 — source_system FileStorageMap) 앞에 붙인다."""
+    원천 = manifest의 source_system(FileStorageMap.source_system 또는 PC 맨 위 폴더 — op-17). 원본 키 첫 마디가 이미 그 원천
+    이름이면(대소문자 무시 — `CRMS/<uuid>/<파일>` + CRMS, `DEV-1/…` + dev-1) 한 번만 쓴다(`CRMS/CRMS/…` 아님), 아니면 앞에 붙인다."""
     key = str(source_key)
     raw_segs = [s for s in key.strip("/").split("/") if s not in ("", ".", "..")]
     head = [] if raw_segs[:-1] and raw_segs[0].lower() == str(source_system).lower() else [safe_filename(source_system, "")]
@@ -129,8 +114,7 @@ def doc_stem(source_key):
 
 
 def _dir_key(file_key):
-    """대표 결과 파일 키 → 문서 폴더 키(끝 '/' 포함) — EDW rep_key에는 이 폴더를 넣는다
-    ('.../Parsing-Result/<UUID>/<원본파일명>/'까지). 폴더 안 최신 결과는 parse_date(날짜+시간) 열로 가린다."""
+    """대표 결과 파일 키 → 문서 폴더 키(끝 '/' 포함, '.../Parsing-Result/<UUID>/<원본파일명>/'까지) — 미리 보기(dry-run) 표시용."""
     return file_key.rsplit("/", 1)[0] + "/"
 
 
@@ -201,7 +185,7 @@ def parse_upload_statuses(env_value):
     vals = {s.strip() for s in (env_value or "").split(",") if s.strip()}
     bad = vals - set(STATUSES)
     if bad:
-        raise ValueError(f"[parsing_meta] PM_UPLOAD_STATUSES에 모르는 상태 — {sorted(bad)}(허용: {STATUSES})")
+        raise ValueError(f"[publish] PM_UPLOAD_STATUSES에 모르는 상태 — {sorted(bad)}(허용: {STATUSES})")
     return vals or set(DEFAULT_UPLOAD_STATUSES)
 
 
@@ -212,7 +196,7 @@ def load_reparse_keys(path):
         return set()
     p = Path(path)
     if not p.exists():
-        raise SystemExit(f"[parsing_meta] --reparse 파일 없음 — {p}")
+        raise SystemExit(f"[publish] --reparse 파일 없음 — {p}")
     return {ln.strip() for ln in p.read_text(encoding="utf-8").splitlines() if ln.strip() and not ln.strip().startswith("#")}
 
 
@@ -260,8 +244,8 @@ def _vlm_model(model, env_fallback):
 
 def engines_used(rep_json, env_fallback=True):
     """문서 하나의 대표 결과(`_rep/<문서>.json` 전체, status_of()가 쓰는 index.json 요약이 아님)
-    에서 실제로 쓰인 엔진 전부(VLM·OCR 포함) → (engines_used 목록, 한 줄 요약) — EDW `engines_used`·
-    `engines_summary` 두 열의 값. 순수 함수(rep_json만 읽음) — 단 env_fallback=True(기본)이면 rep에 VLM 모델
+    에서 실제로 쓰인 엔진 전부(VLM·OCR 포함) → engines_used 목록 — gold `doc.engines`(대표는
+    role "rep"). 순수 함수(rep_json만 읽음) — 단 env_fallback=True(기본)이면 rep에 VLM 모델
     이름이 없을 때만 현재 프로세스의 VLM_MODEL을 대신 읽는다(그 항목에 "source":"env_fallback"
     표시 — publish는 파싱과 다른 실행·env일 수 있어 rep를 1차로, env는 rep에 없을 때만의 대체).
 
@@ -271,22 +255,17 @@ def engines_used(rep_json, env_fallback=True):
       (+모델 rep.post.vlm_models.page) → role='vlm_page' · rep.post.figures(+모델 rep.post.vlm_models.figure) →
       role='vlm_figure' · rep.agent(판단 기록, 있으면) →
       role='agent'. 항목 = {"engine","role","status","version_or_model","calls"}.
-    rep_json이 비었으면([], None)."""
+    rep_json이 비었으면 []."""
     if not rep_json:
-        return [], None
+        return []
     out = []
     rep = rep_json.get("rep") or {}
     tried = rep.get("tried") or {}
     chosen = rep.get("engine")
-    text_names, ocr_names = [], []
     for eng in sorted(tried):
         info = tried[eng] or {}
         role = "rep" if eng == chosen else ("ocr" if eng in _OCR_ENGINE_NAMES else "candidate")
         out.append({"engine": eng, "role": role, "status": info.get("status"), "version_or_model": info.get("version"), "calls": 1})
-        if role == "candidate":
-            text_names.append(eng)
-        elif role == "ocr":
-            ocr_names.append(eng)
     post = rep_json.get("post") or {}
     vlm_models = post.get("vlm_models") or {}
     page_calls, fig_calls = post.get("vlm_page_calls") or 0, post.get("figures") or 0
@@ -307,18 +286,7 @@ def engines_used(rep_json, env_fallback=True):
         out.append(
             {"engine": agent.get("agent") or "agent", "role": "agent", "status": agent.get("status"), "version_or_model": None, "calls": 1}
         )
-    parts = [f"rep={chosen}"] if chosen else []
-    if text_names:
-        parts.append("text=" + ",".join(text_names))
-    if ocr_names:
-        parts.append("ocr=" + ",".join(ocr_names))
-    vlm_bits = ([f"page×{page_calls}"] if page_calls else []) + ([f"fig×{fig_calls}"] if fig_calls else [])
-    if vlm_bits:
-        parts.append(f"vlm={page_model or fig_model or '모델?'} " + " ".join(vlm_bits))
-    if agent:
-        parts.append(f"agent={agent.get('agent') or 'agent'}")
-    summary = "; ".join(parts) or None
-    return out, (summary[:512] if summary else None)
+    return out
 
 
 def raw_artifacts(parse_dir, name, figs, runs=None, rep=None):
@@ -354,7 +322,7 @@ def raw_artifacts(parse_dir, name, figs, runs=None, rep=None):
                 "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in figs),
             )
         )
-    # meta.json·source.json 제외 — _meta.json은 EDW에, source.json은 내부용
+    # meta.json·source.json 제외 — source.json은 내부용
     return [r for r in out if not r[0].endswith("_meta.json")]
 
 
@@ -397,11 +365,11 @@ def plan(
         source_key = e.get("key") or name  # 원본 Object Storage 전체 키(경로 포함); 없으면(폴더 직접 소스) 상대 경로(이름)
         f = Path(source_dir) / name
         gen_sha = e.get("sha256")
-        st, reason, rep = status_of(name, rep_by_doc, summary, skipped, keep)
+        st, reason, _ = status_of(name, rep_by_doc, summary, skipped, keep)
         if f.exists():
-            sha, file_size, local_path = gen_sha or sha256_of(f), f.stat().st_size, f  # 중복 제외가 남긴 값이 있으면 다시 읽지 않음
+            sha, local_path = gen_sha or sha256_of(f), f  # 중복 제외가 남긴 값이 있으면 다시 읽지 않음
         elif gen_sha:  # 파싱이 끝나면 원본을 바로 지움(기본) — 상태는 그대로(ok/partial/failed/…), 로컬만 없음
-            sha, file_size, local_path = gen_sha, e.get("size"), None
+            sha, local_path = gen_sha, None
         else:
             missing += 1
             continue
@@ -410,31 +378,21 @@ def plan(
         # engines_used()에도 쓰고(요건(b)) 올릴 때의 render_md·raw_artifacts에도 그대로 재사용(중복 읽기 없음).
         rep_path = Path(rep_dir) / f"{name}.json"
         full_rep = json.loads(rep_path.read_text(encoding="utf-8")) if rep_path.exists() else None
-        eng_list, eng_summary = engines_used(full_rep) if full_rep else ([], None)
+        eng_list = engines_used(full_rep) if full_rep else []
         row = {
             "source_system": e.get("source_system") or source_system,  # manifest이 들고 온 원천, 없으면 --source-system 폴백
             "source_key": source_key,
-            "source_uri": e.get("uri"),
             "original_filename": e.get("original_filename") or name,
-            "file_format": (rep or {}).get("format"),
-            "file_size": file_size,
             "sha256": sha,
             "rep_bucket": bucket,
-            "rep_key": _dir_key(rep_md_key(prefix, e.get("source_system") or source_system, source_key, parse_date)),  # EDW엔 문서 폴더
-            "rep_etag": None,
+            "rep_key": _dir_key(
+                rep_md_key(prefix, e.get("source_system") or source_system, source_key, parse_date)
+            ),  # 미리 보기 — 문서 폴더
             "parse_status": st,
             "status_reason": reason,
-            "rep_engine": (rep or {}).get("engine"),
-            "rep_acc": (rep or {}).get("acc"),
-            "page_count": (rep or {}).get("pages"),
-            "doc_key": (rep or {}).get("doc_key")
-            or sha,  # 유일한 필수 열, 게시 시점엔 항상 구해짐(대표의 doc_key, 없으면 manifest 원본 sha256)
             "parse_date": parse_date,
             "pipeline_version": version,
-            "status": "active",
-            "status_at": None,
-            "engines_used": json.dumps(eng_list, ensure_ascii=False) if eng_list else None,
-            "engines_summary": eng_summary,
+            "engines": eng_list,
         }
         md_text, raw = None, []
         if upload:
@@ -459,16 +417,16 @@ def plan(
 
 
 def render_excluded_report(entries):
-    """EDW에 못 들어간 행(DRM·파싱 실패) → 마크다운 보고서 — 사유별로 묶어 원본 키를 보여준다(순수 함수,
+    """올리지 않은 DRM·파싱 실패 행 → 마크다운 보고서 — 사유별로 묶어 원본 키를 보여준다(순수 함수,
     I/O 없음 — 파일로 쓰는 것은 호출부 main())."""
     by_reason = {}
     for e in entries:
         row = e["row"]
-        if row["parse_status"] in EDW_EXCLUDED_STATUSES:
+        if row["parse_status"] in EXCLUDED_STATUSES:
             by_reason.setdefault(row["parse_status"], []).append(row)
     if not by_reason:
-        return "# EDW 제외 문서 없음(SI39⑥)\n"
-    lines = ["# EDW 제외 문서 — DRM·파싱 실패(SI39⑥, EDW에 안 넣고 이 보고서로만)", ""]
+        return "# 제외 문서 없음(SI39⑥)\n"
+    lines = ["# 제외 문서 — DRM·파싱 실패(SI39⑥, 올리지 않고 이 보고서로만)", ""]
     for status in sorted(by_reason):
         rows = by_reason[status]
         lines += [f"## {status} ({len(rows)}건)", "", "| source_system | 원본 키 | 사유 |", "|---|---|---|"]
@@ -477,24 +435,25 @@ def render_excluded_report(entries):
     return "\n".join(lines)
 
 
-def apply(entries, storage, db, md_dir, prefix=""):
-    """업로드(.md — 같은 이름이 이미 있으면 덮어쓰지 않고 접미사로 새 이름) + EDW INSERT(KEY가
-    이미 있으면 건너뜀 — db.insert_new, UPDATE·MERGE 없음 · DRM·실패는 EDW_EXCLUDED_STATUSES라 아예 안 보냄).
-    올리기 전에 EDW에서 KEY를 한 번에 본다 — 이미 있으면 올리지 않는다(EDW 행 없는 고아 객체 방지 · `--reparse` 목록만 예외).
-    entries = plan()의 반환값 그대로. md_dir: .md를 잠깐 썼다가 올린 뒤 바로 지우는 로컬 폴더
+def apply(entries, storage, md_dir, prefix="", done=frozenset()):
+    """업로드(.md — 같은 이름이 이미 있으면 덮어쓰지 않고 접미사로 새 이름) → (결과 숫자, 처리 기록 행 목록).
+    done = gold에 끝난 원본 키(gold_docs.done_keys) — 그 문서는 올리지 않는다(`--reparse` 목록만 예외). 실패(failed)는 except_doc_info error.
+    entries = plan()의 반환값 그대로. md_dir: .md를 잠깐 썼다가 올린 뒤 바로 지우는 로컬 폴더.
     각 행에 "upload_result"를 채운다: "uploaded"(이 실행이 새로 올림) · "excluded"(PM_UPLOAD_STATUSES 밖이거나 렌더할 대표 결과가 없음) ·
-    "exists"(EDW에 KEY가 이미 있어 올리지 않음).
+    "exists"(gold에 이미 끝남 — 올리지 않음). 처리 기록 행 = 올린 문서마다 {doc_name, source_key, sha256, silver_bucket, silver_key(.md 객체),
+    engines, parse_status, silver_version, parsed_at(올린 시각 — KST ISO)} — 적재가 gold doc 칸으로.
     --apply일 때만 부른다(네트워크·쓰기)."""
+    from pipeline.shared import except_docs
+
     uploaded = excluded = exists = 0
-    ask = {e["row"]["source_key"] for e in entries if e["upload"] and not e["reparse"] and e["row"]["source_key"] is not None}
-    have = {(r["source_system"], r["source_key"]) for r in db.rows_where("source_key", sorted(ask))} if ask else set()
+    silver = []
     for e in entries:
         row = e["row"]
         if not e["upload"]:
             e["upload_result"] = "excluded"
             excluded += 1
             continue
-        if not e["reparse"] and (row["source_system"] or "unknown", row["source_key"]) in have:  # 빈 원천 = 'unknown'(insert_new와 같음)
+        if not e["reparse"] and row["source_key"] in done:
             e["upload_result"] = "exists"
             exists += 1
             continue
@@ -505,7 +464,7 @@ def apply(entries, storage, db, md_dir, prefix=""):
         row["rep_key"] = _dir_key(fkey)
         folder = fkey.rsplit("/", 1)[0]
         Path(md_dir).mkdir(parents=True, exist_ok=True)
-        for fname, src in e.get("raw") or []:  # 엔진별 원본(engine/)·후보정 대표 원본·meta — .md보다 먼저
+        for fname, src in e.get("raw") or []:  # 엔진별 원본(engine/)·후보정 대표 원본 — .md보다 먼저
             fname = fname.replace("<date>", row["parse_date"]).replace("<stem>", doc_stem(row["source_key"]))
             if isinstance(src, Path):
                 storage.put(src, f"{folder}/{fname}")
@@ -516,31 +475,44 @@ def apply(entries, storage, db, md_dir, prefix=""):
                 tmp.unlink()
         md_path = Path(md_dir) / _local_md_name(row)
         md_path.parent.mkdir(parents=True, exist_ok=True)
-        md = (e["md_text"] or "").encode("utf-8")
-        md_path.write_bytes(md)
+        md_path.write_bytes((e["md_text"] or "").encode("utf-8"))
         storage.put(md_path, fkey)
-        row["rep_etag"] = hashlib.md5(md).hexdigest()  # 올린 바이트 = 메모리의 글자
         md_path.unlink()
         e["upload_result"] = "uploaded"
         uploaded += 1
-    rows_for_db = []
-    for e in entries:
-        if e["row"]["parse_status"] in EDW_EXCLUDED_STATUSES:  # DRM·실패는 EDW에 안 넣음(render_excluded_report로만)
-            continue
-        row = dict(e["row"])
-        row["_reparse"] = e["reparse"]
-        rows_for_db.append(row)
-    inserted, key_skipped = db.insert_new(rows_for_db) if rows_for_db else (0, 0)
-    edw_excluded = sum(1 for e in entries if e["row"]["parse_status"] in EDW_EXCLUDED_STATUSES)
-    return {
+        silver.append(
+            {
+                "doc_name": e["doc_name"],
+                "source_key": row["source_key"],
+                "sha256": row["sha256"],
+                "silver_bucket": row["rep_bucket"],
+                "silver_key": fkey,
+                "engines": row["engines"],
+                "parse_status": row["parse_status"],
+                "silver_version": row["pipeline_version"],
+                "parsed_at": datetime.datetime.now(_KST).isoformat(timespec="seconds"),
+            }
+        )
+    errors = [
+        {
+            "source_key": e["row"]["source_key"],
+            "source_system": e["row"]["source_system"],
+            "file_name": e["doc_name"],
+            "reason": "parse_failed",
+        }
+        for e in entries
+        if e["row"]["parse_status"] == "failed"
+    ]
+    if errors:
+        except_docs.note_error(errors)  # 기록만 — 실패해도 게시는 계속
+    result = {
         "uploaded": uploaded,
         "upload_excluded": excluded,
         "upload_skip_existing": exists,
-        "inserted": inserted,
-        "edw_skip_existing": key_skipped,
-        "edw_excluded_drm_failed": edw_excluded,
+        "excluded_drm_failed": sum(1 for e in entries if e["row"]["parse_status"] in EXCLUDED_STATUSES),
         "rows": len(entries),
     }
+    return result, silver
 
 
 # ── Object Storage 백엔드 ──────────────────────────────────────────
@@ -599,7 +571,7 @@ class S3Store:
 def make_storage():
     bucket = pc.cfg().load.publish.bucket
     if not bucket:
-        raise SystemExit("[parsing_meta] PM_BUCKET 필요(PM1 결정 뒤 채움) — 'file://<폴더>'(시험) 또는 실제 버킷 이름")
+        raise SystemExit("[publish] PM_BUCKET 필요(PM1 결정 뒤 채움) — 'file://<폴더>'(시험) 또는 실제 버킷 이름")
     if bucket.startswith("file://"):
         return LocalFolderStore(bucket[len("file://") :])
     return S3Store(bucket)
@@ -630,9 +602,9 @@ def _no_upload_reason(e):
     if e["upload"]:
         return None
     status = e["row"]["parse_status"]
-    if status in EDW_EXCLUDED_STATUSES:
-        return f"상태={status} — EDW에도 안 들어감(SI39⑥, excluded_<날짜>.md 보고서로만)"
-    return f"상태={status}(PM_UPLOAD_STATUSES 밖) — EDW 행만"
+    if status in EXCLUDED_STATUSES:
+        return f"상태={status} — 올리지 않음(SI39⑥, excluded_<날짜>.md 보고서로만)"
+    return f"상태={status}(PM_UPLOAD_STATUSES 밖) — 올리지 않음"
 
 
 def run(a):
@@ -647,7 +619,7 @@ def run(a):
         if a.apply:
             raise SystemExit("[publish_parse] PM_BUCKET 필요(PM1 결정 뒤) — --apply에는 반드시 설정")
         bucket = "(PM_BUCKET 미설정 — dry-run 미리보기 값)"
-    prefix = C.publish_prefix(pub.prefix or "")  # 개발 서버 여러 벌이면 <접두>/<벌>
+    prefix = pub.prefix or ""
     upload_statuses = parse_upload_statuses(",".join(pub.upload_statuses))  # 목록 → 옛 쉼표 글자(빈 목록 = 안전 기본값)
     reparse_keys = load_reparse_keys(a.reparse)
     rows, missing = plan(
@@ -696,22 +668,20 @@ def run(a):
     }
     if not a.apply:
         print(json.dumps(out, ensure_ascii=False))
-        print("[dry-run] 쓰기 0 — 실제 업로드·EDW 쓰기는 --apply 명시")
+        print("[dry-run] 쓰기 0 — 실제 업로드·기록은 --apply 명시")
         return out
-    storage, db = make_storage(), make_db("write")
+    from pipeline.shared import gold_docs
+
+    storage = make_storage()
+    done = gold_docs.done_keys([e["row"]["source_key"] for e in rows if e["upload"] and not e["reparse"]])
     md_dir = Path(a.out) / "publish" / "_md_tmp"
-    try:
-        with SP.span("load.publish", "load", cpu=True) as sp:  # Object Storage 업로드 + EDW 쓰기 1행(대상 문서 수·결과 숫자)
-            result = apply(rows, storage, db, md_dir, prefix)
-            sp.rows(len(rows)).add(
-                eligible=out["upload_plan"]["eligible"], **{k: v for k, v in (result or {}).items() if isinstance(v, (int, float))}
-            )
-    finally:
-        if hasattr(db, "close"):
-            db.close()
+    with SP.span("load.publish", "load", cpu=True) as sp:  # Object Storage 업로드 1행(대상 문서 수·결과 숫자)
+        result, silver = apply(rows, storage, md_dir, prefix, done)
+        sp.rows(len(rows)).add(eligible=out["upload_plan"]["eligible"], **{k: v for k, v in result.items() if isinstance(v, (int, float))})
     out["result"] = result
     report_dir = Path(a.out) / "publish"
     report_dir.mkdir(parents=True, exist_ok=True)
+    (report_dir / SILVER_FILE).write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in silver), encoding="utf-8")
     report_path = report_dir / f"excluded_{parse_date}.md"
     report_path.write_text(render_excluded_report(rows), encoding="utf-8")  # DRM·실패는 여기로만
     out["excluded_report"] = str(report_path)
@@ -739,7 +709,7 @@ def main(argv=None):
     ap.add_argument("--version", help="기본 저장소 루트 VERSION(옛 PATCH_VERSION이 더 높으면 그것 — common.pipeline_version, D-036)")
     ap.add_argument("--parse-date", help="기본 오늘(YYYY-MM-DD) — Object Storage 키의 날짜 폴더(SI39③)")
     ap.add_argument("--reparse", help="사람 조치 뒤 재파싱 대상 원본 키 목록 파일(한 줄에 하나, SI39③) — 새 날짜 폴더로, 옛 결과는 안 지움")
-    ap.add_argument("--apply", action="store_true", help="실제 업로드 + EDW 쓰기(기본은 dry-run — 표만 출력, 쓰기 0)")
+    ap.add_argument("--apply", action="store_true", help="실제 업로드 + 처리 기록(기본은 dry-run — 표만 출력, 쓰기 0)")
     a = ap.parse_args(argv)
     run(a)
 

@@ -317,12 +317,7 @@ ORDER_CASES = [
     ((True, True, False), ["parse", "publish", "orig", "gold", "temp"], 1),  # gold 실패 — silver는 이미 게시됨, 원본은 게시 뒤 지움
     ((True, False, True), ["parse", "publish", "temp"], 1),  # 게시 실패 — 원본 남김, gold 안 감
     ((False, True, True), ["parse", "temp"], 1),  # 파싱 실패 — 원본 남김, 게시·gold 안 감
-    (
-        ("skip", True, True),
-        ["parse", "publish", "orig", "temp"],
-        0,
-    ),  # 받기가 뺀 문서(중복·DRM) — 게시가 상태를 쓰고 원본 삭제, gold 없음, 실패 아님
-    (("skip", False, True), ["parse", "publish", "temp"], 1),  # 그 게시가 실패 — 원본 남김
+    (("skip", True, True), ["parse", "orig", "temp"], 0),  # 받기가 뺀 문서(중복·DRM) — 게시·gold 없이 원본·임시 삭제, 실패 아님
 ]
 
 

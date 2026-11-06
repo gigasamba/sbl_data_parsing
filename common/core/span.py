@@ -33,6 +33,7 @@ import threading
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from common.core import jsonlog
 
@@ -44,6 +45,7 @@ except ImportError:  # Windows — cpu_ms·rss_peak_mb는 None으로 남김(OS �
 STATUSES = ("ok", "fail", "timeout", "skip", "reused")
 ERR_KINDS = ("env", "timeout", "doc", "external", "db")
 COLUMNS = (
+    "source_system",
     "engine",
     "model",
     "attempt",
@@ -257,6 +259,62 @@ def _logger():
         return _STATE["log"]
 
 
+# ── 원본 manifest 읽기 한 곳(span·받기가 같이 씀) — 마지막으로 읽은 파일 하나만 들고 있다(경로·고친 시각·크기가 같으면 다시 읽지 않음).
+# 새 common 파일이면 fingerprint.py 분류를 고쳐야 해 모든 층 지문이 바뀌므로, 지문 밖인 이 파일에 둔다.
+_MAN_LAST: dict = {}  # {"v": ((경로, 고친 시각 ns, 크기), {이름: 행})} — 파일 하나만
+
+
+def manifest_rows(path):
+    """원본 manifest.jsonl(받기 pipeline.extract.candidate_ready가 씀) → {file_name: 행}(없으면 빈 사전). 돌려준 사전은 함께 쓰는 것 — 고칠 쪽은 dict()로 복사."""
+    p = Path(path)
+    try:
+        st = p.stat()
+    except OSError:
+        return {}
+    key = (str(p), st.st_mtime_ns, st.st_size)
+    last = _MAN_LAST.get("v")
+    if last is None or last[0] != key:
+        out = {}
+        for ln in p.read_text(encoding="utf-8").splitlines():
+            if ln.strip():
+                r = json.loads(ln)
+                if r.get("file_name"):
+                    out[r["file_name"]] = r
+        last = _MAN_LAST["v"] = (key, out)  # 한 번에 바꿔 끼움(스레드가 반쯤 바뀐 값을 보지 않게)
+    return last[1]
+
+
+def manifest_row(name):
+    """이번 실행 manifest(설정 SOURCE_MANIFEST)의 그 이름 행 — 없으면 {}."""
+    from common.config.settings import cfg
+
+    man = cfg().paths.source_manifest
+    return manifest_rows(man).get(str(name), {}) if man else {}
+
+
+def manifest_size(r):
+    """행의 파일 크기(바이트) — 원천 표 `size`, 없으면 해시한 파일의 크기(`sha256_stat[0]` — 폴더 원천), 그것도 없으면 None."""
+    if r.get("size") is not None:
+        return int(r["size"])
+    stat = r.get("sha256_stat")
+    return stat[0] if stat else None
+
+
+def _doc_cols(row):
+    """문서 사건(doc_id 있음)만 — 비어 있는 원천(source_system — 판 0004)·ext·file_bytes를 메움(applog를 여러 벌이 함께 쓰므로).
+    부른 쪽이 준 값이 먼저(받기·건너뜀·구조화는 원천을 span 칸으로 줌), 없을 때만 이번 실행 manifest(manifest_row — 받기가 씀)의
+    그 이름 행 — 원천·크기가 다 있으면 manifest를 보지 않는다. ext는 이름에서(`.pdf` — 다른 span과 같은 꼴)."""
+    doc = row.get("doc_id")
+    if not doc:
+        return {}
+    out = {"ext": row.get("ext") or Path(str(doc)).suffix.lower() or None}
+    if row.get("source_system") is None or row.get("file_bytes") is None:
+        man = _try("manifest", manifest_row, doc) or {}
+        out["source_system"] = row.get("source_system") or man.get("source_system")
+        out["file_bytes"] = row["file_bytes"] if row.get("file_bytes") is not None else manifest_size(man)
+    return out
+
+
 def _emit(row, level=logging.INFO):
     log = _logger()
     if log is None:
@@ -309,7 +367,8 @@ def call_event(stage, ms, exc=None, **metrics):
         "app_version": _try("app_version", app_version),
     }
     for key in COLUMNS:
-        row[key] = parent.cols.get(key) if parent is not None and key in ("doc_id", "ext") else None
+        row[key] = parent.cols.get(key) if parent is not None and key in ("doc_id", "ext", "source_system", "file_bytes") else None
+    row.update(_doc_cols(row))
     _emit(row)
 
 
@@ -548,6 +607,7 @@ def _finish(sp, start_wall, start_mono, usage0, load0):
     }
     for key in COLUMNS:
         row[key] = cols.get(key)
+    row.update(_doc_cols(row))
     _emit(row)
 
 

@@ -7,6 +7,7 @@ SETTINGS(common + pipeline 절)는 확인 명령(python -m pipeline.config)·시
 사용: python -m pipeline.config [--file 경로]   # 읽어서 요약(비밀 가림) · export --section pipeline.host …
 """
 
+import re
 import sys
 
 from pydantic import Field, field_validator  # 칸 형식
@@ -32,10 +33,19 @@ class PipelineConnectionsRdbColumns(Section):
     filename: str | None = F("original_filename", "RDB_COL_FILENAME", "RDB 문서 위치 표에서 원본 파일 이름 열의 이름", blank="keep")
     key: str | None = F("s3_key", "RDB_COL_KEY", "RDB 문서 위치 표에서 Object Storage 키(s3_key) 열의 이름", blank="keep")
     size: str | None = F("file_size", "RDB_COL_SIZE", "RDB 문서 위치 표에서 파일 크기 열의 이름", blank="keep")
+    source_system: str | None = F(
+        "source_system", "RDB_COL_SOURCE_SYSTEM", "RDB 문서 위치 표에서 원천(source_system) 열의 이름", blank="keep"
+    )
 
 
 class PipelineConnectionsRdb(Section):
     bucket: str | None = F(None, "RDB_BUCKET", "RDB 표에 버킷 정보가 없을 때 쓸 Object Storage 버킷 이름(레거시 대체값)")
+    file_table: str | None = F(
+        "AI.FileStorageMap",
+        "RDB_FILE_TABLE",
+        "파싱 대상 파일 목록을 읽을 EDW 표(<스키마>.<표> — 영문·숫자·_만, SQL에 그대로 들어감)",
+        pattern=r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$",
+    )
     increment_col: str | None = F(None, "RDB_INCREMENT_COL", "증분(since) 판정에 쓸 열 이름 — 비우면 문서 ID 열(columns.doc_id)")
     columns: PipelineConnectionsRdbColumns = Field(default_factory=PipelineConnectionsRdbColumns)
 
@@ -84,9 +94,31 @@ class PipelineExtractPrepare(Section):
     )
 
 
+SOURCE_RE = re.compile(
+    r"(SFDC|CRMS|LAS|FAQ|OTHER|DEV-[1-9][0-9]?)"
+)  # 파싱할 원천 값(대문자로 바꾼 뒤) — DEV-<1~99>는 dev·local만(require_run_env)
+
+
 class PipelineExtractSource(Section):
+    systems: CsvList | None = F(
+        None,
+        "SOURCE_SYSTEMS",
+        "파싱할 원천 목록(FileStorageMap.source_system — 대소문자 무관): SFDC·CRMS·LAS·FAQ·Other·DEV-<1~99>(dev·local만) — 비우면 운영 원천 5개(DEV 행 뺌)",
+    )
     fetch_workers: int | None = F(1, "SOURCE_FETCH_WORKERS", "원본 문서 병렬 다운로드 스레드 수(개) — 미리 받기(candidate_ready stage)")
     staging: str | None = F(None, "SOURCE_STAGING", "미리 받기(staging) 폴더 — 원본을 받는 유일한 자리, 비면 rdb:csv 원본을 받지 못함")
+
+    @field_validator("systems")
+    @classmethod
+    def _source_names(cls, v):
+        """원천 이름은 대문자로(비교는 대소문자 무관) — 모르는 값은 거부."""
+        if not v:
+            return v
+        up = [x.strip().upper() for x in v]
+        bad = [x for x in up if not SOURCE_RE.fullmatch(x)]
+        if bad:
+            raise ValueError(f"모르는 원천 {bad} — SFDC·CRMS·LAS·FAQ·Other·DEV-<1~99>")
+        return up
 
 
 class PipelineHostNightly(Section):
@@ -125,7 +157,7 @@ class PipelineLoadPublish(Section):
     )
     prefix: str | None = F(None, "PM_PREFIX", "버킷 안 업로드 경로 접두")
     upload_statuses: CsvList | None = F(
-        ["ok", "partial"], "PM_UPLOAD_STATUSES", "원본을 업로드할 파싱 상태 목록(쉼표 — ok·partial·failed 등 parsing_meta.STATUSES 중에서)"
+        ["ok", "partial"], "PM_UPLOAD_STATUSES", "원본을 업로드할 파싱 상태 목록(쉼표 — ok·partial·failed 등 게시 STATUSES 중에서)"
     )
 
 

@@ -1,5 +1,5 @@
 # settings.sample.yaml — 설정 파일 구조와 설명. 생성: python -m common.config.sample (손으로 고치지 않음)
-# 복사해 [필수] 칸을 채우면 시작된다 — PC: 저장소 루트 settings.yaml(권한 600) · 서버: <루트>/settings.yaml(루트 = 코드 폴더의 부모 · UID 10001·권한 640).
+# 복사해 [필수] 칸을 채우면 시작된다 — PC: 저장소 루트 settings.yaml(권한 600) · 서버: <루트>/settings.yaml(루트 = 코드 폴더 자체 · UID 10001·권한 640).
 # 순서: required(사람이 채울 값) → common·extract·transform·load·search·ops(환경마다 정하는 값) → tuning(거의 안 바꾸는 값) → dev(PC 전용 — 서버는 비움) → option(선택 기능 — 비우면 끔).
 #   빈 칸(`이름:` 뒤가 비어 있음) = 사람이 꼭 적을 값([필수] — 주석에 예). null = 비워 두면 코드 기본값·계산값·끔(주석의 "null = …"). 그 밖의 값 = 코드 기본값.
 #   복사할 때는 [필수] 칸과 바꿀 칸만 옮기기를 권장 — 적힌 값은 코드 기본값보다 이겨서, 나중에 코드 기본값이 바뀌어도 반영되지 않는다.
@@ -13,6 +13,9 @@ required:
   # ---- 실행 환경 ----
   env:
     run_env:                                  # [필수 · 모두(local·dev·prd)] 실행 환경 · local(PC)·dev(개발 서버)·prd(운영 서버)
+  # ---- 파싱할 원천 ----
+  source:
+    source_systems: null                      # [선택 — DEV-<숫자>는 dev·local만(prd면 시작 거부)] 파싱할 원천 목록(FileStorageMap.source_system, 대소문자 무관) · SFDC·CRMS·LAS·FAQ·Other·DEV-<1~99> · 예 [DEV-1] (null = 운영 5개 원천 SFDC·CRMS·LAS·FAQ·Other — DEV-<n> 행은 뺌)
   # ---- PostgreSQL(pgvector) — local은 접속 5칸을 모두 비우면 sqlite 대역(일부만 적으면 거부) ----
   pg:
     pg_host:                                  # [필수 · dev·prd(pipeline·mcp) — local은 비우면 sqlite 대역] PG 주소 · 예 127.0.0.1
@@ -20,7 +23,7 @@ required:
     pg_database:                              # [필수 · dev·prd(pipeline·mcp) — local은 비우면 sqlite 대역] PG 데이터베이스 이름 · 예 rag
     pg_user:                                  # [필수 · dev·prd(pipeline·mcp) — local은 비우면 sqlite 대역] PG 계정 · 예 rag_app
     pg_password:                              # [필수 · dev·prd(pipeline·mcp) — local은 비우면 sqlite 대역] PG 비밀번호 · 서버는 8자 이상 · 예 DB 담당이 준 값 [비밀]
-    pg_schema: data_parsing                   # [선택 — 비우면 data_parsing(여러 벌이면 끝에 _<벌>)] 검색 스키마(소문자·숫자·_)
+    pg_schema: data_parsing                   # [선택 — 비우면 data_parsing] 검색 스키마(소문자·숫자·_)
   # ---- 모델 접속 — 임베딩·LLM·VLM(모델마다 따로) ----
   models:
     # ---- 임베딩 모델 ----
@@ -35,16 +38,14 @@ required:
     vlm_base_url:                             # [필수 · 모두(pipeline)] VLM 주소(OpenAI 호환) · 예 http://10.0.0.7:8000/v1 — 그림·쪽 VLM·스캔 PDF가 씀
     vlm_api_key: null                         # [선택 — 엔드포인트가 키를 요구할 때] VLM API 키 (null = 키 안 보냄) [비밀]
     vlm_model:                                # [필수 · 모두(pipeline)] VLM 모델 이름 · 예 qwen2.5-vl-7b
-  # ---- EDW(회사 DB) — ParsingMeta 표·접속 ----
+  # ---- EDW(회사 DB) 접속 — 읽기 계정만 ----
   edw:
-    parsing_meta_table: AI.ParsingMeta        # [선택] 게시 기록 표 · 스키마.표 · 예 AI.ParsingMeta — 여러 벌이면 끝에 _<벌>
     edw_host:                                 # [필수 · dev·prd(pipeline·mcp) — local은 무시(비움)] EDW(SQL Server) 주소 · 예 edw.corp.local
     edw_port: 1433                            # [선택] EDW 포트 · 1~65535
     edw_database:                             # [필수 · dev·prd(pipeline·mcp) — local은 무시(비움)] EDW 데이터베이스 이름 · 예 EDW
-    edw_read_user:                            # [필수 · dev·prd(pipeline·mcp) — local은 무시(비움)] EDW 읽기 계정(원천 목록·ParsingMeta 조회·query_edw) · 예 svc_parse_r
+    edw_read_user:                            # [필수 · dev·prd(pipeline·mcp) — local은 무시(비움)] EDW 읽기 계정(원천 목록·메타 사슬·query_edw) · 예 svc_parse_r
     edw_read_password:                        # [필수 · dev·prd(pipeline·mcp) — local은 무시(비움)] EDW 읽기 비밀번호 · 예 DB 담당이 준 값 [비밀]
-    edw_write_user:                           # [필수 · dev·prd(pipeline — 게시) — local은 무시(비움)] EDW 쓰기 계정(ParsingMeta INSERT만) · 예 svc_parse_w
-    edw_write_password:                       # [필수 · dev·prd(pipeline — 게시) — local은 무시(비움)] EDW 쓰기 비밀번호 · 예 DB 담당이 준 값 [비밀]
+    edw_file_table: AI.FileStorageMap         # [필수 · 모두(pipeline) — 기본값 그대로 두면 AI.FileStorageMap] 파싱 대상 파일 목록 EDW 표(<스키마>.<표> — 영문·숫자·_만) · 예 AI.FileStorageMap
   # ---- 게시(silver 적재) 위치 ----
   publish:
     publish_bucket:                           # [필수 · dev·prd(pipeline) — local은 무시(dev.local.local_publish_dir)] 게시 버킷(원본 버킷과 다르게) · 예 rag-silver
@@ -180,23 +181,28 @@ ops:
     soffice_path: null                        # soffice 실행 파일 (null = PATH · 이미지 /usr/bin/soffice)
   # ---- 호스트 — 컨테이너 도구·여러 벌·이미지 정리 ----
   host:
+    compose_project: compose                  # compose 묶음 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>)
     container_cli: null                       # 컨테이너 명령 · docker·podman (null = podman, 없으면 docker)
-    instance_name: null                       # 여러 벌(dev만) 이름 · 영소문자·숫자·- · 예 jehun — 스키마·컨테이너·표 이름 끝에 붙음 (null = 한 벌)
+    host_edw_chain_file: null                 # 호스트 EDW 사슬 사본 파일(루트 기준 상대 또는 절대 경로) · 예 /srv/rag/edw_chain.yaml (null = <루트>/edw_chain.yaml)
+    extra_compose: null                       # 더 붙일 compose 파일(루트 기준 상대 또는 절대 경로 — 없는 파일이면 host_ctl.sh 종료 2) · 예 [compose.extra.yml] = <루트>/compose.extra.yml (null = 없음)
     prune_stage_dir: null                     # prune_images.sh가 정리할 조각·tar 폴더 (null = 정리 안 함)
     host_output_dir: null                     # 호스트 결과 폴더(절대 경로) · 예 /srv/rag/output (null = <루트>/output)
     prune_keep_versions: 2                    # 남길 이미지 판 수 · 정수
   # ---- 서버 컨테이너 — CPU·메모리 한도 ----
   containers:
-    pipeline:
-      pipeline_cpus: 5.0                      # data-pipeline 컨테이너 CPU(호스트 CPU 수 이하) · 숫자
-      pipeline_mem_limit: 24g                 # data-pipeline 메모리 · 예 16g
     data_parsing:
+      data_parsing_container_name: mcp-data-parsing  # parse MCP 서비스 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>)
       data_parsing_cpus: 3.0                  # parse MCP 서비스 컨테이너 CPU · 숫자
       data_parsing_mem_limit: 8g              # parse MCP 서비스 메모리 · 예 8g
       data_parsing_cpu_shares: 4096           # parse MCP 서비스 CPU 나눔 비율(일괄 작업 1024)
     mcp:
+      mcp_container_name: mcp-server          # 검색 MCP 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>)
       mcp_cpus: 1.0                           # mcp-server 컨테이너 CPU · 숫자
       mcp_mem_limit: 4g                       # mcp-server 메모리 · 예 4g
+    pipeline:
+      pipeline_container_name: data-pipeline  # 일괄 data-pipeline 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>)
+      pipeline_cpus: 5.0                      # data-pipeline 컨테이너 CPU(호스트 CPU 수 이하) · 숫자
+      pipeline_mem_limit: 24g                 # data-pipeline 메모리 · 예 16g
   # ---- 상주 서비스 — parse MCP ----
   services:
     data_parsing:
@@ -283,6 +289,7 @@ tuning:
       source_column_filename: original_filename  # 원천 목록 열 이름 — 원래 파일 이름 · 예 original_filename
       source_column_storage_key: s3_key       # 원천 목록 열 이름 — Object Storage key · 예 s3_key
       source_column_file_size: file_size      # 원천 목록 열 이름 — 파일 크기 · 예 file_size
+      source_column_source_system: source_system  # 원천 목록 열 이름 — 원천 · 예 source_system
     engine_retries: 1                         # 엔진 비정상 종료 재시도 횟수 · 정수
     fill_merged_cells: true                   # 병합 셀 채우기 · true·false
     max_hidden_overlap_pages: 20              # 숨은 겹침 쪽 VLM 후보 상한 · 0 = 끔
@@ -436,3 +443,9 @@ option:
   devbox:
     ssh_port: null                            # 개발 작업 공간 SSH 포트(dev만 — 개발자마다 다르게) · 예 2222 (null = 끔)
     opencode_config: null                     # opencode 설정 파일(호스트 절대 경로) · 예 /home/sbl/opencode.json (null = 이미지의 틀)
+    home_dir: null                            # 개발 작업 공간 홈 폴더(루트 기준 상대 또는 절대 경로) · 예 /srv/rag/home-hong (null = <루트>/home)
+    gitea_url: null                           # 내부망 gitea 주소(http(s)://호스트[:포트][/경로] — http는 토큰이 암호화 없이 감) · 예 https://gitea.corp.local:3000 (null = git 계정 설정 안 함 — 주소·계정·토큰을 모두 적어야 씀)
+    gitea_user: null                          # gitea 계정 이름 · 예 hong (null = 설정 안 함)
+    gitea_token: null                         # gitea 접근 토큰 · 예 gitea 설정 > 응용 > 토큰에서 만든 값 (null = 설정 안 함) [비밀]
+    git_user_name: null                       # git 커밋 이름(user.name) · 예 홍길동 (null = 설정 안 함)
+    git_user_email: null                      # git 커밋 메일(user.email) · 예 hong@corp.local (null = 설정 안 함)

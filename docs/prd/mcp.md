@@ -27,7 +27,7 @@
 - 입력:
   - `question` 필수 — 빈 글자면 `{"error": …}`, 빠지면 MCP 스키마 오류. `k` 기본 8, 상한 50(넘으면 50으로 줄임 — 오류 아님).
   - 거르기 14칸(`SEARCH_FILTERS`): `source_system` · `client` · `client_like` · `project_id` · `division` · `service_type` · `FAQ_group` · `doc_class` · `sf_op_id` · `sf_op_name` · `contract_id` · `created_since` · `created_until` · `attrs`. 모두 AND, 같은 칸의 목록은 OR, 정확 일치. 모르는 인자는 무시.
-  - `source_system` — `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other` 중 하나. 끝에 `-test`가 붙은 값(`SFDC-test`)도 같은 뜻. 없으면 `{"error": "source_system is required — exactly one of SFDC, CRMS, LAS, FAQ, Other…"}`.
+  - `source_system` — `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other` 중 하나. 끝에 `-test`가 붙은 값(`SFDC-test`)도 같은 뜻. 개발 서버(dev·local)는 `DEV-<숫자>`(대소문자 무관)도 — 그 원천 스키마 `<기준>_dev_<숫자>`가 있을 때만(op-17 — 부를 때 DB를 한 번 찾아 새로 생긴 스키마는 재시작 없이 더하고, 사라진 것은 뺀다 · 표 없는 등 깨진 DEV 스키마는 경고 한 줄 뒤 그 원천만 빼고 5벌은 그대로). 없으면 `{"error": "source_system is required — exactly one of SFDC, CRMS, LAS, FAQ, Other…"}`(있는 DEV 원천이 있으면 뒤에 덧붙임 · prd의 `DEV-…`는 모르는 값과 같은 오류). `filter` 메아리의 DEV 값은 `DEV-<숫자>` 꼴.
   - `client` — 글자 하나 또는 목록, 적재 때 EDW에서 조인한 고객 `client_edw`와 정확 일치. `client_like: true`면 부분 일치.
   - `created_since`·`created_until` — gold `doc.created_at`(원천 등록 시각)과 비교. 시간대 없는 값은 KST. 날짜만이면 since = 그날 00:00, until = 그날 끝까지. `created_at`이 없는 문서는 빠진다. 형식이 틀리면 오류.
   - `attrs: {키: 값 또는 목록}` — 그 원천 `doc.attrs`(JSONB)의 키로 정확 일치(키끼리 AND, 목록 OR). 받는 키 = 사슬 파일(`resources/config/edw_chain.yaml`) `fields`에서 `filter`가 있는 키 + `doc_class`(SFDC·LAS). 모르는 키는 `{"error"}`에 그 원천의 키 목록을 담는다. SQL은 `attrs @> %s::jsonb`(GIN 색인).
@@ -44,7 +44,7 @@
   - 근거에 `file_path`·`attrs` 2칸을 더했고, 입력에 `attrs` 거르기를 더했다.
   - 크기 상한으로 근거를 줄여도 표시 칸을 붙이지 않는다. `notes` 칸은 없다.
 - 파일: `mcp_server/schemas/evidence.py`, `mcp_server/services/search/search_svc.py`, `resources/config/edw_chain.yaml`.
-- QA: `tests/server/mcp/test_search_svc.py`(`_selftest_contract` 사례 표) · 통과. 서버 확인 [refactor.md](../refactoring/refactor.md) C-89.
+- QA: `tests/server/mcp/test_search_svc.py`(`_selftest_contract` 사례 표) · `test_dev_search.py`(DEV 원천 사례 표 — op-17) · 통과. 서버 확인 [refactor.md](../refactoring/refactor.md) C-89.
 - Status: done
 
 <a id="mc-02"></a>
@@ -93,9 +93,9 @@
 - Status: done
 
 <a id="mc-15"></a>
-## mc-15 · 대표 파싱 결과 위치는 ParsingMeta에서
-- 규칙: pgvector에는 거르기 메타만 둔다. 대표 결과 위치(`rep_bucket`·`rep_key`)·파싱 시각·원본 sha256은 EDW `AI.ParsingMeta`에만 있고, 원문 도구([mc-17](#mc-17))가 부를 때 읽는다. 연결 = `source_system` + 원본 전체 경로(gold `doc.file_path` = ParsingMeta 원본 키). `search` 근거에는 `rep_uri`가 없다.
-- 파일: `common/store/parsing_meta_db.py`(`rows_where`·`rows_parsed`·`pick_rep`).
+## mc-15 · 대표 파싱 결과 위치는 gold `doc` 칸에서
+- 규칙: 대표 결과 위치(`silver_bucket`·`silver_key`)·게시 시각 `parsed_at`·원본 `sha256`은 원천 스키마 `doc` 칸([ops.md#op-17](ops.md#op-17))에 있고, 원문 도구([mc-17](#mc-17))가 부를 때 읽는다. `search` 근거에는 `rep_uri`가 없다.
+- 파일: `mcp_server/services/fulltext_svc.py`.
 - QA: `tests/server/mcp/test_fulltext.py` · 통과.
 - Status: done
 
@@ -103,26 +103,25 @@
 ## mc-17 · 원문 전송 도구 `list_doc_fulltext`·`get_doc_fulltext`
 - 이유: 클라이언트가 근거의 원 파싱 결과(.md·.json)를 받는다.
 - 규칙:
-  1. 목록: 원천 스키마 5벌(또는 `source_system`이 고른 하나)의 gold `doc`에서 거른다 — `source_system`·`doc_class`·`sf_op_id`(둘은 `attrs` 키)·`created_since/until`·`docs`. 공용 `doc_id` 순으로 합치고 `cursor` = 마지막 `doc_id`.
-  2. `docs` 항목은 파일 이름(확장자 포함 — 경로 끝 조각) · 원본 전체 경로(정확히 하나) · 64자 `doc_key`(ParsingMeta `sha256`) 중 하나.
-  3. 고른 문서의 `file_path`로 ParsingMeta를 한 번 읽어 `pick_rep`로 행 하나를 고른다 — active 중 최신, active가 없으면 전체 중 최신(파싱 상태는 보지 않음). 원천 표기가 다르면 한 원천일 때만 대체.
-  4. 파일 = 결과 폴더 바로 아래 최신 `<이름>_<parse_date>.md`·`.json`만(`engine/`·`source.json` 제외). 출력 `doc_key` = ParsingMeta `sha256`, `source_system` = 스키마 원천 이름(`SFDC` 등).
-  5. `since`/`until`(파싱 시각)은 ParsingMeta `parsed_at`(UTC)으로 먼저 원본 경로 집합을 구해 좁힌다(IN 목록은 500개씩).
+  1. 목록: 원천 스키마 5벌 + 있는 DEV 원천 스키마(dev·local — op-17)(또는 `source_system`이 고른 하나 — 개발 서버는 있는 `DEV-<숫자>`도, prd는 5개 값만)의 gold `doc`에서 거른다 — `source_system`·`doc_class`·`sf_op_id`(둘은 `attrs` 키)·`created_since/until`·`docs`. 공용 `doc_id` 순으로 합치고 `cursor` = 마지막 `doc_id`.
+  2. `docs` 항목은 파일 이름(확장자 포함 — 경로 끝 조각) · 원본 전체 경로(정확히 하나) · 64자 `doc_key`(`doc.sha256`) 중 하나.
+  3. 결과 폴더 = 그 `doc` 행 `silver_key`의 폴더(`silver_bucket` 안). 폴더가 없는 값이면 목록을 보지 않는다.
+  4. 파일 = 결과 폴더 바로 아래 최신 `<이름>_<parse_date>.md`·`.json`만(`engine/`·`source.json` 제외). 출력 `doc_key` = `doc.sha256`, `source_system` = 스키마 원천 이름(`SFDC`·`DEV-1` 등 — 입력 값과 같은 꼴).
+  5. `since`/`until`(게시 시각)은 `doc.parsed_at`으로 같은 질의에서 거른다.
   6. sfid = `sf1.<base64url(버킷/키)>.<HMAC-SHA256>`, 서명 키 `required.tokens.fulltext_sign_key`.
-  7. `get_doc_fulltext`의 등록 시각 가드: sfid 폴더 → ParsingMeta 원본 경로 → gold `doc.created_at`.
+  7. `get_doc_fulltext`의 등록 시각 가드: sfid 폴더 → 그 폴더를 `silver_key`로 가진 gold `doc`의 `created_at`.
   8. 한도: `docs` 200 · `limit` 기본 50, 상한 200 · get 한 번 20개 · 파일 16 MiB(`too_large`) · 합계 24 MiB(나머지 `batch_full`) · 파일 하나 60초.
-  9. 오류: 서명 키가 비면 `not_configured` · 키를 바꾸면 옛 sfid는 `bad_sfid` · ParsingMeta를 못 읽으면 `registry_unavailable` · Object Storage를 못 읽으면 `source_storage_unavailable` · ParsingMeta 행이 없는 적재 문서는 `no_files`.
+  9. 오류: 서명 키가 비면 `not_configured` · 키를 바꾸면 옛 sfid는 `bad_sfid` · PG(gold `doc`)를 못 읽으면 `registry_unavailable` · Object Storage를 못 읽으면 `source_storage_unavailable` · 처리 기록(`silver_key`)이 없는 적재 문서는 `no_files`.
 - 운영과 다른 점:
   - `rep_engine` 출력 없음.
   - `source_system` 출력은 저장값(`SFDC`) — 운영은 EDW 값(`SFDC-test`). 입력은 둘 다 받는다.
   - 시간대 없는 시각은 KST로 읽는다.
   - `get_doc_fulltext`의 건너뜀 행에 `status` 칸이 없다(`skip_reason`만).
-  - 목록은 gold `doc`에서 고른다 — 적재 전 문서는 나오지 않는다(운영은 ParsingMeta에서 고름).
-  - `pick_rep`는 파싱 상태를 보지 않고, active가 없으면 active 아닌 최신 행으로 대체한다(운영은 active·성공·위치 있는 행만).
+  - 목록은 gold `doc`에서 고른다 — 적재 전 문서는 나오지 않는다.
   - 등록 시각 가드는 검색 DB(gold `doc.created_at`)에서 읽는다.
   - `docs`에 원본 전체 경로도 받는다.
 - 파일: `mcp_server/routers/fulltext_tool.py`, `mcp_server/services/fulltext_svc.py`, `mcp_server/schemas/fulltext.py`.
-- QA: `tests/server/mcp/test_fulltext.py`(ParsingMeta는 SQLite 대역) · 통과. 서버 확인 refactor.md C-75.
+- QA: `tests/server/mcp/test_fulltext.py`(gold `doc`는 SQLite 대역 — 처리 기록 칸에서 읽음 · 출력 모양 그대로) · `test_dev_search.py`(`FULLTEXT` 표 — DEV 입력) · 통과. 서버 확인 refactor.md C-75.
 - Status: done
 
 <a id="mc-06"></a>

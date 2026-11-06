@@ -34,7 +34,7 @@ NAME_LIST = {
     "VLM_EXTRA_BODY": "common/ai/llm.py(_EXTRA_ENV_KEY 표)",
     **{
         f"RDB_COL_{f}": "pipeline/extract/candidate_pick.py(_rdb_cols — 설정 칸 tuning.extract.source_columns.source_column_*)"
-        for f in ("CONTENT_VERSION", "DOC_ID", "FILENAME", "KEY", "SIZE")
+        for f in ("CONTENT_VERSION", "DOC_ID", "FILENAME", "KEY", "SIZE", "SOURCE_SYSTEM")
     },
 }
 # YAML에 넣지 않는 이름 — env로 남김(라이브러리가 읽음) · 인자(빌드·반입·시험 스크립트). 코드가 읽지 않는 이름은 대조하지 않는다.
@@ -111,12 +111,22 @@ NOT_SETTINGS = {
     ),
     "RAG_ROOT": (
         "인자",
-        "호스트 스크립트 변수 — 서버 루트(코드 폴더의 부모 — load_settings.sh가 구해 compose edw_chain.yaml 마운트에, op-13)",
+        "호스트 스크립트 변수 — 서버 루트(코드 폴더 자체 — load_settings.sh가 구해 compose edw_chain.yaml 마운트에, op-13)",
     ),
+    "INSTANCE": ("인자", "호스트 스크립트 변수 — 벌 번호(코드 폴더 이름 끝 -<숫자> — load_settings.sh가 구함, op-17)"),
     "NAME_SUFFIX": (
         "인자",
-        "호스트 스크립트 변수 — 여러 벌 이름 끝 -<ops.host.instance_name>(load_settings.sh가 구해 compose container_name·묶음 이름·타이머에, op-15)",
+        "호스트 스크립트 변수 — 여러 벌 이름 끝 -<벌 번호 — 코드 폴더 이름 끝 숫자>(load_settings.sh가 구해 compose container_name·묶음 이름·타이머에, op-15)",
     ),
+    **{
+        n: ("인자", f"호스트 스크립트 변수 — {what} 이름 = 밑 이름(설정 {key}) + NAME_SUFFIX(load_settings.sh가 구해 compose·스크립트에)")
+        for n, what, key in (
+            ("PIPELINE_CNAME", "data-pipeline 컨테이너", "PIPELINE_CONTAINER"),
+            ("DATA_PARSING_CNAME", "mcp-data-parsing 컨테이너", "DATA_PARSING_CONTAINER"),
+            ("MCP_CNAME", "mcp-server 컨테이너", "MCP_CONTAINER"),
+            ("COMPOSE_PNAME", "compose 묶음", "COMPOSE_PROJECT"),
+        )
+    },
     "POSTGRES_DB": ("env로 남김", "PG 컨테이너 env — compose가 PG_DB로 채움(설정 칸은 op-08에 지움)"),
     "POSTGRES_USER": ("env로 남김", "PG 컨테이너 env — compose가 PG_USER로 채움(설정 칸은 op-08에 지움)"),
 }

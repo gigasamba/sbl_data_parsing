@@ -35,7 +35,7 @@ if [ -d "$CODE_DIR/.git" ] && command -v git >/dev/null 2>&1; then
   xs=(); for d in "${NOT_PRD[@]}"; do xs+=(":(exclude)$d"); done
   git -c safe.directory='*' -C "$CODE_DIR" archive --format=tar.gz HEAD -- . "${xs[@]}" > "$BUNDLE"
 else
-  ex=(--exclude=./.git --exclude=./output)   # 루트의 settings*.yaml·그 사본·백업(비밀값 — `settings copy.yaml` 포함)도 뺌, sample만 묶음
+  ex=(--exclude=./.git --exclude=./output --exclude=./home --exclude=./edw_chain.yaml)   # 벌 폴더(= 코드 폴더)의 결과·개발 작업 공간 홈·사슬 사본, 루트의 settings*.yaml·그 사본·백업(비밀값 — `settings copy.yaml` 포함)도 뺌, sample만 묶음
   for d in "${NOT_PRD[@]}"; do ex+=("--exclude=./$d"); done
   for f in "$CODE_DIR"/settings*.yaml*; do
     [ -e "$f" ] || continue

@@ -18,7 +18,7 @@ from common.core.console import utf8_stdout
 
 OUT = S.REPO_ROOT / "settings.sample.yaml"
 HEAD = """# settings.sample.yaml — 설정 파일 구조와 설명. 생성: python -m common.config.sample (손으로 고치지 않음)
-# 복사해 [필수] 칸을 채우면 시작된다 — PC: 저장소 루트 settings.yaml(권한 600) · 서버: <루트>/settings.yaml(루트 = 코드 폴더의 부모 · UID 10001·권한 640).
+# 복사해 [필수] 칸을 채우면 시작된다 — PC: 저장소 루트 settings.yaml(권한 600) · 서버: <루트>/settings.yaml(루트 = 코드 폴더 자체 · UID 10001·권한 640).
 # 순서: required(사람이 채울 값) → common·extract·transform·load·search·ops(환경마다 정하는 값) → tuning(거의 안 바꾸는 값) → dev(PC 전용 — 서버는 비움) → option(선택 기능 — 비우면 끔).
 #   빈 칸(`이름:` 뒤가 비어 있음) = 사람이 꼭 적을 값([필수] — 주석에 예). null = 비워 두면 코드 기본값·계산값·끔(주석의 "null = …"). 그 밖의 값 = 코드 기본값.
 #   복사할 때는 [필수] 칸과 바꿀 칸만 옮기기를 권장 — 적힌 값은 코드 기본값보다 이겨서, 나중에 코드 기본값이 바뀌어도 반영되지 않는다.
@@ -90,6 +90,7 @@ NOTE_COL = 46  # 칸 주석이 시작하는 열(값 자리와 주석을 떼어 �
 NOTES = {
     # required
     "common.run_env": "실행 환경 · local(PC)·dev(개발 서버)·prd(운영 서버)",
+    "pipeline.extract.source.systems": "파싱할 원천 목록(FileStorageMap.source_system, 대소문자 무관) · SFDC·CRMS·LAS·FAQ·Other·DEV-<1~99> · 예 [DEV-1] (null = 운영 5개 원천 SFDC·CRMS·LAS·FAQ·Other — DEV-<n> 행은 뺌)",
     "common.connections.pg.host": "PG 주소 · 예 127.0.0.1",
     "common.connections.pg.port": "PG 포트 · 예 55433",
     "common.connections.pg.db": "PG 데이터베이스 이름 · 예 rag",
@@ -99,14 +100,11 @@ NOTES = {
     "common.models.embed.base_url": "임베딩 주소(OpenAI 호환) · 예 http://10.0.0.5:8000/v1",
     "common.models.embed.model": "임베딩 모델 이름(색인과 같게) · 예 bge-m3",
     "common.models.embed.api_key": "임베딩 API 키 (null = 키 안 보냄)",
-    "common.connections.parsing_meta.table": "게시 기록 표 · 스키마.표 · 예 AI.ParsingMeta — 여러 벌이면 끝에 _<벌>",
     "common.connections.rdb.host": "EDW(SQL Server) 주소 · 예 edw.corp.local",
     "common.connections.rdb.port": "EDW 포트 · 1~65535",
     "common.connections.rdb.database": "EDW 데이터베이스 이름 · 예 EDW",
-    "common.connections.rdb.read.user": "EDW 읽기 계정(원천 목록·ParsingMeta 조회·query_edw) · 예 svc_parse_r",
+    "common.connections.rdb.read.user": "EDW 읽기 계정(원천 목록·메타 사슬·query_edw) · 예 svc_parse_r",
     "common.connections.rdb.read.password": "EDW 읽기 비밀번호 · 예 DB 담당이 준 값",
-    "common.connections.rdb.write.user": "EDW 쓰기 계정(ParsingMeta INSERT만) · 예 svc_parse_w",
-    "common.connections.rdb.write.password": "EDW 쓰기 비밀번호 · 예 DB 담당이 준 값",
     "common.connections.rdb.sqlite": "가짜 EDW sqlite 파일(저장소 기준 상대 가능) (null = valid_env/edw/edw_copy.sqlite — 없으면 edw.sqlite를 복사)",
     "pipeline.load.publish.local_dir": "게시 폴더(저장소 기준 상대 가능 — 처음 게시할 때 만듦) · 서버 publish_bucket 대신",
     "pipeline.extract.local_source": "파싱 원본 폴더(저장소 기준 상대 가능 — 게시 폴더는 원본에서 뺌) · source_input_location·--source가 없을 때",
@@ -199,11 +197,22 @@ NOTES = {
     "pipeline.paths.soffice_bin": "soffice 실행 파일 (null = PATH · 이미지 /usr/bin/soffice)",
     "common.host.output_root": "호스트 결과 폴더(절대 경로) · 예 /srv/rag/output (null = <루트>/output)",
     "common.host.docker": "컨테이너 명령 · docker·podman (null = podman, 없으면 docker)",
-    "common.host.instance": "여러 벌(dev만) 이름 · 영소문자·숫자·- · 예 jehun — 스키마·컨테이너·표 이름 끝에 붙음 (null = 한 벌)",
     "common.host.image_stage_dir": "prune_images.sh가 정리할 조각·tar 폴더 (null = 정리 안 함)",
     "common.host.prune_keep": "남길 이미지 판 수",
+    "common.host.compose_project": "compose 묶음 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>)",
+    "common.host.extra_compose": "더 붙일 compose 파일(루트 기준 상대 또는 절대 경로 — 없는 파일이면 host_ctl.sh 종료 2) · 예 [compose.extra.yml] = <루트>/compose.extra.yml (null = 없음)",
+    "common.host.edw_chain_src": "호스트 EDW 사슬 사본 파일(루트 기준 상대 또는 절대 경로) · 예 /srv/rag/edw_chain.yaml (null = <루트>/edw_chain.yaml)",
+    "common.host.pipeline_container": "일괄 data-pipeline 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>)",
+    "common.host.data_parsing_container": "parse MCP 서비스 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>)",
+    "common.host.mcp_container": "검색 MCP 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>)",
+    "common.host.devbox.home_dir": "개발 작업 공간 홈 폴더(루트 기준 상대 또는 절대 경로) · 예 /srv/rag/home-hong (null = <루트>/home)",
     "common.host.devbox.ssh_port": "개발 작업 공간 SSH 포트(dev만 — 개발자마다 다르게) · 예 2222 (null = 끔)",
     "common.host.devbox.opencode_config": "opencode 설정 파일(호스트 절대 경로) · 예 /home/sbl/opencode.json (null = 이미지의 틀)",
+    "common.host.devbox.gitea_url": "내부망 gitea 주소(http(s)://호스트[:포트][/경로] — http는 토큰이 암호화 없이 감) · 예 https://gitea.corp.local:3000 (null = git 계정 설정 안 함 — 주소·계정·토큰을 모두 적어야 씀)",
+    "common.host.devbox.gitea_user": "gitea 계정 이름 · 예 hong (null = 설정 안 함)",
+    "common.host.devbox.gitea_token": "gitea 접근 토큰 · 예 gitea 설정 > 응용 > 토큰에서 만든 값 (null = 설정 안 함)",
+    "common.host.devbox.git_user_name": "git 커밋 이름(user.name) · 예 홍길동 (null = 설정 안 함)",
+    "common.host.devbox.git_user_email": "git 커밋 메일(user.email) · 예 hong@corp.local (null = 설정 안 함)",
     "pipeline.host.parse_cpus": "data-pipeline 컨테이너 CPU(호스트 CPU 수 이하)",
     "pipeline.host.parse_mem_limit": "data-pipeline 메모리 · 예 16g",
     "pipeline.host.data_parsing_cpus": "parse MCP 서비스 컨테이너 CPU",
@@ -260,12 +269,14 @@ NOTES = {
     "common.text.draft_terms_max": "용어 초안 행 상한",
     "common.text.search_en_stem": "검색 글자 영어 복수 → 단수",
     "common.text.token_num_norm": "검색 글자 숫자·단위 정규화",
+    "pipeline.connections.rdb.file_table": "파싱 대상 파일 목록 EDW 표(<스키마>.<표> — 영문·숫자·_만) · 예 AI.FileStorageMap",
     "pipeline.connections.rdb.increment_col": "원천 목록 증분 판정 열 (null = 문서 ID 열)",
     "pipeline.connections.rdb.columns.content_version": "원천 목록 열 이름 — 판 ID · 예 content_version_id",
     "pipeline.connections.rdb.columns.doc_id": "원천 목록 열 이름 — 문서 ID · 예 id",
     "pipeline.connections.rdb.columns.filename": "원천 목록 열 이름 — 원래 파일 이름 · 예 original_filename",
     "pipeline.connections.rdb.columns.key": "원천 목록 열 이름 — Object Storage key · 예 s3_key",
     "pipeline.connections.rdb.columns.size": "원천 목록 열 이름 — 파일 크기 · 예 file_size",
+    "pipeline.connections.rdb.columns.source_system": "원천 목록 열 이름 — 원천 · 예 source_system",
     "pipeline.extract.engine_retry": "엔진 비정상 종료 재시도 횟수",
     "pipeline.extract.fill_merged": "병합 셀 채우기",
     "pipeline.extract.hidden_overlap_max": "숨은 겹침 쪽 VLM 후보 상한 · 0 = 끔",
@@ -462,9 +473,9 @@ SET_MATTERS = {"PIPE_PROCS", "PIPE_THREADS", "PM_BUCKET"}
 def _value(p, f):
     """칸에 적을 값(YAML 한 줄) — 코드 기본값. 빈 글자: 사람이 꼭 적을 [필수] 칸(layout.NEED가 "필수"). null: 기본 없음·비밀·빈 글자·
     이미지 기본값 칸(이미지·PC 값이 다름)·SET_MATTERS·저장소 경로가 든 기본값. YAML에서 빈 칸과 null은 같다(둘 다 비움)."""
-    if L.NEED.get(p, "").startswith("필수"):
-        return ""
     d = f.get_default(call_default_factory=True)
+    if L.NEED.get(p, "").startswith("필수") and d is None:  # 기본값이 있는 필수 칸은 그 값을 적어 둠(edw_file_table)
+        return ""
     if S.is_secret(f) or d is None or d == "" or S.env_name(f) in _IMAGE_ENVS | SET_MATTERS:
         return "null"
     if isinstance(d, str) and str(S.REPO_ROOT) in d:

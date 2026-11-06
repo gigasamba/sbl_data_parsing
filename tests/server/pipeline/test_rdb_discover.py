@@ -2,8 +2,7 @@
 
 from pathlib import Path
 
-from common.store.parsing_meta_db import TABLE_ID_RE
-from pipeline.extract.discover_columns import REQUIRED_COLUMNS, _from_csv
+from pipeline.extract.discover_columns import REQUIRED_COLUMNS, TABLE_ID_RE, _from_csv
 
 
 def selftest():

@@ -25,7 +25,7 @@ def conf():
         v = given(k)
         if v is not None:
             c[k] = str(reveal(v))
-    c["PG_SCHEMA"] = cfg().connections.pg.db_schema or ""  # 스키마는 코드 기본값(data_parsing — 여러 벌이면 _<벌>)이 있음
+    c["PG_SCHEMA"] = cfg().connections.pg.db_schema or ""  # 코드 기본값 data_parsing(벌마다 스키마를 나누지 않음)
     missing = [k for k in _PG_KEYS if not c.get(k)]  # 코드 기본값(127.0.0.1·5432 등) 없음, 빈 칸이면 거부
     if missing:
         from common.config.layout import to_yaml

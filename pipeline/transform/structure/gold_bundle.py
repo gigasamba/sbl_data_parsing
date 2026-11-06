@@ -244,7 +244,7 @@ def infer_clients(docs, head=400, roster=None):
 
 
 def warn_if_no_client_roster(docs):
-    """명부(마스터 client_roster·용어 사전 org_client + stack.json client_aliases)가 비어 있어 infer_clients가
+    """명부(마스터 glossary의 고객·용어 org_client + stack.json client_aliases)가 비어 있어 infer_clients가
     아무것도 못 채운 채(묶음에 문서가 있는데도 client가 전부 빈 채) 끝났으면 경고 한 줄만(동작은 안 바꿈 — 이
     묶음을 쓰는 검색 쪽 clientscope·엔티티 분해가 조용히 무동작이 되는 원인을 빌드 시점에 알린다)."""
     if not docs or any(d.get("client") for d in docs):
@@ -253,7 +253,7 @@ def warn_if_no_client_roster(docs):
         return  # 명부는 있는데 이 묶음 문서들이 그냥 다 안 걸렸을 뿐 — 경고 대상 아님
     print(
         "WARNING: 고객 명부 없음 — client 메타가 비어 고객 필터·비교 분할이 동작 안 함"
-        " (마스터 표 확인: `dbtool master load` — resources/vocab/glossary/client_roster.csv·domain_terms.csv)",
+        " (마스터 표 확인: `dbtool master load` — resources/vocab/glossary/glossary.csv)",
         file=sys.stderr,
         flush=True,
     )
@@ -408,8 +408,8 @@ def main(argv=None):
     n_fig_dropped = 0  # 빈 VLM 그림은 청크를 만들지 않음
 
     # EDW 파일 메타(고객·원천 칸·등록 시각)는 적재가 EDW 조인으로 채운다(edw_doc_meta)
-    # rdb:csv 배치 — prepared 파일명 → 원본 s3_key 매핑 (source.py가 남긴 manifest.jsonl)
-    _manifest_keys = {}
+    # 받기(candidate_ready)가 남긴 manifest.jsonl — 파일명 → 원본 s3_key · 원천(FileStorageMap.source_system 또는 PC 맨 위 폴더 — op-17)
+    _manifest_keys, _manifest_src = {}, {}
     _mf = Path(a.parse_dir) / "_source" / "manifest.jsonl"
     if _mf.exists():
         for line in _mf.read_text(encoding="utf-8").splitlines():
@@ -417,6 +417,8 @@ def main(argv=None):
                 r = json.loads(line)
                 if r.get("file_name") and r.get("key"):
                     _manifest_keys[r["file_name"]] = r["key"]
+                if r.get("file_name"):
+                    _manifest_src[r["file_name"]] = r.get("source_system")
     docs, chunks, n_sum, seen_sha = [], [], {"lead": 0}, {}
     progress = contextlib.ExitStack()  # 60초마다 run.progress(처리한 문서/전체)
     progress.enter_context(runtrace.Progress(total=len(reps), done=lambda: len(docs), unit="doc"))
@@ -447,22 +449,14 @@ def main(argv=None):
             _s3_key = _manifest_keys.get(doc) or _manifest_keys.get(Path(path).name)
         if not _s3_key:  # PC 폴더 원천 — 원천 폴더 기준 상대 경로(`SFDC/<uuid>/<이름>` — s3_key와 같은 모양)
             _s3_key = _rel_to_source(path)
-        _src_sys = None
-        _seg = _s3_key.split("/", 1)[0].upper() if _s3_key else ""
-        if _seg in ("SFDC", "CRMS", "LAS", "FAQ"):  # 원본 키 첫 마디 = 원천(스키마 고르기)
-            _src_sys = _seg
-        elif _s3_key:
-            if _s3_key.startswith(("SFDC-", "SFDC_")):
-                _src_sys = "SFDC"
-            elif _s3_key.startswith(("CRMS-", "CRMS_")):
-                _src_sys = "CRMS"
-            elif _s3_key.startswith(("las_", "LAS_")):
-                _src_sys = "LAS"
+        _src_sys = _manifest_src.get(doc) or _manifest_src.get(
+            Path(path).name
+        )  # 원천 = manifest 값(키에서 구하지 않음 — 없으면 적재가 other)
         # pgvector doc에는 검색에 필요한 최소만(EDW 식별 + clients + summary).
         # clients는 main의 infer_clients(docs)가 이후에 채움. file_name은 file_path에서 유도.
         docs.append(
             {
-                "file_path": _s3_key or path,  # Object Storage 원본 경로 = EDW s3_key(ParsingMeta와 잇는 키) — 개발 서버 로컬 경로는 안 씀
+                "file_path": _s3_key or path,  # Object Storage 원본 경로 = EDW s3_key(문서 키) — 개발 서버 로컬 경로는 안 씀
                 "doc_name": doc,  # doc_name은 번들 JSONL 로컬용(파일명) — db 적재 안 함
                 "summary": ab,
                 "full_text": text,  # full_text는 본문 매칭(client) 내부용 — db 적재 안 함
@@ -473,7 +467,9 @@ def main(argv=None):
         )
         first = len(chunks)
         seq = 0
-        with SP.span("transform.structure", doc_id=doc, ext=Path(doc).suffix.lower(), cpu=False) as sp:  # 청킹+위치(bbox) 계산 1문서
+        with SP.span(
+            "transform.structure", doc_id=doc, ext=Path(doc).suffix.lower(), source_system=_src_sys, cpu=False
+        ) as sp:  # 청킹+위치(bbox) 계산 1문서
             rows = S.faq_rows(orig) if _src_sys == "FAQ" and orig else None
             if _src_sys == "FAQ" and not orig:
                 print(f"[bundle] 경고: FAQ 원본이 없어 행 단위로 못 자름 — 일반 청킹: {doc}", flush=True)

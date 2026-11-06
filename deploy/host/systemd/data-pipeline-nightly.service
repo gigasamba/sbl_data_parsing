@@ -4,7 +4,7 @@
 #   nightly_batch.sh scheduled가 그 시각부터 5분 안일 때만 `run_pipeline.py --start-offset 0 --skip-done`을 부름(그 밖에는 말없이 끝).
 #   상한: run_pipeline --max-docs·--deadline(ops.nightly.nightly_max_docs·nightly_stop_time) + TimeoutStartSec(아래 — 마지막 안전판). 사람이 따로 돌린 run_pipeline과는
 #   run_pipeline 잠금(batch_progress/run_pipeline.lock — 도는 중이면 종료 코드 75)으로 겹치지 않는다(pl-18).
-# 서버 설정은 settings.yaml 한 파일(<루트>/settings.yaml — 루트 = 코드 폴더의 부모, env-guide.md §0). nightly_batch.sh가 load_settings.sh load_settings로
+# 서버 설정은 settings.yaml 한 파일(<루트>/settings.yaml — 루트 = 코드 폴더 자체, env-guide.md §0). nightly_batch.sh가 load_settings.sh load_settings로
 #   호스트 칸(NIGHTLY_TIME·DATA_PIPELINE_IMAGE·RAG_OUT·DOC_SRC·RUN_ENV 등)을 셸 env로 받는다(RUN_ENV는 settings.yaml required.env.run_env에만 — unit에 적지 않음).
 #   설정 파일이 없거나 틀리면 종료 코드 2. 설정 파일을 다른 자리에 두면 Environment=SETTINGS_FILE=<파일>을 더한다.
 #   호스트 python에는 PyYAML이 있어야 한다(load_settings.sh — settings_to_env.py).
@@ -15,10 +15,9 @@ After=network-online.target docker.service
 
 [Service]
 Type=oneshot
-# 서버 컨테이너 도구 = root podman 하나(이미지를 sudo podman load로 넣은 저장소와 같게). docker 서버면 User=rag(docker 그룹)·DOCKER=docker.
+# 서버 컨테이너 도구 = root podman 하나(이미지를 sudo podman load로 넣은 저장소와 같게) — 도구 이름은 settings.yaml ops.host.container_cli(비우면 podman, 없으면 docker — load_settings.sh). docker 서버면 User=rag(docker 그룹).
 User=root
-Environment=DOCKER=podman
-# WorkingDirectory = 코드 폴더(host_ctl.sh timers가 채움) — 설정 파일은 그 부모(루트)에서 load_settings.sh가 찾는다.
+# WorkingDirectory = 코드 폴더(host_ctl.sh timers가 채움) — 설정 파일은 그 폴더(루트 = 코드 폴더)에서 load_settings.sh가 찾는다.
 WorkingDirectory=@CODE_DIR@
 ExecStart=/bin/bash deploy/host/scripts/nightly_batch.sh scheduled
 TimeoutStartSec=6h

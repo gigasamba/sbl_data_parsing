@@ -195,12 +195,14 @@ class Progress:
             span.soft_fail("progress.emit", ex)
 
 
-def skip_event(name, reason, **metrics):
+def skip_event(name, reason, source_system=None, **metrics):
     """건너뛴 문서 1건 = extract.skip span 1행(applog.pipe_event): status=skip, err_kind=doc, err·metrics.reason = 이유
     (dup_batch·dup_done·dup_run·drm_*·encrypted_*·unsupported_*), 중복이면 metrics.dup_of = 남긴 문서(이름 또는 원본 키 — dup_run은 이번 실행이 먼저 받은 원본 키)."""
     from pathlib import Path
 
-    with span.span("extract.skip", "extract", doc_id=name, ext=Path(name).suffix.lower()) as sp:
+    with span.span(
+        "extract.skip", "extract", doc_id=name, ext=Path(name).suffix.lower(), source_system=source_system
+    ) as sp:  # 원천 — 모르면 manifest(판 0004)
         sp.add(reason=reason, **metrics)
         sp.result("skip", "doc", span.safe(reason))
     if metrics.get("dup_of"):

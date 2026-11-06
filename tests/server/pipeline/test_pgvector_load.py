@@ -42,6 +42,8 @@ class _FakeDB:
             return []
         if "pg_extension" in low and "vector" in low:
             return [{"x": 1}] if self.has_vector else []
+        if "information_schema.schemata" in low and "_dev_" in low:  # DEV 원천 스키마 찾기(op-17) — 없음
+            return []
         if "information_schema.schemata" in low:
             return [{"x": 1}] if self.schema_exists else []
         if "information_schema.tables" in low and "alembic_version" in sql:
@@ -193,7 +195,6 @@ def test_embed_guard():
 
     from common.config.settings import COMMON
     from common.store import logsink
-    from common.store import parsing_meta_db as PMDB
     from common.store import pg_standin as PS
     from common.store.db.dbtool import standin_script
     from tests.server.pipeline.test_pl13_no_prune import DIM, _bundle
@@ -214,23 +215,22 @@ def test_embed_guard():
             db, sf = PS.StandinPG(S), PS.StandinPG(f"{S}_sfdc")
             with sf.cn.cursor() as cur:
                 cur.execute(standin_script(f"{S}_sfdc", DIM))
-            with patch.object(PMDB, "make_db", side_effect=SystemExit("no write account")):
-                M.load(db, bundle("SFDC/u/a.txt", "m-A", tmp))
-                for i, (case, model, refused) in enumerate(cases):
-                    path = f"SFDC/u/n{i}.txt"
-                    with patch.object(logsink, "emit") as emit:
-                        try:
-                            M.load(db, bundle(path, model, tmp))
-                            got = False
-                        except SystemExit as e:
-                            got = True
-                            assert e.code == 2, (case, e.code)
-                    there = bool(sf.q(f"SELECT 1 AS o FROM {S}_sfdc.doc WHERE file_path = %s", (path,)))
-                    assert got == refused and there != refused, (case, got, there)
-                    assert emit.call_count == int(refused), (case, emit.call_args_list)
-                    if refused:
-                        table, row = emit.call_args.args
-                        assert table == "pipe_event" and row["status"] == "fail" and row["err_kind"] == "env", row
-                        assert "embed_model_mismatch" in row["err"] and "m-A" in row["err"] and "m-B" in row["err"], row
+            M.load(db, bundle("SFDC/u/a.txt", "m-A", tmp))
+            for i, (case, model, refused) in enumerate(cases):
+                path = f"SFDC/u/n{i}.txt"
+                with patch.object(logsink, "emit") as emit:
+                    try:
+                        M.load(db, bundle(path, model, tmp))
+                        got = False
+                    except SystemExit as e:
+                        got = True
+                        assert e.code == 2, (case, e.code)
+                there = bool(sf.q(f"SELECT 1 AS o FROM {S}_sfdc.doc WHERE file_path = %s", (path,)))
+                assert got == refused and there != refused, (case, got, there)
+                assert emit.call_count == int(refused), (case, emit.call_args_list)
+                if refused:
+                    table, row = emit.call_args.args
+                    assert table == "pipe_event" and row["status"] == "fail" and row["err_kind"] == "env", row
+                    assert "embed_model_mismatch" in row["err"] and "m-A" in row["err"] and "m-B" in row["err"], row
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

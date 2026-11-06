@@ -18,39 +18,7 @@ CREATE TABLE FileStorageMap (
     created_at         TEXT    NOT NULL CHECK (created_at = strftime('%Y-%m-%d %H:%M:%S', created_at))   -- DATETIME2(0)
 ) STRICT;
 
--- AI.ParsingMeta — same columns and keys as deploy/data_etl/tools/parsing_meta_mssql.sql
--- (common_tools/handoff_contract.py PARSING_META_COLUMNS). Written by pipeline/load/publish_parse_result.py (RDB_SQLITE).
-CREATE TABLE ParsingMeta (
-    parse_meta_id     INTEGER PRIMARY KEY AUTOINCREMENT,                                          -- BIGINT IDENTITY
-    source_system     TEXT    CHECK (source_system IS NULL OR length(source_system) <= 64),
-    source_key        TEXT    CHECK (source_key IS NULL OR length(source_key) <= 1024),
-    source_uri        TEXT    CHECK (source_uri IS NULL OR length(source_uri) <= 2048),
-    original_filename TEXT    CHECK (original_filename IS NULL OR length(original_filename) <= 512),
-    file_format       TEXT    CHECK (file_format IS NULL OR length(file_format) <= 32),
-    file_size         INTEGER,                                                                    -- BIGINT
-    sha256            TEXT    CHECK (sha256 IS NULL OR length(sha256) <= 64),
-    rep_bucket        TEXT    CHECK (rep_bucket IS NULL OR length(rep_bucket) <= 256),
-    rep_key           TEXT    CHECK (rep_key IS NULL OR length(rep_key) <= 2048),
-    rep_etag          TEXT    CHECK (rep_etag IS NULL OR length(rep_etag) <= 128),
-    parse_status      TEXT    CHECK (parse_status IS NULL OR length(parse_status) <= 32),
-    status_reason     TEXT    CHECK (status_reason IS NULL OR length(status_reason) <= 2000),
-    rep_engine        TEXT    CHECK (rep_engine IS NULL OR length(rep_engine) <= 128),
-    rep_acc           REAL,                                                                       -- FLOAT
-    page_count        INTEGER CHECK (page_count IS NULL OR page_count BETWEEN -2147483648 AND 2147483647),   -- INT
-    doc_key           TEXT    NOT NULL CHECK (length(doc_key) <= 64),
-    parse_date        TEXT    CHECK (parse_date IS NULL OR length(parse_date) <= 32),
-    pipeline_version  TEXT    CHECK (pipeline_version IS NULL OR length(pipeline_version) <= 64),
-    status            TEXT    CHECK (status IS NULL OR status IN ('active', 'changed', 'deleted')),
-    status_at         TEXT    CHECK (status_at IS NULL OR length(status_at) <= 32),
-    engines_used      TEXT,                                                                       -- NVARCHAR(MAX), JSON array
-    engines_summary   TEXT    CHECK (engines_summary IS NULL OR length(engines_summary) <= 512),
-    parsed_at         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now'))             -- DATETIME2(0) DEFAULT SYSUTCDATETIME()
-) STRICT;
-CREATE UNIQUE INDEX UQ_ParsingMeta_key    ON ParsingMeta (source_system, source_key, parse_date) WHERE source_key IS NOT NULL;
-CREATE UNIQUE INDEX UQ_ParsingMeta_dockey ON ParsingMeta (doc_key, parse_date) WHERE source_key IS NULL;
-CREATE INDEX IX_ParsingMeta_doc_key ON ParsingMeta (doc_key);
-
--- seed rows (FileStorageMap only; ParsingMeta starts empty — publish writes it)
+-- seed rows (FileStorageMap)
 
 INSERT INTO FileStorageMap (id, content_id, s3_key, source_system, original_filename, content_version_id, file_size, sha256, sf_op_id, contract_id, created_at) VALUES
     (1, 'd2139fbd2cbe40341dbe83966c9ad767066ad1333806a21d45295223262b0660', 'CRMS/19f7e8be-02be-5b8a-8918-64496e955191/normal_control.pdf', 'CRMS', 'normal_control.pdf', 1, 918, 'd2139fbd2cbe40341dbe83966c9ad767066ad1333806a21d45295223262b0660', NULL, NULL, '2026-10-15 09:00:00'),

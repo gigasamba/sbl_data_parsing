@@ -6,6 +6,8 @@ DOC_HINTS와 같은 글자로 굳혀 둔다(한 번 배포한 판은 고치지 �
 
 from alembic import context, op
 
+from common.store.db.migrations import search_parts
+
 revision = "0003_search"
 down_revision = "0002_search"
 branch_labels = None
@@ -22,7 +24,10 @@ DOC_HINTS_COLS = {k: [c.split()[0] for c in v.split(", ")] for k, v in DOC_HINTS
 def upgrade():
     b = context.config.attributes["schema"]
     bind = op.get_bind()
-    for src, cols in DOC_HINTS.items():
+    for src in search_parts.sources(tuple(DOC_HINTS)):
+        cols = DOC_HINTS.get(src)
+        if not cols:  # DEV 원천 실행(op-17) — 힌트 칸 없음
+            continue
         adds = ", ".join(f"ADD COLUMN IF NOT EXISTS {c}" for c in cols.split(", "))
         bind.exec_driver_sql(f"ALTER TABLE {b}_{src}.doc {adds}")
 

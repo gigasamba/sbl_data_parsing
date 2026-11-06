@@ -24,7 +24,7 @@ from pathlib import Path
 from common.config import settings as C
 from common.core import span as SP  # 성능 span
 from common.core.console import utf8_stdout
-from common.core.contract import file_hash, jl
+from common.core.contract import file_hash
 from common.core.contract import safe_path_join as _safe_join  # 경로 잇기(load 단계와 같은 함수)
 from common.core.paths import atomic_write_text, tmp_path_for
 from common.store import objectstore
@@ -35,9 +35,8 @@ from pipeline.shared.srcsha import sha_of, stat_of
 
 
 def _read_manifest(state):
-    """state/manifest.jsonl → {file_name: 행}(없으면 빈 사전)."""
-    man_f = state / "manifest.jsonl"
-    return {r["file_name"]: r for r in jl(man_f)} if man_f.exists() else {}
+    """state/manifest.jsonl → {file_name: 행}(없으면 빈 사전) — 고쳐 다시 쓰므로 공용 읽기(span.manifest_rows)의 사본."""
+    return dict(SP.manifest_rows(state / "manifest.jsonl"))
 
 
 def _write_manifest(state, rows):
@@ -83,7 +82,14 @@ def download(rows, state, workers=1):
 
     def _one(o):
         name = o["filename"] or o["key"]
-        with SP.span("extract.download", "extract", doc_id=name, ext=Path(name).suffix.lower(), file_bytes=o["size"]) as sp:
+        with SP.span(
+            "extract.download",
+            "extract",
+            doc_id=name,
+            ext=Path(name).suffix.lower(),
+            file_bytes=o["size"],
+            source_system=o.get("source_system"),
+        ) as sp:
             return _fetch(o, sp)
 
     def _fetch(o, sp):
@@ -152,6 +158,9 @@ def _rdb_plan(table, state, limit=0, done=frozenset()):
     """문서 위치 표(csv:)의 대상 행 → (names, fetch_one(name, dest) → manifest 행). 고르고(rdb_pick) staging에 받은 뒤(download)
     fetch_one이 staging 파일을 dest/name으로 하드 링크한다(받지 못한 문서가 있으면 멈춤). 다른 원천의 같은 내용 파일도 따로 받는다."""
     by_name, n_seen = CP.rdb_pick(table, state, limit, done)
+    rows = list(by_name.values())
+    name_of = _rerun_names({r["key"]: n for n, r in by_name.items()}, rows, _read_manifest(state))  # 앞 실행 이름과 겹치지 않게
+    by_name = {name_of[r["key"]]: r for r in rows}
     names = sorted(by_name)
     failed = download(list(by_name.values()), state, max(1, int(pc.cfg().extract.source.fetch_workers)))
     if failed:
@@ -175,7 +184,7 @@ def _rdb_plan(table, state, limit=0, done=frozenset()):
             "original_filename": o.get("filename"),
             "content_version_id": o.get("content_version"),  # FileStorageMap 고유 칸
             "created_at": o.get("created_at"),  # 원천 등록 시각 → gold_bundle → gold doc.created_at
-            "source_system": _derive_source_from_key(o["key"]),
+            "source_system": o["source_system"],  # FileStorageMap.source_system(op-17 — 키에서 다시 구하지 않음)
             **_hashed(f),
         }  # publish_parse_result가 문서별로 이 값 사용(없으면 --source-system 폴백)
 
@@ -210,38 +219,67 @@ def resolve(source, out, limit=0, done=frozenset()):
     return _folder_tree(src, files[: limit or None], Path(out), state)
 
 
+def _rerun_names(name_of, rows, man):
+    """이번 행의 문서 이름(name_of = 이번 실행 안에서 고른 원본 키 → 이름) → 앞 실행 manifest 행과도 겹치지 않는 이름(rdb·PC 폴더 같음).
+    같은 키면 그 문서라 앞 이름 그대로, 다른 키가 쓴 이름이면 `_rdb_names`와 같은 꼴(`<상위 폴더>__<이름>`, 그래도 겹치면 키 전체를 `__`로 이음)."""
+    by_key = {r["key"]: r for r in rows}
+    out = {r.get("key"): n for n, r in man.items() if r.get("key") in by_key}  # 같은 문서 다시 — 앞 이름 그대로
+    taken = set(man)
+    for k, n in name_of.items():
+        if k not in out:
+            r = by_key[k]
+            out[k] = next(
+                c
+                for c in (
+                    n,
+                    CP._safe_name(f"{r['doc_id']}__{r.get('filename') or r['doc_id']}", ""),
+                    CP._safe_name(k.replace("/", "__"), ""),
+                )
+                if c not in taken
+            )
+            taken.add(out[k])
+    return out
+
+
 def _folder_tree(src, files, out, state):
     """PC 폴더 원천이 원천별 하위 폴더(`SFDC/<uuid>/<파일>` — Object Storage 키 모양)면: rdb 배치와 같게
-    평평한 폴더(`<out>/_source_files`)에 복사하고 manifest.jsonl에 상대 키(`key`)·원본 주소(`uri`)·원천을 적는다 — 구조화가 키 첫 마디로
-    원천을 고르고(gold_bundle), 원본 주소가 원래 파일을 가리키게. 같은 이름은 rdb와 같은 규칙(`<상위 폴더>__<이름>`)."""
+    평평한 폴더(`<out>/_source_files`)에 복사하고 manifest.jsonl에 상대 키(`key`)·원본 주소(`uri`)·원천(맨 위 폴더 이름)을 적는다 —
+    구조화·적재·게시가 그 원천을 쓰고(gold_bundle), 원본 주소가 원래 파일을 가리키게. 같은 이름은 rdb와 같은 규칙(`<상위 폴더>__<이름>`)."""
     local = out / "_source_files"
     local.mkdir(parents=True, exist_ok=True)
-    rows = [{"key": p.relative_to(src).as_posix(), "filename": p.name, "doc_id": p.parent.name, "path": p} for p in files]
-    name_of = CP._rdb_names(rows)
-    man = []
+    rows = [
+        {
+            "key": p.relative_to(src).as_posix(),
+            "filename": p.name,
+            "doc_id": p.parent.name,
+            "path": p,
+            "source": p.relative_to(src).parts[0],
+        }
+        for p in files
+    ]
+    man, names = _read_manifest(state), []  # 앞 실행 행은 남김(rdb와 같음) — 같은 결과 폴더의 앞 문서도 구조화·적재가 원천·키를 찾음
+    name_of = _rerun_names(CP._rdb_names(rows), rows, man)
     for r in rows:
         name = name_of[r["key"]]
         f = _safe_join(local, name)
         shutil.copy2(r["path"], f)
-        man.append(
-            {
-                "file_name": name,
-                "uri": r["path"].resolve().as_uri(),
-                "key": r["key"],
-                "original_filename": r["filename"],
-                "source_system": _derive_source_from_key(r["key"]) or CP._known_source(r["key"].split("/", 1)[0]),
-                **_hashed(f),
-            }
-        )
-    C.put(SOURCE_MANIFEST=str(_write_manifest(state, man)))  # rdb 배치와 같은 인계(원본 위치 주소 — contract.make_source_uri)
-    names = [m["file_name"] for m in man]
+        names.append(name)
+        man[name] = {
+            "file_name": name,
+            "uri": r["path"].resolve().as_uri(),
+            "key": r["key"],
+            "original_filename": r["filename"],
+            "source_system": CP._known_source(r["source"]),  # 맨 위 폴더 = 원천(_tree_files가 확인함)
+            **_hashed(f),
+        }
+    C.put(SOURCE_MANIFEST=str(_write_manifest(state, man.values())))  # rdb 배치와 같은 인계(원본 위치 주소 — contract.make_source_uri)
     print(f"[source] 폴더 {src}(하위 폴더 {len(names)}개 파일 — 상대 키로 manifest) · 대상 {len(names)}개", flush=True)
     return local, names, state
 
 
 def finish(state, rep_index):
     """Object Storage에서 받은 원본: 대표 결과가 나온 문서를 처리 완료로 기록한다(processed.jsonl). sha256은 받기(`_hashed`)가
-    manifest에 이미 남겼다(publish_parse_result `plan()`이 로컬 원본 없이도 그 값으로 EDW 행을 씀).
+    manifest에 이미 남겼다(publish_parse_result `plan()`이 로컬 원본 없이도 그 값을 gold 처리 기록으로 넘김).
     파일은 지우지 않는다 — 원본 삭제는 게시가 끝난 뒤 run_pipeline `drop_original()` 한 곳."""
     man = _read_manifest(state)
     if not man:
@@ -262,12 +300,12 @@ def stage_batch(source, out, prepared, limit, run_step, done=frozenset(), scan_r
     """파싱 전 extract 한 번 — 세 단계를 이 순서로 한 번씩:
     1. 받기 — `resolve`: 고르기(처리 기록·지원 안 함·done) → rdb:csv는 staging에 받아(`download`) 파싱 원본 폴더에 놓음.
        받은 파일의 sha256은 여기서 한 번 구해 manifest에 둔다(뒤 단계는 그 값을 씀).
-    2. 중복 제외 — `_dedup`: 받은 파일의 sha256으로 같은 묶음 안 같은 내용은 대표 하나만, 남은 것 중 ParsingMeta에 끝난 다른 원본과
+    2. 중복 제외 — `_dedup`: 받은 파일의 sha256으로 같은 묶음 안 같은 내용은 대표 하나만, 남은 것 중 gold에 끝난 다른 원본과
        sha256이 같으면 뺀다. seen(이번 실행의 받은 sha256 표지 폴더 — 문서마다 stage를 부르는 서버 흐름)을 주면 이번 실행에서 다른 원본이
-       먼저 받은 sha256도 뺀다(`skip_doc_info`에도 `duplicate_sha256`). <out>/dedup/keep.txt = 남은 이름(게시가 빠진 문서를 skipped_dup로 씀).
+       먼저 받은 sha256도 뺀다. 뺀 중복은 모두 except_doc_info skip(`duplicate_sha256`). <out>/dedup/keep.txt = 남은 이름.
     3. 거르기 — filter_and_rotate(only.txt의 이름만 → prepared/): DRM·암호·지원 안 함은 건너뜀 기록만(처리하지 않음), 방향 보정.
     건너뛴 문서는 문서마다 `skip_event` 1행(applog.pipe_event — status=skip, err_kind=doc). 거르기가 뺀 영구 이유(지원 안 함·DRM·암호)는
-    applog.skip_doc_info에도(`_record_filtered` — 다음 대상 목록이 뺌, pl-58).
+    applog.except_doc_info skip에도(`_record_filtered` — 다음 대상 목록이 뺌, op-17).
     → (원본 폴더, 남은 이름 목록(받은 순서), 상태 폴더, 남은 이름 목록 파일 only.txt). run_step(args) → 종료 코드(자식 프로세스).
     scan_rotate=False면 이미지 PDF는 돌리지 않는다(run_pipeline의 스캔 문서 정책)."""
     out = Path(out)
@@ -291,11 +329,11 @@ def stage_batch(source, out, prepared, limit, run_step, done=frozenset(), scan_r
 
 def _dedup(local, names, dedup_dir, state, seen=None):
     """받은 파일의 sha256으로 중복 제외 → 남은 이름(names 순서). 같은 묶음 안(이번 names만 — 폴더에 남은 앞 실행 파일은 안 봄)은
-    deduplication.run_folder(대표 하나 — 1건 이하면 해시만), 그다음 ParsingMeta에 파싱된 원본 행(ok·partial —
-    candidate_pick.done_by_sha)이 같은 sha256을 다른 원본 키로 가지면 뺀다(같은 키면 그 문서의 재처리라 남김), seen이 있으면 이번 실행에서
-    다른 원본이 먼저 받은 sha256이면 뺀다(`_claim` — skip_doc_info에도). 원본 키 = manifest의 "key"(없으면 이름 — 게시와 같은 규칙).
+    deduplication.run_folder(대표 하나 — 1건 이하면 해시만), 그다음 gold 문서(candidate_pick.done_by_sha — doc.sha256)가 같은 sha256을
+    다른 원본 키로 가지면 뺀다(같은 키면 그 문서의 재처리라 남김), seen이 있으면 이번 실행에서 다른 원본이 먼저 받은 sha256이면 뺀다(`_claim`).
+    뺀 중복(dup_batch·dup_done·dup_run)은 모두 except_doc_info skip(`duplicate_sha256` — op-17). 원본 키 = manifest의 "key"(없으면 이름 — 게시와 같은 규칙).
     sha256은 받기가 manifest에 남긴 값(srcsha.sha_of — 없으면 한 번 구함).
-    keep.txt = 폴더 파일 중 이번에 중복으로 뺀 것만 없는 목록(게시가 빠진 것만 skipped_dup로 쓰고, 앞 실행의 남은 문서는 그대로 둠)."""
+    keep.txt = 폴더 파일 중 이번에 중복으로 뺀 것만 없는 목록(게시는 빠진 것을 올리지 않고, 앞 실행의 남은 문서는 그대로 둠)."""
     from pipeline.extract import deduplication as dedup
 
     if len(names) <= 1:  # 묶을 것이 없음(서버 stage는 문서 하나씩) — 해시만, 지문 캐시·groups.csv 안 씀
@@ -303,34 +341,35 @@ def _dedup(local, names, dedup_dir, state, seen=None):
     else:
         keep, rows, _ = dedup.run_folder(local, dedup_dir, set(names), write_keep=False)  # keep.txt는 아래에서 한 번
     rep = {r["group"]: r["file"] for r in rows if r["representative"]}
-    dropped = set()
-    for r in rows:
-        if not r["representative"]:
-            skip_event(r["file"], "dup_batch", dup_of=rep[r["group"]])
-            dropped.add(r["file"])
     man = _read_manifest(state)
     key_of = {n: r.get("key") or n for n, r in man.items()}
+    src_of = {n: r.get("source_system") for n, r in man.items()}
+    dups: list[str] = []
+    for r in rows:
+        if not r["representative"]:
+            skip_event(r["file"], "dup_batch", src_of.get(r["file"]), dup_of=rep[r["group"]])
+            dups.append(r["file"])
     picked = [n for n in names if n in keep]
     done = CP.done_by_sha({keep[n] for n in picked})
-    left, run_dup = [], []
+    left = []
     for n in picked:
         key, hit = key_of.get(n, n), done.get(keep[n])
         if hit and hit[0] != key:
-            skip_event(n, "dup_done", dup_of=hit[0])
-            dropped.add(n)
+            skip_event(n, "dup_done", src_of.get(n), dup_of=hit[0])
+            dups.append(n)
             continue
         first = _claim(seen, keep[n], key) if seen is not None else None
         if first:
-            skip_event(n, "dup_run", dup_of=first)
-            dropped.add(n)
-            run_dup.append((n, key))
+            skip_event(n, "dup_run", src_of.get(n), dup_of=first)
+            dups.append(n)
         else:
             left.append(n)
-    if run_dup:  # 같은 내용을 이미 파싱하는 원본이 있음 — 다음 대상 목록에서도 뺌
-        from pipeline.extract import skip_docs
+    if dups:  # 같은 내용의 원본이 이미 있음(같은 묶음·gold·이번 실행) — 다음 대상 목록에서도 뺌
+        from pipeline.shared import except_docs
 
-        skip_docs.record([_skip_row(k, n, "duplicate_sha256") for n, k in run_dup])
+        except_docs.record([_skip_row(key_of.get(n, n), n, "duplicate_sha256", man.get(n)) for n in dups])
     Path(dedup_dir).mkdir(parents=True, exist_ok=True)
+    dropped = set(dups)
     rest = sorted(
         f.name for f in Path(local).iterdir() if f.is_file() and not CP._hidden(f) and f.name != ".gitkeep" and f.name not in dropped
     )
@@ -357,17 +396,24 @@ def _claim(seen, sha, key):
         tmp.unlink(missing_ok=True)
 
 
-def _skip_row(key, name, reason):
-    """skip_docs.record 행 하나 — 원본 키에서 원천 이름을 얻는다."""
-    return {"source_key": key, "source_system": CP.source_of(key), "file_name": name, "reason": reason}
+def _skip_row(key, name, reason, man_row):
+    """except_docs.record 행 하나 — 원천·크기는 manifest 행의 source_system·크기(span.manifest_size — 없으면 None)."""
+    man_row = man_row or {}
+    return {
+        "source_key": key,
+        "source_system": man_row.get("source_system"),
+        "file_name": name,
+        "file_size": SP.manifest_size(man_row),
+        "reason": reason,
+    }
 
 
 def _record_filtered(prepared, state):
-    """거르기(filter_and_rotate)가 이번에 뺀 문서(`prepared/_records/skipped.csv`)를 skip_doc_info에(영구 이유만 — skip_docs.record).
+    """거르기(filter_and_rotate)가 이번에 뺀 문서(`prepared/_records/skipped.csv`)를 except_doc_info skip에(영구 이유만 — except_docs.record).
     원본 키 = manifest의 "key"(없으면 이름 — 게시와 같은 규칙)."""
     import csv
 
-    from pipeline.extract import skip_docs
+    from pipeline.shared import except_docs
 
     f = Path(prepared) / "_records" / "skipped.csv"
     if not f.exists():
@@ -376,7 +422,7 @@ def _record_filtered(prepared, state):
         rows = list(csv.DictReader(fh))
     man = _read_manifest(state)
     keys = {r["file"]: (man.get(r["file"]) or {}).get("key") or r["file"] for r in rows}
-    skip_docs.record([_skip_row(keys[r["file"]], r["file"], r["reason"]) for r in rows])
+    except_docs.record([_skip_row(keys[r["file"]], r["file"], r["reason"], man.get(r["file"])) for r in rows])
 
 
 def _stage_cmd(argv):
@@ -389,7 +435,7 @@ def _stage_cmd(argv):
     from pipeline.parse_steps import run_step
 
     ap = argparse.ArgumentParser(prog="pipeline.extract.candidate_ready stage")
-    ap.add_argument("--csv", required=True, help="문서 위치 표(id·s3_key·original_filename·file_size)")
+    ap.add_argument("--csv", required=True, help="문서 위치 표(id·s3_key·original_filename·file_size·source_system)")
     ap.add_argument("--out", required=True, help="문서 결과 폴더(_source_files·parse/_source·dedup이 여기에)")
     ap.add_argument("--prepared", required=True, help="파싱 입력 폴더(거르기를 지난 파일)")
     ap.add_argument("--no-scan-rotate", action="store_true", help="이미지 PDF는 방향 보정 안 함(스캔 문서 정책)")
@@ -405,20 +451,6 @@ def _stage_cmd(argv):
     )
     print(f"[source] stage: 파싱할 문서 {len(left)}건 → {only}", flush=True)
     return 0
-
-
-def _derive_source_from_key(key):
-    """s3_key prefix로 출처 시스템 판별 — OS 경로의 폴더명(SFDC-test/CRMS-test/las_test)을 그대로 사용."""
-    if not key:
-        return None
-    first = key.split("/")[0] if "/" in key else key
-    if first.startswith(("SFDC-", "SFDC_")):
-        return "SFDC-test"
-    if first.startswith(("CRMS-", "CRMS_")):
-        return "CRMS-test"
-    if first.startswith(("las_", "LAS_")):
-        return "las_test"
-    return None
 
 
 if __name__ == "__main__":

@@ -6,6 +6,8 @@
 
 from alembic import context, op
 
+from common.store.db.migrations import search_parts
+
 revision = "0004_search"
 down_revision = "0003_search"
 branch_labels = None
@@ -20,7 +22,7 @@ def upgrade():
     b = context.config.attributes["schema"]
     bind = op.get_bind()
     adds = ", ".join(f"ADD COLUMN IF NOT EXISTS {c}" for c in DOC_META.split(", "))
-    for src in SOURCES:
+    for src in search_parts.sources(SOURCES):
         bind.exec_driver_sql(f"ALTER TABLE {b}_{src}.doc {adds}")
         bind.exec_driver_sql(f"ALTER TABLE {b}_{src}.corpus_stat DROP COLUMN IF EXISTS dim")
 

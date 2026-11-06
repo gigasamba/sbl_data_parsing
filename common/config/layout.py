@@ -15,9 +15,13 @@ SECTIONS = ("required", "common", "extract", "transform", "load", "search", "ops
 # required — (카테고리 열쇠, 제목, [(칸 이름, 모델 경로, 필수 조건)]). 조건은 sample 주석 머리에 그대로 — "필수 · <언제·어느 앱>" 또는 "선택".
 _PG_NEED = "필수 · dev·prd(pipeline·mcp) — local은 비우면 sqlite 대역"
 _SERVER_NEED = "필수 · dev·prd(pipeline·mcp) — local은 무시(비움)"
-_WRITE_NEED = "필수 · dev·prd(pipeline — 게시) — local은 무시(비움)"
 REQUIRED_GROUPS = (
     ("env", "실행 환경", (("run_env", "common.run_env", "필수 · 모두(local·dev·prd)"),)),
+    (
+        "source",
+        "파싱할 원천",
+        (("source_systems", "pipeline.extract.source.systems", "선택 — DEV-<숫자>는 dev·local만(prd면 시작 거부)"),),
+    ),
     (
         "pg",
         "PostgreSQL(pgvector) — local은 접속 5칸을 모두 비우면 sqlite 대역(일부만 적으면 거부)",
@@ -26,7 +30,7 @@ REQUIRED_GROUPS = (
                 (f"pg_{k}", f"common.connections.pg.{m}", _PG_NEED)
                 for k, m in (("host", "host"), ("port", "port"), ("database", "db"), ("user", "user"), ("password", "password"))
             ),
-            ("pg_schema", "common.connections.pg.db_schema", "선택 — 비우면 data_parsing(여러 벌이면 끝에 _<벌>)"),
+            ("pg_schema", "common.connections.pg.db_schema", "선택 — 비우면 data_parsing"),
         ),
     ),
     (
@@ -51,16 +55,14 @@ REQUIRED_GROUPS = (
     ),
     (
         "edw",
-        "EDW(회사 DB) — ParsingMeta 표·접속",
+        "EDW(회사 DB) 접속 — 읽기 계정만",
         (
-            ("parsing_meta_table", "common.connections.parsing_meta.table", "선택"),
             ("edw_host", "common.connections.rdb.host", _SERVER_NEED),
             ("edw_port", "common.connections.rdb.port", "선택"),
             ("edw_database", "common.connections.rdb.database", _SERVER_NEED),
             ("edw_read_user", "common.connections.rdb.read.user", _SERVER_NEED),
             ("edw_read_password", "common.connections.rdb.read.password", _SERVER_NEED),
-            ("edw_write_user", "common.connections.rdb.write.user", _WRITE_NEED),
-            ("edw_write_password", "common.connections.rdb.write.password", _WRITE_NEED),
+            ("edw_file_table", "pipeline.connections.rdb.file_table", "필수 · 모두(pipeline) — 기본값 그대로 두면 AI.FileStorageMap"),
         ),
     ),
     (
@@ -191,9 +193,12 @@ PLACED = {
     "mcp.host.mem_limit": "ops.containers.mcp.mcp_mem_limit",
     "pipeline.host.parse_cpus": "ops.containers.pipeline.pipeline_cpus",
     "pipeline.host.parse_mem_limit": "ops.containers.pipeline.pipeline_mem_limit",
+    "common.host.pipeline_container": "ops.containers.pipeline.pipeline_container_name",
+    "common.host.data_parsing_container": "ops.containers.data_parsing.data_parsing_container_name",
+    "common.host.mcp_container": "ops.containers.mcp.mcp_container_name",
     "common.host.docker": "ops.host.container_cli",
+    "common.host.edw_chain_src": "ops.host.host_edw_chain_file",
     "common.host.output_root": "ops.host.host_output_dir",
-    "common.host.instance": "ops.host.instance_name",
     "common.host.prune_keep": "ops.host.prune_keep_versions",
     "common.host.image_stage_dir": "ops.host.prune_stage_dir",
     "common.log.db_enabled": "ops.log.log_db_enabled",
@@ -281,6 +286,7 @@ PLACED = {
     "pipeline.connections.rdb.columns.filename": "tuning.extract.source_columns.source_column_filename",
     "pipeline.connections.rdb.increment_col": "tuning.extract.source_columns.source_column_increment",
     "pipeline.connections.rdb.columns.key": "tuning.extract.source_columns.source_column_storage_key",
+    "pipeline.connections.rdb.columns.source_system": "tuning.extract.source_columns.source_column_source_system",
     "pipeline.extract.text_page_sec": "tuning.extract.text_engine_page_timeout_sec",
     "pipeline.load.publish.upload_statuses": "tuning.load.publish.publish_upload_statuses",
     "common.log.batch_size": "tuning.ops.log.log_batch_size",
@@ -426,6 +432,7 @@ TUNING_RARE = (  # 결과 파라미터(청크·순위·그림 고르기)·내부
     "pipeline.connections.rdb.columns.filename",
     "pipeline.connections.rdb.columns.key",
     "pipeline.connections.rdb.columns.size",
+    "pipeline.connections.rdb.columns.source_system",
     "pipeline.extract.fill_merged",
     "pipeline.extract.hidden_overlap_max",
     "pipeline.extract.kreuzberg_prose_filter",
@@ -503,14 +510,6 @@ def reject_dup_keys(loader_cls):
 
     loader_cls.add_constructor("tag:yaml.org,2002:map", no_dup)
     return loader_cls
-
-
-def per_instance(name, instance):
-    """여러 벌 — 이름 끝에 `_<벌>`(`-`는 `_`로). 벌 이름이 없거나 이미 붙어 있으면(따로 적은 값) 그대로. 앱(settings)·호스트(run_pipeline)가 같이 쓴다."""
-    if not name or not instance:
-        return name
-    tail = "_" + str(instance).replace("-", "_")
-    return name if name.endswith(tail) else name + tail
 
 
 def _role(model_path):

@@ -119,7 +119,6 @@ CODE_FP_SKIP = (
     "store/pg_standin.py",
     "store/mssql.py",
     "store/objectstore.py",
-    "store/parsing_meta_db.py",
     "store/db/",
     "config/boot.py",
     "config/export.py",

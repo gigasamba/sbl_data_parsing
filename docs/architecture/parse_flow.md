@@ -28,7 +28,7 @@ flowchart TD
     A["입구: systemd 타이머 → nightly_batch.sh → run_pipeline.py (서버) / python -m pipeline.cli parse (PC)"]
     B["extract (staging): candidate_pick.py list → candidate_ready.py stage(받기 → deduplication.py → filter_and_rotate.py)"]
     C["transform (silver): parse/parse_engines.py + parse/engines/* → parse_scoring.py → doc_represent.py (+ figures/*, 후보정)"]
-    P["load (silver): publish_parse_result.py → Object Storage + EDW ParsingMeta"]
+    P["load (silver): publish_parse_result.py → Object Storage + publish/silver.jsonl"]
     D["transform (gold): gold_bundle.py → chunking.py + common/ai/embed.py → 묶음(bundle)"]
     E["load (gold): pgvector_load.py → edw_doc_meta.py + doc_classify.py → PostgreSQL pgvector"]
     F["검색: mcp_server/main.py → search_svc.py → retriever.py / pgsearch.py"]
@@ -47,19 +47,19 @@ flowchart TD
   - **`→ Object Storage·EDW`·`→ 임베딩 모델`**: 그 행에서 바깥 서비스(내부망 Object Storage, 회사 DB, 임베딩 서버)에 접속한다.
 - 한 행 = 한 파일 위치. 화살표(→)는 왼쪽 파일·함수가 오른쪽을 부른다는 뜻이다. "자식"은 그 행의 왼쪽 프로세스가 새 python 프로세스를 하나 더 띄워 돌린다는 뜻이고, "자식의 자식"은 그 자식이 또 하나를 띄운다는 뜻이다 — 문서 1건이면 호스트 `run_pipeline.py` → 컨테이너 `pipeline.cli parse`(12행) → 자식 `parse_engines`·`parse_scoring`·`doc_represent`(각각 따로) → 자식의 자식 = 문서×엔진마다 엔진 하나(16행).
 - 3행은 문서 목록 전체에 한 번, 4행부터는 문서마다 돈다.
-- **받기 전(3~4행)** 에는 표에 있는 값(이름·크기·끝난 문서·영구 건너뜀은 3행, 확장자는 4행)만으로 거른다. **받은 뒤(5~8행)** 에야 알 수 있는 것(파일 내용이 같은지, DRM·암호)은 받은 파일로 거른다. 원본은 4행에서 한 번만 받고, 파싱은 7행을 지난 파일만 읽는다.
-- 중복·DRM·암호·미지원으로 건너뛴 문서는 문서마다 PostgreSQL `applog.pipe_event`에 `extract.skip` 행 하나를 남긴다(까닭, 중복이면 남긴 문서 이름). 다시 받아도 같은 결과인 문서(지원 안 함·확장자 없음·DRM·암호)와 같은 밤 다른 원본과 같은 내용인 문서(`duplicate_sha256`)는 `applog.skip_doc_info`에도 원본 키당 한 행을 남겨 다음 밤 대상 목록(3행)에서 뺀다 — [db_schema.md](db_schema.md).
+- **받기 전(3~4행)** 에는 표에 있는 값(이름·크기·끝난 문서·영구 뺌은 3행, 확장자는 4행)만으로 거른다. **받은 뒤(5~8행)** 에야 알 수 있는 것(파일 내용이 같은지, DRM·암호)은 받은 파일로 거른다. 원본은 4행에서 한 번만 받고, 파싱은 7행을 지난 파일만 읽는다.
+- 중복·DRM·암호·미지원으로 건너뛴 문서는 문서마다 PostgreSQL `applog.pipe_event`에 `extract.skip` 행 하나를 남긴다(까닭, 중복이면 남긴 문서 이름). 다시 받아도 같은 결과인 문서(지원 안 함·확장자 없음·DRM·암호)와 다른 원본과 같은 내용인 문서(`duplicate_sha256` — 같은 묶음·같은 밤·끝난 gold 문서)는 `applog.except_doc_info`에도 `skip` 행(원본 키당 하나)을 남겨 다음 밤 대상 목록(3행)에서 뺀다. 파싱·게시·적재 실패는 같은 표에 `error` 행으로 기록만 하고 다음 실행이 다시 고른다 — [db_schema.md](db_schema.md).
 
 | 순서 | ETL | 기능명 | 기능 상세 설명 | 실행 위치 | 파일 | 함수 |
 |---|---|---|---|---|---|---|
 | 1 | 입구 | 설정 읽기·잠금 | 서버 settings.yaml을 읽고 컨테이너 이름(벌 접미)을 정함(`configure()`), 겹침 잠금을 잡음(`take_lock()` — 다른 run_pipeline이 돌면 종료 75) | 호스트 | `deploy/host/scripts/run_pipeline.py` | `main()` → `configure()`·`take_lock()` |
 | 2 | 입구 | 엔진 구성 확인 | 컨테이너 안에서 엔진 구성 파일을 읽어 봄(못 읽거나 모양이 틀리면 종료 2) | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/cli.py` | `stack_check()` → `show_stack()` |
-| 3 | extract | 대상 목록(받기 전) | EDW `FileStorageMap`에서 이름 키워드·크기순, 시작 자리·개수, `--skip-done`이면 끝난 문서(ParsingMeta)와 영구 건너뜀 문서(`applog.skip_doc_info`) 빼기, FAQ 먼저 → 목록 파일 `_docflow/targets.json`. 확장자는 여기서 보지 않음(4행) | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/extract/candidate_pick.py` → `pipeline/extract/skip_docs.py` | `pick_targets()`·`list_cmd()` → `list_targets()` → `edw_rows()`·`done_keys()`·`skipped_keys()`·`faq_first()` |
-| 4 | extract | 받기 | 문서 위치 csv(`batch.csv`)를 쓰고, 지원 안 하는 확장자(압축·엔진 없음)는 받기 전에 빼서 `extract.skip` 행·`applog.skip_doc_info`에 남긴 뒤 나머지를 Object Storage에서 `_staging/`로 한 번 받고(받아 둔 판의 ETag가 같으면 다시 안 받음) 받은 파일의 sha256을 한 번 구해 `manifest.jsonl`에 적음. 앞 실행이 남긴 문서 폴더(`_docflow/<순번>`)는 그 폴더의 원본 위치가 이 문서와 같을 때만 다시 쓰고, 다르면 지우고 새로 받음 | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/extract/candidate_ready.py` → `pipeline/extract/candidate_pick.py` → `pipeline/extract/skip_docs.py` | `downloader()`·`stage_one()`·`stage_cmd()` → `stage_batch()` → `resolve()` → `_rdb_plan()` → `rdb_pick()` → `_filter_unsupported_rows()`·`_record_source_skipped()` → `record()` · `download()` |
+| 3 | extract | 대상 목록(받기 전) | EDW `FileStorageMap`에서 이름 키워드·크기순, 시작 자리·개수, `--skip-done`이면 끝난 문서(gold `doc` 행이 있는 원본 키)와 영구 뺌 문서(`applog.except_doc_info` `skip`) 빼기, FAQ 먼저 → 목록 파일 `_docflow/targets.json`. 확장자는 여기서 보지 않음(4행) | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/extract/candidate_pick.py` → `pipeline/shared/gold_docs.py`·`pipeline/shared/except_docs.py` | `pick_targets()`·`list_cmd()` → `list_targets()` → `edw_rows()`·`done_keys()`·`skipped_keys()`·`faq_first()` |
+| 4 | extract | 받기 | 문서 위치 csv(`batch.csv`)를 쓰고, 지원 안 하는 확장자(압축·엔진 없음)는 받기 전에 빼서 `extract.skip` 행·`applog.except_doc_info` `skip`에 남긴 뒤 나머지를 Object Storage에서 `_staging/`로 한 번 받고(받아 둔 판의 ETag가 같으면 다시 안 받음) 받은 파일의 sha256을 한 번 구해 `manifest.jsonl`에 적음. 앞 실행이 남긴 문서 폴더(`_docflow/<순번>`)는 그 폴더의 원본 위치가 이 문서와 같을 때만 다시 쓰고, 다르면 지우고 새로 받음 | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/extract/candidate_ready.py` → `pipeline/extract/candidate_pick.py` → `pipeline/shared/except_docs.py` | `downloader()`·`stage_one()`·`stage_cmd()` → `stage_batch()` → `resolve()` → `_rdb_plan()` → `rdb_pick()` → `_filter_unsupported_rows()`·`_record_source_skipped()` → `record()` · `download()` |
 | 5 | extract | 중복 제외(받은 뒤) | 이번 배치 안에서 sha256(4행이 manifest에 적은 값)이 같은 파일은 하나만 남김(1건이면 묶지 않음). 문서마다 받는 서버 흐름은 이번 실행에서 다른 원본이 먼저 받은 sha256이면 뺌(`_docflow/_seen_sha/<sha256>` 표지 — 3행이 비움) | 컨테이너 | `pipeline/extract/candidate_ready.py` → `pipeline/extract/deduplication.py` | `_dedup()` → `run_folder()`·`_claim()` |
-| 6 | extract | 중복 제외(받은 뒤) | sha256이 같은 끝난 문서(ParsingMeta)가 원본 위치가 다르면 건너뜀(같은 위치면 다시 돌리는 것이라 남김) | 컨테이너 | `pipeline/extract/candidate_ready.py` → `pipeline/extract/candidate_pick.py` → `common/store/parsing_meta_db.py` | `_dedup()` → `done_by_sha()` → `done_by_sha()` |
+| 6 | extract | 중복 제외(받은 뒤) | sha256이 같은 끝난 gold 문서(`doc.sha256`)가 원본 위치가 다르면 건너뜀(같은 위치면 다시 돌리는 것이라 남김) | 컨테이너 | `pipeline/extract/candidate_ready.py` → `pipeline/extract/candidate_pick.py` → `pipeline/shared/gold_docs.py` | `_dedup()` → `done_by_sha()` → `done_by_sha()` |
 | 7 | extract | 거르기(받은 뒤) | DRM·암호·미지원 형식을 거르고(DRM은 표시만 하고 건너뜀) 방향을 바로잡아 `prepared/`로, 지난 이름을 `only.txt`에 | 컨테이너(자식) | `pipeline/extract/candidate_ready.py` → `pipeline/extract/filter_and_rotate.py` | `stage_batch()` → `main()` |
-| 8 | extract | 건너뜀 기록 | 4~7행에서 뺀 문서마다 `applog.pipe_event`에 `extract.skip` 행. 7행이 뺀 영구 이유(지원 안 함·확장자 없음·DRM·암호)와 5행의 같은 밤 중복(`duplicate_sha256` — 먼저 받은 원본 키는 `extract.skip` 행 `dup_of`)은 `applog.skip_doc_info`에도(원본 키당 한 행 — 3행이 다음 밤에 뺌). 그 밖의 중복·파싱 실패는 쓰지 않음 | 컨테이너(자식) | `pipeline/extract/filter_and_rotate.py` → `pipeline/shared/runtrace.py` · `pipeline/extract/candidate_ready.py` → `pipeline/extract/skip_docs.py` | `_record_skip()` → `skip_event()` · `_record_filtered()`·`_dedup()` → `record()` |
+| 8 | extract | 건너뜀 기록 | 4~7행에서 뺀 문서마다 `applog.pipe_event`에 `extract.skip` 행. 7행이 뺀 영구 이유(지원 안 함·확장자 없음·DRM·암호)와 5·6행의 중복(`duplicate_sha256` — 먼저 받은 원본 키는 `extract.skip` 행 `dup_of`)은 `applog.except_doc_info`에도 `skip` 행(원본 키당 하나 — 3행이 다음 밤에 뺌) | 컨테이너(자식) | `pipeline/extract/filter_and_rotate.py` → `pipeline/shared/runtrace.py` · `pipeline/extract/candidate_ready.py` → `pipeline/shared/except_docs.py` | `_record_skip()` → `skip_event()` · `_record_filtered()`·`_dedup()` → `record()` |
 | 9 | extract | 레인 나누기 | 받은 원본으로 light·medium·vlm 중 하나(캐시가 있으면 컨테이너를 부르지 않음) | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/extract/doc_lane_group.py` | `classify_doc()` → `doc_lane_group()` |
 | 10 | transform | 레인 워커 | 레인 대기열에서 문서 하나를 꺼냄(구조화 대기가 많거나 MCP 업로드 중이면 쉼) | 호스트 | `deploy/host/scripts/run_pipeline.py` | `lane_worker()` → `pick_lane()` |
 | 11 | transform | 문서 1건 파싱 시작 | 레인별 값으로 `pipeline.cli parse --staged` 명령을 만들어 실행(제한 시간 45분 — 실패·시간 초과면 `sweep_cmd()`로 그 문서 표지를 가진 컨테이너 안 프로세스를 끔). 받기 단계가 중복·DRM·암호·지원 안 함으로 뺀 문서(`only.txt`가 빔)는 파싱하지 않고 `건너뜀`으로 28행 게시로 바로 넘김(실패로 세지 않음) | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` | `parse_one()` → `parse_cmd()`·`sweep_cmd()` |
@@ -80,8 +80,8 @@ flowchart TD
 | 26 | transform | 끝 표시 | `_rep/_DONE.json`을 대표 결과가 바뀌었을 때만 씀(`write_mark()`가 True) | 컨테이너 | `pipeline/cli.py` → `pipeline/transform/represent/doc_represent.py` | `parse_module()` → `rep_digest()`·`write_mark()` |
 | 27 | extract | 받기 끝 기록 | 26행 `write_mark()`가 True이고 원본이 Object Storage에서 왔을 때만: 대표 결과가 나온 문서의 처리 기록(`processed.jsonl`)을 남김(sha256은 4행이 이미 manifest에 씀, 파일은 지우지 않음) | 컨테이너 | `pipeline/cli.py` → `pipeline/extract/candidate_ready.py` | `parse_module()` → `finish()` |
 | 28 | load | silver 게시 명령 | 호스트가 컨테이너 안 게시 명령을 부르고, 게시 명령이 대표 결과·원본 주소·건너뜀 기록을 모음 | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/load/publish_parse_result.py` | `publish_one()` → `main()` → `run()` → `_load_inputs()` |
-| 29 | load | silver 게시 계획 | 문서마다 상태를 정함(`ok`·`partial`·`failed`·중복 `skipped_dup`·DRM·암호 `skipped_drm`·이번 대상 아님 `not_parsed` — 지원 안 함으로 빠진 문서도 `not_parsed`)과 올릴 자리(`rep.md` 키). EDW에 가는 상태는 `ok`·`partial`·`skipped_dup`·`not_parsed`(`skipped_drm`·`failed`는 30행 제외 보고서로만). 건너뛴 문서는 결과 없이 상태만(중복은 다음 밤에 다시 안 고름) — gold를 돌지 않음 | 컨테이너 | `pipeline/load/publish_parse_result.py` | `run()` → `plan()` → `status_of()`·`rep_md_key()`·`render_md()` |
-| 30 | load | silver 게시 실행 | `rep.md`·엔진별 원결과를 Object Storage에 올리고(같은 이름이 있으면 새 이름), EDW ParsingMeta에 새 행만 넣음(`apply()`). DRM·실패는 EDW에 안 넣고 `run()`이 제외 보고서(`publish/excluded_<날짜>.md`)에만 씀 | 컨테이너 → Object Storage·EDW | `pipeline/load/publish_parse_result.py` → `common/store/parsing_meta_db.py` | `apply()` → `put()`·`insert_new()` · `run()` → `render_excluded_report()` |
+| 29 | load | silver 게시 계획 | 문서마다 상태를 정함(`ok`·`partial`·`failed`·중복 `skipped_dup`·DRM·암호 `skipped_drm`·이번 대상 아님 `not_parsed` — 지원 안 함으로 빠진 문서도 `not_parsed`)과 올릴 자리(`rep.md` 키). 올리는 상태는 `ok`·`partial`(`skipped_drm`·`failed`는 30행 제외 보고서로). 건너뛴 문서는 올리지 않고 gold를 돌지 않음 | 컨테이너 | `pipeline/load/publish_parse_result.py` | `run()` → `plan()` → `status_of()`·`rep_md_key()`·`render_md()` |
+| 30 | load | silver 게시 실행 | gold에 이미 끝난 문서는 빼고(`--reparse` 목록만 예외) `rep.md`·엔진별 원결과를 Object Storage에 올리고(같은 이름이 있으면 새 이름), 올린 문서마다 처리 기록 한 줄을 `publish/silver.jsonl`에 씀(`apply()`). 실패는 `applog.except_doc_info` `error`, DRM·실패는 `run()`이 제외 보고서(`publish/excluded_<날짜>.md`)에도 씀 | 컨테이너 → Object Storage | `pipeline/load/publish_parse_result.py` → `pipeline/shared/except_docs.py` | `apply()` → `put()`·`record_error()` · `run()` → `render_excluded_report()` |
 | 31 | — | 원본 삭제(한 곳) | 게시 성공 뒤에만 받은 원본(`_staging/<…>.bin`)과 문서 폴더 링크(`_source_files/`)를 지움. `prepared/` 하드 링크는 40행 임시 폴더 삭제 때 지워짐 | 호스트 | `deploy/host/scripts/run_pipeline.py` | `drop_original()` |
 | 32 | transform | 구조화·적재 명령 | 호스트가 컨테이너 안 구조화(`gold_bundle --src prepared/`)와 적재(`pgvector_load load`)를 한 명령으로 이어서(`&&`) 부름 — 33~39행 | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/transform/structure/gold_bundle.py` | `gold_one()` → `struct_cmd()` → `main()` |
 | 33 | transform | 청크 나누기 | 대표 결과를 구조(제목·문단·표) 기준 청크로 | 컨테이너 | `pipeline/transform/structure/gold_bundle.py` → `pipeline/transform/structure/chunking.py` | `main()` → `chunk_all()` |
@@ -90,7 +90,7 @@ flowchart TD
 | 36 | load | 임베딩·모델 검사 | 묶음에 벡터가 있고 DB와 같은 임베딩 모델인지 | 컨테이너 | `pipeline/load/pgvector_load.py` | `load()` → `require_vectors()`·`require_same_model()` |
 | 37 | load | EDW 메타 붙이기 | 원천 표에서 만든 날짜·고객 등 | 컨테이너 | `pipeline/load/pgvector_load.py` → `pipeline/load/edw_doc_meta.py` | `load()` → `fetch()` |
 | 38 | load | 분류 라벨 | SFDC·LAS 문서에 분류 라벨(이미 있는 라벨은 덮지 않음) | 컨테이너 | `pipeline/load/pgvector_load.py` → `pipeline/load/doc_classify.py` | `_classify()` → `apply()` |
-| 39 | load | PostgreSQL 쓰기 | 문서·청크를 쓰고 ParsingMeta에 `gold_version`을 기록 | 컨테이너 | `pipeline/load/pgvector_load.py` | `_load_src()` → `_mark_loaded()` |
+| 39 | load | PostgreSQL 쓰기 | 문서·청크를 쓰고 `doc`에 처리 기록(`--silver publish/silver.jsonl`의 값 + `gold_version`·`loaded_at`)을 함께 씀 | 컨테이너 | `pipeline/load/pgvector_load.py` | `load()` → `_load_src()` |
 | 40 | — | 문서 임시 폴더 삭제 | 어느 길이든 문서 끝에 `_docflow/<순번>`(`prepared/` 포함)을 지움. 게시·구조화가 시간 초과(15분·30분)여도 컨테이너 안 그 프로세스는 끄지 않음(11행 파싱만 끔) | 호스트 | `deploy/host/scripts/run_pipeline.py` | `drop_temp()` → `_wipe()` |
 
 PC에서는 `python -m pipeline.cli parse`를 바로 부른다 — 12행(`parse_module()`)으로 들어가 13행 엔진 구성 검사 뒤, `--source`를 주면 4~8행의 `stage_batch()`를 같은 명령 안에서 돌리고 14행부터 같은 함수로 간다(§2-2). 검색 MCP의 `parse_document`는 §1-2.
@@ -134,7 +134,7 @@ sequenceDiagram
     R->>R: configure() — settings.yaml 읽기, 잠금 batch_progress/run_pipeline.lock
     R->>C: docker exec … python -m pipeline.cli show-stack (엔진 구성 확인)
     R->>C: python -m pipeline.extract.candidate_pick list (대상 목록 → _docflow/targets.json)
-    C->>E: AI.FileStorageMap 목록(파일 크기 순) · AI.ParsingMeta 끝난 문서(--skip-done) · FAQ 상태
+    C->>E: AI.FileStorageMap 목록(파일 크기 순) · FAQ 상태 (끝난 문서는 PG gold doc — --skip-done)
     loop 문서마다 (스레드)
         R->>C: python -m pipeline.extract.candidate_ready stage (받기 → 중복 → 거르기)
         R->>C: python3 pipeline/extract/doc_lane_group.py 파일 이름 크기 (레인 분류 — doc_lane_group(), extract.classify 행)
@@ -172,13 +172,13 @@ flowchart TD
 | 시작 판정 | `deploy/host/scripts/nightly_batch.sh` | `NIGHTLY_TIME`·`NIGHTLY_MAX_DOCS`·`NIGHTLY_DEADLINE`(`ops.nightly.*`)이 다 있고 지금이 시작 5분 안일 때만 `run_pipeline.py`를 부름. `parse`·`publish` 1회 실행은 `pipe_exec.sh` | 서버 `settings.yaml` → 셸 변수 |
 | 설정 읽기 | `deploy.host.scripts.run_pipeline.configure()`·`deploy.host.scripts.run_pipeline.read_settings()` | 필수 칸(`SETTINGS_REQUIRED`) 확인, `run_env`가 dev·prd가 아니면 거부, 작업 폴더·결과 폴더·컨테이너 명령을 정함 | `settings.yaml` → 전역 값 |
 | 엔진 구성 확인 | `deploy.host.scripts.run_pipeline.stack_check()` | 컨테이너 안 `python -m pipeline.cli show-stack` | — |
-| 대상 고르기 | `deploy.host.scripts.run_pipeline.pick_targets()` → 컨테이너 `python -m pipeline.extract.candidate_pick list`(`pipeline.extract.candidate_pick.list_targets()`) | `AI.FileStorageMap`의 모든 문서 목록(파일 크기 순, 크기 없는 행 뺌 — `--filter <키워드>`를 주면 이름 조건으로 좁힘), `--start-offset`(기본 0)·`--limit`·`--seqs`, `--skip-done`이면 ParsingMeta에 끝난 문서(`ok`·`partial`은 `gold_version`도 있어야, `skipped_dup` — `pipeline.extract.candidate_pick.done_keys()` 하나)와 영구 건너뜀 문서(`applog.skip_doc_info` — `pipeline.extract.skip_docs.skipped_keys()`)를 뺌, FAQ 교체가 필요하면 FAQ를 앞에(교체를 마친 키 `<결과 폴더>/_faq_seen.txt`), 앞 `--max-docs`개. 러너는 목록 파일만 읽는다 | EDW → `_docflow/targets.json`(`total`·`start`·`docs`[`seq`·`id`·`s3_key`·`original_filename`·`file_size`]) |
+| 대상 고르기 | `deploy.host.scripts.run_pipeline.pick_targets()` → 컨테이너 `python -m pipeline.extract.candidate_pick list`(`pipeline.extract.candidate_pick.list_targets()`) | `AI.FileStorageMap`의 모든 문서 목록(파일 크기 순, 크기 없는 행 뺌 — `--filter <키워드>`를 주면 이름 조건으로 좁힘), `--start-offset`(기본 0)·`--limit`·`--seqs`, `--skip-done`이면 끝난 문서(원천 스키마 어디든 gold `doc` 행이 있는 원본 키 — `pipeline.extract.candidate_pick.done_keys()` → `pipeline.shared.gold_docs.done_keys()`)와 영구 뺌 문서(`applog.except_doc_info` `skip` — `pipeline.shared.except_docs.skipped_keys()`)를 뺌, FAQ 교체가 필요하면 FAQ를 앞에(교체를 마친 키 `<결과 폴더>/_faq_seen.txt`), 앞 `--max-docs`개. 러너는 목록 파일만 읽는다 | EDW → `_docflow/targets.json`(`total`·`start`·`docs`[`seq`·`id`·`s3_key`·`original_filename`·`file_size`]) |
 | 받기·중복·거르기 | `deploy.host.scripts.run_pipeline.downloader()` → `deploy.host.scripts.run_pipeline.stage_one()` → 컨테이너 `python -m pipeline.extract.candidate_ready stage`(`pipeline.extract.candidate_ready.stage_batch()`) | 문서 위치 csv(`_docflow/<seq>/batch.csv`)를 쓰고 원본을 `<결과 폴더>/_staging/<sha1>.bin`으로 한 번 받음(옆 `<sha1>.etag`가 지금 ETag와 같으면 다시 안 받음) → 문서 폴더 `_source_files/`에 링크 → 중복 확인 → 거르기·`prepared/`. 파일 1건마다 `pipeline.extract.candidate_ready.download()`가 `applog.pipe_event`에 `extract.download` 행(`head_ms`·`download_ms`·`mbps`·`lock_wait_ms`, 실패는 `external`)을 남긴다. 받기에 실패하면 그 문서는 파싱 실패로 끝난다 | Object Storage → `_staging/` → `prepared/`, `parse/_source/only.txt` |
 | 레인 분류 | `deploy.host.scripts.run_pipeline.classify_doc()` → 컨테이너 `python3 pipeline/extract/doc_lane_group.py <파일> <원본 이름> <크기>` → `pipeline.extract.doc_lane_group.doc_lane_group()` | 규칙은 `doc_lane_group()` 하나에 있다: 글자 형식 light · pptx·ppt vlm · pdf·오피스는 내용 검사(PDF 첫 3쪽 글자 수로 스캔, 오피스 zip 내장 그림 수·용량, 검사 실패) → heavy면 vlm, 아니면 크기 기준으로 medium/light · 그 밖 형식 vlm([ops.md#rn-01](../prd/ops.md#rn-01)). `classify_doc()`은 답의 마지막 줄만 읽고(없으면 vlm), 결과를 `batch_progress/docflow_class.json`(s3_key별)에 캐시. 원본 이름을 받은 `pipeline.extract.doc_lane_group.main()`은 판별 1건을 `extract.classify` 행(`doc_id` = 원본 이름, `metrics.group`, 파일이 없으면 fail)으로 남기고(기록이 실패해도 그룹은 같음), `classify_doc()`은 `batch_progress`의 classify 기록에 `sec`(분류 전체)·`probe_sec`(컨테이너 호출)을 적는다 | 원본 → 레인 |
 | 파싱 | `deploy.host.scripts.run_pipeline.lane_worker()` → `deploy.host.scripts.run_pipeline.parse_one()` → `deploy.host.scripts.run_pipeline.parse_cmd()` | 컨테이너 안 단계별 함수는 §1-1 표 12~27행. `pipeline.cli parse --staged`를 문서 폴더 `_docflow/<seq>`로 실행. 문서 폴더 칸(`PIPE_OUT_ROOT`·`DOC_DIR_PREPARED`·`PARSE_IMAGES_ROOT`·`PARSE_RAW_ROOT`) 다음 공통 `--set`(`PARSE_SET`): `VLM_MAX_CONCURRENCY=8`, `VLM_CONCURRENCY=8`, `VLM_FIGURES_MAX=10`, `PARSE_POST=supsub,charts,figures,context,attachments`, `RAPIDOCR_PAGE_WORKERS=2`, `OCR_THREADS=1`, `PIPE_PROCS=4`, `PARSE_REP_SELECT=first`, `PARSE_QA_LIGHT=1`. vlm 레인은 `VLM_MAX_CONCURRENCY=6`·`VLM_CONCURRENCY=6`·`PARSE_POST`에 `vlm_page` 추가·`VLM_PAGE_MAX=`(빈 값 = 쪽 수 제한 없음), 끝에 `CPU_MAX_LOAD=<게이트>`(light 레인은 9). 쪽 해상도는 덮지 않음(`extract.page_render_dpi` 그대로) | 원본 → `_docflow/<seq>/parse/_rep/` |
-| 게시 | `deploy.host.scripts.run_pipeline.publish_one()` → `deploy.host.scripts.run_pipeline.publish_cmd()` | `pipeline.load.publish_parse_result --out <문서 폴더> --source-system FileStorageMap --apply` | `_rep` → Object Storage + ParsingMeta |
+| 게시 | `deploy.host.scripts.run_pipeline.publish_one()` → `deploy.host.scripts.run_pipeline.publish_cmd()` | `pipeline.load.publish_parse_result --out <문서 폴더> --source-system FileStorageMap --apply` | `_rep` → Object Storage + `publish/silver.jsonl` |
 | 원본 삭제 | `deploy.host.scripts.run_pipeline.drop_original()` | 게시 성공 뒤에만 `_staging/<sha1>.bin`과 `_source_files/`를 지움 | — |
-| gold | `deploy.host.scripts.run_pipeline.gold_one()` → `deploy.host.scripts.run_pipeline.struct_cmd()` | `gold_bundle --parse-dir … --out …/bundle` 다음 `pgvector_load load --bundle … --rep-dir …/parse/_rep`(`EMBED_CONCURRENCY=6` 등) | `_rep` → 묶음 → PG |
+| gold | `deploy.host.scripts.run_pipeline.gold_one()` → `deploy.host.scripts.run_pipeline.struct_cmd()` | `gold_bundle --parse-dir … --out …/bundle` 다음 `pgvector_load load --bundle … --rep-dir …/parse/_rep --silver …/publish/silver.jsonl`(`EMBED_CONCURRENCY=6` 등) | `_rep` → 묶음 → PG |
 | 정리 | `deploy.host.scripts.run_pipeline.drop_temp()`·`deploy.host.scripts.run_pipeline.sweep_cmd()` | 문서 임시 폴더 삭제. 파싱 실패·시간 초과면 그 문서 표지(`RUN_PIPELINE_DOC`)를 가진 컨테이너 안 프로세스를 끔 | — |
 | MCP 양보 | `deploy.host.scripts.run_pipeline._mcp_pause_monitor()`·`deploy.host.scripts.run_pipeline.mcp_busy()` | `_mcp_parse/jobs/`가 30초 안에 바뀌면 medium 전담 워커가 쉼 | — |
 
@@ -197,7 +197,7 @@ PC에서는 `run_pipeline.py`를 돌리지 않는다(운영 EDW·Object Storage�
 | 적재 | `python -m pipeline.load.pgvector_load load --bundle …` | §5-2 |
 | 검색 | `python -m mcp_server.cli.search_ask ask --source CRMS --q "…"` 또는 `mcp_server.main` | §6 |
 
-게시(`publish_parse_result`)는 PC(`run_env: local`)에서 `dev.local.local_publish_dir`(비우면 `valid_env/object_storage/Parsing_Result` — 로컬 폴더를 가짜 Object Storage로)와 `dev.local.local_edw_sqlite_file`(`RDB_SQLITE` — 비우면 `valid_env/edw/edw_copy.sqlite`, 없으면 `edw.sqlite`를 복사)로 시험한다. local은 서버 전용 칸(EDW·Object Storage·게시 버킷)을 비우고 경고만 한다(§5-1).
+게시(`publish_parse_result`)는 PC(`run_env: local`)에서 `dev.local.local_publish_dir`(비우면 `valid_env/object_storage/Parsing_Result` — 로컬 폴더를 가짜 Object Storage로)로 시험한다. local은 서버 전용 칸(EDW·Object Storage·게시 버킷)을 비우고 경고만 한다(§5-1).
 
 ---
 
@@ -211,7 +211,7 @@ PC에서는 `run_pipeline.py`를 돌리지 않는다(운영 EDW·Object Storage�
 ```mermaid
 flowchart TD
     S0["pipeline.cli.parse_module: _stack() → pipeline.transform.parse.engine_check.resolve() 엔진 구성 검사"]
-    S1["pipeline.extract.candidate_pick.done_keys · rdb_pick: EDW ParsingMeta에 끝난 문서는 받기 전에 뺌"]
+    S1["pipeline.extract.candidate_pick.done_keys · rdb_pick: gold doc에 끝난 문서는 받기 전에 뺌"]
     S2["pipeline.extract.candidate_ready.resolve: 폴더면 그대로, rdb:csv면 Object Storage에서 받기"]
     S3["pipeline.extract.deduplication.run_folder: 내용 SHA-256이 같은 파일은 하나만 keep"]
     S4["pipeline.extract.filter_and_rotate.main: DRM·암호·미지원 거름, 회전(기본 꺼짐), prepared로 복사"]
@@ -224,7 +224,7 @@ flowchart TD
 | 단계 | 파일·함수 | 하는 일 | 입력 → 출력 |
 |---|---|---|---|
 | 엔진 구성 검사 | `pipeline.parse_steps.stack()` → `pipeline.transform.parse.engine_check.resolve()` · `pipeline.transform.parse.engines.registry.installed()` | `resources/config/pipeline_stack.json`을 읽고, 등록부에 없거나 설치 안 된 엔진이 있으면 종료 2 | 구성 파일 → 사전(`pipeline.config.stack()`) |
-| 대상 고르기 | `pipeline.extract.candidate_pick.done_keys()`·`pipeline.extract.candidate_pick.rdb_pick()` → `common/store/parsing_meta_db.py` | ParsingMeta에서 `ok`·`partial` 문서 키를 한 번 읽어 받기 전에 뺌(rdb는 s3_key, 하위 폴더는 상대 경로, 평평한 폴더는 이름). 서버에서 못 읽으면 종료 4(전체 재파싱 방지). 처리 기록(`processed.jsonl`)에 있는 판·압축·처리 엔진 없는 형식도 뺌 | EDW·문서 위치 csv → 받을 목록 |
+| 대상 고르기 | `pipeline.extract.candidate_pick.done_keys()`·`pipeline.extract.candidate_pick.rdb_pick()` → `pipeline/shared/gold_docs.py` | gold `doc` 행이 있는 원본 키를 한 번 읽어 받기 전에 뺌(rdb는 s3_key, 하위 폴더는 상대 경로, 평평한 폴더는 이름). 서버에서 PG를 못 읽으면 종료 4(전체 재파싱 방지). 처리 기록(`processed.jsonl`)에 있는 판·압축·처리 엔진 없는 형식도 뺌 | PG·문서 위치 csv → 받을 목록 |
 | 원본 가져오기 | `pipeline.extract.candidate_ready.resolve()` | 폴더: 파일 목록 그대로. `rdb:csv:<경로>`: csv의 `AI.FileStorageMap` 다섯 칸(id·s3_key·original_filename·file_size·content_version_id)으로 Object Storage에서 받음(`extract.source.source_staging_dir` 폴더에 한 번 받고 문서 폴더에는 링크, 같은 크기 파일이 있으면 다시 안 받음, `extract.source.source_fetch_threads` 병렬). 다른 원천의 같은 내용 파일도 따로 받는다(원천마다 독립) | csv → `<out>/_source_files/`, `parse/_source/manifest.jsonl`·`selected.txt` |
 | 중복 확인 | `pipeline.extract.deduplication.run_folder()` | 파일 내용 SHA-256이 같으면 대표 하나만 keep(지우지 않음, 대표 = 사본 표시 없는 이름 → 최신 → 큰 파일). 받기(`candidate_ready._dedup`)가 같은 프로세스에서 부르고, sha256은 받기가 manifest에 남긴 값(`pipeline.shared.srcsha.sha_of`). 문서 1건이면 해시만 돌려주고 아무것도 쓰지 않음 | 원본 폴더 → `dedup/keep.txt`·`groups.csv`·`report.md`·`fingerprints.jsonl` |
 | 준비 | `pipeline.extract.filter_and_rotate.main()` | 머리 바이트로 DRM·OLE 암호·압축 등 미지원·열기 암호 PDF를 거르고 기록, 회전은 `extract.prepare.rotate_pages`(`PREPARE_ROTATE`, 기본 꺼짐)일 때만(`--no-scan-rotate`면 이미지 PDF는 회전 안 함 — run_pipeline `ops.run_pipeline.parse.batch_rotate_scans`) RapidOCR 점수로 0·90·180·270도 중 고름(`pipeline.extract.filter_and_rotate.best_angle()`), 나머지는 복사(`pipeline.extract.filter_and_rotate.place()`). 형식 변환은 하지 않는다 | 원본 → `prepared/`, `prepared/rotation.csv`(회전 전 `orig_sha256`), `prepared/_records/skipped.{csv,jsonl}` |
@@ -245,7 +245,7 @@ flowchart TD
 | 받은 원본 | `<결과 폴더>/_staging/`(`extract.source.source_staging_dir`), 문서 폴더 `_source_files/`는 링크 | staging 파일 이름 = sha1(버킷 + s3_key). 대표 결과가 나오면 `pipeline.extract.candidate_ready.finish()`가 링크를 지우고, staging 원본은 게시 뒤 `drop_original()`이 지움 |
 | 원본 목록 | `parse/_source/manifest.jsonl`·`processed.jsonl` | `processed.jsonl`의 (key, ETag/증분값)이 같으면 다시 안 받음 |
 | 중복 판정 | `dedup/keep.txt` | 파일 내용 SHA-256 |
-| 끝난 문서 판정 | (EDW `AI.ParsingMeta`) | `parse_status`가 `ok`·`partial`이면 다시 파싱 안 함 |
+| 끝난 문서 판정 | (PG 원천 스키마 `doc`) | 그 원본 키의 `doc` 행이 있으면 다시 파싱 안 함 |
 | 준비본 | `prepared/`, `rotation.csv`, `_records/skipped.*` | 원본 수정 시각이 같고 회전 기록이 있으면 다시 안 함 |
 | 엔진 결과 | `parse/<엔진>/<문서>.json` | **재사용 없음** — 실행마다 요청한 문서×엔진을 늘 다시 돈다(같은 내용 파일은 받은 뒤 중복 제외에서 이미 하나만 남김). `p0_key`(원본 sha + 엔진 판 + 엔진 코드 지문)는 출처 기록용 |
 | 실행 기록 | `parse/runs.jsonl` | 이번 실행 기록만(시간·오류·`p0_key`·`p0_code`·`run_id`) |
@@ -383,7 +383,7 @@ run_pipeline 경로에서는 `PARSE_RAW_ROOT`가 문서 폴더(`_docflow/<seq>/p
 
 ## 5. load — silver 게시와 gold 적재
 
-### 5-1. silver 게시 — Object Storage + EDW `AI.ParsingMeta`
+### 5-1. silver 게시 — Object Storage + 처리 기록 파일
 
 ```mermaid
 flowchart TD
@@ -392,7 +392,7 @@ flowchart TD
     C["check_bucket_overlap: 게시 버킷 = 원천 버킷이면 거부"]
     D["publish_parse_result.apply: render_md(_rep) → rep.md + raw_artifacts"]
     E["Object Storage: 접두/source_system/원본 키/parse_date/rep.md"]
-    F["EDW AI.ParsingMeta INSERT (parsing_meta_db.py)"]
+    F["publish/silver.jsonl (올린 문서마다 한 줄 — 적재가 gold doc 칸으로)"]
     G["publish/excluded_날짜.md (DRM·실패 문서)"]
     A --> B --> C --> D --> E
     D --> F
@@ -401,11 +401,11 @@ flowchart TD
 
 | 단계 | 파일·함수 | 하는 일 | 입력 → 출력 |
 |---|---|---|---|
-| 진입 | `pipeline.load.publish_parse_result.main()` → `pipeline.load.publish_parse_result.run()` | 입력 모으기, dry-run이면 표만, `--apply`면 업로드·EDW 쓰기 | `<out>/parse/…` → 결과 표 |
+| 진입 | `pipeline.load.publish_parse_result.main()` → `pipeline.load.publish_parse_result.run()` | 입력 모으기, dry-run이면 표만, `--apply`면 업로드·처리 기록 파일 쓰기 | `<out>/parse/…` → 결과 표 |
 | 계획 | `pipeline.load.publish_parse_result.plan()`·`pipeline.load.publish_parse_result.status_of()` | 문서마다 겹침 키(source_system, 원본 전체 키)·상태·올릴지 여부. 원본 sha는 지우기 전 manifest에 남긴 값 | → 게시 행 |
-| 올리기 | `pipeline.load.publish_parse_result.apply()`·`pipeline.load.publish_parse_result.render_md()`·`pipeline.load.publish_parse_result.raw_artifacts()`·`pipeline.load.publish_parse_result.rep_md_key()` (버킷 겹침 검사 `pipeline.load.publish_parse_result.check_bucket_overlap()`) | 대표 결과를 마크다운으로(본문 + 끝에 못 넣은 표), 같은 날짜 폴더에 엔진별 원결과·메타도 함께. EDW에 키(source_system, 원본 전체 키)가 이미 있는 문서는 올리지 않음(`--reparse` 목록만 새 날짜 폴더). 결과 키는 원천 이름을 한 번만(원본 키가 이미 원천 이름으로 시작하면 덧붙이지 않음). 원본 파일은 올리지 않음 | → Object Storage |
-| 기록 | `common/store/parsing_meta_db.py` | `AI.ParsingMeta` INSERT만(UPDATE 없음), 쓰기 계정. DDL은 실행하지 않음 | → EDW |
-| 접속 | `common/store/objectstore.py`·`common/store/mssql.py` | S3 호환 Object Storage(boto3)·SQL Server 접속, PC 가짜 EDW sqlite | — |
+| 올리기 | `pipeline.load.publish_parse_result.apply()`·`pipeline.load.publish_parse_result.render_md()`·`pipeline.load.publish_parse_result.raw_artifacts()`·`pipeline.load.publish_parse_result.rep_md_key()` (버킷 겹침 검사 `pipeline.load.publish_parse_result.check_bucket_overlap()`) | 대표 결과를 마크다운으로(본문 + 끝에 못 넣은 표), 같은 날짜 폴더에 엔진별 원결과·메타도 함께. gold에 이미 끝난 문서(`pipeline.shared.gold_docs.done_keys()`)는 올리지 않음(`--reparse` 목록만 새 날짜 폴더). 결과 키는 원천 이름을 한 번만(원본 키가 이미 원천 이름으로 시작하면 덧붙이지 않음). 원본 파일은 올리지 않음 | → Object Storage |
+| 기록 | `pipeline.load.publish_parse_result.apply()` | 올린 문서마다 `sha256`·`silver_bucket`·`silver_key`(대표 .md 객체)·`engines`·`parse_status`·`silver_version`·`parsed_at`(올린 시각, KST) 한 줄 | → `<out>/publish/silver.jsonl` |
+| 접속 | `common/store/objectstore.py` | S3 호환 Object Storage(boto3) 접속 | — |
 
 게시 설정(서버는 `settings.yaml`의 `required` 묶음, PC는 `dev.local` 묶음):
 
@@ -414,13 +414,10 @@ flowchart TD
 | `required.publish.publish_bucket`(`PM_BUCKET`) | 게시용 Object Storage 버킷 이름(원천 버킷과 다르게 — 검사는 없음) | 쓰지 않음 — `dev.local.local_publish_dir` 폴더(비우면 `valid_env/object_storage/Parsing_Result`) |
 | `required.publish.publish_prefix`(`PM_PREFIX`) | 버킷 안 결과 경로 접두 | 같음 |
 | `required.object_storage.*`(`object_storage_endpoint`·`object_storage_access_key`·`object_storage_secret_key`) · `common.connections.object_storage.*`(`object_storage_region`·`object_storage_verify_tls` — 기본값 있음) | S3 호환 접속 | 쓰지 않음(적혀 있어도 비움) |
-| `required.edw.parsing_meta_table`(`PM_TABLE`) | 비우면 `AI.ParsingMeta` | 비움 |
-| `required.edw.edw_host`·`edw_port`·`edw_database`·`edw_write_user`·`edw_write_password` | ParsingMeta INSERT용 EDW 접속 — 쓰기 계정 필수(비우면 게시 거부, 읽기 계정으로 대신하지 않음) | 쓰지 않음(적혀 있어도 비움) |
-| `dev.local.local_edw_sqlite_file`(`RDB_SQLITE`) | 비움(서버에 있으면 실패) | 가짜 EDW sqlite 파일 하나(모든 표) — 비우면 `valid_env/edw/edw_copy.sqlite` |
 
 `--apply`인데 `required.publish.publish_bucket`이 비면 멈춘다(dry-run은 미리보기 값으로 표만 냄).
 
-요건: [load.md#pl-09](../prd/load.md#pl-09) · [load.md#pl-26](../prd/load.md#pl-26). 표 정의: [db_schema.md](db_schema.md), DDL `docs/operations/parsing_meta_mssql.sql`.
+요건: [load.md#pl-09](../prd/load.md#pl-09) · [load.md#pl-26](../prd/load.md#pl-26). 처리 기록 칸 정의: [db_schema.md](db_schema.md).
 
 ### 5-2. gold 적재 — 묶음 → PostgreSQL(pgvector)
 
@@ -430,21 +427,19 @@ sequenceDiagram
     participant M as edw_doc_meta.py
     participant K as doc_classify.py
     participant P as PostgreSQL (원천별 스키마 5벌)
-    participant E as EDW AI.ParsingMeta
     L->>L: require_vectors · require_same_model (임베딩 없음·모델 다름이면 거부)
     L->>M: fetch(file_path 목록) — edw_chain.yaml 사슬로 고객·등록 시각·attrs
     L->>K: SFDC·LAS 문서 doc_class (llm.chat, 이미 라벨 있으면 그대로)
-    L->>P: 한 트랜잭션 — 같은 file_path는 건너뜀(--replace면 지우고 다시)
-    L->>E: _mark_loaded — loaded_at · gold_version (실패해도 적재는 유지)
+    L->>P: 한 트랜잭션 — doc·chunk + 처리 기록 칸(silver.jsonl · gold_version · loaded_at), 같은 file_path는 건너뜀(silver.jsonl에 줄이 있으면 처리 기록 칸만 고침 · --replace면 지우고 다시)
 ```
 
 | 단계 | 파일·함수 | 하는 일 | 입력 → 출력 |
 |---|---|---|---|
 | 진입·검사 | `pipeline.load.pgvector_load.load()` | 판 기록(`alembic_version`) 확인, 임베딩 없는 묶음·다른 모델 묶음 거부 | `bundle/` → — |
 | EDW 메타 | `pipeline.load.edw_doc_meta.fetch()` · `common/store/edw_chain.py` | 사슬 파일(`ops.paths.edw_chain_file` — 비우면 `resources/config/edw_chain.yaml`)을 따라 원본 경로마다 `client_edw`·`created_at`·원천 메타(`attrs`). EDW를 못 열면 메타를 비운 채 계속 | EDW(읽기 계정 `required.edw.edw_read_user`·`edw_read_password`, PC는 `dev.local.local_edw_sqlite_file`) → 문서 칸 |
-| 분류 | `pipeline.load.doc_classify.apply()` → `pipeline.load.doc_classify.classify_one()` | SFDC·LAS 문서에 `doc_class`(지시서 `resources/prompts/pipeline/classify_sfdc`·`classify_las`). 실패한 문서는 이번에 적재 안 함 → 다음 실행이 다시 고름 | `_rep` 본문 → 라벨, `classify_audit.jsonl` |
+| 분류 | `pipeline.load.doc_classify.apply()` → `pipeline.load.doc_classify.classify_one()` | SFDC·LAS 문서에 `doc_class`(지시서 `resources/prompts/pipeline/classify_sfdc`·`classify_las`). 실패한 문서는 이번에 적재 안 함(`applog.except_doc_info` `error`) → 다음 실행이 다시 고름 | `_rep` 본문 → 라벨, `classify_audit.jsonl` |
 | 쓰기 | `pipeline.load.pgvector_load._load_src()` | 문서의 source_system으로 원천 스키마(SFDC·CRMS·LAS·FAQ·other)를 고르고 `doc`·`chunk`·용어 행. 묶음에 없는 문서는 지우지 않음 | → PG |
-| 기록 | `pipeline.load.pgvector_load._mark_loaded()` → `common.store.parsing_meta_db.mark_loaded()` | `gold_version` = `<VERSION>+m<마스터 해시 앞 8자>` | → EDW |
+| 기록 | `pipeline.load.pgvector_load.load()`(`--silver <문서 폴더>/publish/silver.jsonl`) → `pipeline.load.pgvector_load._load_src()` | `doc`에 게시 기록(원본 키 `source_key` = `file_path`로 이음 — 이미 있는 행은 그 칸만 고침, `--replace`인데 줄이 없으면 옛 값 유지, 새 문서에 줄이 없으면 NULL)·`gold_version`(`<VERSION>+m<마스터 해시 앞 8자>`)·`loaded_at`(적재 시각) | → PG `doc` |
 | FAQ 교체 | `python -m pipeline.load.pgvector_load faq-sync [--reset]` | 새 FAQ가 오면 gold FAQ를 통째로 비움(`candidate_pick list`의 `faq_first()`가 부름) | — |
 | 접속 | `common/store/pg.py`·`common/store/pg_standin.py` | PG 연결, PC 시험용 SQLite 대역 | — |
 
@@ -454,8 +449,8 @@ sequenceDiagram
 
 | 명령 | 파일 | 하는 일 |
 |---|---|---|
-| `python -m common.store.db.dbtool up --target all --schema <이름> --bundle <묶음>` | `common/store/db/dbtool.py` · `common/store/db/migrations/versions/*` | Alembic으로 검색(`0001_search_base`~`0005_doc_attrs`)·`applog`·`master` 표를 만듦. 실행 중 DDL은 하지 않는다 |
-| `dbtool master load` | `common/store/master.py` | `resources/vocab/glossary/*.csv` → `<PG_SCHEMA>_master` 표 |
+| `python -m common.store.db.dbtool up --target all --schema <이름> --bundle <묶음>` | `common/store/db/dbtool.py` · `common/store/db/migrations/versions/*` | Alembic으로 검색(`0001_search_base`~`0006_doc_record`)·`applog`·`master` 표를 만듦. 실행 중 DDL은 하지 않는다 |
+| `dbtool master load` | `common/store/master.py` | `resources/vocab/glossary/glossary.csv` → `<PG_SCHEMA>_master.glossary` 표 |
 | `pgvector_load deploy` | `pipeline.load.pgvector_load.deploy()` | vector 확장·스키마 주인·차원 확인 뒤 `dbtool.upgrade("search", …)` |
 | `dbtool check --target all` | `common/store/db/dbtool.py` | DB 판이 코드의 끝 판인지 |
 
@@ -464,10 +459,10 @@ sequenceDiagram
 | 산출물 | 자리 | 다시 쓰는 기준 |
 |---|---|---|
 | 게시 마크다운·원결과 | Object Storage `<required.publish.publish_prefix>/<source_system>/<원본 키>/<parse_date>/rep.md` 외 | 같은 키가 있으면 건너뜀(덮지 않음) |
-| 게시 기록 | EDW `AI.ParsingMeta` | 겹침 키(source_system, source_key)가 있으면 INSERT 안 함 |
+| 게시 기록 | `<out>/publish/silver.jsonl` | 매 게시(올린 문서만) — 적재가 `doc` 칸으로 옮김 |
 | 제외 보고 | `<out>/publish/excluded_<날짜>.md` | 매 실행 |
 | gold 행 | PG 원천별 스키마 `doc`·`chunk`… | `file_path`가 어느 원천 스키마에든 있으면 건너뜀(`--replace`면 다시) |
-| 적재 기록 | EDW `ParsingMeta.loaded_at`·`gold_version` | `gold_version`이 비면 다음 `--skip-done`이 다시 고름 |
+| 처리 기록 | PG `doc`의 `sha256`·`silver_bucket`·`silver_key`·`engines`·`parse_status`·`silver_version`·`gold_version`·`parsed_at`·`loaded_at` | `doc` 행이 있으면 다음 `--skip-done`이 고르지 않음 |
 
 ---
 
@@ -484,7 +479,7 @@ flowchart TD
     P["pgsearch.py: 벡터(HNSW) + BM25 + 드문 ID → RRF"]
     Q["common/ai/embed.py 질문 임베딩 (query_cache.sqlite)"]
     O["evidence_shape.py → schemas/evidence.py 근거 13칸"]
-    FT["fulltext_tool.py → services/fulltext_svc.py: ParsingMeta 위치 → Object Storage"]
+    FT["fulltext_tool.py → services/fulltext_svc.py: gold doc의 silver 위치 → Object Storage"]
     PD["parse_tool.py → parse_proxy.py → mcp-data-parsing 의 pipeline/run_mcp_parsing.py"]
     M --> S --> H --> R --> P --> O
     R --> Q
@@ -493,7 +488,7 @@ flowchart TD
 ```
 
 - `search`: 거르기에 맞는 문서 범위 안에서만 하이브리드 검색, 결과를 근거 칸으로 다듬음.
-- `list_doc_fulltext`·`get_doc_fulltext`: 대표 결과 위치는 PG가 아니라 EDW ParsingMeta에서 그때 읽고, 서명된 `sfid`로 Object Storage에서 받음.
+- `list_doc_fulltext`·`get_doc_fulltext`: 대표 결과 위치·`doc_key`·파싱 시각은 gold `doc` 칸(`silver_bucket`·`silver_key`·`sha256`·`parsed_at`)에서 읽고, 서명된 `sfid`로 Object Storage에서 받음.
 - `parse_document`: 파일 하나를 `mcp-data-parsing` 컨테이너의 작업 서비스(`127.0.0.1:8766`)에 넘김 → 같은 `filter_and_rotate` → `parse_engines` → `parse_scoring` → `doc_represent`(사슬 `pipeline.parse_steps`)를 (`pipeline.run_mcp_parsing`가) `output/_mcp_parse/`에서 돌림(구조화·적재 없음).
 - `query_edw`·`edw_meta`: EDW 읽기 전용 질의·카탈로그(`services/edw_query.py`·`edw_meta.py`).
 - 호출마다 `applog.mcp_log` 한 행(`services/call_log.py`).
@@ -526,7 +521,7 @@ flowchart TD
 | 그림·첨부 P0 경로 | `pipeline.shared.raw_cache.raw_vlm_path()`·`pipeline.shared.raw_cache.raw_engine_path()` | 이미지 sha·모델·지시서 id · 첨부 sha·엔진@판 | 같으면 다시 안 부름 |
 | 임베딩 캐시 | `pipeline.transform.structure.gold_bundle.embed_all()` | (모델, 본문) | 같으면 API를 다시 안 부름 |
 | LLM 응답 캐시 | `common.ai.llm.cache_key()` | (모델, 메시지, 온도, 최대 토큰, json 모드) | `common.models.llm.llm_response_cache_dir`(기본 `output/eval/llm_cache`) |
-| 끝난 문서 | `common.store.parsing_meta_db.DONE_STATUSES` | ParsingMeta `parse_status`·`gold_version` | 문서 단위로 다시 파싱 안 함(`run_pipeline --skip-done`, `candidate_pick.done_keys`) |
+| 끝난 문서 | `pipeline.shared.gold_docs.done_keys()` | 원천 스키마 `doc` 행의 원본 키(`file_path`) | 문서 단위로 다시 파싱 안 함(`run_pipeline --skip-done`, `candidate_pick.done_keys`) |
 | 중간 캐시 정리 | `pipeline.transform.parse.parse_engines.purge_caches()` | `_reread_p3/_vlm_cache`·`_agent/_vlm_cache`·`signals` | 합계가 `tuning.extract.cache.parse_cache_max_gb`(5GB)를 넘으면 오래된 것부터 지움(parse_engines 시작 때) |
 
 공용·레이어 파일을 고칠 때의 규칙과 지금 기준값은 [CLAUDE.md §4](../../CLAUDE.md)와 [test.md#e2-02](../prd/test.md#e2-02)에 있다.

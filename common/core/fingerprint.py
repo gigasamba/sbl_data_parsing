@@ -64,7 +64,6 @@ EXCLUDED_FILES = (
     "core/meaning.py",  # 유의미 토큰 — parse 내부(대표 선정·QA)·structure 내부(쪽 번호 제거) 각자 전용, 서로 맞출 공유 값이 없음(text.py와 tokens() 이름이 겹치지만 규칙이 다름)
     "store/mssql.py",  # 회사 DB(SQL Server) SQLAlchemy 연결 — 연결 방법만
     "store/objectstore.py",  # Object Storage(S3) 연결 설정
-    "store/parsing_meta_db.py",  # EDW AI.ParsingMeta 메타 저장 — 운영 기록, 핸드오프 내용 아님
     "core/paths.py",  # cli 평가 도구 경로 기본값 + 원자적 파일 쓰기 헬퍼(쓰는 방식만·내용은 안 바꿈)
     "store/pg.py",  # PostgreSQL 연결 설정
     "store/edw_chain.py",  # EDW 조인 사슬 파일 읽기·검사(적재 edw_meta·검색 거르기 이름) — 인계 형식과 무관
@@ -122,7 +121,7 @@ def _semver(text):
 def pipeline_version(root=None):
     """버전 표기(한 곳) — 두 이미지 공통 SemVer, 저장소 루트 VERSION(이미지 /app/deploy/VERSION).
     SemVer 꼴이 아니거나 없으면 env PIPELINE_VERSION → 'unknown'.
-    publish(AI.ParsingMeta.pipeline_version)·실행 보드(run_board)·parse_parallel이 같이 씀."""
+    게시(silver_version)·실행 보드(run_board)·parse_parallel이 같이 씀."""
     import os
 
     base = Path(root) if root else _ROOT

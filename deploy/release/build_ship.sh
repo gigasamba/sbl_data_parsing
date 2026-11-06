@@ -18,11 +18,12 @@ BUILD_ONLY=${BUILD_ONLY:-0}
 [ "$BUILD_ONLY" = 1 ] || TARGET=${TARGET:?TARGET=user@수집서버 를 지정(빌드만 하려면 BUILD_ONLY=1)}
 IMAGE_TARGET=${IMAGE_TARGET:-pipeline}
 case "$IMAGE_TARGET" in
-  pipeline|mcp|pipeline-runtime|mcp-runtime) ;;   # *-runtime = 코드 없는 실행 이미지(개발 서버, 코드 폴더를 /app/deploy에 마운트)
+  pipeline|mcp|pipeline-runtime|mcp-runtime) ;;   # *-runtime = 코드 없는 실행 이미지(개발 서버, 코드 폴더를 APP_CODE_ROOT에 마운트)
   *) echo "[오류] 모르는 IMAGE_TARGET: $IMAGE_TARGET (pipeline·mcp·pipeline-runtime·mcp-runtime)" >&2; exit 2 ;;
 esac
 . deploy/release/image_names.sh   # image_name_of — 타깃 → 이미지 이름(stage_images.sh와 같은 파일)
 APP_VERSION=$(app_version) || exit 2
+APP_CODE_ROOT=$(awk -F'\t' '$1=="image.code_root"{print $4}' deploy/host/scripts/host_settings.tsv)   # 컨테이너 안 코드 자리(settings.IMAGE_PATHS — gen_host_keys.py가 표로 냄)
 VCS_REF=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
 if [ "$VCS_REF" != unknown ] && ! git diff --quiet HEAD -- 2>/dev/null; then VCS_REF="$VCS_REF-dirty"; fi   # 커밋 안 한 변경이 섞인 빌드 표시
 TAG_DEFAULT=0; [ -n "${TAG:-}" ] || TAG_DEFAULT=1
@@ -84,9 +85,9 @@ if [ "$RUNTIME" = 1 ]; then
   # 맨 위 폴더 755 + 모든 항목 모두가 읽기(head로 자르지 않음 — pipefail에서 tar가 SIGPIPE로 실패함)
   bad=$(tar -tvzf - < "$CODE_OUT" | awk 'NR==1 && $1 != "drwxr-xr-x" {print "맨위폴더 " $1} $1 !~ /^.r..r..r/ {print $NF}')
   [ -z "$bad" ] || { echo "[오류] 코드 폴더 묶음 권한 — 컨테이너 사용자 10001이 못 읽음: $bad"; exit 1; }
-  echo "[코드 폴더 묶음] $CODE_OUT ($(du -h "$CODE_OUT" | cut -f1)) — 서버의 새 루트에 코드 폴더로 풂(release-and-patch.md §8 — op-13)"
+  echo "[코드 폴더 묶음] $CODE_OUT ($(du -h "$CODE_OUT" | cut -f1)) — 서버의 벌 폴더(sbl_data_parsing-main-<번호>)로 풂(release-and-patch.md §8 — op-13)"
   export MSYS_NO_PATHCONV=1   # Windows Git Bash가 -v 인자를 바꾸지 않게
-  RUN_ARGS="-v $(cygpath -m "$CODE_DIR" 2>/dev/null || echo "$CODE_DIR"):/app/deploy:ro"
+  RUN_ARGS="-v $(cygpath -m "$CODE_DIR" 2>/dev/null || echo "$CODE_DIR"):$APP_CODE_ROOT:ro"
 fi
 bash deploy/release/selftest_gate.sh $DOCKER run --rm $RUN_ARGS "$TAG" selftest   # 알려진 FAIL 밖 FAIL 0이어야 통과(selftest 종료 코드만 보지 않음)
 $DOCKER run --rm $RUN_ARGS "$TAG" resources
@@ -114,15 +115,15 @@ if [ "$RUNTIME" = 1 ]; then   # 판정용 코드 폴더를 같이 보내 붙임
   rsync --partial "$CODE_OUT" "$TARGET:$REMOTE_DIR/" 2>/dev/null || scp "$CODE_OUT" "$TARGET:$REMOTE_DIR/"
   RCODE="$REMOTE_DIR/code-$APP_VERSION-$VCS_REF"
   ssh "$TARGET" "rm -rf $RCODE && mkdir -p $RCODE && tar -xzf $REMOTE_DIR/$(basename "$CODE_OUT") --no-same-owner -C $RCODE"
-  R_ARGS="-v $RCODE:/app/deploy:ro,z"
+  R_ARGS="-v $RCODE:$APP_CODE_ROOT:ro,z"
 fi
 ssh "$TARGET" "$REMOTE_DOCKER run --rm $R_ARGS $TAG resources"
 bash deploy/release/selftest_gate.sh ssh "$TARGET" "$REMOTE_DOCKER run --rm $R_ARGS $TAG selftest"
 cat <<EOF
 완료: $TAG
 다음(수집 서버):
-  1) 루트 폴더(아무 자리 — 예 /home/dev/)에 코드 zip을 풀고 코드 폴더에서 sudo bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>(op-13)
-  2) <루트>/settings.yaml의 맨 위 required 빈 값을 채움(새 판이면 앞 루트의 settings.yaml·edw_chain.yaml을 복사해 옴)
+  1) 공용 폴더(예 /home/sbl/)에 코드 zip을 풀어 벌 폴더(sbl_data_parsing-main-<번호>)로 두고 그 안에서 sudo bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>(op-13)
+  2) <벌 폴더>/settings.yaml의 맨 위 required 빈 값을 채움(새 판 덮어쓰기면 settings.yaml·edw_chain.yaml·output/은 그대로 둠)
   3) 띄우기·점검: README §5(host_ctl.sh up -d … → host_ctl.sh check)
   압축본 $REMOTE_DIR/$(basename "$OUT") 은 적재 확인 뒤 지워도 됨
 EOF
