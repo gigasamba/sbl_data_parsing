@@ -163,6 +163,23 @@ def test_glossary_same_as_old_csv():
             pass
 
 
+def test_convert_old_csv():
+    """옛 CSV 폴더 → glossary.csv(convert) → 옛 행 모양으로 되돌리면 입력과 같음 · 있는 파일은 덮지 않음 · melt = MELT 표."""
+    assert M.melt(OLD) == [dict(zip(COLS, r)) for r in sorted(MELT, key=lambda r: ("client", "term", "id").index(r[0]))]
+    d = Path(tempfile.mkdtemp())
+    _write_old(d)
+    out = d / "glossary.csv"
+    assert M.convert(d, out) == len(MELT)
+    tables = M.to_tables(M.read_csv(out))
+    for name, cols in M.SHAPES.items():
+        assert tables[name] == [{c: r.get(c, "") for c in cols} for r in OLD[name]], name
+    try:
+        M.convert(d, out)
+        raise AssertionError("있는 파일을 덮음")
+    except SystemExit:
+        pass
+
+
 def test_load_hash_and_transaction():
     d = Path(tempfile.mkdtemp())
     st = _standin(d)

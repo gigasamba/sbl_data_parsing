@@ -214,16 +214,22 @@ id,contract_no,"C-[A-Z]{2,4}-\d{4}-\d{2}",regex,합성 데이터 형식,,
 - 초안 도구 `python -m pipeline.transform.structure.glossary_suggest`·`gen_roster --kind product`·`python -m pipeline.transform.structure.draft_terms --bundle <묶음>`은 `output/` 아래 초안(용어 사전 옛 칸 꼴 — 한 줄 = 개념 하나)만 만든다 — 사람이 확인해 `glossary.csv`의 `term` 줄로 옮긴다.
 
 #### 고객 마스터에서 명부 만들기
-SFDC·EDW 내보내기에서 명부 초안을 만든다. 열 이름만 매핑 파일에 적는다(예제: `resources/vocab/glossary/client_master.example.csv` + `client_master_map.example.json`). 매핑 키 = 명부 칸: `name`(필수 → `canonical_name`) · `aliases`(`;`·`|`) · `client_id`·`name_ko`·`client_type`·`segment`·`country`·`parent_client_id`·`status`·`description`·`updated`(선택). 열 이름은 영문·숫자·`_`만. 같은 고객 여러 줄은 하나로 합친다(별칭은 합치고 다른 칸은 처음 값).
+SFDC·EDW 내보내기에서 `glossary.csv`의 고객(`client`) 줄을 만든다. 열 이름만 매핑 파일에 적는다(예제: `resources/vocab/glossary/client_master.example.csv` + `client_master_map.example.json`). 매핑 키 = 명부 칸: `name`(필수 → `canonical_name`) · `aliases`(`;`·`|`) · `client_id`·`name_ko`·`client_type`·`segment`·`country`·`parent_client_id`·`status`·`description`·`updated`(선택). 열 이름은 영문·숫자·`_`만. 같은 고객 여러 줄은 하나로 합친다(별칭은 합치고 다른 칸은 처음 값).
 내보낸 파일과 매핑 파일을 `<루트>/output/glossary/`에 둔 뒤(컨테이너에서 `/app/output/glossary/`):
 ```bash
 G=/app/output/glossary
 $DOCKER exec data-pipeline python -m pipeline.transform.structure.roster_from_edw --kind client \
   --source csv:$G/client_master.csv --mapping $G/client_master_map.json \
-  --out $G/client_roster.csv          # EDW 표에서 바로: --source rdb:<스키마.표>(읽기 계정)
-$DOCKER exec data-pipeline python -m pipeline.transform.structure.roster_from_edw --check $G/client_roster.csv   # 오류 0 확인
+  --out $G/glossary.csv               # EDW 표에서 바로: --source rdb:<스키마.표>(읽기 계정)
+$DOCKER exec data-pipeline python -m pipeline.transform.structure.roster_from_edw --check $G/glossary.csv   # 오류 0 확인
 ```
-초안은 한 줄 = 고객 하나(옛 명부 칸 꼴)다 — 사람이 확인해 `glossary.csv`의 `client` 줄로 옮긴다(칸 대응: `canonical_name` → `canonical`, `aliases`의 표기마다 `alias` 줄, 다른 칸은 같은 이름의 `variant_kind` 줄 — `parent_client_id`는 `parent`, `description`은 `client_id` 줄의 `description`).
+`--out` 파일이 이미 있으면 고객 줄만 바꾸고 용어·ID 꼴 줄은 그대로 둔다(glossary 꼴이 아닌 파일이면 거부). 먼저 파일을 복사해 두고 바뀐 줄을 비교한 뒤 반영한다.
+
+#### 옛 CSV를 `glossary.csv`로 옮기기
+옛 판의 `client_roster.csv`·`domain_terms.csv`·`id_patterns.csv`가 있는 폴더를 한 번에 옮긴다(같은 대응 — 없는 파일은 건너뜀, 만들 파일이 이미 있으면 거부):
+```bash
+$DOCKER exec data-pipeline python -m common.store.master convert --src /app/output/glossary --out /app/output/glossary/glossary.csv
+```
 
 #### 점검(반영 전)
 ```bash

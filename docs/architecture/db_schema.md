@@ -135,7 +135,7 @@ EDW 표(`AI.FileStorageMap`, 원천 표 SFDC·CRMS·LAS 등)는 서버에서 운
 
 - **해시·판:** 마스터 해시 = 머리글·`row_no` 순서 `glossary` 행의 sha256(16진 64자) — 읽을 때 계산한다(해시를 적어 두는 표 없음). 구조화가 읽은 마스터 해시를 묶음 `meta.json` `master_hash`에 남기고 적재가 gold `doc.gold_version` = `<VERSION>+m<해시 앞 8자>`로 쓴다(`master_hash`가 없는 묶음은 `<VERSION>`만). `silver_version`에는 붙이지 않는다. 마스터 해시는 캐시 열쇠·code_fp에 없다 — 마스터가 바뀌어도 자동 전체 재처리는 없고 `gold_version`으로 추적한다.
 - **읽는 모양:** `common.store.master`가 `glossary` 줄을 원본 값(`kind`·`canonical`)마다 모아 `common.core.terms`가 읽는 행 모양(고객 명부·용어 사전·ID 꼴 — 칸 이름 `common.store.master.SHAPES`)으로 되돌려 넘긴다. 모르는 `kind`·`variant_kind`, 값이 하나인 종류가 두 줄이면 `master load`가 표를 바꾸지 않고 거부한다(읽을 때도 같은 검사).
-- **파일로 남는 것:** `client_master.example.csv`·`client_master_map.example.json`(명부 초안 도구 `gen_roster` 입력·예시) · `client_roster_seed.json`(주요 바이오·제약사 공개 이름 seed — 구조화 `infer_clients`가 파일로 읽음).
+- **파일로 남는 것:** `client_master.example.csv`·`client_master_map.example.json`(명부 도구 `gen_roster` 입력·예시 — 출력은 `glossary.csv` 고객 줄) · `client_roster_seed.json`(주요 바이오·제약사 공개 이름 seed — 구조화 `infer_clients`가 파일로 읽음).
 
 ### master.glossary
 

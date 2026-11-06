@@ -7,7 +7,9 @@ glossary는 melt 꼴(유사값마다 한 줄 — 구분·원본 값·유사값·
 
 import hashlib
 import json
+import re
 import threading
+from pathlib import Path
 
 from common.core.paths import RES_ROOT
 from common.store.db.models.master_tables import COLS, TABLE
@@ -104,16 +106,67 @@ def content_hash(rows):
 
 
 def read_csv(folder=GLOSSARY):
-    """git glossary.csv → [행 사전…]. 머리글이 표 정의와 다르면 거부(칸을 바꾸려면 새 Alembic 판)."""
+    """git glossary.csv(폴더 또는 파일 경로) → [행 사전…]. 머리글이 표 정의와 다르면 거부(칸을 바꾸려면 새 Alembic 판)."""
     import csv
 
     from common.core.terms import _read_text
 
-    rows = list(csv.reader(_read_text(folder / CSV_NAME)[0].splitlines()))
+    path = Path(folder) / CSV_NAME if Path(folder).is_dir() else Path(folder)  # 폴더(glossary.csv) 또는 파일 경로
+    rows = list(csv.reader(_read_text(path)[0].splitlines()))
     head = tuple(h.strip() for h in rows[0])
     if head != COLS:
-        raise SystemExit(f"[master] {CSV_NAME} 머리글이 표와 다름 — 칸을 바꾸려면 새 Alembic 판(master): {head}")
+        raise SystemExit(f"[master] {path.name} 머리글이 표와 다름 — 칸을 바꾸려면 새 Alembic 판(master): {head}")
     return [dict(zip(COLS, [*r, *[""] * len(COLS)][: len(COLS)])) for r in rows[1:] if r]
+
+
+def melt(tables):
+    """옛 행 모양 {옛 표: [행 사전…]} → glossary 행(to_tables의 반대 — 같은 대응). 원본 값 = 정식 이름(고객은 비면 한글 이름)·표준 이름·ID 종류.
+    목록 칸은 `|`(고객 별칭은 `;`도)로 나눠 한 줄씩, 빈 값은 줄을 만들지 않는다. 설명을 가진 종류(head) 줄은 늘 만든다(ID의 정규식은 나누지 않음)."""
+    out = []
+    for kind, (table, name_col, head, desc_col, cols) in KINDS.items():
+        for r in tables.get(table, []):
+            r = {k: (v or "") for k, v in r.items() if k is not None}
+            canon = r.get(name_col, "") or (r.get("name_ko", "") if kind == "client" else "")
+            flags = [r.get(f, "") for f in FLAGS] if kind == "term" else ["", ""]
+            out.append(dict(zip(COLS, (kind, canon, r.get(cols[head], ""), head, r.get(desc_col, ""), *flags))))
+            for vk, col in cols.items():
+                v = r.get(col, "")
+                if vk == head or not v:
+                    continue
+                items = re.split(r"[;|]" if vk == "alias" else r"\|", v) if vk in LISTS else [v]
+                out += [dict(zip(COLS, (kind, canon, x.strip(), vk, "", "", ""))) for x in items if x.strip()]
+    return out
+
+
+def write_csv(rows, path):
+    """glossary 행 → CSV(UTF-8·LF, 머리글 COLS)."""
+    import csv
+    import io
+
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator="\n")
+    w.writerow(COLS)
+    w.writerows([r.get(c) or "" for c in COLS] for r in rows)
+    Path(path).write_text(buf.getvalue(), encoding="utf-8", newline="")
+
+
+def convert(src, out):
+    """옛 마스터 CSV 폴더(client_roster.csv·domain_terms.csv·id_patterns.csv — 없는 파일은 건너뜀) → glossary.csv. 반환: 줄 수.
+    out이 이미 있으면 거부(덮어쓰지 않음) · 되돌려 읽기(to_tables)가 거부하는 내용이면 쓰지 않음."""
+    import csv
+
+    from common.core.terms import _read_text
+
+    out, src = Path(out), Path(src)
+    if out.exists():
+        raise SystemExit(f"[master] {out}가 이미 있음 — 덮어쓰지 않음(다른 이름으로)")
+    have = {n: src / f"{n}.csv" for n in SHAPES if (src / f"{n}.csv").is_file()}
+    if not have:
+        raise SystemExit(f"[master] {src}에 옛 마스터 CSV(client_roster·domain_terms·id_patterns)가 없음")
+    rows = melt({n: list(csv.DictReader(_read_text(f)[0].splitlines())) for n, f in have.items()})
+    to_tables(rows)
+    write_csv(rows, out)
+    return len(rows)
 
 
 def load(db, rows=None):
@@ -189,7 +242,27 @@ def get():
         return m
 
 
+def main(argv=None):
+    """python -m common.store.master convert --src <옛 CSV 폴더> --out <glossary.csv> — 옛 마스터 CSV를 glossary 꼴로(op-17)."""
+    import argparse
+
+    from common.core.console import utf8_stdout
+
+    utf8_stdout()
+    ap = argparse.ArgumentParser(description="옛 마스터 CSV(client_roster·domain_terms·id_patterns) → glossary.csv")
+    ap.add_argument("cmd", choices=["convert"])
+    ap.add_argument("--src", required=True, help="옛 CSV가 있는 폴더")
+    ap.add_argument("--out", required=True, help="만들 glossary.csv 경로(이미 있으면 거부)")
+    a = ap.parse_args(argv)
+    print(f"[master] {convert(a.src, a.out)}줄 → {a.out}")
+    return 0
+
+
 def reset():
     """다시 읽게(검색 서버가 적재 판 바뀜을 볼 때·시험)."""
     with _GOT_LOCK:
         _GOT.clear()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
