@@ -19,7 +19,7 @@ from common.store.db.models import search_tables as ST
 from mcp_server import config as mc
 from mcp_server.schemas import fulltext as FT
 from mcp_server.services.search.search_svc import KST, kst_bound
-from mcp_server.services.search.server_state import _retriever
+from mcp_server.services.search.server_state import _retriever, dev_hint, dev_served
 
 _HEX64 = re.compile(r"[0-9a-f]{64}")
 _REP_FILE = re.compile(r"_(\d{4}-\d{2}-\d{2}_\d{6})\.(md|json)$")  # <stem>_<parse_date>.md|json — publish_parse_result.rep_md_key
@@ -110,33 +110,14 @@ def _rep_files(s3, bucket, folder):
     return (max(dates) if dates else None), {k: (best[k][1] if k in best else None) for k in ("md", "json")}
 
 
-_DEV_STANDIN: dict = {}  # PC 대역 (대역 폴더, DEV 원천 스키마) → 연결(파일 하나 — 부를 때마다 열지 않게, 폴더가 바뀌면 새로)
-
-
 def _pg(src):
-    """원천 스키마 하나의 gold 연결(검색과 같은 연결 — 못 열거나 질의가 실패하면 예외, 호출부가 registry_unavailable로).
-    DEV 원천(dev_<n> — op-17)은 검색기가 없어 other의 연결로 스키마 이름만 바꿔 읽는다."""
-    if src in ST.SOURCES:
-        return _retriever(src).pg
-    other = _retriever("other").pg
-    schema = ST.src_schema(ST.split_schema(other.schema)[0], src)
-    if not getattr(other, "is_standin", False):
-        from mcp_server.services.search.server_state import SchemaView
-
-        return SchemaView(other.pool_obj, schema)
-    from common.store.pg_standin import StandinPG, standin_dir
-
-    key = (str(standin_dir()), schema)
-    if key not in _DEV_STANDIN:
-        _DEV_STANDIN[key] = StandinPG(schema)
-    return _DEV_STANDIN[key]
+    """원천 스키마 하나의 gold 연결(검색과 같은 연결 — 못 열거나 질의가 실패하면 예외, 호출부가 registry_unavailable로)."""
+    return _retriever(src).pg
 
 
 def _sources():
-    """원천 스키마 전부 — 5벌 + DB(PC는 대역 폴더)에 있는 DEV 원천 스키마 `<기준>_dev_<n>`(op-17). 요청마다 한 번(카탈로그 질의 1번)."""
-    other = _pg("other")
-    standin = getattr(other, "is_standin", False)
-    return ST.all_sources(ST.split_schema(other.schema)[0], None if standin else other.q)
+    """원천 스키마 전부 — 5벌 + 지금 검색하는 DEV 원천(server_state.dev_served — op-17)."""
+    return [*ST.SOURCES, *dev_served()]
 
 
 def _folder(key):
@@ -176,7 +157,14 @@ def do_list(
                 conds.append(f"parsed_at {op} %s")
                 vals.append(t.isoformat())
         if source_system and str(source_system).upper().removesuffix("-TEST") not in {s.upper() for s in ST.SOURCES}:
-            raise BadRequest("source_system은 SFDC·CRMS·LAS·FAQ·Other 중 하나(-test 붙어도 됨)")
+            src, found = ST.source_of(source_system), []
+            if ST.is_dev(src):  # DEV-<n> 꼴만 DB를 봄 — 그 원천 스키마가 있을 때만(prd는 늘 없음, op-17)
+                try:
+                    found = dev_served()
+                except Exception:
+                    return {"error": "registry_unavailable"}
+            if src not in found:
+                raise BadRequest("source_system은 SFDC·CRMS·LAS·FAQ·Other 중 하나(-test 붙어도 됨)" + dev_hint(found))
         srcs = [ST.source_of(source_system)] if source_system else None  # 원천 스키마 고르기 — 안 주면 모두(5벌 + DEV)
         for col, v in (("doc_class", doc_class), ("sf_op_id", sf_op_id)):  # doc.attrs 키(없는 원천은 0건)
             if v:

@@ -49,7 +49,7 @@
 |---|---|---|---|---|
 | `question` | 글자 | 예 | — | 빠지면 MCP 스키마 오류(`Field required`, 도구가 돌기 전). 빈 글자면 `{"error": "question is required — …"}` |
 | `k` | 정수 | 아니요 | 8 | 상한 50 — 더 크면 50으로 줄인다(오류 아님). 근거 개수의 최대값 |
-| `source_system` | 글자(목록이면 값 하나) | **예** | — | `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other` 중 **하나** — 그 원천의 문서만 찾는다(원천마다 따로 색인). `-test`가 붙은 값(`SFDC-test`)도 같은 뜻. 빠지거나 둘 이상이면 `{"error": "source_system is required …"}` |
+| `source_system` | 글자(목록이면 값 하나) | **예** | — | `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other` 중 **하나** — 그 원천의 문서만 찾는다(원천마다 따로 색인). `-test`가 붙은 값(`SFDC-test`)도 같은 뜻. 개발 서버는 `DEV-<숫자>`도(그 원천 스키마가 있을 때 — `migrate up --target search` 뒤 처음 부르면 재시작 없이 잡힘, 지운 스키마는 거부). 빠지거나 둘 이상이면 `{"error": "source_system is required …"}` |
 | `client` | 글자 또는 목록 | 아니요 | — | EDW 고객 이름 전체(`client_edw`), 정확 일치. 목록은 OR. 채워지는 원천: SFDC(영업 기회의 계정)·CRMS(계약 목록의 고객) — LAS·FAQ는 고객이 없어 0건 |
 | `client_like` | 참·거짓 | 아니요 | — | `true`면 `client`를 부분 일치로. `client`와 함께만 뜻이 있다 |
 | `project_id` | 글자 또는 목록 | 아니요 | — | 프로젝트 코드, 정확 일치 — SFDC만 |
@@ -143,7 +143,7 @@
 | 이름 | 형식 | 기본 | 한도·규칙 |
 |---|---|---|---|
 | `docs` | 글자 목록 | — | 원본 파일 이름(확장자 포함 — 빼면 0건) · 원본 전체 경로(`/`가 들어간 값 — 정확히 하나) · 64자 `doc_key`(섞어도 됨). 200개까지 — 넘으면 `bad_request` |
-| `source_system` | 글자 | — | `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`(`-test` 붙어도 같은 뜻) — 안 주면 원천 5개 모두에서 고름 |
+| `source_system` | 글자 | — | `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`(`-test` 붙어도 같은 뜻) · 개발 서버는 있는 `DEV-<숫자>`도 — 안 주면 원천 모두(개발 서버는 DEV 원천 포함)에서 고름 |
 | `doc_class` | 글자 | — | 분류값, 정확 일치 |
 | `sf_op_id` | 글자 | — | 영업 기회 id, 정확 일치 |
 | `since` | 글자 | — | 파싱 시각부터. `YYYY-MM-DD` 또는 `YYYY-MM-DD HH:MM:SS`(시간대 없이 — KST) |

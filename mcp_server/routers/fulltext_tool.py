@@ -22,7 +22,7 @@ def register(m):
     ) -> dict:
         """Stage 1 of 2: list each document's representative parse-result files (.md/.json) and issue signed handles (sfid).
         At least one condition (AND): docs (<=200 original file names with extension, or 64-hex doc_key), source_system
-        (SFDC/CRMS/LAS/FAQ; '-test' suffix accepted), doc_class, sf_op_id, since/until (parse time), created_since/created_until
+        (SFDC/CRMS/LAS/FAQ; '-test' suffix accepted) (개발 서버: DEV-<숫자>), doc_class, sf_op_id, since/until (parse time), created_since/created_until
         (source registration time). Dates: YYYY-MM-DD or YYYY-MM-DD HH:MM:SS without time zone (KST); date-only until includes
         that whole day. limit default 50, max 200; cursor = previous batch.next_cursor.
         Returns {batch:{matched, returned, next_cursor, files_total_bytes}, documents:[{file_name, doc_key, source_system,

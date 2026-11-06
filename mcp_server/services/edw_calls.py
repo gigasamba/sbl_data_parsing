@@ -37,13 +37,20 @@ def search_attrs():
         ch = chain()
     except ValueError as e:
         return {"error": str(e)}
+    from mcp_server.services.search.server_state import dev_served
+
     out = {}
-    for s in ST.SOURCES:
-        fm = EC.filters(ch, s)
-        out["Other" if s == "other" else s.upper()] = {
+    try:
+        dev = dev_served()  # 검색하는 DEV 원천(op-17 — prd는 없음). DEV는 사슬이 없어 빈 칸
+    except (Exception, SystemExit) as e:  # 검색 DB를 못 읽어도(PG 접속 칸 없음 등) EDW 메타 도구는 5벌로
+        print(f"[mcp] search_attrs DEV 원천 못 읽음: {type(e).__name__}", flush=True)
+        dev = []
+    for s in [*ST.SOURCES, *dev]:
+        fm = EC.filters(ch, s) if s in ch else {}
+        out[ST.label(s)] = {
             "filter": {n: k for n, k in fm.items() if n in SEARCH_FILTERS},
             "attrs": sorted(set(fm.values())),
-            "evidence": EC.evidence(ch, s),
+            "evidence": EC.evidence(ch, s) if s in ch else [],
         }
     return out
 
