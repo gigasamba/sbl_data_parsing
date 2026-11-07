@@ -67,7 +67,8 @@ def _mail_items(path):
             name, data = a.longFilename or a.shortFilename or getattr(a, "displayName", None), a.data
             export = getattr(data, "exportBytes", None)
             if export:  # 메일 안 메일(.msg)
-                name, data = f"{name or getattr(data, 'subject', None) or '메일'}.msg", export()
+                name = name or getattr(data, "subject", None) or "메일"
+                name, data = (name if name.lower().endswith(".msg") else f"{name}.msg"), export()
             if name and isinstance(data, bytes):
                 out.append((str(name), data, {}, False))
         return out

@@ -1,5 +1,5 @@
-"""압축 원본(.zip·.tar·.tgz·.tar.gz) 읽기 한 곳(pl-57) — 받기의 거르기(`check`)와 대표 결과의 첨부 단계(`entries`)가 같이 쓴다.
-안의 압축은 한 단계 더 풀고 그 밑은 파일 그대로 둔다. 안전 상한(풀린 크기 합계·파일 수)은 설정 `tuning.extract.archive`."""
+"""압축 원본(.zip·.tar·.tgz·.tar.gz) 읽기 한 곳(pl-57) — 받기의 거르기(`check`)와 꺼내기(`members` — unpack, pl-63)가 같이 쓴다.
+거르기는 안의 압축을 한 단계 더 열어 보고, 꺼내는 깊이는 설정 `tuning.extract.attach`(unpack). 안전 상한(풀린 크기 합계·파일 수)은 설정 `tuning.extract.archive`."""
 
 import io
 import tarfile
