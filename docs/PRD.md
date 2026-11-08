@@ -7,7 +7,7 @@
 - pl-25 DB 스키마 명세 — dev: 검색 DB(gold — 처리 기록 `doc` 칸 판 0006 포함)·마스터·applog는 구현됨, 서버 판 올리기·ParsingMeta 기록 옮기기는 DB 담당자 승인·실행 대기(refactor.md C-107).
 - 열린 요건(todo): run_pipeline 지휘만 [rn-05](prd/ops.md#rn-05) · 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 확장자 `.hwp` [pl-45](prd/transform.md#pl-45) · 그림 부가 기능 줄이기 [pl-05](prd/transform.md#pl-05) · 전체 e2e [pl-54](prd/ops.md#pl-54) · prd 이미지에 settings.yaml 굽기 [op-12](prd/doc.md#op-12) · 판 묶기(잠재 문제) [pl-56](prd/load.md#pl-56).
 - 서버 확인만 남음(dev): parse_document CPU 우선 [rn-03](prd/ops.md#rn-03).
-- 정리·구조(todo, 사용자 11-08): 옛 오피스 검사기 [pl-66](prd/extract.md#pl-66) · 대표 결과 교차 병합 [pl-67](prd/transform.md#pl-67) · 실버 먼저 적재 [pl-68](prd/load.md#pl-68) · DB 시험 [e2-22](prd/test.md#e2-22).
+- 정리·구조(todo, 사용자 11-08): 대표 결과 교차 병합 [pl-67](prd/transform.md#pl-67) · 실버 먼저 적재 [pl-68](prd/load.md#pl-68) · DB 시험 [e2-22](prd/test.md#e2-22).
 - 시험 정리(todo): [e2-13](prd/test.md#e2-13) · [e2-20](prd/test.md#e2-20).
 
 ## 수집 (extract) — 서버에서 문서 목록을 정하고 받아 오기까지
@@ -31,7 +31,7 @@
 | 같은 밤에 받은 같은 내용 문서는 하나만 파싱한다 — 문서마다 따로 받는(stage) 서버 흐름에서도 이번 실행이 이미 받은 sha256과 같으면 건너뜀 + `applog.except_doc_info` `skip` `duplicate_sha256`(먼저 받은 원본 키는 `pipe_event` `dup_of`) · staging 재사용은 내용이 같을 때만(ETag) | 같은 파일을 두 번 파싱·적재하지 않는다. 크기만 같은 새 판을 옛 파일로 파싱하지 않는다 | dev | [pl-59](prd/extract.md#pl-59) | 러너 `stage_one`이 앞 실행 문서 폴더를 원본 키만 보고 다시 씀(ETag 비교·이번 실행 표지 없음) · 원본 삭제가 `.etag` 옆 파일을 남김 |
 | 고르기·받기(extract)는 변환(transform)을 import하지 않는다 — 지원 확장자 목록은 `pipeline/shared`에 · 원천 이름은 FileStorageMap `source_system` 값 하나 | ETL 방향을 지킨다(rn-08). 원천 이름이 자리마다 다르면 게시·구조화·건너뜀 기록의 원천이 어긋난다 | todo | [pl-59](prd/extract.md#pl-59) | `candidate_pick`·`filter_and_rotate`가 `transform.parse.engines.registry`를 import |
 | 안 문서를 꺼내지 못한 경우(깨짐·암호·상한) 성한 안 파일은 그대로 붙여 적재하고, `applog.except_doc_info`에 원본 키당 종류 `part`·수준 `warn` 한 행(이유 = 못 꺼낸 안 파일 이름과 까닭)을 남긴다. 꺼내기는 이름 글자(cp949·cp437)를 바로 읽고, 원본 하나의 꺼낸 합계 크기 상한을 두고, 목록 `parts.json`은 다 쓴 뒤에만 보이게 쓰고, 신선도는 원본 sha256으로 본다. 같은 내용 첨부는 한 번만, 이름 속 줄바꿈은 지워 절 제목이 깨지지 않게. 붙인 절은 제목 줄(`## [첨부 …]`)로 시작 | 무엇이 빠졌는지 알 수 있게(사용자 11-08). 표 구조는 그대로 — 새 종류 값 `part`는 DB 담당자에게 알림(C-111) | done | [pl-65](prd/extract.md#pl-65) |  |
-| 옛 형식 오피스(`.doc`·`.xls`·`.ppt`)의 암호·DRM·안 구조 검사는 읽기 코드 하나(olefile)로 한다 — 견본 문서로 두 코드 결과가 같음을 시험으로 확인한 뒤 | 같은 일을 두 벌로 하지 않는다. 옛 형식도 지금처럼 잘 돌아야 한다(사용자 11-08) | todo | [pl-66](prd/extract.md#pl-66) | 지금 olefile과 직접 짠 `_cfb_sectors` 두 벌 |
+| 옛 형식 오피스(`.doc`·`.xls`·`.ppt`)의 암호·DRM·안 구조 검사는 읽기 코드 하나(olefile)로 한다 — 견본 문서로 두 코드 결과가 같음을 시험으로 확인한 뒤 | 같은 일을 두 벌로 하지 않는다. 옛 형식도 지금처럼 잘 돌아야 한다(사용자 11-08) | done | [pl-66](prd/extract.md#pl-66) |  |
 
 ## 변환 (transform) — 파싱·대표 결과 고르기·그림·구조화
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |

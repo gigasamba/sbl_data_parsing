@@ -28,6 +28,8 @@ import struct
 import threading
 from pathlib import Path
 
+import olefile  # extract-msg와 함께 설치됨(pipeline.extract.unpack과 같음)
+
 from common.core.console import utf8_stdout
 from common.core.paths import (  # 폴더 재편 뒤 이 상수만 바뀌면 됨
     APP_ROOT,
@@ -58,71 +60,6 @@ OLE_EXT = {".doc", ".xls", ".ppt"}
 ARCHIVE_EXT = {".7z", ".rar", ".bz2", ".xz"}
 
 
-def _cfb_sectors(data):
-    """CFB(복합 파일 바이너리) 최소 머리글 읽기 — FAT·디렉터리만 stdlib로(olefile 없을 때 대체).
-    ponytail: 109개 직접 FAT 섹터(DIFAT 없이 다루는 범위 — 사양상 보통 문서 7MB까지)만, 미니스트림(작은 스트림)도 다루지
-    않음 — 그 밖은 신호 없음(None)으로 포기(엔진이 각자 판정). olefile이 설치되면 이 함수 대신 그걸 쓴다."""
-    if len(data) < 512 or data[:8] != CFB_SIG:
-        return None
-    try:
-        sector_shift = struct.unpack_from("<H", data, 30)[0]
-        mini_cutoff = struct.unpack_from("<I", data, 56)[0]
-        first_dir_sec = struct.unpack_from("<I", data, 48)[0]
-        num_fat = struct.unpack_from("<I", data, 44)[0]
-        fat_ids = struct.unpack_from("<109I", data, 76)
-    except struct.error:
-        return None
-    if not (0 <= num_fat <= 109):  # DIFAT 필요(섹터 많음) — 다루지 않음
-        return None
-    sector_size = 1 << sector_shift
-
-    def off(secid):
-        return 512 + secid * sector_size
-
-    fat = []
-    for secid in fat_ids[:num_fat]:
-        o = off(secid)
-        if o < 0 or o + sector_size > len(data):
-            return None
-        n = sector_size // 4
-        fat.extend(struct.unpack_from(f"<{n}I", data, o))
-
-    def chain(start, limit_bytes=None):
-        secid, seen, buf = start, set(), b""
-        while 0 <= secid < len(fat) and secid not in seen:
-            seen.add(secid)
-            o = off(secid)
-            if o + sector_size > len(data):
-                break
-            buf += data[o : o + sector_size]
-            if limit_bytes and len(buf) >= limit_bytes:
-                break
-            secid = fat[secid]
-        return buf
-
-    dir_bytes = chain(first_dir_sec)
-    entries = []
-    for i in range(0, len(dir_bytes) - 127, 128):
-        ent = dir_bytes[i : i + 128]
-        namelen = struct.unpack_from("<H", ent, 64)[0]
-        if not (2 <= namelen <= 64):
-            continue
-        try:
-            name = ent[: namelen - 2].decode("utf-16-le")
-        except UnicodeDecodeError:
-            continue
-        entries.append({"name": name, "type": ent[66], "start": struct.unpack_from("<I", ent, 116)[0]})
-    return {"entries": entries, "mini_cutoff": mini_cutoff, "chain": chain}
-
-
-def _ole_stream_head(cfb, name, n=2048):
-    """CFB 스트림 하나의 앞 n바이트(미니스트림 제외 — 위 _cfb_sectors ponytail)."""
-    for e in cfb["entries"]:
-        if e["type"] == 2 and e["name"] == name:
-            return cfb["chain"](e["start"], n)[:n]
-    return None
-
-
 def _ole_head_reason(ext, head):
     """FIB fEncrypted(.doc)·BIFF FILEPASS(.xls) 신호 — 스트림 앞부분(head)만 봄."""
     if head is None:
@@ -144,8 +81,8 @@ def _ole_head_reason(ext, head):
 
 def _ole_encrypted_reason(p):
     """.doc·.xls·.ppt 암호 — OOXML과 다른 신호: FIB fEncrypted 플래그(.doc)·BIFF FILEPASS 레코드(.xls)·
-    EncryptedSummary 스토리지(.ppt — CryptoAPI RC4 암호화 때 추가되는 저장소, CryptSession10Container를 담음).
-    olefile이 설치돼 있으면 그걸로(정확), 없으면 _cfb_sectors 최소 리더로. None = 의심 없음(엔진이 각자 판정)."""
+    EncryptedSummary 스트림(.ppt — CryptoAPI RC4 암호화 때 추가됨, CryptSession10Container를 담음).
+    olefile 하나로 읽는다(pl-66 — 미니 스트림의 작은 스트림까지 규격대로). None = 의심 없음(엔진이 각자 판정)."""
     ext = p.suffix.lower()
     if ext not in OLE_EXT:
         return None
@@ -156,32 +93,14 @@ def _ole_encrypted_reason(p):
     if not data.startswith(CFB_SIG):
         return None  # OLE 컨테이너가 아니면(다른 손상 등) 엔진이 각자 판정
     try:
-        import olefile
-    except ImportError:
-        olefile = None
-    if olefile is not None:
-        try:
-            ole = olefile.OleFileIO(io.BytesIO(data))
-            names = {s[-1] for s in ole.listdir()}
-            if ext == ".ppt" and "EncryptedSummary" in names:
-                return "encrypted_ppt"
-            if ext != ".ppt":  # .ppt는 위 저장소 이름만 보고, 없으면 아래 내장 판독기로 다시
-                stream = "WordDocument" if ext == ".doc" else next((n for n in ("Workbook", "Book") if n in names), None)
-                head = ole.openstream(stream).read(2048) if stream else None
-                reason = _ole_head_reason(ext, head)
-                if reason:
-                    return reason
-            # olefile이 '없음'이라도 아래 내장 판독기로 한 번 더(규격을 덜 지킨 CFB는 olefile이 짧은 스트림을 미니 스트림에서
-            # 읽어 엉뚱한 바이트를 줌 — 이미지(olefile 있음)에서만 .xls 암호를 놓치던 것, OLE 파일만 추가 비용)
-        except Exception:
-            pass  # olefile이 못 읽는 CFB(작은·비표준 구성)는 아래 내장 판독기로 다시 — 그냥 None이면 이미지에서만 암호 .doc을 놓침
-    cfb = _cfb_sectors(data)
-    if not cfb:
+        ole = olefile.OleFileIO(io.BytesIO(data))
+        names = {s[-1] for s in ole.listdir()}
+        if ext == ".ppt":
+            return "encrypted_ppt" if "EncryptedSummary" in names else None
+        stream = "WordDocument" if ext == ".doc" else next((n for n in ("Workbook", "Book") if n in names), None)
+        return _ole_head_reason(ext, ole.openstream(stream).read(2048) if stream else None)
+    except Exception:  # 깨진·잘린 CFB(olefile이 못 읽음)는 신호 없음 — 엔진이 각자 판정
         return None
-    if ext == ".ppt":
-        return "encrypted_ppt" if any(e["name"] == "EncryptedSummary" for e in cfb["entries"]) else None
-    name = "WordDocument" if ext == ".doc" else next((n for n in ("Workbook", "Book") if any(e["name"] == n for e in cfb["entries"])), None)
-    return _ole_head_reason(ext, _ole_stream_head(cfb, name) if name else None)
 
 
 def _unsupported_reason(p):

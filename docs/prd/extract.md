@@ -185,5 +185,7 @@ A: `, 절 `DS`. 5행 = `divider`만 → 건너뜀. 머리글 없는 시트 `memo
 <a id="pl-66"></a>
 ## pl-66 · 옛 형식 오피스 검사기 하나로
 - 요건: 같은 검사를 두 벌로 두지 않는다. 남길 쪽은 olefile — 견본 `.doc`·`.xls`·`.ppt`(암호 있음·없음)로 두 코드 결과가 같은지 먼저 시험.
-- 반영: 없음(사용자 11-08 결정 — 다음 작업).
-- Status: todo
+- 규칙: `filter_and_rotate._ole_encrypted_reason`이 olefile로만 읽는다 — `.doc` `WordDocument` FIB fEncrypted · `.xls` `Workbook`/`Book` BIFF FILEPASS · `.ppt` `EncryptedSummary` 스트림. 규격(MS-CFB)대로 4096바이트 미만 스트림은 미니 스트림에서 읽는다. 깨지거나 잘린 복합 파일·DRM 머리는 신호 없음(엔진이 각자 판정 — 옛 형식은 DRM 머리를 보지 않는다).
+- 시험: `tests/server/pipeline/test_prepare.py::test_ole_encrypted_cases` 사례 표(규격대로 만든 `_build_cfb` — 암호 있음·없음, 미니 스트림, DRM 흉내, 깨진·잘린 파일 + PC에서는 `valid_env` 견본 4건과 반으로 자른 사본). 견본 `encrypted_ole.doc`는 규격대로 다시 만들었다(크기 2560, sha256 `622c1824…` — `valid_env/edw/ai.sql`·`edw.sqlite` 함께).
+- 반영: 사용자 11-08.
+- Status: done
