@@ -9,7 +9,8 @@ from pathlib import Path
 
 from common.config.settings import COMMON
 from pipeline import config as pc
-from pipeline.load.publish_parse_result import SILVER_FILE, rep_md_key, run
+from pipeline.load.publish_parse_result import SILVER_FILE, rep_md_key, run, status_of
+from pipeline.shared.except_docs import reason_of
 from tests.server.pipeline.goldseed import seed
 
 
@@ -248,3 +249,19 @@ def test_stage_dropped_docs():
         silver = (out / "publish" / SILVER_FILE).read_text(encoding="utf-8")
         assert r["result"]["uploaded"] == 0 and r["result"]["excluded_drm_failed"] == want and silver == "", (name, r, silver)
         shutil.rmtree(d, ignore_errors=True)
+
+
+SKIP_REASON_CASES = [  # (받기 거르기 이유, 게시 상태, except_doc_info skip 이유) — 두 곳이 PERMANENT 하나로 같게 가름
+    ("drm_fasoo", "skipped_drm", "drm_fasoo"),
+    ("encrypted_archive", "skipped_drm", "encrypted_archive"),
+    ("broken_archive", "skipped_drm", "broken_archive"),
+    ("archive_too_big", "skipped_drm", "archive_too_big"),
+    ("unsupported_archive", "skipped_drm", "unsupported_archive"),
+    ("parse_timeout", "not_parsed", None),  # 영구 이유 아님 — 다음 실행이 다시 고름
+]
+
+
+def test_skip_reason_same_in_publish_and_except_docs():
+    for reason, status, skip in SKIP_REASON_CASES:
+        assert status_of("a.zip", {}, {}, {"a.zip": reason})[0] == status, reason
+        assert reason_of("a.zip", reason) == skip, reason

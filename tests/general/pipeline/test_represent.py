@@ -16,6 +16,15 @@ from pipeline.transform.represent.doc_represent import (
     status,
 )
 
+STATUS_CASES = [  # (runs.jsonl error, 상태) — 환경 판정은 env_error.is_env_error 한 곳
+    (None, "성공"),
+    ("TimeoutError: x", "시간 초과"),
+    ("ImportError: x (미설치)", "환경"),
+    ("FileNotFoundError: soffice", "환경"),
+    ("ValueError: x", "실패"),
+    ("PdfReadError: EOF marker not found", "실패"),  # 깨진 PDF — 환경 탓 아님
+]
+
 
 def selftest():
     r = {
@@ -36,8 +45,8 @@ def selftest():
     keys = {row_key({"context": ["A-1"], "cells": ["1,000"]})}  # E2: 표기만 다른 같은 행은 보충하지 않음
     assert row_key({"context": ["A-1 "], "cells": ["1000"]}) in keys and row_key({"context": ["a-1"]}) in keys
     assert row_key({"context": ["B-2"], "cells": ["1,000"]}) not in keys
-    assert status({"error": None}) == "성공" and status({"error": "TimeoutError: x"}) == "시간 초과"
-    assert status({"error": "ImportError: x (미설치)"}) == "환경" and status({"error": "ValueError: x"}) == "실패"
+    for err, want in STATUS_CASES:
+        assert status({"error": err}) == want, err
     import tempfile
 
     d = Path(tempfile.mkdtemp())

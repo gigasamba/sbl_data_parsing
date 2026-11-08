@@ -22,6 +22,7 @@ from pathlib import Path
 from common.core import span as SP
 from common.core.console import utf8_stdout
 from pipeline import config as pc
+from pipeline.shared.env_error import is_env_error
 from pipeline.shared.ext_groups import IMG_EXTS
 from pipeline.shared.pdf_kind import doc_pages
 
@@ -369,13 +370,13 @@ def fill_scan_pages(rep, dd, doc_path, page_vlm=None):
 
 
 def status(r):
-    """runs.jsonl 기록 하나 → 상태: 성공 · 시간 초과 · 환경(미설치·미설정·연결) · 실패."""
+    """runs.jsonl 기록 하나 → 상태: 성공 · 시간 초과 · 환경(미설치·미설정 — env_error.is_env_error) · 실패."""
     e = r.get("error") or ""
     if not e:
         return "성공"
     if "Timeout" in e:
         return "시간 초과"
-    if any(k in e for k in ("미설정", "미설치", "NotFoundError", "not found", "FileNotFoundError", "SpawnError", "initialization fai")):
+    if is_env_error(e):
         return "환경"
     return "실패"
 

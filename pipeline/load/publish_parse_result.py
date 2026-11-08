@@ -20,7 +20,7 @@ settings.sample.yaml `load.publish`·`required`). PC는 버킷 `file://<폴더>`
 ④ gold에 이미 끝난 문서는 올리기 전에 걸러 아예 올리지 않는다(`apply()` — 같은 문서의 결과 폴더가 쌓이지 않게). `--reparse` 목록만 예외(새 날짜 폴더).
 ⑥ DRM·파싱 실패(`EXCLUDED_STATUSES`)는 `render_excluded_report()`로 마크다운 보고서만.
 
-상태(parse_status) = ok · partial(교차 정확도 < criteria.json run.cross_acc_full) · failed · skipped_drm(DRM·암호 래핑) ·
+상태(parse_status) = ok · partial(교차 정확도 < criteria.json run.cross_acc_full) · failed · skipped_drm(받기가 뺀 원본 — DRM·암호·미지원·깨진 압축, except_docs.PERMANENT) ·
 skipped_dup(dedup keep.txt에서 빠짐) · not_parsed(이번 파싱 대상 아님). 원본은 게시 뒤 지워지므로 ok·partial도 로컬 원본이 없을 수
 있다 — 그때는 manifest의 "sha256"(candidate_ready가 남김)으로 대체한다(parse_status는 그대로).
 
@@ -45,6 +45,7 @@ from common.core.contract import file_hash, jl, safe_filename, safe_path_join
 from common.core.fingerprint import pipeline_version
 from common.core.paths import APP_ROOT, CRITERIA_FILE
 from pipeline import config as pc
+from pipeline.shared.except_docs import PERMANENT
 
 ROOT = APP_ROOT  # output/ 등 런타임 경로용
 _KST = datetime.timezone(datetime.timedelta(hours=9))  # parsed_at 표기(적재 created_at과 같은 시간대 — 대역 글자 비교도 맞음)
@@ -159,9 +160,9 @@ def _local_md_name(row):
 
 
 def status_of(name, rep_by_doc, summary, skipped=None, keep=None):
-    """문서 하나의 파싱 상태 — skipped(이름→drm_*·encrypted_* 사유, filter_and_rotate의 skipped.jsonl)·
+    """문서 하나의 파싱 상태 — skipped(이름→사유, filter_and_rotate의 skipped.jsonl — except_docs.PERMANENT로 시작하면 skipped_drm)·
     keep(dedup keep.txt에 있는 이름 집합, None = dedup 정보 없음 → 전부 포함) 순서로 먼저 걸러진 뒤 대표 결과(rep)를 본다."""
-    if skipped and name in skipped and str(skipped[name]).startswith(("drm", "encrypted")):
+    if skipped and name in skipped and str(skipped[name]).startswith(PERMANENT):
         return "skipped_drm", skipped[name], None
     if keep is not None and name not in keep:
         return "skipped_dup", "완전 중복으로 제외(dedup keep.txt에 없음)", None
