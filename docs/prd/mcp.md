@@ -172,9 +172,9 @@
 <a id="mc-09"></a>
 ## mc-09 · 서버 실행과 안전
 - 이유: 공용 내부 서비스라 계속 떠 있어야 하고 위험한 노출은 거부해야 한다.
-- 규칙: FastMCP streamable HTTP(`/mcp`, 기본 `search.server.mcp_bind_host` 127.0.0.1 · `mcp_port` 8765) 또는 `--stdio`. loopback이 아닌 주소는 `required.tokens.mcp_token` 필요(상수 시간 비교), 0.0.0.0 거부, DNS 리바인딩 가드(`search.server.mcp_allowed_hosts`). `/health`(준비 중이면 503). 도구 동시 8(`search.server.mcp_max_concurrent_tools`) + 대기열, 도구 한 번 30초. PG 질의 하나 120초(`tuning.common.connections.pg.pg_statement_timeout_sec` — 넘으면 `timeout`) · 끊긴 풀 연결은 꺼낼 때 새 연결로 한 번 바꾸고, 그래도 DB에 닿지 못하면 `db_unavailable`(원문 도구는 `registry_unavailable` 그대로). 새 적재 판이면 다시 읽는다. 호출 감사 기록은 [ops.md#op-01](ops.md#op-01).
+- 규칙: FastMCP streamable HTTP(`/mcp`, 기본 `search.server.mcp_bind_host` 127.0.0.1 · `mcp_port` 8765) 또는 `--stdio`. loopback이 아닌 주소는 `required.tokens.mcp_token` 필요(상수 시간 비교), 0.0.0.0 거부, DNS 리바인딩 가드(`search.server.mcp_allowed_hosts`). `/health`(준비 중이면 503). 도구 동시 8(`search.server.mcp_max_concurrent_tools`) + 대기열(`mcp_max_queued_tools`, 비우면 자리 수 × 4 — 차면 바로 `busy`), 도구 한 번 30초. `parse_document`와 `get_doc_fulltext`는 공용 자리를 쓰지 않고 도구마다 자기 자리 2개 + 같은 규칙의 대기열을 쓴다(파싱은 오래 걸리고, 원문 받기는 한 번에 최대 24 MiB를 메모리에 올린다). `parse_document`는 `time_out_threshold`만큼 기다리되 10분에서 자른다. PG 질의 하나 120초(`tuning.common.connections.pg.pg_statement_timeout_sec` — 넘으면 `timeout`) · 끊긴 풀 연결은 꺼낼 때 새 연결로 한 번 바꾸고, 그래도 DB에 닿지 못하면 `db_unavailable`(원문 도구는 `registry_unavailable` 그대로). 새 적재 판이면 다시 읽는다. 호출 감사 기록은 [ops.md#op-01](ops.md#op-01).
 - 파일: `mcp_server/main.py`, `mcp_server/services/tool_runner.py`, `mcp_server/config.py`, `common/store/pg.py`(`PGPool`).
-- QA: `tests/server/mcp/test_tool_runner.py`(`test_db_errors`) · `tests/general/common/test_pg.py`(`test_pool_options`) · 통과.
+- QA: `tests/server/mcp/test_tool_runner.py`(`test_db_errors` · `test_own_slots` — 자기 자리 2개·셋째 대기·대기열 차면 `busy`) · `tests/general/common/test_pg.py`(`test_pool_options`) · 통과.
 - Status: done
 
 <a id="mc-20"></a>

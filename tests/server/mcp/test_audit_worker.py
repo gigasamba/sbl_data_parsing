@@ -18,6 +18,13 @@ from mcp_server.services import call_log as audit
 from mcp_server.services import tool_runner
 
 
+def _full(on):
+    """공용·parse_document 자리를 대기열까지 가득 찬 꼴(on — 다음 요청은 busy)로, 아니면 빈 꼴로(현재 설정 기준)."""
+    for name in ("shared", "do_parse_document"):
+        lane = tool_runner._lane(name)
+        lane.accepted = lane.total + tool_runner._queue_cap(lane.total) if on else 0
+
+
 def test_response_deadlines():
     rows, threads = [], []
     original = audit.Call._prepare
@@ -31,7 +38,7 @@ def test_response_deadlines():
         original(call)
 
     async def run():
-        tool_runner._LIMITER, tool_runner._INFLIGHT = None, 0
+        tool_runner._LANES.clear()
         # 공용 anyio limiter가 포화돼도 전용 감사 워커는 진행한다.
         default = anyio.to_thread.current_default_thread_limiter()
         previous_tokens = default.total_tokens
@@ -48,11 +55,11 @@ def test_response_deadlines():
                 assert await tool_runner._bg(lambda: release.wait(30)) == {"error": "timeout"}
                 await asyncio.wait_for(wait_until_entered(), 30)
                 assert not release.is_set() and not rows
-                tool_runner._INFLIGHT = 2
+                _full(True)
                 for invoke in (lambda: tool_runner._bg(lambda: None), lambda: tool_runner._bg_long(lambda: None, 1)):
                     assert await invoke() == {"error": "busy"}
                     assert not release.is_set() and not rows
-                tool_runner._INFLIGHT = 0
+                _full(False)
                 for invoke in (lambda: tool_runner._bg(lambda: result), lambda: tool_runner._bg_long(lambda: result, 1)):
                     reply = await invoke()
                     assert reply is result and not release.is_set() and not rows
@@ -66,7 +73,7 @@ def test_response_deadlines():
             release.set()
             default.release()
             default.total_tokens = previous_tokens
-            tool_runner._LIMITER, tool_runner._INFLIGHT = None, 0
+            tool_runner._LANES.clear()
 
     assert audit.drain()
     with patch.object(audit.Call, "_prepare", delayed), patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(row)):
