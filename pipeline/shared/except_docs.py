@@ -3,6 +3,7 @@
   이번 실행·끝난 문서와 같은 내용). 대상 목록(`candidate_pick.list_targets --skip-done`)이 그 키를 뺀다 — 밤마다 같은 문서를 다시 받지 않게.
 - `error` = 파싱·적재 실패: 기록만 하고 다음 실행이 다시 고른다(`skipped_keys`에 들지 않음).
 - `part`(수준 warn) = 안 문서(압축 안 파일·첨부·개체)를 일부 못 꺼냄(pl-65): 성한 안 파일은 붙여 적재됨, 기록만.
+- `silver`(수준 warn) = 실버만 게시 — 골드 전(pl-68): 게시가 쓰고 골드 적재가 성공하면 지운다. 남아 있으면 골드 실패·중단·실버까지만 실행.
 PG 접속 정보가 있으면 PG(`dbtool up --target applog` — 판 0003), 없으면 PC 대역 sqlite(`<standin_dir>/applog.sqlite` — 표를 바로 만듦,
 서버는 대역을 쓰지 않고 멈춤). 명령 `python -m pipeline.shared.except_docs error --csv <문서 위치 표> --reason <이유>` — run_pipeline이
 문서의 파싱·게시·적재 실패를 적는다."""
@@ -123,6 +124,31 @@ def note_error(rows, **kw):
 def record_part(rows):
     """안 문서를 못 꺼낸 원본(pl-65 — 성한 안 파일은 붙여 적재됨)을 part 행(수준 warn)으로 — 기록만(대상 목록에서 빼지 않음, 실패해도 받기는 계속)."""
     return note_error(rows, kind="part", level="warn", what="안 문서 못 꺼냄")
+
+
+SILVER_REASON = "실버만 게시 — 골드 전"
+
+
+def record_silver(rows):
+    """실버를 게시한 원본(pl-68)을 silver 행(수준 warn)으로 — 골드 적재가 성공하면 clear_silver가 지운다. 남은 행 = 골드 실패·중단·실버까지만 실행.
+    기록만(대상 목록에서 빼지 않음, 실패해도 게시는 계속)."""
+    return note_error([{**r, "reason": SILVER_REASON} for r in rows], kind="silver", level="warn", what="실버만 게시")
+
+
+def clear_silver(keys):
+    """골드 적재가 끝난 원본 키의 silver 행을 지운다(pl-68). 기록일 뿐이라 실패해도 적재는 계속(경고 한 줄). 반환: 받은 키 수."""
+    keys = sorted({k for k in keys if k})
+    if not keys:
+        return 0
+    try:
+        db = _db()
+        try:
+            db.q(f"DELETE FROM {_schema()}.{TABLE} WHERE except_type = 'silver' AND source_key = ANY(%s)", (keys,))
+        finally:
+            _close(db)
+    except Exception as ex:
+        print(f"[except] silver 행 못 지움({type(ex).__name__}) — 계속", file=sys.stderr, flush=True)
+    return len(keys)
 
 
 def skipped_keys():

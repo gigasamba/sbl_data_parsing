@@ -340,7 +340,7 @@ SELECT except_type, reason, source_system, count(*) AS docs, sum(count) AS times
 FROM applog.except_doc_info
 GROUP BY except_type, reason, source_system ORDER BY docs DESC;
 ```
-`part`(수준 `warn`)는 안 문서를 일부 못 꺼낸 원본이다 — 이유에 못 꺼낸 안 파일 이름과 까닭(`encrypted`·`too_big`·`too_many`·`total_cap`·`no_unwrap`·`cannot_open`·`read_failed`)이 있고 문서 자체는 적재됐다. `skip` 풀어 주는 법(행 지우기 — DB 담당 승인)은 [env-guide 실행 기록](env-guide.md#0-0-실행-기록json-로그db-감사성능).
+`part`(수준 `warn`)는 안 문서를 일부 못 꺼낸 원본이다 — 이유에 못 꺼낸 안 파일 이름과 까닭(`encrypted`·`too_big`·`too_many`·`total_cap`·`no_unwrap`·`cannot_open`·`read_failed`)이 있고 문서 자체는 적재됐다. `silver`(수준 `warn`)는 실버만 게시되고 골드가 아직 없는 원본이다 — 골드 적재가 성공하면 그 행은 지워지므로, 남아 있으면 골드 실패·중단·실버까지만 실행이다. `skip` 풀어 주는 법(행 지우기 — DB 담당 승인)은 [env-guide 실행 기록](env-guide.md#0-0-실행-기록json-로그db-감사성능).
 
 ## 9. 건드리면 안 되는 것
 

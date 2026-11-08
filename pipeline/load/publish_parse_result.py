@@ -432,7 +432,8 @@ def render_excluded_report(entries):
 
 def apply(entries, storage, md_dir, prefix="", done=frozenset()):
     """업로드(.md — 같은 이름이 이미 있으면 덮어쓰지 않고 접미사로 새 이름) → (결과 숫자, 처리 기록 행 목록).
-    done = gold에 끝난 원본 키(gold_docs.done_keys) — 그 문서는 올리지 않는다(`--reparse` 목록만 예외). 실패(failed)는 except_doc_info error.
+    done = gold에 끝난 원본 키(gold_docs.done_keys) — 그 문서는 올리지 않는다(`--reparse` 목록만 예외). 실패(failed)는 except_doc_info error,
+    올린 문서는 except_doc_info silver(골드 적재가 성공하면 지움 — pl-68).
     entries = plan()의 반환값 그대로. md_dir: .md를 잠깐 썼다가 올린 뒤 바로 지우는 로컬 폴더.
     각 행에 "upload_result"를 채운다: "uploaded"(이 실행이 새로 올림) · "excluded"(PM_UPLOAD_STATUSES 밖이거나 렌더할 대표 결과가 없음) ·
     "exists"(gold에 이미 끝남 — 올리지 않음). 처리 기록 행 = 올린 문서마다 {doc_name, source_key, sha256, silver_bucket, silver_key(.md 객체),
@@ -500,6 +501,14 @@ def apply(entries, storage, md_dir, prefix="", done=frozenset()):
     ]
     if errors:
         except_docs.note_error(errors)  # 기록만 — 실패해도 게시는 계속
+    if silver:  # pl-68 — 골드 적재가 성공하면 지움(남으면 실버만 있는 문서)
+        except_docs.record_silver(
+            [
+                {"source_key": e["row"]["source_key"], "source_system": e["row"]["source_system"], "file_name": e["doc_name"]}
+                for e in entries
+                if e.get("upload_result") == "uploaded"
+            ]
+        )
     result = {
         "uploaded": uploaded,
         "upload_excluded": excluded,

@@ -10,7 +10,7 @@ from pathlib import Path
 from common.config.settings import COMMON
 from pipeline import config as pc
 from pipeline.load.publish_parse_result import SILVER_FILE, rep_md_key, run, status_of
-from pipeline.shared.except_docs import reason_of
+from pipeline.shared.except_docs import SILVER_REASON, reason_of
 from tests.server.pipeline.goldseed import seed
 
 
@@ -157,7 +157,9 @@ def selftest():
         cn = sqlite3.connect(d / "pg" / "applog.sqlite")
         errs = cn.execute("select source_key, except_type, reason from except_doc_info").fetchall()
         cn.close()
-        assert errs == [("docs/b.pdf", "error", "parse_failed")], errs  # 파싱 실패 — 기록만(다음 실행이 다시 고름)
+        assert sorted(errs) == [("docs/a.pdf", "silver", SILVER_REASON), ("docs/b.pdf", "error", "parse_failed")], (
+            errs
+        )  # 파싱 실패 — 기록만(다음 실행이 다시 고름) · 올린 a는 silver(pl-68)
 
         seed([{"file_path": "docs/a.pdf", "source_system": "FileStorageMap"}])  # a가 gold에 적재됨
         r2 = run(a)  # 같은 걸 재실행 — a는 이미 gold에 있음 → 올리지 않음(pl-61)

@@ -27,7 +27,7 @@
 **모듈 경계(자동 점검 — `python -m common.check.check_modules`):**
 - `pipeline`과 `mcp_server`는 서로 import하지 않는다. 함께 쓸 코드는 `common`으로 올린다.
 - 앱(`common`, `pipeline`, `mcp_server`)은 `validation`과 `tests`를 import하지 않는다. PC에서만 쓰는 기능은 `importlib`에 모듈 이름 문자열을 넘겨 불러온다.
-- `pipeline` 안에서는 extract → transform → load 방향을 지킨다. 거꾸로 import하지 않는다(⑫ "단계 방향" — 함수 안 늦은 import도 센다).
+- `pipeline` 안에서는 extract → transform → load 방향을 지킨다. 거꾸로 import하지 않는다(⑫ "단계 방향" — 함수 안 늦은 import도 센다. 허용 예외는 [pl-68](docs/prd/load.md#pl-68)의 둘뿐).
 - 설정 값을 환경변수에서 직접 읽지 않는다(⑩ "os.environ 0", ⑪ "자식 프로세스 env에 설정 이름 0" — §3).
 - `mcp_server/routers`에는 도구 등록만 두고 로직은 `services`에, 출력 구조는 `schemas`에 둔다.
 

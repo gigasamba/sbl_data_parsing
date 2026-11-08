@@ -220,6 +220,7 @@ def load(db, bundle, replace=False, rep_dir=None, silver=None):
     silver = 게시 처리 기록 파일(silver.jsonl — 원본 키 source_key = 묶음 문서 file_path로 이음). 그 문서 줄이 있으면 새로 넣는 행에 쓰고
     이미 있는 행(건너뜀 — 재게시)은 그 칸만 UPDATE. 줄이 없으면 --replace는 옛 행의 처리 기록을 그대로 옮기고, 새 문서는 NULL."""
     from common.store.db.models import search_tables as ST
+    from pipeline.shared import except_docs
 
     if replace:
         _require_marked_schema(db)  # XS3 — 남의 기존 스키마에 --replace 금지
@@ -248,8 +249,6 @@ def load(db, bundle, replace=False, rep_dir=None, silver=None):
         d["attrs"] = dict(m.get("attrs") or {})
     failed = _classify(db, B, docs, rep_dir, replace)  # SFDC·LAS 라벨(gold 넣기 전 · 이미 있는 라벨은 덮지 않음)
     if failed:  # 분류 실패 = 적재 실패 — 기록만(다음 실행이 다시 고름)
-        from pipeline.shared import except_docs
-
         except_docs.note_error(  # 기록만 — 실패해도 적재는 계속
             [
                 {
@@ -290,6 +289,9 @@ def load(db, bundle, replace=False, rep_dir=None, silver=None):
                 _drop_docs(cur, dbs[src].schema, ids)
             for src, idx in by_src.items():
                 _add(counts, src, _load_src(cur, dbs[src].schema, src, docs, idx, chunks, vecs, meta, replace))
+    except_docs.clear_silver(
+        d["file_path"] for d in docs if d["file_path"] not in failed
+    )  # pl-68 — 이제 gold에 있음(분류 실패는 silver 행 남김)
     counts["sec"] = round(time.time() - t0, 1)
     return counts
 

@@ -71,6 +71,6 @@
 - 요건(되어야 할 모습):
   1. 대표 결과 점수(`parse_scoring.doc_accuracy`)는 p1, 고객 이름 찾기 `pipeline/transform/structure/client_roster.py`는 s 층 목록에 든다. 결과를 만들지 않는 오프라인 도구는 `NOT_LAYER`에 적는다. 층 파일이 import하는 pipeline 파일은 같은 층에 든다(엔진 코드는 p0, 실행 기록 `runtrace.py`만 뺌 — `test_code_fp.test_layer_imports_in_layer`).
   2. `CODE_FP_SKIP`에 적은 파일(기록·DB 연결·표 정의·설정 도구)은 지문 계산에서 import를 따라가지 않는다. 설정 모델 `common/config/settings.py`는 기본값이 결과를 바꿀 수 있어 따라간다.
-  3. `common/check/check_modules.py` ⑫ — `pipeline` 안에서 뒤 단계를 import하면(함수 안 늦은 import 포함) 위반이다. 예외(`STAGE_ALLOW`)는 없다 — VLM 호출 게이트는 `vlmcall.py`([pl-43](transform.md#pl-43)).
+  3. `common/check/check_modules.py` ⑫ — `pipeline` 안에서 뒤 단계를 import하면(함수 안 늦은 import 포함) 위반이다. 예외(`STAGE_ALLOW`)는 없다 — VLM 호출 게이트는 `vlmcall.py`([pl-43](transform.md#pl-43)). import가 아닌 역방향 호출은 둘만 허용한다 — 실버 먼저 게시와 받기의 FAQ 교체 확인(`candidate_pick.faq_sync`)이 적재 명령 `pgvector_load faq-sync`를 자식 프로세스로 부르는 것([pl-68](load.md#pl-68)).
 - QA: `tests/server/common/test_code_fp.py`(`pipeline/transform` 아래 빠진 파일 · 표 정의·기록 파일은 지문 그대로) · `tests/server/common/test_check_modules.py`.
 - Status: done

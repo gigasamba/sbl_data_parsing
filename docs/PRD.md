@@ -7,7 +7,7 @@
 - pl-25 DB 스키마 명세 — dev: 검색 DB(gold — 처리 기록 `doc` 칸 판 0006 포함)·마스터·applog는 구현됨, 서버 판 올리기·ParsingMeta 기록 옮기기는 DB 담당자 승인·실행 대기(refactor.md C-107).
 - 열린 요건(todo): run_pipeline 지휘만 [rn-05](prd/ops.md#rn-05) · 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 확장자 `.hwp` [pl-45](prd/transform.md#pl-45) · 그림 부가 기능 줄이기 [pl-05](prd/transform.md#pl-05) · 전체 e2e [pl-54](prd/ops.md#pl-54) · prd 이미지에 settings.yaml 굽기 [op-12](prd/doc.md#op-12) · 판 묶기(잠재 문제) [pl-56](prd/load.md#pl-56).
 - 서버 확인만 남음(dev): parse_document CPU 우선 [rn-03](prd/ops.md#rn-03).
-- 정리·구조(todo, 사용자 11-08): 대표 결과 교차 병합 [pl-67](prd/transform.md#pl-67) · 실버 먼저 적재 [pl-68](prd/load.md#pl-68) · DB 시험 [e2-22](prd/test.md#e2-22).
+- 정리·구조(todo, 사용자 11-08): 대표 결과 교차 병합 [pl-67](prd/transform.md#pl-67) · DB 시험 [e2-22](prd/test.md#e2-22).
 - 시험 정리(todo): [e2-13](prd/test.md#e2-13) · [e2-20](prd/test.md#e2-20).
 
 ## 수집 (extract) — 서버에서 문서 목록을 정하고 받아 오기까지
@@ -101,7 +101,7 @@
 | 원천 시스템별 PG 스키마 5벌(`<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`), 각자 `doc`·`chunk`·BM25 표, `doc_id` 시퀀스는 기준 스키마 하나를 함께 | 원천마다 메타가 다르고 BM25 점수를 섞지 않는다. MCP `source_system` 필수(등급 A) | done | [pl-28](prd/load-schema.md#pl-28) |  |
 | 원천 = EDW `AI.FileStorageMap.source_system` 칸 값 하나 — 고르기·구조화·적재(`SFDC`·`CRMS`·`LAS`·`FAQ`, 그 밖은 `other`)·게시가 모두 그 값을 쓴다(목록 파일·manifest로 넘김, PC 폴더는 맨 위 폴더 이름). `faq` 스키마만 `chunk.faq_group` 칸 | 원본 경로에서 원천을 다시 구하지 않는다 — 원천 칸 하나로 정함 | done | [pl-28](prd/load-schema.md#pl-28) |  |
 | 게시는 gold `doc`에 같은 원본 키가 이미 있는지 먼저 보고, 있으면 올리지 않는다(`--reparse` 목록만 예외) | 끝난 문서의 결과를 Object Storage에 또 쌓지 않는다 | done | [pl-61](prd/load.md#pl-61) |  |
-| 단계 순서는 받기 → 변환(실버 → 골드) → 적재다. 예외 하나 — 실버 대표 결과는 골드 변환 전에 먼저 게시·적재해도 된다(골드 중 프로세스가 꺼져도 실버가 남게). 골드가 실패·중단되었거나 실버까지만 돌린 실행은 상태 기록을 보고 실버만 게시한다 | 사용자 11-08. 이 예외 말고 변환이 적재를 부르는 역방향 호출은 없다 | todo | [pl-68](prd/load.md#pl-68) | 설계 전 — 지금 흐름과 차이 확인 필요 |
+| 단계 순서는 받기 → 변환(실버 → 골드) → 적재다. 예외 하나 — 실버 대표 결과는 골드 변환 전에 먼저 게시·적재해도 된다(골드 중 프로세스가 꺼져도 실버가 남게). 골드가 실패·중단되었거나 실버까지만 돌린 실행은 상태 기록을 보고 실버만 게시한다 | 사용자 11-08. 역방향 호출은 이것과 받기의 FAQ 교체 확인(`candidate_pick.faq_sync`)이 적재 명령 `pgvector_load faq-sync`를 자식 프로세스로 부르는 것 둘뿐이다 | done | [pl-68](prd/load.md#pl-68) | 게시가 `applog.except_doc_info`에 `silver` 행(수준 `warn`)을 쓰고 골드 적재가 성공하면 지운다 — 남은 행 = 실버만 있는 문서 |
 
 ## 검색 MCP (mcp) — AI 클라이언트가 부르는 도구 서버(이미지 `mcp-server`)
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |

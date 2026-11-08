@@ -204,5 +204,10 @@ FAQ는 판을 잇지 않는다. 새 FAQ가 오면 gold faq를 비우고 FAQ 전�
 <a id="pl-68"></a>
 ## pl-68 · 실버 먼저 적재(단계 순서의 예외 하나)
 - 요건: 골드 변환 중 프로세스가 꺼져도 실버 결과가 검색되게. 실버 게시·적재만 변환보다 먼저 올 수 있고, 그 밖의 역방향 호출은 없다. 골드 실패·중단·실버까지만 실행은 상태 기록으로 판단.
-- 반영: 없음(사용자 11-08 결정 — 다음 작업).
-- Status: todo
+- 반영: 흐름은 받기 → 파싱 → 실버 게시(`publish_parse_result`) → 원본 지움 → 골드(구조화+적재)다(서버 `run_pipeline.py`).
+  1. 게시가 올린 원본마다 `applog.except_doc_info`에 종류 `silver`·수준 `warn`·이유 `실버만 게시 — 골드 전` 한 행을 쓴다(`except_docs.record_silver` — 기록만, 실패해도 게시는 계속).
+  2. 골드 적재(`pgvector_load.load`)가 끝나면 이번 묶음에서 gold에 있는 원본 키의 `silver` 행을 지운다(`except_docs.clear_silver`). 분류에 실패해 gold에 안 넣은 문서는 지우지 않는다.
+  3. 그래서 골드 실패·골드 중 프로세스 꺼짐·실버까지만 실행은 `silver` 행이 상태 기록으로 남는다. 대상 목록에서 빼는 키가 아니다(다음 실행이 다시 고름).
+  4. 역방향 호출 예외는 둘뿐이다 — 이 실버 먼저 게시와 받기의 FAQ 교체 확인(`candidate_pick.faq_sync`)이 적재 명령 `pgvector_load faq-sync`를 자식 프로세스로 부르는 것(import가 아니라 명령 이름 문자열 — 모듈 경계 점검 ⑫이 세지 않음).
+- QA: `tests/server/pipeline/test_silver_row.py` 사례 표(골드 성공 → silver 행 없음 · 골드 실패 → 남음 · 실버까지만 → 남음) · `test_publish_parse.py`(게시가 올린 문서의 silver 행).
+- Status: done
