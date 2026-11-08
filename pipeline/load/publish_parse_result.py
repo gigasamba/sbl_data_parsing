@@ -42,6 +42,7 @@ from common.config import settings as C  # common 칸(VLM_MODEL·OS_*) · 비밀
 from common.core import span as SP  # 성능 span
 from common.core.console import utf8_stdout
 from common.core.contract import file_hash, jl, safe_filename, safe_path_join
+from common.core.fingerprint import pipeline_version
 from common.core.paths import APP_ROOT, CRITERIA_FILE
 from pipeline import config as pc
 
@@ -57,13 +58,6 @@ SILVER_FILE = "silver.jsonl"  # <out>/publish/ 아래 처리 기록 — 적재�
 
 
 sha256_of = file_hash
-
-
-def pipeline_version():
-    """버전 — common.pipeline_version()(저장소 루트 VERSION·오버레이 패치 PATCH_VERSION 중 높은 것, 실행 보드와 같은 규칙)."""
-    from common import pipeline_version as _pv
-
-    return _pv()
 
 
 def today():
@@ -530,9 +524,6 @@ class LocalFolderStore:
             return None
         return {"size": p.stat().st_size, "etag": hashlib.md5(p.read_bytes()).hexdigest()}
 
-    def exists(self, key):
-        return self.head(key) is not None
-
     def put(self, local_path, key):
         dst = safe_path_join(self.root, key)
         dst.parent.mkdir(parents=True, exist_ok=True)
@@ -561,9 +552,6 @@ class S3Store:
                 return None
             raise
 
-    def exists(self, key):
-        return self.head(key) is not None
-
     def put(self, local_path, key):
         self.cli.upload_file(str(local_path), self.bucket, key)
 
@@ -583,10 +571,7 @@ def _load_inputs(out, manifest, source_dir, rep, summary, skipped, keep):
     source_dir = Path(source_dir) if source_dir else out / "_source_files"
     rep = Path(rep) if rep else out / "parse" / "_rep" / "index.json"
     summary = Path(summary) if summary else out / "parse" / "parse_summary.json"
-    if not skipped:  # filter_and_rotate가 기록을 prepared/_records/에 씀(예전 자리 prepared/skipped.jsonl도 읽음)
-        new, old = out / "prepared" / "_records" / "skipped.jsonl", out / "prepared" / "skipped.jsonl"
-        skipped = new if new.exists() or not old.exists() else old
-    skipped = Path(skipped)
+    skipped = Path(skipped) if skipped else out / "prepared" / "_records" / "skipped.jsonl"  # filter_and_rotate가 쓰는 자리
     keep = Path(keep) if keep else out / "dedup" / "keep.txt"
     if not manifest.exists():
         raise SystemExit(f"[publish_parse] manifest 없음 — {manifest}(Object Storage·RDB 기원 파싱만 대상, 폴더 직접 파싱은 PM3 범위 밖)")
@@ -696,9 +681,7 @@ def main(argv=None):
     ap.add_argument("--source-dir", help="기본 <out>/_source_files")
     ap.add_argument("--rep", help="기본 <out>/parse/_rep/index.json")
     ap.add_argument("--summary", help="기본 <out>/parse/parse_summary.json")
-    ap.add_argument(
-        "--skipped", help="기본 <out>/prepared/_records/skipped.jsonl(옛 자리 prepared/skipped.jsonl도 — DRM·암호, 없으면 무시)"
-    )
+    ap.add_argument("--skipped", help="기본 <out>/prepared/_records/skipped.jsonl(DRM·암호, 없으면 무시)")
     ap.add_argument("--keep", help="기본 <out>/dedup/keep.txt(중복 제외 — 없으면 dedup 정보 없음으로 전부 포함)")
     ap.add_argument(
         "--source-system",

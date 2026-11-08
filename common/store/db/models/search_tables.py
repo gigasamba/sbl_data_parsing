@@ -1,7 +1,7 @@
 """검색 스키마 표 정의(정본). 원천 시스템마다 PG 스키마 하나 `<PG_SCHEMA>_<원천>`
 (원천 = sfdc·crms·las·faq·other + 개발 서버의 DEV 원천 dev_<n> — op-17) — 스키마마다 같은 표 doc·chunk·chunk_term·term_stat·corpus_stat + 뷰 v_chunk_source, 그 원천 전용 칸만 다름.
 기준 스키마 `<PG_SCHEMA>`에는 Alembic 판 표와 5벌이 함께 쓰는 doc_id 시퀀스(`doc_id_seq`)만 있다(실행 정보는 실행 기록에).
-임베딩 차원은 실행 값이라 함수로 만든다. 색인 정의 글자(index_defs)·뷰(views_expected — 칸 이름 순서 + 정의 글자)는 PostgreSQL이 돌려주는 꼴
+임베딩 차원은 실행 값이라 함수로 만든다. 색인 정의 글자(index_defs)·뷰(view_columns 칸 이름 순서·view_sql 정의 글자)는 PostgreSQL이 돌려주는 꼴
 (pg_get_indexdef·pg_get_viewdef — `{S}` = 원천 스키마). Alembic 판(migrations/versions/0002~0007)이 같은 DDL을 글자로 갖고,
 selftest(test_dbtool)가 판 파일의 칸·뷰를 이 정의와 대조한다."""
 
@@ -240,11 +240,6 @@ def view_sql(src):
         + [f"c.{n}" for n, _ in CHUNK_EXTRA.get(src, ())]
     )
     return "SELECT " + ", ".join(sel) + " FROM {S}.chunk c JOIN {S}.doc d ON d.doc_id = c.doc_id"
-
-
-def views_expected(src):
-    """뷰 이름 → (칸 이름 순서 — 판정, 정의 글자 — 알림만)."""
-    return {"v_chunk_source": (tuple(view_columns(src)), view_sql(src))}
 
 
 def view_ddl(src):

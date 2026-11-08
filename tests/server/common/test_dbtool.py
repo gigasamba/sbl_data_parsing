@@ -84,7 +84,7 @@ def selftest():
             }
             views = {n for (n,) in db.sqlite.execute("SELECT name FROM sqlite_master WHERE type = 'view'")}
             md = ST.search_metadata(sch, 4096)
-            assert got == {t.name: [c.name for c in t.columns] for t in md.sorted_tables} and views == set(ST.views_expected(src)), (
+            assert got == {t.name: [c.name for c in t.columns] for t in md.sorted_tables} and views == {"v_chunk_source"}, (
                 src,
                 got,
             )

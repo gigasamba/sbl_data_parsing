@@ -129,7 +129,7 @@
 | n_chunks | INT | `48210` | 청크 수 N | pgvector_load | pgsearch BM25 | 유지 |
 | avg_len | DOUBLE | `171.4` | 평균 n_terms(avgdl) | pgvector_load | pgsearch BM25 | 유지 |
 
-뷰 `v_chunk_source`는 `chunk`↔`doc`을 이은 읽기 전용 뷰다(원천 스키마마다 — 칸 = 청크 칸 + `file_name`(= `file_path` 끝 조각) + 그 원천의 doc 칸 + (faq) `faq_group`). 모델 `views_expected(원천)`이 비교 기준이다.
+뷰 `v_chunk_source`는 `chunk`↔`doc`을 이은 읽기 전용 뷰다(원천 스키마마다 — 칸 = 청크 칸 + `file_name`(= `file_path` 끝 조각) + 그 원천의 doc 칸 + (faq) `faq_group`). 모델 `view_columns(원천)`(칸 순서)·`view_sql(원천)`(정의 글자)이 비교 기준이다.
 
 ## 3. EDW (MSSQL)
 

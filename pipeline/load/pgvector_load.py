@@ -25,7 +25,7 @@ from common.core import span as SP  # 성능 span
 from common.core.console import utf8_stdout
 from common.core.contract import jl  # 묶음 읽기
 from common.core.text import index_text, tokens  # 색인·토큰 규칙(모듈 계약)
-from common.store.pg import HNSW_MAX, PG, _standin_schema, _warn_standin, conf, has_conn, vec  # noqa: F401
+from common.store.pg import PG, _standin_schema, _warn_standin, conf, has_conn, vec
 from pipeline import config as pc
 from pipeline.shared import runtrace  # pipe_run 문서 수·직접 실행 run_id
 
@@ -516,7 +516,7 @@ def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
 def gold_version(meta):
     """gold_version = `<VERSION>+m<마스터 해시 앞 8자>` — 구조화가 읽은 마스터 표 해시(묶음 meta.json master_hash).
     master_hash가 없는 묶음은 `<VERSION>`만. 캐시 열쇠·code_fp에는 넣지 않는다(마스터가 바뀌어도 자동 재처리 없음)."""
-    from pipeline.load.publish_parse_result import pipeline_version  # 게시(silver_version)와 같은 자리
+    from common.core.fingerprint import pipeline_version  # 게시(silver_version)와 같은 자리
 
     h = (meta or {}).get("master_hash")
     return f"{pipeline_version()}+m{h[:8]}" if h else pipeline_version()

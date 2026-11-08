@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
-"""실험 저장소 공통 계약 — 층별 코드 지문·열쇠·`_manifest.json`·낡음 판정.
+"""실험 저장소 공통 계약 — 층별 코드 지문.
 parse·structure·load·search 코드는 import하지 않는다(계약 코드는 모듈 경계 밖 — 파이프라인 쪽이 이 함수들만 가져다 씀).
-"같은 입력 + 같은 코드 지문 = 같은 열쇠" — 층 코드가 바뀌면 지문이 바뀌어 저장본이 자동으로 낡음이 된다.
+층 코드가 바뀌면 지문이 바뀌어 저장본이 자동으로 낡음이 된다.
 여기는 2개 이상 이미지가 쓰는 계약만 둔다(파싱 전용 함수는 pipeline/shared·pipeline/transform/parse).
 """
 
 import functools
 import hashlib
-import json
-import subprocess
-import time
 from pathlib import Path
 
 from common.core.paths import DEPLOY_ROOT
@@ -228,52 +225,6 @@ def _code_fp(layer, base):
         # 줄바꿈 통일 — 작업 사본의 CRLF/LF 차이(편집기·git 체크아웃)로 지문이 흔들리지 않게
         h.update(p.read_bytes().replace(b"\r\n", b"\n"))
     return h.hexdigest()[:12]
-
-
-def _canon(obj):
-    return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-
-
-def key(layer, parts, root=None):
-    """열쇠 = sha256(parts의 표준 JSON + 그 층 code_fp)[:16] — parts의 dict 순서는 안 탄다(sort_keys)."""
-    payload = _canon(parts) + code_fp(layer, root)
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
-
-
-def _git_commit():
-    try:
-        r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=DEV, capture_output=True, text=True, timeout=5)
-        return r.stdout.strip() or None if r.returncode == 0 else None
-    except (OSError, subprocess.SubprocessError):
-        return None
-
-
-def manifest(path, layer, parts, root=None):
-    """저장본 폴더에 `_manifest.json`을 쓴다(parts·code_fp·git commit·생성 시각) — audit·is_stale이 이걸 읽는다."""
-    d = Path(path)
-    d.mkdir(parents=True, exist_ok=True)
-    m = {
-        "layer": layer,
-        "parts": parts,
-        "code_fp": code_fp(layer, root),
-        "git_commit": _git_commit(),
-        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-    }
-    (d / "_manifest.json").write_text(json.dumps(m, ensure_ascii=False, indent=1), encoding="utf-8")
-    return m
-
-
-def is_stale(dir, root=None):
-    """→ (낡음?, 이유). manifest 없음 = 낡음(버전 미상 취급 — 설계 문서 "기존 output/parse는 provenance 없어 낡음 표시")."""
-    d = Path(dir)
-    f = d / "_manifest.json"
-    if not f.exists():
-        return True, "_manifest.json 없음"
-    m = json.loads(f.read_text(encoding="utf-8"))
-    cur = code_fp(m.get("layer"), root)
-    if cur != m.get("code_fp"):
-        return True, f"code_fp 바뀜({m.get('code_fp')} → {cur})"
-    return False, ""
 
 
 def sha8(text):

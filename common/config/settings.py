@@ -459,32 +459,6 @@ def is_host(path):
     return "host" in path.split(".")[:-1]
 
 
-def type_label(annotation):
-    names = []
-    for a in _args(annotation):
-        if a is CsvList:
-            names.append("목록(쉼표 또는 YAML 목록)")
-        elif a is CsvText:
-            names.append("글자(쉼표 목록 — 원문 그대로, YAML 목록은 쉼표로 이음)")
-        elif a is WordList:
-            names.append("목록(공백 또는 YAML 목록)")
-        elif a is JsonValue:
-            names.append("JSON(사전·목록)")
-        elif a is AutoWord:
-            names.append("auto")
-        elif a is Port:
-            names.append("int(포트 — 정수만)")
-        elif a is LibEnv:
-            names.append("사전(라이브러리 env 이름: 글자)")
-        elif get_origin(a) is Literal:
-            names.append("|".join(map(str, get_args(a))))
-        elif get_origin(a) in (list, dict):
-            names.append(get_origin(a).__name__)
-        else:
-            names.append(getattr(a, "__name__", str(a)))
-    return " | ".join(names)
-
-
 def env_map(model_cls, *, hosts=False):
     """env 이름 → 경로(호스트 절은 hosts=True일 때만 — 같은 env 이름이 앱·호스트 두 칸에 있음). 사본을 돌려준다."""
     return dict(_env_map(model_cls, hosts))
@@ -1037,20 +1011,6 @@ def _check_names(names):
     if unknown:
         raise KeyError(f"설정 칸이 없는 이름 {unknown}")
     return known
-
-
-def overridden(environ=None):
-    """지금 설정 파일(SETTINGS_FILE 덮기 파일 사슬)의 overrides에 든 이름 — 공유 settings.yaml 위에 한 번 덮은 값
-    (mcp_eval client_only_env가 씀). 덮기 파일이 아니거나 못 읽으면 빈 묶음."""
-    environ = os.environ if environ is None else environ  # env 남김 — 설정 파일 자리 신호
-    run = environ.get("RUN_ENV") or None
-    path = find_file(environ, run if run in RUN_ENVS else None)
-    if path is None:
-        return frozenset()
-    try:
-        return frozenset(read_settings(path)[1])
-    except SettingsError:
-        return frozenset()
 
 
 def _env_text(v):

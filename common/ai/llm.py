@@ -354,18 +354,6 @@ def _model_down_reset(base_url):
 
 # 출력 형식 검사·1회 재요청(output_schema가 있는 패키지만). 그래도 안 맞으면 그대로 돌려줘 호출부 기본값 처리에 맡김.
 _SCHEMA_RETRY_NOTE = "앞 응답이 형식에 맞지 않았다 — 스키마에 맞는 JSON 하나만"
-_schema_stats = {"invalid": 0, "retry_ok": 0, "retry_failed": 0}
-
-
-def _bump_schema_stat(key):
-    with _lock:
-        _schema_stats[key] += 1
-
-
-def schema_stats():
-    """invalid: 1차 응답이 output_schema에 안 맞아 재요청한 수 · retry_ok·retry_failed: 재요청 결과."""
-    with _lock:
-        return dict(_schema_stats)
 
 
 def _schema_ok(text, schema):
@@ -465,7 +453,6 @@ def _once(agent, role, prof, messages, temperature, max_tokens, json_mode, extra
     schema = _manifest(agent).get("output_schema") if agent else None
     if schema is None or _schema_ok(text, schema):
         return text, usage
-    _bump_schema_stat("invalid")
     first = usage or {}
     reserve_call()
     try:
@@ -477,7 +464,6 @@ def _once(agent, role, prof, messages, temperature, max_tokens, json_mode, extra
         raise
     text = msg.get("content") or ""
     ok = _schema_ok(text, schema)
-    _bump_schema_stat("retry_ok" if ok else "retry_failed")
     usage = dict(usage or {})
     for k in ("prompt_tokens", "completion_tokens"):
         usage[k] = (first.get(k) or 0) + (usage.get(k) or 0)

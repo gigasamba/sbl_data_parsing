@@ -620,7 +620,7 @@ def to_model(doc, source=""):
 
 
 def to_file(model_doc):
-    """모델 배치 사전 → 파일 사전(SECTIONS 순서). sample·시험이 쓴다."""
+    """모델 배치 사전 → 파일 사전(SECTIONS 순서). 시험이 설정 파일을 만들 때 쓴다."""
     out = {}
     for p, v in _leaves(model_doc or {}):
         set_path(out, to_yaml(p), v)

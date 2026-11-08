@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from common.core.artifacts import code_fp, is_stale, key, manifest
+from common.core.artifacts import code_fp
 
 
 def selftest():
@@ -47,28 +47,6 @@ def selftest():
         check("code_fp: 층이 import하는 common 변경은 지문에 반영", fp2 != fp3)
         (root / "common" / "core" / "unused.py").write_text("z = 2\n", encoding="utf-8")
         check("code_fp: 층이 안 쓰는 common 변경은 지문 그대로(10-05)", fp3 == code_fp("s", root=root))
-
-        parts = {"chunker": "structure", "k": 800}
-        k1 = key("s", parts, root=root)
-        k2 = key("s", {"k": 800, "chunker": "structure"}, root=root)  # 키 순서만 다름
-        check("key: dict 키 순서 안 탐(안정)", k1 == k2)
-        check("key: 16자 hex", len(k1) == 16 and all(c in "0123456789abcdef" for c in k1))
-
-        out = root / "store" / "s" / "x"
-        m = manifest(out, "s", parts, root=root)
-        check("manifest: _manifest.json 생성", (out / "_manifest.json").exists())
-        check("manifest: code_fp 기록", m["code_fp"] == fp3)
-        stale, reason = is_stale(out, root=root)
-        check("is_stale: 갓 만든 저장본은 안 낡음", stale is False and reason == "")
-
-        (root / "pipeline" / "transform" / "structure" / "gold_bundle.py").write_text(
-            "from common.core import text\nx = 3\n", encoding="utf-8"
-        )
-        stale2, reason2 = is_stale(out, root=root)
-        check("is_stale: 코드가 바뀌면 낡음으로 바뀜", stale2 is True and "code_fp" in reason2)
-
-        missing, why = is_stale(root / "store" / "s" / "없음", root=root)
-        check("is_stale: manifest 없는 폴더는 낡음(버전 미상)", missing is True and "없음" in why)
 
     print(f"\n{'모두 통과' if not failures else str(len(failures)) + '건 실패: ' + ', '.join(failures)}")
     if failures:

@@ -47,7 +47,6 @@ from common.config.settings import (
     list_sep,
     load,
     overlay_file,
-    overridden,
     pin_env,
     put,
     read_yaml,
@@ -471,11 +470,6 @@ def selftest():
         check(
             "env의 옛 설정 이름 알림 없음(0.2.0 — pl-46: 알림을 지움)",
             "PIPE_PROCS" not in buf.getvalue() and "RAG_ROOT" not in buf.getvalue(),
-        )
-        check(
-            "overridden()(R-11): 지금 덮기 파일의 overrides 이름만(공유 settings.yaml 값은 아님)",
-            overridden({"SETTINGS_FILE": str(d / "ovb.yaml")}) == {"LLM_FAKE", "EMBED_TIMEOUT", "LLM_MODEL", "VLM_MODEL", "PM_PREFIX"}
-            and overridden({"SETTINGS_FILE": str(tf)}) == frozenset(),
         )
         check(
             "dropped(): 형식 틀려 버린 옛 env 이름을 알림",

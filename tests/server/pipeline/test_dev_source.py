@@ -51,7 +51,11 @@ def test_mapping():
     for schema, want in SPLIT:
         assert ST.split_schema(schema) == want, schema
     assert ST.src_schema("ai", "dev_1") == "ai_dev_1" and ST.label("dev_12") == "DEV-12" and ST.label("other") == "Other"
-    assert ST.doc_columns("dev_1") == ST.doc_columns("other") and ST.views_expected("dev_1") == ST.views_expected("other")
+    assert (
+        ST.doc_columns("dev_1") == ST.doc_columns("other")
+        and ST.view_columns("dev_1") == ST.view_columns("other")
+        and ST.view_sql("dev_1") == ST.view_sql("other")
+    )
     assert "dev_1" not in ST.SOURCES  # 고정 5벌은 그대로(판 파일이 대조)
 
 

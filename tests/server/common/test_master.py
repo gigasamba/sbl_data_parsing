@@ -298,8 +298,8 @@ def test_server_refuses_and_empty_table():
 
 
 def test_gold_version():
+    from common.core.fingerprint import pipeline_version
     from pipeline.load import pgvector_load as L
-    from pipeline.load.publish_parse_result import pipeline_version
 
     v = pipeline_version()
     cases = [({"master_hash": "58a24b0258b4a00772"}, f"{v}+m58a24b02"), ({}, v), (None, v)]

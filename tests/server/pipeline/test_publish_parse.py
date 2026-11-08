@@ -81,7 +81,8 @@ def make_fixture():
         + "\n",
         encoding="utf-8",
     )
-    (out / "prepared" / "skipped.jsonl").write_text(
+    (out / "prepared" / "_records").mkdir(parents=True, exist_ok=True)
+    (out / "prepared" / "_records" / "skipped.jsonl").write_text(
         json.dumps({"file": "d.pdf", "reason": "drm_fasoo", "sha256": "x"}) + "\n", encoding="utf-8"
     )
 

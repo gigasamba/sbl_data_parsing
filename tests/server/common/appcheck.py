@@ -35,7 +35,7 @@ def app_selftest(app_cls, top):
     secret = "tok-" + "y" * 10
     with tempfile.TemporaryDirectory() as td:
         f = Path(td) / "s.yaml"
-        host_leaf = next(p for p, fi, _ in rows if p.startswith(top + ".host.") and S.type_label(fi.annotation) == "str")
+        host_leaf = next(p for p, fi, _ in rows if p.startswith(top + ".host.") and S._args(fi.annotation) == [str])
         sec_leaf = next(p for p, fi, _ in rows if S.is_secret(fi))  # 앱 절에 비밀 칸이 없으면 common 것
         doc = {}
         L.set_path(doc, host_leaf, "v1")
@@ -85,7 +85,7 @@ def app_selftest(app_cls, top):
             for p, fi, _ in rows
             if p.startswith(top + ".")
             and not S.is_host(p)
-            and S.type_label(fi.annotation) == "str"
+            and S._args(fi.annotation) == [str]
             and not S.is_secret(fi)
             and p not in S.LOCAL_IGNORED  # local이 비우는 서버 전용 칸은 빼고(op-14)
             and _probe_value(fi)

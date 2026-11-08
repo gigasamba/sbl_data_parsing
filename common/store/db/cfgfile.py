@@ -25,7 +25,7 @@ class StackBody(BaseModel):
     parse: dict[str, list[str]]
     source: str | None = None
     embed: str
-    chunk: Literal["structure"]  # 청커는 structure 하나(pipeline/transform/structure/chunking.py CHUNKERS)
+    chunk: Literal["structure"]  # 청커는 structure 하나(pipeline/transform/structure/chunking.py)
     retrieve: str
     k: int
 
