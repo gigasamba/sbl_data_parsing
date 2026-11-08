@@ -137,10 +137,8 @@ def test_dispatch_audit():
         assert audit.drain()
         assert rows[-1]["status"] == "ok"
         tool_runner._LANES.clear()
-        with mc.senv(MCP_MAX_CONCURRENCY="1", MCP_MAX_QUEUE="1"):
-            _full(True)
+        with mc.senv(MCP_MAX_CONCURRENCY="1", MCP_MAX_QUEUE="1"), _full():
             assert await tool_runner._bg_long(lambda: None, 1) == {"error": "busy"}
-            _full(False)
         assert await tool_runner._bg_long(slow, -9.99) == {"error": "timeout"}
         await asyncio.sleep(0.1)
         assert audit.drain()
@@ -499,8 +497,7 @@ def test_audit_off_loop():
             app = main.build_guarded_app("127.0.0.1", 8765, "")
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             tool_runner._LANES.clear()
-            with mc.senv(MCP_MAX_CONCURRENCY="1", MCP_MAX_QUEUE="1"):
-                _full(True)
+            with mc.senv(MCP_MAX_CONCURRENCY="1", MCP_MAX_QUEUE="1"), _full():
                 task = asyncio.create_task(tool_runner._bg_long(do_parse_document, 1, encoded))
                 await ready(entered)
                 assert (await client.get("/health")).status_code == 200
@@ -511,7 +508,6 @@ def test_audit_off_loop():
                 assert seen == [3]  # 2자리 + 대기 1 = 가득 — busy 판정/거부 뒤에만 입력 처리, 업무 함수는 안 돌림.
             entered.clear()
             input_release.clear()
-            _full(False)
             task = asyncio.create_task(tool_runner._bg(do_parse_document, encoded))
             for event in (entered, output_entered):
                 await ready(event)

@@ -36,7 +36,7 @@ def test_no_run_is_noop():
             sp.add(pages=3).observe("x", 1).set(engine="e").result("fail", "doc", "ignored")
         span.add_current(x=1)
         assert span.current() is None
-        with mock.patch.object(embed, "_embed_api", lambda texts, kind="passage": np.ones((len(texts), 3), dtype=np.float32)):
+        with mock.patch.object(embed, "_embed_api", lambda texts, kind="passage", timeout=None: np.ones((len(texts), 3), dtype=np.float32)):
             vec = embed.embed_texts("api", ["질문"], "query")
         assert vec.shape == (1, 3)
     assert rows == [] and threading.active_count() == threads and span._STATE["log"] is logger_before

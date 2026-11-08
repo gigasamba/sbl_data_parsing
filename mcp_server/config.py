@@ -92,6 +92,11 @@ class McpServer(Section):
     manifest: str | None = F(None, "MCP_MANIFEST", "수집 manifest.jsonl 경로(문서 유형·버전·삭제 여부 출처)")
     max_concurrency: int | None = F(8, "MCP_MAX_CONCURRENCY", "도구 동시 실행 상한(개)")
     max_queue: int | None = F(None, "MCP_MAX_QUEUE", "도구 대기열 상한(개) — 넘으면 즉시 busy 응답, 0이면 무제한")
+    pg_statement_timeout_sec: int | None = F(
+        25,
+        "MCP_PG_STATEMENT_TIMEOUT",
+        "검색 MCP 연결 풀의 PostgreSQL 질의 하나의 시간 제한(초) — 도구 시간 상한(30초)보다 짧게. 넘으면 DB가 그 질의를 멈추고 도구는 timeout, 0이면 제한 없음",
+    )
     port: Port | None = F(8765, "MCP_PORT", "MCP 서버 포트")
     reload_check_sec: float | None = F(30.0, "MCP_RELOAD_CHECK_SEC", "적재 버전 변경 확인 간격(초) — 바뀌면 검색기·edw_meta 다시 읽음")
     tool_timeout_sec: float | None = F(30.0, "MCP_TOOL_TIMEOUT_SEC", "도구 1회 실행 시간 상한(초) — 넘으면 timeout 응답, 0이면 무제한")

@@ -44,8 +44,8 @@ def _warn_tls_off():
     )
 
 
-def client(timeout=None):
-    """boto3 s3 클라이언트. timeout(초)이 있으면 connect·read 둘 다 그 값으로(근거 이미지 받기 시간 상한).
+def client(timeout=None, retries=3):
+    """boto3 s3 클라이언트. timeout(초)이 있으면 connect·read 둘 다 그 값으로(근거 이미지 받기 시간 상한). retries = 실패 뒤 다시 보내는 횟수(첫 시도 빼고).
     PC(RUN_ENV=local)는 거부 — 칸을 비워도 boto3 기본값(AWS 주소·~/.aws 키)으로 실제 S3에 닿을 수 있어서(op-14). 모든 S3 접속이 여기를 거친다."""
     from common.config.settings import guard_run_env
 
@@ -57,7 +57,7 @@ def client(timeout=None):
     import boto3
     from botocore.config import Config
 
-    cfg_kwargs = {"retries": {"max_attempts": 3}}
+    cfg_kwargs = {"retries": {"max_attempts": retries}}  # botocore legacy: max_attempts = 다시 보내는 횟수
     if timeout:
         cfg_kwargs.update(connect_timeout=timeout, read_timeout=timeout)
     os_ = cfg().connections.object_storage

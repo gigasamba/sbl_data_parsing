@@ -130,8 +130,8 @@ def test_reload_keeps_pool():
         class Pool:
             schema = "t"
 
-            def __init__(self, c):
-                made.append(self)
+            def __init__(self, c, statement_timeout_sec=None):
+                made.append(statement_timeout_sec)
 
             q = scope = None  # SchemaView가 묶기만 함(all_sources는 가짜)
 
@@ -143,7 +143,8 @@ def test_reload_keeps_pool():
             mock.patch.object(M.ST, "all_sources", lambda base, q=None: ["other"]),
         ):
             first, second = M.connect_sources(), M.connect_sources()
-        assert len(made) == 1 and first["other"].pool_obj is second["other"].pool_obj is _STATE["pool"]
+        # 풀 하나 · 질의 시간 제한은 MCP 칸(기본 25초 — 도구 30초 안), 파이프라인 칸(120초)이 아님
+        assert made == [25] and first["other"].pool_obj is second["other"].pool_obj is _STATE["pool"]
     finally:
         _STATE.clear()
         _STATE.update(saved)

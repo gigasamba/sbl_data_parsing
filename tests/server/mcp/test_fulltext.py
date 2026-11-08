@@ -285,3 +285,14 @@ def test_get_batch():
             assert [f["status"] for f in r["files"]] == ["ok"] * 3, r
             assert pg.call_count == len(M._sources()), pg.call_count  # 파일 수와 무관하게 원천마다 한 번
     print("[시험] get_doc_fulltext 동시 받기 — 순서·건너뜀 사유·batch 같음 · 등록 시각 가드 원천마다 질의 한 번 통과")
+
+
+def test_storage_client():
+    """원문 도구의 저장소 클라이언트 — 호출 하나 25초(도구 30초 안)·실패면 한 번만 더."""
+    M._client.cache_clear()
+    try:
+        with patch("common.store.objectstore.client") as made:
+            M._client()
+        assert made.call_args.kwargs == {"timeout": 25, "retries": 1} and FT.FILE_TIMEOUT_SEC < 30, made.call_args
+    finally:
+        M._client.cache_clear()

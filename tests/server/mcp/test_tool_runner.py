@@ -152,6 +152,40 @@ def test_own_slots():
     M._LANES.clear()
 
 
+def test_slot_held():
+    """시간 초과된 스레드는 정말 끝날 때까지 자리를 쥔다 — 그동안 온 요청은 자리를 기다리다 timeout(도구는 안 돎), 끝난 뒤엔 바로 돎."""
+    import asyncio
+
+    ran = []
+
+    def slow():
+        time.sleep(0.4)
+        ran.append("slow")
+
+    def fast():
+        ran.append("fast")
+        return 1
+
+    cases = [  # (부를 도구, 그 전에 기다릴 초, 기대 결과)
+        (slow, 0, {"error": "timeout"}),  # 0.1초에 시간 초과 — 스레드는 0.4초까지 자리를 쥠
+        (fast, 0, {"error": "timeout"}),  # 자리 대기 중 시간 초과 — fast는 돌지 않음
+        (fast, 0.5, 1),  # slow가 끝난 뒤 — 자리가 비어 바로 돎
+    ]
+    M._LANES.clear()
+    with mc.senv(MCP_MAX_CONCURRENCY="1", MCP_MAX_QUEUE=None, MCP_TOOL_TIMEOUT_SEC="0.1"):
+
+        async def main():
+            out = []
+            for tool, wait, _ in cases:
+                await asyncio.sleep(wait)
+                out.append(await _bg(tool))
+            return out
+
+        out = asyncio.run(main())
+    M._LANES.clear()
+    assert out == [want for _, _, want in cases] and ran == ["slow", "fast"], (out, ran)
+
+
 def test_main():  # 옛 자기 점검 사례(__main__이 없어 import해 부르던 순서 — main.py 옛 selftest)
     _selftest_concurrency()
     _selftest_overload()

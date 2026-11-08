@@ -102,7 +102,7 @@ def _client():
     """boto3 클라이언트 하나를 계속 씀(스레드 안전) — 요청마다 새로 만들지 않음."""
     from common.store.objectstore import client
 
-    return client(timeout=FT.FILE_TIMEOUT_SEC)
+    return client(timeout=FT.FILE_TIMEOUT_SEC, retries=1)
 
 
 def _rep_files(s3, bucket, folder):

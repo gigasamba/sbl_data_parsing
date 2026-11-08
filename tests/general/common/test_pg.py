@@ -130,18 +130,20 @@ def test_pool_options():
     import psycopg_pool as _pp
 
     c = {"PG_HOST": "x", "PG_PORT": "5432", "PG_DB": "x", "PG_USER": "x", "PG_PASSWORD": "x", "PG_SCHEMA": "ai"}
-    cases = [  # (PG_STATEMENT_TIMEOUT, 기대 options)
-        (None, "-c statement_timeout=120000"),  # 기본 120초
-        ("5", "-c statement_timeout=5000"),
-        ("0", None),
+    cases = [  # (PG_STATEMENT_TIMEOUT, 부르는 쪽 statement_timeout_sec, 기대 options)
+        (None, None, "-c statement_timeout=120000"),  # 기본 120초
+        (None, 25, "-c statement_timeout=25000"),  # 검색 MCP가 덮음(mcp.server.pg_statement_timeout_sec)
+        ("5", 0, None),  # 덮은 0 = 제한 없음
+        ("5", None, "-c statement_timeout=5000"),
+        ("0", None, None),
     ]
     check = _pp.ConnectionPool.check_connection
-    for v, want in cases:
+    for v, mine, want in cases:
         with COMMON.env(PG_STATEMENT_TIMEOUT=v), patch.object(_pp, "ConnectionPool") as fake:
             fake.check_connection = check
-            PGPool(c)
+            PGPool(c, statement_timeout_sec=mine)
         kw = fake.call_args.kwargs
-        assert kw["kwargs"].get("options") == want and kw["check"] == check, (v, kw)
+        assert kw["kwargs"].get("options") == want and kw["check"] == check, (v, mine, kw)
     print("[selftest] PGPool — 연결 확인(check)·질의 시간 제한(options) 전달 통과")
 
 

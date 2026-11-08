@@ -18,7 +18,7 @@ from common.core.paths import APP_ROOT
 ROOT = APP_ROOT  # output/query_cache.sqlite 기준
 
 
-def _embed_api(texts, kind="passage"):
+def _embed_api(texts, kind="passage", timeout=None):
     """OpenAI 호환 /embeddings — 주소·모델 이름은 common/models.py profile("embed")에서(호출은 urllib).
     모델은 주소·이름만 바꿔 끼움. 내부망만(DONT 13). 질의에는 EMBED_QUERY_PREFIX를 앞에 붙임(Qwen3 임베딩 계열 권장:
     'Instruct: <과업>\\nQuery: ' — \\n은 줄바꿈으로). 결과는 L2 정규화."""
@@ -41,7 +41,7 @@ def _embed_api(texts, kind="passage"):
     key = reveal(by_env(prof.key_env)) if prof.key_env else None  # key_env는 env 이름 — 값은 설정 객체에서
     if key:
         req.add_header("Authorization", f"Bearer {key}")
-    r, reserved = _g_urlopen_metered(req, cfg().models.embed.timeout, "EMBED")
+    r, reserved = _g_urlopen_metered(req, timeout or cfg().models.embed.timeout, "EMBED")  # timeout: 부르는 쪽이 덮음(검색 MCP 25초)
     try:
         data = json.load(r)
     finally:
@@ -108,23 +108,23 @@ def query_model_mismatch(meta):
     )
 
 
-def embed_texts(embed, texts, kind):
-    """embed: api만. kind = query·passage."""
+def embed_texts(embed, texts, kind, timeout=None):
+    """embed: api만. kind = query·passage. timeout(초) = 호출 하나 제한(없으면 common.models.embed.timeout)."""
     if not texts:
         return np.zeros((0, 1), dtype=np.float32)
     if kind == "query":
         import sqlite3
 
         try:
-            return _embed_query_cached(embed, texts, kind)
+            return _embed_query_cached(embed, texts, kind, timeout)
         except sqlite3.Error:  # 캐시 잠금·손상 — 질의는 캐시 없이
             pass
-    return _embed_uncached(embed, texts, kind)
+    return _embed_uncached(embed, texts, kind, timeout)
 
 
-def _embed_query_cached(embed, texts, kind):
+def _embed_query_cached(embed, texts, kind, timeout=None):
     if (db := _query_cache()) is None:
-        return _embed_uncached(embed, texts, kind)
+        return _embed_uncached(embed, texts, kind, timeout)
     try:
         import hashlib
 
@@ -134,7 +134,7 @@ def _embed_query_cached(embed, texts, kind):
         got = dict(db.execute(f"SELECT k, v FROM q WHERE k IN ({','.join('?' * len(keys))})", keys).fetchall())
         todo = [i for i, k in enumerate(keys) if k not in got]
         if todo:
-            new = _embed_uncached(embed, [texts[i] for i in todo], kind)
+            new = _embed_uncached(embed, [texts[i] for i in todo], kind, timeout)
             for i, v in zip(todo, new):
                 got[keys[i]] = np.asarray(v, dtype=np.float32).tobytes()
             db.executemany("INSERT OR REPLACE INTO q VALUES (?, ?)", [(keys[i], got[keys[i]]) for i in todo])
@@ -145,12 +145,12 @@ def _embed_query_cached(embed, texts, kind):
         db.close()
 
 
-def _embed_uncached(embed, texts, kind):
+def _embed_uncached(embed, texts, kind, timeout=None):
     if embed != "api":
         raise ValueError(f"임베딩 방식 {embed!r}는 지원하지 않음 — api만(로컬 모델 길은 0.2.0에 지움, pl-46)")
     sp = _span.current()  # 열린 span(구조화 임베딩)이 있을 때만 호출 수·지연을 쌓음. 없으면 이 한 줄만 비용
     t0 = time.monotonic() if sp is not None else 0.0
-    out = _embed_api(texts, kind)
+    out = _embed_api(texts, kind, timeout)
     if sp is not None:
         ms = (time.monotonic() - t0) * 1000
         sp.add(embed_calls=1).observe("embed_call_ms", ms).ext_call(ms)

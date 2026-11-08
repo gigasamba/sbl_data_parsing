@@ -110,7 +110,7 @@
   5. `since`/`until`(게시 시각)은 `doc.parsed_at`으로 같은 질의에서 거른다.
   6. sfid = `sf1.<base64url(버킷/키)>.<HMAC-SHA256>`, 서명 키 `required.tokens.fulltext_sign_key`.
   7. `get_doc_fulltext`의 등록 시각 가드: sfid의 대표 결과 .md 키(.json이면 같은 이름 .md)를 `silver_key`로 가진 gold `doc`의 `created_at` — 요청한 키 전부를 원천 스키마마다 질의 한 번으로 읽는다.
-  8. 한도: `docs` 200 · `limit` 기본 50, 상한 200 · get 한 번 20개 · 파일 16 MiB(`too_large`) · 합계 24 MiB(나머지 `batch_full`) · 파일 하나 60초. 크기 확인·받기는 동시에(8개씩) 하되 판정과 출력 순서는 요청한 순서대로다(한 개씩 받을 때와 같은 결과).
+  8. 한도: `docs` 200 · `limit` 기본 50, 상한 200 · get 한 번 20개 · 파일 16 MiB(`too_large`) · 합계 24 MiB(나머지 `batch_full`) · 저장소 호출 하나 25초(실패면 한 번 더). 크기 확인·받기는 동시에(8개씩) 하되 판정과 출력 순서는 요청한 순서대로다(한 개씩 받을 때와 같은 결과).
   9. 오류: 서명 키가 비면 `not_configured` · 키를 바꾸면 옛 sfid는 `bad_sfid` · PG(gold `doc`)를 못 읽으면 `registry_unavailable` · Object Storage를 못 읽으면 `source_storage_unavailable` · 처리 기록(`silver_key`)이 없는 적재 문서는 `no_files`.
 - 운영과 다른 점:
   - `rep_engine` 출력 없음.
@@ -172,9 +172,9 @@
 <a id="mc-09"></a>
 ## mc-09 · 서버 실행과 안전
 - 이유: 공용 내부 서비스라 계속 떠 있어야 하고 위험한 노출은 거부해야 한다.
-- 규칙: FastMCP streamable HTTP(`/mcp`, 기본 `search.server.mcp_bind_host` 127.0.0.1 · `mcp_port` 8765) 또는 `--stdio`. loopback이 아닌 주소는 `required.tokens.mcp_token` 필요(상수 시간 비교), 0.0.0.0 거부, DNS 리바인딩 가드(`search.server.mcp_allowed_hosts`). `/health`(준비 중이면 503). 도구 동시 8(`search.server.mcp_max_concurrent_tools`) + 대기열(`mcp_max_queued_tools`, 비우면 자리 수 × 4 — 차면 바로 `busy`), 도구 한 번 30초. `parse_document`와 `get_doc_fulltext`는 공용 자리를 쓰지 않고 도구마다 자기 자리 2개 + 같은 규칙의 대기열을 쓴다(파싱은 오래 걸리고, 원문 받기는 한 번에 최대 24 MiB를 메모리에 올린다). `parse_document`는 `time_out_threshold`만큼 기다리되 10분에서 자른다. PG 질의 하나 120초(`tuning.common.connections.pg.pg_statement_timeout_sec` — 넘으면 `timeout`) · 끊긴 풀 연결은 꺼낼 때 새 연결로 한 번 바꾸고, 그래도 DB에 닿지 못하면 `db_unavailable`(원문 도구는 `registry_unavailable` 그대로). 새 적재 판이면(`tuning.search.server.mcp_reload_check_sec` 30초마다 확인) 검색기를 다시 만든다 — 판 확인 질의가 실패하면 안 바뀐 것으로 보고 그대로 둔다. PG 연결 풀은 프로세스에 하나이고 다시 만들 때도 그대로 쓴다. 호출 감사 기록은 [ops.md#op-01](ops.md#op-01).
+- 규칙: FastMCP streamable HTTP(`/mcp`, 기본 `search.server.mcp_bind_host` 127.0.0.1 · `mcp_port` 8765) 또는 `--stdio`. loopback이 아닌 주소는 `required.tokens.mcp_token` 필요(상수 시간 비교), 0.0.0.0 거부, DNS 리바인딩 가드(`search.server.mcp_allowed_hosts`). `/health`(준비 중이면 503). 도구 동시 8(`search.server.mcp_max_concurrent_tools`) + 대기열(`mcp_max_queued_tools`, 비우면 자리 수 × 4 — 차면 바로 `busy`), 도구 한 번 30초. `parse_document`와 `get_doc_fulltext`는 공용 자리를 쓰지 않고 도구마다 자기 자리 2개 + 같은 규칙의 대기열을 쓴다(파싱은 오래 걸리고, 원문 받기는 한 번에 최대 24 MiB를 메모리에 올린다). `parse_document`는 `time_out_threshold`만큼 기다리되 10분에서 자른다. 안쪽 제한은 모두 도구 30초보다 짧다 — PG 질의 하나 25초(`tuning.search.server.mcp_pg_statement_timeout_sec` — 검색 MCP 풀만, 넘으면 `timeout`) · 질의 임베딩 호출 하나 25초(연결·시간 초과면 한 번 더) · 원문 도구의 저장소 호출 하나 25초(실패면 한 번 더). 시간 초과로 응답한 뒤에도 끊지 못한 작업 스레드는 정말 끝날 때까지 자기 자리를 쥔다(그동안 새 요청은 그 자리를 기다린다). 끊긴 풀 연결은 꺼낼 때 새 연결로 한 번 바꾸고, 그래도 DB에 닿지 못하면 `db_unavailable`(원문 도구는 `registry_unavailable` 그대로). 새 적재 판이면(`tuning.search.server.mcp_reload_check_sec` 30초마다 확인) 검색기를 다시 만든다 — 판 확인 질의가 실패하면 안 바뀐 것으로 보고 그대로 둔다. PG 연결 풀은 프로세스에 하나이고 다시 만들 때도 그대로 쓴다. 호출 감사 기록은 [ops.md#op-01](ops.md#op-01).
 - 파일: `mcp_server/main.py`, `mcp_server/services/tool_runner.py`, `mcp_server/config.py`, `common/store/pg.py`(`PGPool`).
-- QA: `tests/server/mcp/test_tool_runner.py`(`test_db_errors` · `test_own_slots` — 자기 자리 2개·셋째 대기·대기열 차면 `busy`) · `tests/server/mcp/test_server_state.py`(`test_reload_keeps_pool` — 확인 실패는 그대로·판이 바뀌면 다시·풀 하나) · `tests/general/common/test_pg.py`(`test_pool_options`) · 통과.
+- QA: `tests/server/mcp/test_tool_runner.py`(`test_db_errors` · `test_own_slots` — 자기 자리 2개·셋째 대기·대기열 차면 `busy`) · `tests/server/mcp/test_server_state.py`(`test_reload_keeps_pool` — 확인 실패는 그대로·판이 바뀌면 다시·풀 하나·질의 제한 25초) · `test_tool_runner.py::test_slot_held` · `test_rank_rules.py::test_embed_retry` · `test_fulltext.py::test_storage_client` · `tests/general/common/test_pg.py`(`test_pool_options`) · 통과.
 - Status: done
 
 <a id="mc-20"></a>

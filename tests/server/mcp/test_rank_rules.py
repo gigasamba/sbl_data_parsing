@@ -39,5 +39,36 @@ def _selftest_index_mismatch():
     print("[selftest] AD41 — 질의 임베딩 모델 ≠ 색인 meta면 거부(키워드 검색으로 조용히 안 떨어짐) 통과")
 
 
+def test_embed_retry():
+    """질의 임베딩 — 호출 하나 25초(EMBED_QUERY_SEC) · 연결·시간 초과(OSError)면 한 번만 더."""
+    from unittest import mock
+
+    import numpy as np
+
+    from mcp_server.services.search import rank_rules as RR
+
+    cases = [  # (호출마다 결과 — OSError면 그 예외, 기대: 벡터 또는 예외 형식, 호출 수)
+        ([np.ones((1, 2))], "vec", 1),
+        ([OSError("timed out"), np.ones((1, 2))], "vec", 2),
+        ([OSError("timed out"), OSError("timed out")], OSError, 2),
+    ]
+    for answers, want, n in cases:
+        seen = []
+
+        def fake(embed, texts, kind, timeout=None, answers=answers, seen=seen):
+            seen.append(timeout)
+            got = answers[len(seen) - 1]
+            if isinstance(got, Exception):
+                raise got
+            return got
+
+        with mock.patch.object(RR, "embed_texts", fake):
+            try:
+                got = "vec" if len(RR.embed_query({"embed": "api", "dim": 2}, "q")) == 2 else None
+            except OSError as e:
+                got = type(e)
+        assert got == want and seen == [RR.EMBED_QUERY_SEC] * n and RR.EMBED_QUERY_SEC < 30, (answers, got, seen)
+
+
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통
     selftest()

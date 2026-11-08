@@ -71,7 +71,7 @@ def test_parse_attempt_column():
 def test_embed_span_cache_batches_retries():
     calls = []
 
-    def fake_api(texts, kind="passage"):
+    def fake_api(texts, kind="passage", timeout=None):
         calls.append(len(texts))
         if len(calls) == 2:  # 두 번째 호출은 서버 일시 오류 — 다시 보낸다
             raise OSError("busy")
@@ -101,7 +101,10 @@ def test_embed_span_cache_batches_retries():
 
 def test_embed_hook_is_free_without_span():
     rows, patched = _capture()
-    with patched, mock.patch.object(embed, "_embed_api", lambda texts, kind="passage": np.ones((len(texts), 2), dtype=np.float32)):
+    with (
+        patched,
+        mock.patch.object(embed, "_embed_api", lambda texts, kind="passage", timeout=None: np.ones((len(texts), 2), dtype=np.float32)),
+    ):
         assert embed._embed_uncached("api", ["a"], "passage").shape == (1, 2)
     assert rows == []
 

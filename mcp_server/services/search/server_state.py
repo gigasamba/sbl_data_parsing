@@ -203,7 +203,7 @@ def connect_sources():
     """원천 이름 → 그 원천 스키마 연결(`<PG_SCHEMA>_<원천>`) — 5벌 + 있는 DEV 원천(op-17 — prd는 5벌만). 실 PG는 프로세스에 풀 하나(처음 한 번 만들고 재적재 때도 그대로 — _STATE["pool"]) + SchemaView,
     대역은 스키마마다 파일 하나(StandinPG)."""
     if has_conn():
-        pool = _STATE.get("pool") or PGPool(conf())
+        pool = _STATE.get("pool") or PGPool(conf(), statement_timeout_sec=mc.cfg().server.pg_statement_timeout_sec)
         _STATE["pool"] = pool
         return {src: SchemaView(pool, ST.src_schema(pool.schema, src)) for src in ST.all_sources(pool.schema, pool.q)}
     _warn_standin()

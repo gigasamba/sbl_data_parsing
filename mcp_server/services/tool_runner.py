@@ -1,6 +1,7 @@
 """도구 실행 창구 — 스레드 실행·도구별 자리(공용 MCP_MAX_CONCURRENCY · parse_document 2 · get_doc_fulltext 2)·대기열 상한(MCP_MAX_QUEUE)·
 요청 시간 상한(MCP_TOOL_TIMEOUT_SEC)·감사 1행."""
 
+import threading
 from functools import partial
 
 import anyio
@@ -17,13 +18,43 @@ _LANES: dict = {}  # 자리 이름("shared" 또는 _OWN_SLOTS의 이름) → _La
 
 
 class _Lane:
-    """한 무리의 자리. accepted = 받아들인(실행 중+대기 중) 요청 수 — limiter 통계는 판정과 자리 잡기 사이에 await가 끼어
-    동시에 온 요청을 못 세므로 따로 센다(판정→증가 사이에 await가 없음)."""
+    """한 무리의 자리. 자리는 작업 스레드 안에서 잡고 그 스레드가 정말 끝날 때 놓는다 — 시간 초과로 호출자가 떠나도 스레드가
+    도는 동안은 자리를 쥔다(못 끊는 스레드가 자리 밖에서 쌓이지 않게). accepted = 받아들였고 아직 안 끝난 요청 수(도는 중·자리 대기 중·
+    시간 초과 뒤에도 도는 중) — 판정→증가 사이에 await가 없어 동시에 온 요청도 정확히 센다."""
 
     def __init__(self, slots):
-        self.limiter = anyio.CapacityLimiter(slots)
         self.total = slots
+        self.slots = threading.Semaphore(slots)
+        self.lock = threading.Lock()
         self.accepted = 0
+
+
+class _Ticket:
+    """요청 하나의 몫 — accepted는 한쪽만 줄인다: 스레드가 시작했으면 스레드가 끝날 때, 못 시작했으면 호출자가 떠날 때."""
+
+    def __init__(self, lane):
+        self.lane, self.started, self.gone = lane, False, False
+
+    def run(self, call):
+        lane = self.lane
+        with lane.lock:
+            if self.gone:
+                return None
+            self.started = True
+        try:
+            with lane.slots:
+                if self.gone:  # 자리를 기다리는 동안 호출자가 시간 초과로 떠남 — 도구를 돌리지 않음
+                    return None
+                return call()
+        finally:
+            with lane.lock:
+                lane.accepted -= 1
+
+    def leave(self):
+        with self.lane.lock:
+            self.gone = True
+            if not self.started:
+                self.lane.accepted -= 1
 
 
 def _lane(name):
@@ -43,15 +74,22 @@ async def _dispatch(fn, timeout, a, kw, lane_name):
     도구가 던진 PG 오류(풀이 끊긴 연결을 한 번 바꾼 뒤에도): 질의 시간 제한(QueryCanceled)은 timeout, 그 밖의 접속 오류는 db_unavailable."""
     lane = _lane(lane_name)
     queue_cap = _queue_cap(lane.total)
-    if queue_cap and lane.accepted >= lane.total + queue_cap:
+    with lane.lock:
+        busy = bool(queue_cap) and lane.accepted >= lane.total + queue_cap
+        if not busy:
+            lane.accepted += 1
+    if busy:
         call_log.start(fn, a, kw).finish({"error": "busy"})
         return {"error": "busy"}
-    lane.accepted += 1
+    ticket = _Ticket(lane)
     audit = call_log.start(fn, a, kw)
     call = partial(audit.run, fn, *a, **kw)
     try:
         with anyio.fail_after(timeout):
-            result = await anyio.to_thread.run_sync(call, limiter=lane.limiter, abandon_on_cancel=timeout is not None)
+            # 스레드 몫은 요청마다 따로(limiter 1) — 자리 대기는 스레드 안(lane.slots)이라 anyio 공용 스레드 상한(40)에 묶이지 않게
+            result = await anyio.to_thread.run_sync(
+                ticket.run, call, limiter=anyio.CapacityLimiter(1), abandon_on_cancel=timeout is not None
+            )
         audit.finish(result)
         return result
     except TimeoutError as exc:
@@ -70,7 +108,7 @@ async def _dispatch(fn, timeout, a, kw, lane_name):
         audit.finish(status="error", err=str(exc))
         raise
     finally:
-        lane.accepted -= 1
+        ticket.leave()
 
 
 async def _bg(fn, *a, **kw):
@@ -78,7 +116,7 @@ async def _bg(fn, *a, **kw):
     과부하 보호: 자리(공용 MCP_MAX_CONCURRENCY, get_doc_fulltext는 자기 2자리)만큼 돌고 있는 것 + 그 뒤로 밀린 대기가
     대기열 상한(MCP_MAX_QUEUE, 기본 자리 수×4, =0이면 무제한)까지 차 있으면 **기다리지 않고** 바로
     {"error": "busy"} — 꽉 찼을 때 요청이 무한정 쌓여 죽는 대신 호출자가 바로 알고 재시도하게.
-    받아들여진 요청은 시간 상한(MCP_TOOL_TIMEOUT_SEC, 기본 30초, =0이면 무제한) 안에 끝나야 하며 넘으면 {"error": "timeout"}.
+    받아들여진 요청은 시간 상한(MCP_TOOL_TIMEOUT_SEC, 기본 30초, =0이면 무제한) 안에 끝나야 하며 넘으면 {"error": "timeout"}(못 끊는 스레드는 끝날 때까지 자리를 쥔다 — _Lane).
     호출자별 동시 상한은 안 둠 — MCP_TOKEN이 서버 전체에 하나뿐이라 X-MCP-Client 머리글(자기 신고값,
     검증 없음)로 자원을 나누면 신뢰 경계가 아닌 값으로 과설계만 늘어남."""
     timeout = float(mc.cfg().server.tool_timeout_sec)  # 기본 30(모델) — 요청마다

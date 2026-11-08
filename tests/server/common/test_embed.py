@@ -16,7 +16,7 @@ def test_main():  # 질의 임베딩 캐시 기본 켬·해시 키만 저장·�
 
     calls = []
 
-    def _fake_uncached(embed, texts, kind):
+    def _fake_uncached(embed, texts, kind, timeout=None):
         calls.append(len(texts))
         return np.array([[float(len(t)), float(i)] for i, t in enumerate(texts)], dtype=np.float32)
 

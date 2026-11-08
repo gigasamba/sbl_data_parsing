@@ -255,7 +255,7 @@ NOTES = {
     # tuning
     "common.connections.pg.connect_timeout": "PG 연결 제한(초)",
     "common.connections.pg.pool_max": "검색 MCP의 PG 연결 풀 크기",
-    "common.connections.pg.statement_timeout_sec": "검색 MCP PG 질의 하나의 제한(초) · 0 = 끔",
+    "common.connections.pg.statement_timeout_sec": "PG 연결 풀 기본 질의 제한(초) — 검색 MCP는 mcp_pg_statement_timeout_sec · 0 = 끔",
     "common.models.embed.query_cache_max": "질의 캐시 행 상한 · 0 = 무제한",
     "common.models.embed.timeout": "임베딩 호출 제한(초)",
     "common.models.llm.empty_retry_max": "빈 응답 때 다시 요청할 토큰 상한",
@@ -326,6 +326,7 @@ NOTES = {
     "mcp.search.weights.id": "순위 합치기(RRF) 가중치 — ID",
     "mcp.search.weights.vector": "순위 합치기(RRF) 가중치 — 벡터",
     "mcp.server.max_queue": "도구 대기 상한 · 0 = 무제한 (null = 동시 상한 × 4)",
+    "mcp.server.pg_statement_timeout_sec": "검색 MCP PG 질의 하나의 제한(초) · 0 = 끔",
     "mcp.server.reload_check_sec": "적재 판 확인 간격(초)",
     "mcp.server.tool_timeout_sec": "도구 1회 제한(초) · 0 = 무제한",
     "common.log.queue_size": "DB 로그 대기열 크기",

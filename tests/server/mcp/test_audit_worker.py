@@ -1,6 +1,7 @@
 """감사 지연은 응답/도구 limiter와 독립, 포화 메타와 종료 deadline을 검증한다."""
 
 import asyncio
+import contextlib
 import json
 import subprocess
 import sys
@@ -18,11 +19,18 @@ from mcp_server.services import call_log as audit
 from mcp_server.services import tool_runner
 
 
-def _full(on):
-    """공용·parse_document 자리를 대기열까지 가득 찬 꼴(on — 다음 요청은 busy)로, 아니면 빈 꼴로(현재 설정 기준)."""
-    for name in ("shared", "do_parse_document"):
-        lane = tool_runner._lane(name)
-        lane.accepted = lane.total + tool_runner._queue_cap(lane.total) if on else 0
+@contextlib.contextmanager
+def _full():
+    """블록 안에서 공용·parse_document 자리를 대기열까지 가득 찬 꼴로(다음 요청은 busy — 현재 설정 기준), 나가면 원래 수로."""
+    lanes = [tool_runner._lane(name) for name in ("shared", "do_parse_document")]
+    extra = [lane.total + tool_runner._queue_cap(lane.total) for lane in lanes]
+    for lane, n in zip(lanes, extra):
+        lane.accepted += n
+    try:
+        yield
+    finally:
+        for lane, n in zip(lanes, extra):
+            lane.accepted -= n
 
 
 def test_response_deadlines():
@@ -45,7 +53,8 @@ def test_response_deadlines():
         default.total_tokens = 1
         await default.acquire()
         try:
-            with mc.senv(MCP_MAX_CONCURRENCY="1", MCP_MAX_QUEUE="1", MCP_TOOL_TIMEOUT_SEC="0.05"):
+            # 공용 2자리 — 시간 초과된 첫 스레드는 release까지 한 자리를 계속 쥔다(남은 한 자리로 다음 요청이 돎).
+            with mc.senv(MCP_MAX_CONCURRENCY="2", MCP_MAX_QUEUE="1", MCP_TOOL_TIMEOUT_SEC="0.05"):
 
                 async def wait_until_entered():
                     while not entered.is_set():
@@ -55,11 +64,10 @@ def test_response_deadlines():
                 assert await tool_runner._bg(lambda: release.wait(30)) == {"error": "timeout"}
                 await asyncio.wait_for(wait_until_entered(), 30)
                 assert not release.is_set() and not rows
-                _full(True)
-                for invoke in (lambda: tool_runner._bg(lambda: None), lambda: tool_runner._bg_long(lambda: None, 1)):
-                    assert await invoke() == {"error": "busy"}
-                    assert not release.is_set() and not rows
-                _full(False)
+                with _full():
+                    for invoke in (lambda: tool_runner._bg(lambda: None), lambda: tool_runner._bg_long(lambda: None, 1)):
+                        assert await invoke() == {"error": "busy"}
+                        assert not release.is_set() and not rows
                 for invoke in (lambda: tool_runner._bg(lambda: result), lambda: tool_runner._bg_long(lambda: result, 1)):
                     reply = await invoke()
                     assert reply is result and not release.is_set() and not rows
