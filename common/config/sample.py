@@ -65,7 +65,6 @@ CATEGORIES = {
     "dev": (
         ("local(PC) 전용 — 가짜 EDW·게시 폴더·원본 폴더·새 문서 상한(서버 전용 칸 대신)", ("dev.local",)),
         ("외부 모델 — 허용·지출 상한·단가", ("dev.models",)),
-        ("로컬 대체 PG(sqlite)", ("dev.pg_standin",)),
         ("가짜 LLM", ("dev.fake_llm",)),
         ("검증 페이지", ("dev.search_ui",)),
         ("PC 시험 Docker", ("dev.docker",)),
@@ -358,8 +357,6 @@ NOTES = {
     "common.models.llm.price_out": "출력 단가($/백만 토큰) (null = 내장 가격표)",
     "common.models.guard.budget_usd": "하루 외부 모델 지출 상한($)",
     "common.models.guard.spend_file": "지출 장부 (null = output/_llm_spend/<날짜>.txt)",
-    "common.connections.pg.standin_dir": "PG 없을 때 쓰는 sqlite 폴더 (null = output/pg_standin)",
-    "common.connections.pg.standin_schema": "대역 스키마 이름(pg_schema를 비웠을 때)",
     "common.dev.llm_fake": "가짜 LLM 응답(서버면 시작 거부)",
     "mcp.dev.mcp_url": "검증 페이지가 붙을 검색 MCP 주소 · 예 http://127.0.0.1:8765/mcp",
     "mcp.dev.ui_port": "검증 페이지 포트",
@@ -373,7 +370,7 @@ NOTES = {
 
 TITLES = {
     "tuning": "tuning — 거의 바꾸지 않는 값(분류별 — 결과 파라미터·내부 상한·제한 시간·자원 세부값). 코드 기본값 그대로 두는 것이 보통.",
-    "dev": "dev — PC 전용(RUN_ENV=local): 외부 모델·지출 상한·로컬 대체 DB·PC 시험 도구. 서버(dev·prd)는 이 절을 비워 둔다(서버에서 거부).",
+    "dev": "dev — PC 전용(RUN_ENV=local): 외부 모델·지출 상한·PC 시험 도구. 서버(dev·prd)는 이 절을 비워 둔다(서버에서 거부).",
     "option": "option — 선택 기능(앱이 쓰지 않음 — 호스트 스크립트만). 비우면 끔.",
 }
 

@@ -4,8 +4,7 @@
 - `error` = 파싱·적재 실패: 기록만 하고 다음 실행이 다시 고른다(`skipped_keys`에 들지 않음).
 - `part`(수준 warn) = 안 문서(압축 안 파일·첨부·개체)를 일부 못 꺼냄(pl-65): 성한 안 파일은 붙여 적재됨, 기록만.
 - `silver`(수준 warn) = 실버만 게시 — 골드 전(pl-68): 게시가 쓰고 골드 적재가 성공하면 지운다. 남아 있으면 골드 실패·중단·실버까지만 실행.
-PG 접속 정보가 있으면 PG(`dbtool up --target applog` — 판 0003), 없으면 PC 대역 sqlite(`<standin_dir>/applog.sqlite` — 표를 바로 만듦,
-서버는 대역을 쓰지 않고 멈춤). 명령 `python -m pipeline.shared.except_docs error --csv <문서 위치 표> --reason <이유>` — run_pipeline이
+표는 `dbtool up --target applog`(판 0003)가 만든다 — PG 접속 정보가 없으면 멈춤. 명령 `python -m pipeline.shared.except_docs error --csv <문서 위치 표> --reason <이유>` — run_pipeline이
 문서의 파싱·게시·적재 실패를 적는다."""
 
 import csv
@@ -29,37 +28,14 @@ def _schema():
     return schema_of("applog")
 
 
-def standin():
-    """PC 대역(sqlite) — 표가 없으면 표 정의(log_tables)에서 만들고, 앞서 만든 대역 파일에 없는 칸(판 0004 file_ext·file_size)은 더한다."""
-    from sqlalchemy.dialects import postgresql
-    from sqlalchemy.schema import CreateTable
-
-    from common.store.db.models.log_tables import log_metadata
-    from common.store.pg_standin import StandinPG
-
-    schema = _schema()
-    db = StandinPG(schema)
-    table = log_metadata(schema).tables[f"{schema}.{TABLE}"]
-    ddl = CreateTable(table, if_not_exists=True).compile(dialect=postgresql.dialect())
-    db.q(f"CREATE SCHEMA IF NOT EXISTS {schema};\n{str(ddl).strip()}")  # CREATE SCHEMA로 시작 = 대역의 DDL 묶음(DEFAULT now() 번역)
-    have = {r[1] for r in db.sqlite.execute(f"PRAGMA table_info({TABLE})")}
-    for col in table.columns:
-        if col.name not in have:
-            db.sqlite.execute(f"ALTER TABLE {TABLE} ADD COLUMN {col.name} {col.type.compile(dialect=postgresql.dialect())}")
-    return db
-
-
 def _db():
-    from common.store.pg import PG, _warn_standin, conf, has_conn
+    from common.store.pg import PG, conf
 
-    if has_conn():
-        return PG({**conf(), "PG_SCHEMA": _schema()})
-    _warn_standin()  # 서버(dev·prd)는 여기서 SystemExit
-    return standin()
+    return PG({**conf(), "PG_SCHEMA": _schema()})
 
 
 def _close(db):
-    (getattr(db, "sqlite", None) or db.cn).close()  # 대역은 sqlite 연결, PG는 psycopg 연결
+    db.cn.close()
 
 
 def reason_of(name, reason):

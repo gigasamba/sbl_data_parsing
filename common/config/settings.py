@@ -1316,10 +1316,6 @@ class CommonConnectionsPg(Section):
     pool_max: int | None = F(8, "PG_POOL_MAX", "검색 MCP PostgreSQL 연결 풀 최대 연결 수")
     port: Port | None = F(None, "PG_PORT", "PostgreSQL 포트(필수 — op-09)")
     db_schema: str | None = F("data_parsing", "PG_SCHEMA", "pgvector 기본 스키마 이름(소문자·숫자·_ — 여러 벌도 같은 스키마, op-09·op-17)")
-    standin_dir: str | None = F(None, "PG_STANDIN_DIR", "PG 접속 정보가 없을 때 쓰는 로컬 대체 DB(sqlite) 폴더", repo=True)
-    standin_schema: str | None = F(
-        "data_parsing", "PG_STANDIN_SCHEMA", "로컬 대체 DB(sqlite)의 스키마 이름 — PG_SCHEMA가 비었을 때(PC 전용, op-09)"
-    )
     user: str | None = F(None, "PG_USER", "PostgreSQL 접속 계정 이름(필수 — op-09)")
 
 

@@ -13,7 +13,7 @@
 SECTIONS = ("required", "common", "extract", "transform", "load", "search", "ops", "tuning", "dev", "option")
 
 # required — (카테고리 열쇠, 제목, [(칸 이름, 모델 경로, 필수 조건)]). 조건은 sample 주석 머리에 그대로 — "필수 · <언제·어느 앱>" 또는 "선택".
-_PG_NEED = "필수 · dev·prd(pipeline·mcp) — local은 비우면 sqlite 대역"
+_PG_NEED = "필수 · 모두(local·dev·prd — pipeline·mcp)"
 _SERVER_NEED = "필수 · dev·prd(pipeline·mcp) — local은 무시(비움)"
 REQUIRED_GROUPS = (
     ("env", "실행 환경", (("run_env", "common.run_env", "필수 · 모두(local·dev·prd)"),)),
@@ -24,7 +24,7 @@ REQUIRED_GROUPS = (
     ),
     (
         "pg",
-        "PostgreSQL(pgvector) — local은 접속 5칸을 모두 비우면 sqlite 대역(일부만 적으면 거부)",
+        "PostgreSQL(pgvector) — 접속 5칸 모두 필수(PC는 시험 pgvector 컨테이너 — 비거나 일부만 적으면 거부)",
         (
             *(
                 (f"pg_{k}", f"common.connections.pg.{m}", _PG_NEED)
@@ -356,8 +356,6 @@ PLACED = {
     "common.models.llm.price_out": "dev.models.llm.llm_price_out_usd_per_mtok",
     "common.models.vlm.allow_external": "dev.models.vlm.vlm_allow_external",
     "common.models.vlm.est_usd": "dev.models.vlm.vlm_est_usd_per_call",
-    "common.connections.pg.standin_dir": "dev.pg_standin.pg_standin_dir",
-    "common.connections.pg.standin_schema": "dev.pg_standin.pg_standin_schema",
     "mcp.dev.mcp_url": "dev.search_ui.search_ui_mcp_url",
     "mcp.dev.ui_port": "dev.search_ui.search_ui_port",
     # dev — local(PC) 전용 값(op-14: local은 서버 전용 칸을 무시하고 이 값을 씀)
@@ -471,7 +469,7 @@ TUNING_RARE = (  # 결과 파라미터(청크·순위·그림 고르기)·내부
 )
 TUNING = frozenset(TUNING_INTERNAL + TUNING_RESOURCE + TUNING_RARE)
 
-# PC 전용 칸 — 서버(dev·prd)는 외부 모델·로컬 대체 DB를 거부하므로 비워 둔다. 파일 자리 dev.<역할 자리>(sample 맨 아래 절).
+# PC 전용 칸 — 서버(dev·prd)는 외부 모델을 거부하므로 비워 둔다. 파일 자리 dev.<역할 자리>(sample 맨 아래 절).
 LOCAL = (
     "common.models.embed.allow_external",
     "common.models.llm.allow_external",
@@ -483,8 +481,6 @@ LOCAL = (
     "common.models.llm.price_out",
     "common.models.guard.budget_usd",
     "common.models.guard.spend_file",
-    "common.connections.pg.standin_dir",
-    "common.connections.pg.standin_schema",
 )
 
 

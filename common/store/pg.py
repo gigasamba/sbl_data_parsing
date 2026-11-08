@@ -4,10 +4,10 @@ PG_CONNECT_TIMEOUT(기본 10초) — 공유 PG가 방화벽·주소 문제로 �
 PG_POOL_MAX(기본 8, PGPool) — 공유 PG의 max_connections 여유 안에서 잡을 것(다른 팀 서비스도 같은 PG를 씀).
 PG_STATEMENT_TIMEOUT(기본 120초, PGPool만 — 부르는 쪽이 statement_timeout_sec로 덮음: 검색 MCP는 mcp.server.pg_statement_timeout_sec 25초) — 질의 하나가 넘으면 DB가 멈춤(QueryCanceled → 도구는 timeout).
 connect()는 적재(pipeline/load/pgvector_load.py — 단일 연결), PGPool은 검색 MCP(mcp_server/services/search/server_state.py
-connect_sources() — 상주 Retriever)가 쓴다. has_conn·conf·_standin_schema·_warn_standin·PG·PGPool·vec은 두 쪽이 같이 쓰고
+connect_sources() — 상주 Retriever)가 쓴다. 접속 정보가 없으면 conf()가 채울 자리를 적고 멈춘다(로컬 대체 DB 없음 — PC도 pgvector).
+conf·PG·PGPool·vec은 두 쪽이 같이 쓰고
 점검 도구도 PG·conf를 직접 쓰므로 여기(공용)에 둔다."""
 
-import os
 import re
 import sys
 from contextlib import contextmanager
@@ -41,36 +41,6 @@ def conf():
 
         _warn_once(f"[pg] {to_yaml('common.connections.pg.db_schema')}가 비어 기본 스키마 {c['PG_SCHEMA']}를 씀")
     return c
-
-
-def has_conn():
-    """연결 정보가 실제로 있는지(기본값만 있는 상태는 '없음') — PG_PASSWORD 또는 PG_HOST.
-    connect()(적재)·server_state.connect_sources()(검색 MCP)의 단일 전환점: 있으면 진짜 PG, 없으면 스탠드인(sqlite, common/store/pg_standin.py)."""
-    # PG_HOST·libpq 표준(PGPASSWORD·PGPASSFILE)도 '있음' — 비밀번호 없이 .pgpass·trust 인증 쓰는 서버가 스탠드인으로 빠지지 않게
-    st = cfg().connections.pg
-    return any((reveal(st.password), st.host)) or any(
-        os.environ.get(k) for k in ("PGPASSWORD", "PGPASSFILE")
-    )  # env 남김 — 내부 신호: libpq 표준 변수
-
-
-def _standin_schema(pg_schema=None):
-    st = cfg().connections.pg
-    s = pg_schema or (st.db_schema if given("PG_SCHEMA") else None) or st.standin_schema  # pg_schema를 적었으면 그것, 아니면 대역 스키마
-    if not re.fullmatch(r"[a-z_][a-z0-9_]{0,62}", s):
-        raise SystemExit("PG_SCHEMA는 소문자·숫자·_ 만")
-    return s
-
-
-def _warn_standin():
-    """연결 정보를 잊고 서버에 올려도 조용히 넘어가지 않게, 스탠드인을 고를 때마다
-    첫 줄 WARNING(stderr). 억제 스위치 없음(의도 — 서버에서 안 보여야 할 줄이지, 숨길 일이 아님)."""
-    if guard_run_env() not in (None, "local"):  # 서버(dev·prd·모르는 값)는 스탠드인으로 대체하지 않고 멈춤
-        raise SystemExit(f"RUN_ENV={guard_run_env()} — PG 접속 정보 없음(common.connections.pg) · 서버는 로컬 대체 DB를 쓰지 않음(pl-12)")
-    print(
-        "WARNING: PG 접속 정보 없음 → 로컬 대체 DB(output/pg_standin) 사용 — 서버면 settings.yaml required.pg 확인",
-        file=sys.stderr,
-        flush=True,
-    )
 
 
 class _ScopedConn:

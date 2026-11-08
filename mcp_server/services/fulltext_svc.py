@@ -79,7 +79,7 @@ def _when(v, upper, name):
 
 
 def _aware(v):
-    """DB 값(PG는 datetime, SQLite 대역은 글자) → aware datetime(시간대 없으면 KST) 또는 None."""
+    """DB 값(datetime 또는 ISO 글자) → aware datetime(시간대 없으면 KST) 또는 None."""
     if v in (None, ""):
         return None
     t = v if isinstance(v, datetime) else datetime.fromisoformat(str(v))
@@ -209,9 +209,7 @@ def do_list(
         vals.append(int(cursor))
     try:
         rows, matched = [], 0
-        for src in (
-            srcs or _sources()
-        ):  # 원천 스키마마다 같은 조건 — doc_id는 5벌 공용 시퀀스라 합쳐서 한 줄로 정렬·쪽 넘김(대역은 스키마마다 파일이라 SQL로 못 합침)
+        for src in srcs or _sources():  # 원천 스키마마다 같은 조건 — doc_id는 5벌 공용 시퀀스라 합쳐서 한 줄로 정렬·쪽 넘김
             rs, m = _select(_pg(src), src, conds, vals, cursor not in (None, ""), lim)
             rows += rs
             matched += m

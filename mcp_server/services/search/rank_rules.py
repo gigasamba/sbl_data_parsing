@@ -1,4 +1,4 @@
-"""검색 공용 도우미(pgsearch·retriever) — 질의 임베딩·가중치·ID 문턱. 검색은 PG 하나(PC는 SQLite 대역 pg_standin)."""
+"""검색 공용 도우미(pgsearch·retriever) — 질의 임베딩·가중치·ID 문턱. 검색은 PG 하나(PC도)."""
 
 from common.ai.embed import embed_texts, query_model_mismatch
 from mcp_server import config as mc

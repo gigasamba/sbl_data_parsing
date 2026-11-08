@@ -5,7 +5,7 @@ import threading
 import time
 
 from common.store.db.models import search_tables as ST
-from common.store.pg import PGPool, _standin_schema, _warn_standin, conf, has_conn  # 시험이 has_conn을 바꿔 끼움
+from common.store.pg import PGPool, conf
 from mcp_server import config as mc
 
 _STATE: dict = {}
@@ -30,13 +30,8 @@ def _version_of(dbs):
 
 
 def check_store():
-    """서버(dev·prd)에서 PG 접속 칸이 비면 SystemExit(채울 자리를 적음 — common.store.pg.conf). 검색 저장소는 PG 하나(
-    저장소 종류 칸 mcp.server.store는 11-01에 없앰), PC는 칸이 비면 SQLite 대역. main이 시작 때 부른다(예열 스레드·요청 안에서는
-    SystemExit가 조용히 스레드만 죽이므로)."""
-    from common.core import paths
-
-    if paths.LOCAL_RUN:
-        return
+    """PG 접속 칸이 비면 SystemExit(채울 자리를 적음 — common.store.pg.conf). 검색 저장소는 PG 하나(PC도 — 로컬 대체 DB 없음).
+    main이 시작 때 부른다(예열 스레드·요청 안에서는 SystemExit가 조용히 스레드만 죽이므로)."""
     conf()
 
 
@@ -100,25 +95,19 @@ def _dev_retriever(src, db):
 
 def dev_served():
     """지금 검색하는 DEV 원천(번호 순) — "어떤 DEV 원천이 있나"의 답은 여기 하나(search·원문 도구·edw_meta). 처음이면 검색기를 만들고,
-    부를 때마다 DB(PC는 대역 폴더)를 한 번 찾아 그사이 생긴 스키마(dbtool up)는 그 원천만 더하고 사라진 것은 뺀다 — 재시작 없이.
+    부를 때마다 DB를 한 번 찾아 그사이 생긴 스키마(dbtool up)는 그 원천만 더하고 사라진 것은 뺀다 — 재시작 없이.
     prd는 ST.dev_sources가 빈 목록(DEV 없음). 깨진 스키마는 한 번 경고하고 다음 전체 재생성까지 다시 시도하지 않는다."""
     _retriever("other")  # 처음이면 만듦 · 재적재 확인
     if "dbs" not in _STATE:  # 시험이 Retriever를 직접 넣은 경우
         return [s for s in _STATE["Rs"] if ST.is_dev(s)]
     other = _STATE["dbs"]["other"]
-    standin = getattr(other, "is_standin", False)
-    found = ST.dev_sources(ST.split_schema(other.schema)[0], None if standin else other.q)
+    found = ST.dev_sources(ST.split_schema(other.schema)[0], other.q)
     gone = [s for s in _STATE["Rs"] if ST.is_dev(s) and s not in found]
     new = {}
     for src in found:
         if src not in _STATE["Rs"] and src not in _STATE.get("bad_dev", ()):
             schema = ST.src_schema(ST.split_schema(other.schema)[0], src)
-            if standin:
-                from common.store.pg_standin import StandinPG
-
-                db = StandinPG(schema)
-            else:
-                db = SchemaView(other.pool_obj, schema)
+            db = SchemaView(other.pool_obj, schema)
             new[src] = (db, _dev_retriever(src, db))
     if gone or new:
         ver = dict((v[0], v) for v in _version_of({s: db for s, (db, R) in new.items() if R}))
@@ -171,8 +160,7 @@ def _warmup_bg():
 def health_body():
     """가벼운 상태만(내부 경로는 안 보여줌). 예열 스레드가 아직 안 끝났으면
     warming=True(ready=False, 라우트가 503) · 끝났는데 실패했으면 ready=True + warning(서버는 계속 뜸).
-    store="pgvector"일 때 db: "standin"(sqlite, common/pg_standin.py) | "pg"(진짜 PG) —
-    서버에서 PG_PASSWORD를 빠뜨려 조용히 스탠드인으로 떨어진 경우를 /health만 보고도 알 수 있게."""
+    store="pgvector"일 때 db: "pg"(저장소는 PG 하나 — 칸 모양은 그대로 둠)."""
     Rs = _STATE.get("Rs") or {}
     R = next(iter(Rs.values()), None)
     done = _STATE.get("warmup_done", False)
@@ -183,7 +171,7 @@ def health_body():
         "data_version": _STATE.get("version"),
     }
     if R is not None and R.pg:
-        out["db"] = "standin" if getattr(R.pg, "is_standin", False) else "pg"
+        out["db"] = "pg"
     if not done:
         out["warming"] = True
     elif _STATE.get("warmup_ok") is False:
@@ -200,14 +188,8 @@ class SchemaView:
 
 
 def connect_sources():
-    """원천 이름 → 그 원천 스키마 연결(`<PG_SCHEMA>_<원천>`) — 5벌 + 있는 DEV 원천(op-17 — prd는 5벌만). 실 PG는 프로세스에 풀 하나(처음 한 번 만들고 재적재 때도 그대로 — _STATE["pool"]) + SchemaView,
-    대역은 스키마마다 파일 하나(StandinPG)."""
-    if has_conn():
-        pool = _STATE.get("pool") or PGPool(conf(), statement_timeout_sec=mc.cfg().server.pg_statement_timeout_sec)
-        _STATE["pool"] = pool
-        return {src: SchemaView(pool, ST.src_schema(pool.schema, src)) for src in ST.all_sources(pool.schema, pool.q)}
-    _warn_standin()
-    from common.store.pg_standin import StandinPG
-
-    base = _standin_schema(None)
-    return {src: StandinPG(ST.src_schema(base, src)) for src in ST.all_sources(base)}
+    """원천 이름 → 그 원천 스키마 연결(`<PG_SCHEMA>_<원천>`) — 5벌 + 있는 DEV 원천(op-17 — prd는 5벌만). 프로세스에 풀 하나(처음 한 번
+    만들고 재적재 때도 그대로 — _STATE["pool"]) + SchemaView."""
+    pool = _STATE.get("pool") or PGPool(conf(), statement_timeout_sec=mc.cfg().server.pg_statement_timeout_sec)
+    _STATE["pool"] = pool
+    return {src: SchemaView(pool, ST.src_schema(pool.schema, src)) for src in ST.all_sources(pool.schema, pool.q)}

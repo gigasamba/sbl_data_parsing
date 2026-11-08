@@ -277,7 +277,7 @@ def done_by_sha(shas):
 def _read_done(read, empty):
     try:
         return read()
-    except (Exception, SystemExit) as ex:  # 서버에 PG 접속 정보가 없으면 SystemExit(대역 거부)
+    except (Exception, SystemExit) as ex:  # PG 접속 정보가 없으면 SystemExit(conf)
         if C.guard_run_env() not in (None, "local"):  # pl-12 — 서버(dev·prd·모르는 값)
             print(f"[parse] gold doc을 읽지 못함 — 멈춤(종료 4, 전체 재파싱 안 함): {type(ex).__name__}", file=sys.stderr, flush=True)
             raise SystemExit(4) from None

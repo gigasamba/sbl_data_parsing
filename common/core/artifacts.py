@@ -113,7 +113,6 @@ CODE_FP_SKIP = (
     "core/span.py",
     "core/resources.py",
     "store/logsink.py",
-    "store/pg_standin.py",
     "store/mssql.py",
     "store/objectstore.py",
     "store/db/",

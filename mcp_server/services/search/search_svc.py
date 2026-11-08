@@ -129,7 +129,7 @@ def _scope_sql(hard, src, fmap):
         elif name in ("created_since", "created_until"):
             op, t = kst_bound(v, name == "created_until")
             conds.append(f"created_at {op} %s")  # created_at이 없는 문서는 빠짐
-            # KST 글자로 — 적재 값(pgvector_load._kst)과 같은 시간대 표기라 SQLite 대역의 글자 비교도 맞음(PG는 시각으로 비교)
+            # KST 글자로 — 적재 값(pgvector_load._kst)과 같은 시간대 표기(PG는 시각으로 비교)
             vals.append(t.isoformat())
         elif name == "attrs":
             for key, xs in v.items():
@@ -150,7 +150,7 @@ def _hard_filter_scope(hard, src, fmap):
 
 
 def _doc_attrs(src, paths):
-    """근거 문서 file_path → doc.attrs dict(PG는 dict, SQLite 대역은 JSON 글자)."""
+    """근거 문서 file_path → doc.attrs dict(jsonb — 글자로 오면 풀어 씀)."""
     paths = sorted(p for p in paths if p)
     if not paths:
         return {}
