@@ -120,7 +120,7 @@ def selftest():
         skipped = []
         _record_skip(fasoo, "drm_fasoo", skipped, log)
         recs = [json.loads(ln) for ln in log.read_text(encoding="utf-8").splitlines()]
-        assert len(recs) == 1 and recs[0]["reason"] == "drm_fasoo" and recs[0]["file"] == "a.docx" and recs[0]["sha256"], recs
+        assert len(recs) == 1 and recs[0]["reason"] == "drm_fasoo" and recs[0]["file"] == "a.docx", recs
         assert skipped == [{"file": "a.docx", "reason": "drm_fasoo"}], skipped
     print(
         "selftest OK — DRM·암호 머리 바이트 판별(Fasoo·MarkAny·SoftCamp·OLE EncryptedPackage·PDF 머리 깨짐 → drm_unknown, "
@@ -199,7 +199,7 @@ def test_main():  # 옛 `if a.selftest:` 갈래(main() 안)
 
 def test_records_outside_scanned_folder():
     """운영 고침 10(11-02) — 건너뛴 문서 기록(skipped.csv·skipped.jsonl)은 prepared/_records/에. 파싱(run_all)이 훑는 맨 위에는
-    문서와 rotation.csv만 남아, 기록 파일이 "건너뜀(처리 엔진 없음) .csv"로 세지지 않는다. 옛 자리의 누적 기록은 옮겨 이어 쓴다."""
+    문서와 rotation.csv만 남아, 기록 파일이 "건너뜀(처리 엔진 없음) .csv"로 세지지 않는다."""
     import sys
     import tempfile
     from unittest import mock
@@ -210,12 +210,11 @@ def test_records_outside_scanned_folder():
         out.mkdir()
         (src / "a.txt").write_text("hello", encoding="utf-8")
         (src / "b.zip").write_bytes(b"PK\x03\x04" + b"\x00" * 20)  # 깨진 압축 — 건너뜀(broken_archive — pl-57)
-        (out / "skipped.jsonl").write_text(json.dumps({"file": "old.pdf", "reason": "drm_fasoo"}) + "\n", encoding="utf-8")
-        (out / "skipped.csv").write_text("file,reason\n", encoding="utf-8")
+        (out / "skipped.csv").write_text("file,reason\n", encoding="utf-8")  # 맨 위 옛 기록 — 문서가 아니라 지워짐
         with mock.patch.object(sys, "argv", ["prepare", "--src", str(src), "--out", str(out)]):
             M.main()
         top = sorted(p.name for p in out.iterdir() if p.is_file())
         assert top == ["a.txt", "rotation.csv"], top
         recs = [json.loads(ln) for ln in (out / "_records" / "skipped.jsonl").read_text(encoding="utf-8").splitlines()]
-        assert [r["file"] for r in recs] == ["old.pdf", "b.zip"], recs
+        assert [r["file"] for r in recs] == ["b.zip"], recs
         assert "b.zip" in (out / "_records" / "skipped.csv").read_text(encoding="utf-8-sig")

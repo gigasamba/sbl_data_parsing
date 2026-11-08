@@ -58,7 +58,7 @@
 ### 규칙
 1. 모든 VLM 호출(엔진 `qwen_vlm`·쪽 VLM·pptx 슬라이드·그림 VLM·중첩 그림)은 `pipeline/shared/vlmcall.py`의 `ask()` 하나로 `common.ai.llm.complete('vlm')`를 부른다 — 내부망 가드·예산 장부·모델 다운 감지가 같고, 요청 본문에 `common.models.vlm.vlm_extra_request_body`(생각 끄기 등)를 합친다. 코드에 고정한 생각 끄기는 없다.
 2. 호출 1건 제한 시간 = `common.models.vlm.vlm_timeout_sec`(180초). 실패(시간 초과·연결 오류·429·5xx) 재시도 = `tuning.common.models.vlm.vlm_retries`(1 — 시도는 retry + 1번).
-3. 렌더 해상도 = `extract.page_render_dpi`(150) 하나 — 엔진·쪽 VLM·pptx·그림·`prepare --dpi` 기본값. 긴 변은 2000 px로 줄인다.
+3. 렌더 해상도 = `extract.page_render_dpi`(150) 하나 — 엔진·쪽 VLM·pptx·그림·준비(prepare) 회전이 같이 쓴다. 긴 변은 2000 px로 줄인다.
 4. 쪽 수 상한 = `transform.vlm.vlm_max_pages_per_doc`(비움 = 전부, 0 = 끔) — 엔진과 쪽 VLM 공통. `extract.ocr.ocr_max_pages_per_doc`는 OCR 엔진(VLM 아님)에만 남는다(엔진 공용 파일 `engines/_common`을 바꾸면 모든 엔진 지문이 바뀌어 두었다).
 5. 엔진과 쪽 VLM은 같은 쪽 옮기기 함수(`transcribe` — 같은 지시문 `page_transcribe`·렌더·캐시 열쇠)를 써서, 엔진이 옮긴 쪽은 후보정이 캐시로 다시 쓴다. 엔진은 쪽 하나라도 호출이 실패하면 문서×엔진 실패로 남긴다(빈 답은 빈 쪽).
 6. 동시 수: 한 프로세스 안 모든 VLM 호출의 합 상한 = `common.models.vlm.vlm_max_total_requests`(8, 호출 한 건이 자리 하나). 문서 하나 안 = `common.models.vlm.vlm_requests_per_doc`(4 — 쪽·그림 공통). 쪽 옮기기는 가장 느린 호출이 60초를 넘으면 다음 묶음 병렬 수를 절반(최소 2)으로 줄였다가 빨라지면 되돌린다(코드 상수).

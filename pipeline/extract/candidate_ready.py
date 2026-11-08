@@ -6,7 +6,7 @@
   --source rdb:csv:<경로>            문서 위치 표(csv — run_pipeline이 목록 파일에서 만든 batch.csv)의 키만 Object Storage에서 staging으로 받음
 
 Object Storage 원본 처리: 받은 파일의 sha256은 받기(resolve)가 한 번 구해 manifest에, 대표 결과가 나온 문서는 parse 뒤 처리 기록만 남김(finish). 원본 삭제는 게시가 끝난 뒤 run_pipeline drop_original 한 곳.
-처리한 객체(ETag 또는 (key, 증분값))는 output/parse/_source/processed.jsonl에 기록 → 다음 실행에서 다시 받지 않음. 실패한 문서는 남겨 다음 실행이 다시 시도.
+처리한 객체((key, 증분값))는 output/parse/_source/processed.jsonl에 기록 → 다음 실행에서 다시 받지 않음. 실패한 문서는 남겨 다음 실행이 다시 시도.
 검색 결과의 원본 위치(source_uri) = s3://버킷/키(SOURCE_MANIFEST로 common.core.ids.source_uri가 읽음).
 접속: OS_ENDPOINT · OS_ACCESS_KEY · OS_SECRET_KEY · OS_REGION(기본 us-east-1) · OS_VERIFY_TLS(기본 1, 사내 CA면 경로) — 비밀값은 settings.yaml에만.
 받기 전 대조 — size가 있으면 ContentLength와 비교(크기 불일치는 참고 기록만).
@@ -90,55 +90,52 @@ def download(rows, state, workers=1):
             file_bytes=o["size"],
             source_system=o.get("source_system"),
         ) as sp:
-            return _fetch(o, sp)
-
-    def _fetch(o, sp):
-        p = _staging_path(wd, o["bucket"], o["key"])
-        tmp = wd / (p.name + ".part")
-        on_wire = True  # head·전송 중의 실패는 원인이 외부(스토리지·네트워크)라 err_kind=external — botocore 예외는 이름으로 못 가림
-        try:
-            t_head = time.monotonic()
-            head = cli.head_object(Bucket=o["bucket"], Key=o["key"])
-            actual, etag = head.get("ContentLength"), head.get("ETag")
-            head_ms = (time.monotonic() - t_head) * 1000
-            tag = p.with_suffix(".etag")  # 받은 판의 ETag — 다시 쓸지는 이 값으로만(크기만 같은 새 판을 옛 파일로 파싱하지 않게)
-            if o["size"] is not None and actual is not None and int(actual) != int(o["size"]):
-                # RDB file_size가 Object Storage와 어긋날 수 있어 필수 비교에서 뺀다 — 문서 식별은 키, 내용은 sha256. 크기는 참고 기록만.
-                rec = {"doc_id": o["doc_id"], "bucket": o["bucket"], "key": o["key"], "size_rdb": o["size"], "size_store": actual}
-                with book, (state / "size_mismatch.log").open("a", encoding="utf-8") as f:
-                    f.write(json.dumps({**rec, "at": time.strftime("%Y-%m-%dT%H:%M:%S")}, ensure_ascii=False) + "\n")
-                print(
-                    f"[source] 크기 불일치(참고만 — 받기 진행) — RDB({o['size']}) ≠ Object Storage({actual}): {o['bucket']}/{o['key']}",
-                    flush=True,
-                )
-            # 같은 판을 받아 둠(앞선 실행이 게시 전에 멈춤)
-            if etag and p.exists() and tag.is_file() and tag.read_text(encoding="utf-8") == etag:
-                sp.add(head_ms=round(head_ms), reused=1)
+            p = _staging_path(wd, o["bucket"], o["key"])
+            tmp = wd / (p.name + ".part")
+            on_wire = True  # head·전송 중의 실패는 원인이 외부(스토리지·네트워크)라 err_kind=external — botocore 예외는 이름으로 못 가림
+            try:
+                t_head = time.monotonic()
+                head = cli.head_object(Bucket=o["bucket"], Key=o["key"])
+                actual, etag = head.get("ContentLength"), head.get("ETag")
+                head_ms = (time.monotonic() - t_head) * 1000
+                tag = p.with_suffix(".etag")  # 받은 판의 ETag — 다시 쓸지는 이 값으로만(크기만 같은 새 판을 옛 파일로 파싱하지 않게)
+                if o["size"] is not None and actual is not None and int(actual) != int(o["size"]):
+                    # RDB file_size가 Object Storage와 어긋날 수 있어 필수 비교에서 뺀다 — 문서 식별은 키, 내용은 sha256. 크기는 참고 기록만.
+                    rec = {"doc_id": o["doc_id"], "bucket": o["bucket"], "key": o["key"], "size_rdb": o["size"], "size_store": actual}
+                    with book, (state / "size_mismatch.log").open("a", encoding="utf-8") as f:
+                        f.write(json.dumps({**rec, "at": time.strftime("%Y-%m-%dT%H:%M:%S")}, ensure_ascii=False) + "\n")
+                    print(
+                        f"[source] 크기 불일치(참고만 — 받기 진행) — RDB({o['size']}) ≠ Object Storage({actual}): {o['bucket']}/{o['key']}",
+                        flush=True,
+                    )
+                # 같은 판을 받아 둠(앞선 실행이 게시 전에 멈춤)
+                if etag and p.exists() and tag.is_file() and tag.read_text(encoding="utf-8") == etag:
+                    sp.add(head_ms=round(head_ms), reused=1)
+                    return True
+                t_dl = time.monotonic()
+                cli.download_file(o["bucket"], o["key"], str(tmp))
+                download_ms = (time.monotonic() - t_dl) * 1000
+                on_wire = False
+                os.replace(tmp, p)  # 그 이름으로 보이는 파일은 항상 완전한 내용
+                if etag:
+                    atomic_write_text(tag, etag)
+                else:
+                    tag.unlink(missing_ok=True)
+                size = int(actual) if actual is not None else o["size"]
+                if size is not None:
+                    sp.set(file_bytes=size)
+                # 순수 전송 속도(head 제외) — 네트워크 문제인지 코드 문제인지 가르는 값
+                sp.add(head_ms=round(head_ms), download_ms=round(download_ms))
+                if size and download_ms > 0:
+                    sp.add(mbps=round(size * 8 / 1e6 / (download_ms / 1000), 2))
+                print(f"[source] staging: {o['filename'] or o['key']} ({actual if actual is not None else '?'}B) 받음", flush=True)
                 return True
-            t_dl = time.monotonic()
-            cli.download_file(o["bucket"], o["key"], str(tmp))
-            download_ms = (time.monotonic() - t_dl) * 1000
-            on_wire = False
-            os.replace(tmp, p)  # 그 이름으로 보이는 파일은 항상 완전한 내용
-            if etag:
-                atomic_write_text(tag, etag)
-            else:
-                tag.unlink(missing_ok=True)
-            size = int(actual) if actual is not None else o["size"]
-            if size is not None:
-                sp.set(file_bytes=size)
-            # 순수 전송 속도(head 제외) — 네트워크 문제인지 코드 문제인지 가르는 값
-            sp.add(head_ms=round(head_ms), download_ms=round(download_ms))
-            if size and download_ms > 0:
-                sp.add(mbps=round(size * 8 / 1e6 / (download_ms / 1000), 2))
-            print(f"[source] staging: {o['filename'] or o['key']} ({actual if actual is not None else '?'}B) 받음", flush=True)
-            return True
-        except Exception as e:
-            tmp.unlink(missing_ok=True)
-            code, kind = SP.classify(e)
-            sp.result(code, "external" if on_wire and code == "fail" else kind, e)
-            print(f"[source] staging: 받기 실패 — {o['bucket']}/{o['key']}: {type(e).__name__}: {str(e)[:120]}", flush=True)
-            return False
+            except Exception as e:
+                tmp.unlink(missing_ok=True)
+                code, kind = SP.classify(e)
+                sp.result(code, "external" if on_wire and code == "fail" else kind, e)
+                print(f"[source] staging: 받기 실패 — {o['bucket']}/{o['key']}: {type(e).__name__}: {str(e)[:120]}", flush=True)
+                return False
 
     t0 = time.time()
     with SP.span("extract.staging", "extract", total=len(todo)) as sp:  # 받기 1회 = 1행(받은 수·실패 수)
@@ -177,13 +174,10 @@ def _rdb_plan(table, state, limit=0, done=frozenset()):
             "file_name": name,
             "uri": f"s3://{o['bucket']}/{o['key']}",
             "key": o["key"],
-            "etag": o["etag"],
             "size": o["size"],
             "doc_id": o["doc_id"],
             "updated_at": o["updated_at"],
             "original_filename": o.get("filename"),
-            "content_version_id": o.get("content_version"),  # FileStorageMap 고유 칸
-            "created_at": o.get("created_at"),  # 원천 등록 시각 → gold_bundle → gold doc.created_at
             "source_system": o["source_system"],  # FileStorageMap.source_system(op-17 — 키에서 다시 구하지 않음)
             **_hashed(f),
         }  # publish_parse_result가 문서별로 이 값 사용(없으면 --source-system 폴백)
@@ -292,7 +286,7 @@ def finish(state, rep_index):
     done = [man[n] for n in ok if n in man]
     with CP._processed_path(state).open("a", encoding="utf-8") as f:
         for r in done:
-            f.write(json.dumps({"key": r["key"], "etag": r["etag"], "ver": r.get("updated_at")}, ensure_ascii=False) + "\n")
+            f.write(json.dumps({"key": r["key"], "ver": r.get("updated_at")}, ensure_ascii=False) + "\n")
     print(f"[source] 처리 완료 {len(done)}개 기록(원본은 게시 뒤 drop_original이 지움)", flush=True)
 
 
@@ -312,7 +306,6 @@ def stage_batch(source, out, prepared, limit, run_step, done=frozenset(), scan_r
     local, names, state = resolve(source, out, limit, done)  # 1. 받기
     if not CP.is_remote(source):
         C.put(DOC_DIR=str(Path(local).resolve()))  # 원본 위치 주소 = 이 폴더의 file:///
-    (state / "selected.txt").write_text("\n".join(names) + "\n", encoding="utf-8")
     keep_names = _dedup(local, names, out / "dedup", state, seen)  # 2. 중복 제외
     only = state / "only.txt"
     only.write_text("\n".join(keep_names) + "\n", encoding="utf-8")
@@ -336,10 +329,10 @@ def _dedup(local, names, dedup_dir, state, seen=None):
     keep.txt = 폴더 파일 중 이번에 중복으로 뺀 것만 없는 목록(게시는 빠진 것을 올리지 않고, 앞 실행의 남은 문서는 그대로 둠)."""
     from pipeline.extract import deduplication as dedup
 
-    if len(names) <= 1:  # 묶을 것이 없음(서버 stage는 문서 하나씩) — 해시만, 지문 캐시·groups.csv 안 씀
+    if len(names) <= 1:  # 묶을 것이 없음(서버 stage는 문서 하나씩) — 해시만
         keep, rows = {n: sha_of(Path(local) / n) for n in names}, []
     else:
-        keep, rows, _ = dedup.run_folder(local, dedup_dir, set(names), write_keep=False)  # keep.txt는 아래에서 한 번
+        keep, rows = dedup.run_folder(local, set(names))
     rep = {r["group"]: r["file"] for r in rows if r["representative"]}
     man = _read_manifest(state)
     key_of = {n: r.get("key") or n for n, r in man.items()}
@@ -370,9 +363,7 @@ def _dedup(local, names, dedup_dir, state, seen=None):
         except_docs.record([_skip_row(key_of.get(n, n), n, "duplicate_sha256", man.get(n)) for n in dups])
     Path(dedup_dir).mkdir(parents=True, exist_ok=True)
     dropped = set(dups)
-    rest = sorted(
-        f.name for f in Path(local).iterdir() if f.is_file() and not CP._hidden(f) and f.name != ".gitkeep" and f.name not in dropped
-    )
+    rest = sorted(f.name for f in Path(local).iterdir() if f.is_file() and not CP._hidden(f) and f.name not in dropped)
     (Path(dedup_dir) / "keep.txt").write_text("\n".join(rest) + "\n", encoding="utf-8")
     return left
 

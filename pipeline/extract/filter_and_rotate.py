@@ -6,7 +6,7 @@
 2. 방향 보정(설정 `extract.prepare.rotate_pages` — 기본 꺼짐): 켜면 이미지·이미지 PDF의 쪽마다 0·90·180·270도로 돌려
    RapidOCR 점수(가로 글상자의 신뢰도 × 글자 수)를 **동시에**(스레드 4개, 스레드마다 RapidOCR 하나) 재고 가장 높은 방향으로 돌린다
    (같으면 0도, 모두 0이면 그대로). 끄면 회전을 위한 OCR을 전혀 하지 않고 그대로 놓는다.
-   - 점수는 긴 변 --probe-px(기본 1280)로 줄인 이미지로 계산(속도). 저장은 원래 해상도(PDF는 --dpi, 기본 extract.page_render_dpi = 150).
+   - 점수는 긴 변 PROBE_PX(1280)로 줄인 이미지로 계산(속도). 저장은 원래 해상도(PDF는 extract.page_render_dpi = 150).
    - 회전이 있었던 파일만 새로 쓰고, 나머지는 그대로 복사. 텍스트 레이어가 있는 PDF·오피스·txt는 복사만.
    - 이미지 PDF를 돌리면 쪽 이미지로 다시 만든 PDF가 된다(원래 텍스트 레이어 없음 전제).
 3. 기록: output/prepared/rotation.csv (파일·쪽·선택 각도·네 방향 점수·`orig_sha256` = 회전 전 원본 파일 sha256 —
@@ -19,13 +19,13 @@
 
 import argparse
 import csv
+import functools
 import io
 import json
 import os
 import shutil
 import struct
 import threading
-import time
 from pathlib import Path
 
 from common.core.console import utf8_stdout
@@ -39,8 +39,6 @@ from pipeline.extract import archive, unpack
 from pipeline.shared.ext_groups import IMG_EXTS, OOXML_EXTS
 from pipeline.shared.srcsha import sha_of
 from pipeline.transform.parse.engines import registry  # '처리 엔진 없는 확장자' 판정(engines_for)
-
-_OCR: list = []
 
 # DRM·암호 래핑 머리 바이트 판별. 내용은 열지 않음(이름·종류·머리만), 네트워크 없음, 제조사 서명은 공개 포맷 기준만.
 ZIP_SIG = b"PK\x03\x04"  # 정상 OOXML(ZIP 컨테이너)
@@ -222,8 +220,8 @@ def _drm_reason(p):
 
 
 _TLS = threading.local()  # 스레드마다 RapidOCR 하나(회전 판정 4방향 동시 계산 — 한 객체를 여러 스레드가 같이 쓰지 않게)
-_POOL: list = []
 ANGLES = (0, 90, 180, 270)
+PROBE_PX = 1280  # 회전 점수를 잴 때 줄이는 긴 변(px)
 
 
 def _ocr_lines(arr):
@@ -245,13 +243,12 @@ def _ocr_lines(arr):
     return list(zip(r.boxes.tolist(), r.txts, r.scores)) if r.boxes is not None else []
 
 
+@functools.cache
 def _pool():
     """4방향 동시 계산 스레드 풀(한 번 만들어 쪽마다 다시 씀 — 스레드의 RapidOCR도 그대로 남아 다시 씀)."""
-    if not _POOL:
-        from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import ThreadPoolExecutor
 
-        _POOL.append(ThreadPoolExecutor(max_workers=len(ANGLES), thread_name_prefix="rotate"))
-    return _POOL[0]
+    return ThreadPoolExecutor(max_workers=len(ANGLES), thread_name_prefix="rotate")
 
 
 def score(im, probe):
@@ -278,22 +275,15 @@ def best_angle(im, probe):
     return (a if s[a] > 0 else 0), s
 
 
-_sha256 = sha_of  # 받기가 manifest에 남긴 값(같은 파일일 때) — 없으면 다시 구함
-
-
 def _record_skip(p, reason, skipped, skipped_log):
-    """건너뛴 문서 기록 — skipped.csv(이번 실행 전체, 호환)용 리스트에 더하고, skipped.jsonl(누적, 이어쓰기)에
-    파일 sha256·시각과 함께 바로 씀 + extract.skip span 1행(runtrace.skip_event)."""
+    """건너뛴 문서 기록 — skipped.csv(이번 실행 전체, 호환)용 리스트에 더하고, skipped.jsonl(누적, 이어쓰기 — 게시가 이유를 읽음)에
+    바로 씀 + extract.skip span 1행(runtrace.skip_event)."""
     from pipeline.shared.runtrace import skip_event
 
     skipped.append({"file": p.name, "reason": reason})
     skip_event(p.name, reason)
     print(f"{p.name}: {reason} — 기록하고 건너뜀", flush=True)
-    try:
-        sha = _sha256(p)
-    except OSError:
-        sha = None
-    rec = {"file": p.name, "reason": reason, "sha256": sha, "time": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    rec = {"file": p.name, "reason": reason}
     skipped_log.parent.mkdir(parents=True, exist_ok=True)
     with skipped_log.open("a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
@@ -338,10 +328,6 @@ def main():
     )
     ap.add_argument("--out", default=str(APP_ROOT / "output" / "prepared"))
     ap.add_argument("--only", default="", help="이 목록(파일명 한 줄씩)에 있는 파일만 — 보통 stage_batch의 only.txt")
-    ap.add_argument(
-        "--dpi", type=int, default=pc.cfg().extract.ocr.dpi, help="PDF 쪽 렌더 해상도 — 기본 extract.page_render_dpi(쪽·그림 VLM과 같은 값)"
-    )
-    ap.add_argument("--probe-px", type=int, default=1280)
     ap.add_argument("--no-scan-rotate", action="store_true", help="이미지 PDF(스캔)는 방향 보정 안 함 — run_pipeline 스캔 문서 정책")
     a = ap.parse_args()
     from PIL import Image
@@ -354,8 +340,6 @@ def main():
     records = out / "_records"
     records.mkdir(exist_ok=True)
     parts = out / unpack.PARTS  # 꺼낸 안 문서(pl-63) — 하위 폴더라 파싱 대상(맨 위 파일)이 아님
-    if (out / "skipped.jsonl").exists() and not (records / "skipped.jsonl").exists():  # 예전 자리의 누적 기록은 옮겨 이어 씀
-        (out / "skipped.jsonl").replace(records / "skipped.jsonl")
     skipped_log = Path(pc.cfg().extract.skipped_log or (records / "skipped.jsonl"))  # S7c — 설정 객체
     only = {x.strip() for x in Path(a.only).read_text(encoding="utf-8").splitlines() if x.strip()} if a.only else None
     files = sorted(p for p in src.iterdir() if p.is_file() and p.name != ".gitkeep" and (only is None or p.name in only))
@@ -366,6 +350,7 @@ def main():
                 old.setdefault(r["file"], []).append(r)
     log, n_rot, n_skip, skipped = [], 0, 0, []
     rotate_on = bool(pc.cfg().extract.prepare.rotate)  # 사용자 11-02 — 회전 켬/끔 하나(기본 꺼짐)
+    dpi = pc.cfg().extract.ocr.dpi  # PDF 쪽 렌더 해상도(쪽·그림 VLM과 같은 값)
     for p in files:
         ext = p.suffix.lower()
         dst = out / p.name
@@ -385,16 +370,15 @@ def main():
         if unsup:
             _record_skip(p, unsup, skipped, skipped_log)
             continue
-        bad = (
-            None if unpack.is_fresh(p, parts) else archive.check(p)
-        )  # 압축 원본 — 암호·깨짐·안전 상한(pl-57 — 이미 풀어 둔 원본은 다시 안 봄)
+        fresh = unpack.is_fresh(p, parts)  # 이미 풀어 둔 원본(pl-57·pl-63)은 다시 거르거나 풀지 않음
+        bad = None if fresh else archive.check(p)  # 압축 원본 — 암호·깨짐·안전 상한
         if bad:
             _record_skip(p, bad, skipped, skipped_log)
             continue
         if ext in IMG_EXTS and rotate_on:
-            osha = _sha256(p)  # 원본(회전 전) sha256 — post.vlm_page P0 열쇠가 렌더 바이트 대신 이걸 씀
+            osha = sha_of(p)  # 원본(회전 전) sha256 — post.vlm_page P0 열쇠가 렌더 바이트 대신 이걸 씀
             im = Image.open(p)
-            ang, s = best_angle(im, a.probe_px)
+            ang, s = best_angle(im, PROBE_PX)
             log.append({"file": p.name, "page": 1, "angle": ang, "orig_sha256": osha, **{f"s{k}": round(v) for k, v in s.items()}})
             if ang:
                 tmp = tmp_path_for(
@@ -412,24 +396,24 @@ def main():
         ):  # 회전은 extract.prepare.rotate_pages(기본 꺼짐)일 때만 · 꺼지면 회전용 OCR 없이 그대로 놓음
             import pypdfium2 as pdfium
 
-            osha = _sha256(p)
+            osha = sha_of(p)
             pages, changed = [], False
             for i, pg in enumerate(pdfium.PdfDocument(str(p))):
-                im = pg.render(scale=a.dpi / 72).to_pil().convert("RGB")
-                ang, s = best_angle(im, a.probe_px)
+                im = pg.render(scale=dpi / 72).to_pil().convert("RGB")
+                ang, s = best_angle(im, PROBE_PX)
                 log.append({"file": p.name, "page": i + 1, "angle": ang, "orig_sha256": osha, **{f"s{k}": round(v) for k, v in s.items()}})
                 pages.append(im.rotate(ang, expand=True) if ang else im)
                 changed |= bool(ang)
             if changed:
                 tmp = tmp_path_for(dst)  # 위와 같은 이유(이미지 PDF도 place()로 하드링크됐을 수 있음)
-                pages[0].save(tmp, "PDF", resolution=a.dpi, save_all=True, append_images=pages[1:])
+                pages[0].save(tmp, "PDF", resolution=dpi, save_all=True, append_images=pages[1:])
                 os.replace(tmp, dst)
                 n_rot += 1
             else:
                 place(p, dst)
         else:
             place(p, dst)
-        if not unpack.is_fresh(p, parts):  # 문서 안 문서(압축·메일 첨부·오피스 개체)를 _parts/<이름>/에(pl-63)
+        if not fresh:  # 문서 안 문서(압축·메일 첨부·오피스 개체)를 _parts/<이름>/에(pl-63)
             unpack.unpack(dst, parts)
         angles = ", ".join(f"{r['page']}쪽 {r['angle']}°" for r in log if r["file"] == p.name)
         print(f"{p.name}: {angles or '복사'}", flush=True)
