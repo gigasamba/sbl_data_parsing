@@ -94,7 +94,6 @@ CONTRACT_FUNCS = {
     "bundle_chunk_keys",
     "norm",
     "_aliases",
-    "pairs_of",
     "table_rows",
     "locate",
 }

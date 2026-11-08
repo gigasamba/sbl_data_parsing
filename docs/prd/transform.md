@@ -112,14 +112,14 @@
 
 ### 규칙
 1. 대표 엔진은 정확도 + 풍부함으로 고른다(`transform.represent.engine_pick`, 기본 best).
-2. 줄 단위 투표로 합치고(`fragment_vote.py`), 엔진 사이 라벨·값을 서로 확인한다(`crosscheck.py`).
+2. 여러 엔진이 성공하면 대표 본문은 그대로 두고 다른 엔진에만 있는 조각을 끼운다([pl-67](#pl-67)).
 3. 후보정 `PARSE_POST`(일괄 파싱 기본 `all` = `vlm_page,supsub,charts,figures,context,attachments`, 파싱 서비스 기본 `supsub`): 쪽 VLM 채우기([pl-22](#pl-22)), 윗첨자 `^`·아래첨자 `_`, 차트·그림([pl-05](#pl-05)), 그림 근처 맥락([pl-37](#pl-37)), 메일 첨부([pl-36](#pl-36)).
 4. 여러 엔진의 표를 본문 제자리에 넣고(`table_inline.py`), 표준 표(`tables_std`)를 만든다. 바꾼 자리 안 칸 사이 글은 표 뒤에 남기되, 표 칸(하나 또는 공백으로 나뉜 여럿 — 고른 표와 본문 엔진 표의 칸 모두)으로만 된 글은 버린다.
 5. 파싱 QA(`parse_scoring.py`): 교차 정확도가 `resources/config/criteria.json` `run.cross_acc_full`(0.95) 미만이면 상태 `partial`, 아니면 `ok`.
 6. 대표 결과는 마스터(용어집·고객 명부)를 읽지 않는다.
 
 ### QA
-- `tests/general/pipeline/test_represent.py` · `tests/server/pipeline/test_fuse.py` · `tests/server/pipeline/test_table_inline.py` · `tests/server/pipeline/test_table_std.py` · `tests/server/pipeline/test_supsub.py` · `tests/general/pipeline/test_parse_qa.py`.
+- `tests/general/pipeline/test_represent.py` · `tests/server/pipeline/test_cross_merge.py` · `tests/server/pipeline/test_table_inline.py` · `tests/server/pipeline/test_table_std.py` · `tests/server/pipeline/test_supsub.py` · `tests/general/pipeline/test_parse_qa.py`.
 - Status: done
 
 <a id="pl-36"></a>
@@ -265,6 +265,13 @@
 
 <a id="pl-67"></a>
 ## pl-67 · 대표 결과 교차 병합
-- 요건: 엔진 하나면 그대로, 여럿이면 다른 쪽만 조각 단위로 병합(소제목·표·쪽·bbox). 시간 제한 대신 비교를 가볍게. 읽는 곳 없는 조각 투표·교차 확인은 이 구조로 바꾸며 지운다. 설계는 코드 확인 뒤 사용자 확인.
-- 반영: 없음(사용자 11-08 결정 — 다음 작업).
-- Status: todo
+- 요건: 엔진 하나면 그대로, 여럿이면 다른 쪽만 조각 단위로 병합(소제목·표·쪽·bbox). 시간 제한 대신 비교를 가볍게. 읽는 곳 없는 조각 투표·교차 확인은 이 구조로 바꾸며 지운다.
+- 규칙(사용자 11-08 결정):
+  1. 그 문서에 성공한 엔진이 하나면 그 결과를 그대로 쓴다(병합 없음).
+  2. 여럿이면 대표 엔진 본문은 **한 글자도 바꾸지 않는다**. 다른 엔진 본문을 조각(빈 줄·쪽 나눔 `\f`으로 나눈 소제목·표·문단)으로 나눠, 조각 낱말의 98% 이상이 대표에 있으면 같은 내용으로 보고 건너뛴다. 아니면 그 조각을 바로 앞에 맞은 대표 조각 바로 뒤에 끼운다(앞에 맞은 조각이 없으면 그 쪽 첫머리).
+  3. 쪽 수(`\f`)가 같으면 쪽끼리, 다르면 문서 전체끼리 견준다. 공백을 뺀 글이 같은 쪽은 조각 비교 없이 먼저 거른다(가벼운 비교 먼저 — 시간 제한 없음).
+  4. 비교 전 줄 끝(`\r\n`)을 `\n`으로 맞춘다(옛 버그: kreuzberg 본문의 `\r\n` 때문에 문단이 길어 보여 `kvx_rfp_main.pdf` 문단 7개 중 6개가 바뀌었다).
+  5. 끼운 조각 수를 엔진별로 `rep.rep.merge`에 남긴다.
+- 반영: `pipeline/transform/represent/doc_represent.py` `cross_merge()`. 지운 것 — 조각 투표 `fragment_vote.py`(`rep.fused`·`_rep/conflicts.jsonl`), 교차 확인 `crosscheck.py`(`rep.meta` 내용 — 인계 계약 칸이라 빈 값 `{}`만 남김), 옛 쪽·문단 교체(`_merge_pages`·`_merge_paragraphs`), 채점의 `route.json`(교차 확인만 읽음), `common/core/repfmt.py`의 `pairs_of`·`nlabel`·`pick`과 그것만 쓰던 것(핸드오프 지문 바뀜 — 서버 문서 전체 다시 처리, [C-113](../refactoring/refactor.md)). 시험 `tests/server/pipeline/test_cross_merge.py`.
+- 비고: 엑셀처럼 시트 전체가 한 조각인 문서는 날짜 표기만 달라도(예 office `46355` ↔ kreuzberg `2026-11-29`) 시트 조각이 통째로 끼워진다(`arg_abx101_stability_trend_ko.xlsx` 본문 15,555 → 32,085자).
+- Status: done

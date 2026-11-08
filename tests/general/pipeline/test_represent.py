@@ -179,30 +179,6 @@ def selftest():
     assert t0["source_engine"] == "eng1" and t0["header"] == ["a", "b"] and t0["rows"] == [["1", "2"]] and "inline" in t0, t0
     print("[selftest] AD23·TA1 — represent가 table_inline으로 tables_std 생성(rep.rep.table_inline 기록) 통과")
 
-    # AD25(b)(c) — 같은 표 행(자리) "금액"에서 값은 같은데 표기(쉼표·마침표)가 갈린 엔진 둘 → fuse_mod가 찾은
-    # 충돌(행 라벨·엔진별 원문 표기·승자)이 문서(_rep/<문서>.json)뿐 아니라 _rep/conflicts.jsonl에도 모인다.
-    raw5a = {"text": "계약서 금액 거래", "tables": [], "facts": [{"context": ["금액"], "value": "430,000"}]}
-    raw5b = {"text": "계약서 금액 거래", "tables": [], "facts": [{"context": ["금액"], "value": "430.000"}]}
-    pd5 = Path(tempfile.mkdtemp()) / "parse"
-    (pd5 / "eng1").mkdir(parents=True)
-    (pd5 / "eng2").mkdir(parents=True)
-    (pd5 / "_rep").mkdir()
-    doc5 = "e.txt"
-    (pd5 / "eng1" / f"{doc5}.json").write_text(json.dumps(raw5a, ensure_ascii=False), encoding="utf-8")
-    (pd5 / "eng2" / f"{doc5}.json").write_text(json.dumps(raw5b, ensure_ascii=False), encoding="utf-8")
-    (pd5 / "qa.json").write_text(
-        json.dumps(
-            {"docs": {doc5: {"format": ".txt", "engines": {"eng1": {"ok": True}, "eng2": {"ok": True}}, "ref": None, "pages": None}}}
-        ),
-        encoding="utf-8",
-    )
-    represent({"name": "t5", "parse": {".txt": ["eng1", "eng2"]}}, pd5)
-    conf = [json.loads(ln) for ln in (pd5 / "_rep" / "conflicts.jsonl").read_text(encoding="utf-8").splitlines() if ln.strip()]
-    assert len(conf) == 1 and conf[0]["doc"] == doc5, conf
-    c0 = conf[0]["conflicts"][0]
-    assert c0["label"] == "금액" and c0["winner"] == "430,000" and c0["losers"][0]["text"] == "430.000", c0
-    print("[selftest] AD25(b)(c) — fuse 충돌(행 라벨 자리) → _rep/conflicts.jsonl 통과")
-
     # PE1 후속(2026-10-07) — 스캔 쪽 채움: fill_scan_pages() 단위 — 혼합 3쪽(.pdf_text) 중 스캔 쪽(2쪽)만
     # 쪽 VLM 글로 채움(글자층 쪽은 그대로). 0.2.0(pl-46) — 옛 OCR 엔진(.pdf_image) 대체 길은 지움.
     import io as _io
@@ -417,48 +393,6 @@ def selftest():
     ):
         assert _vt(rep_x, {"format": fmt}) is want, (rep_x, fmt)
     print("[selftest] 10-29 C — VLM 엔진이 옮긴 스캔 문서: 쪽 VLM 0회·쪽 전체 그림 VLM 생략(vlm_page 없을 때도)·covered 판정 표 통과")
-
-    # AD29 P1 — 융합: 두 텍스트
-    # 레이어 엔진이 동의한 값(430,000)이 OCR 혼자 낸 값(430.000)을 이기고 rep["fused"]["facts"]에 들어간다
-    # (rep["text"]·rep["facts"](기존 칸)은 안 건드림 — 새 칸만 추가).
-    pd5 = Path(tempfile.mkdtemp()) / "parse"
-    for eng in ("pdfplumber", "pymupdf", "rapidocr_ko"):
-        (pd5 / eng).mkdir(parents=True)
-    (pd5 / "_rep").mkdir()
-    doc5 = "e.txt"
-    facts_text = [{"context": ["금액"], "value": "430,000"}]
-    facts_ocr = [{"context": ["금액"], "value": "430.000"}]
-    (pd5 / "pdfplumber" / f"{doc5}.json").write_text(
-        json.dumps({"text": "본문", "facts": facts_text}, ensure_ascii=False), encoding="utf-8"
-    )
-    (pd5 / "pymupdf" / f"{doc5}.json").write_text(json.dumps({"text": "본문", "facts": facts_text}, ensure_ascii=False), encoding="utf-8")
-    (pd5 / "rapidocr_ko" / f"{doc5}.json").write_text(
-        json.dumps({"text": "본문", "facts": facts_ocr}, ensure_ascii=False), encoding="utf-8"
-    )
-    (pd5 / "qa.json").write_text(
-        json.dumps(
-            {
-                "docs": {
-                    doc5: {
-                        "format": ".txt",
-                        "engines": {"pdfplumber": {"ok": True}, "pymupdf": {"ok": True}, "rapidocr_ko": {"ok": True}},
-                        "ref": None,
-                        "pages": None,
-                    }
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-    stack5 = {"name": "t5", "parse": {".txt": ["pdfplumber", "pymupdf", "rapidocr_ko"]}}
-    represent(stack5, pd5)
-    on5 = json.loads((pd5 / "_rep" / f"{doc5}.json").read_text(encoding="utf-8"))
-    assert on5["text"] == "본문" and on5["facts"] == facts_text  # 본문·기존 facts(대표 것)는 그대로
-    by5 = {f["context"][0]: f for f in on5["fused"]["facts"]}
-    assert by5["금액"]["value"] == "430,000" and set(by5["금액"]["engines"]) == {"pdfplumber", "pymupdf"}
-    assert on5["fused"]["conflicts"][0]["losers"][0]["engines"] == ["rapidocr_ko"]
-    assert "reread" not in on5["fused"]  # 재판독 칸 없음(pl-34에 지움)
-    print("[selftest] AD29 P1 — 라벨:값 조각 투표(신뢰도 높은 쪽 승, 본문·기존 facts 불변) 통과")
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

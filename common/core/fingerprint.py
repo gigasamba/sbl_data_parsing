@@ -24,7 +24,7 @@ _ROOT = Path(__file__).resolve().parent.parent  # 공용 패키지 루트(common
 HANDOFF_FILES = (
     "core/contract.py",  # 인계 형식 자체(_rep REP_KEYS·bundle CHUNK_KEYS/DOC_KEYS 스키마, jl() 읽기) + doc_key(file_sha256)·chunk_key
     # — structure·load가 시작 전에 이걸로 거부 판정, parse·structure가 독립적으로 다시 계산해 맞춤
-    "core/repfmt.py",  # (라벨,값) 쌍 추출·계약번호/고객 정규식 — parse(crosscheck→_rep meta.pairs)가 뽑고 structure(gold_bundle.py AQ.pick)가 같은 규칙으로 해석
+    "core/repfmt.py",  # _rep 본문의 원문 위치(locate — 쪽·줄·소제목)·표 행 해석 — structure(청크 위치)가 parse 본문 형식대로 읽음
     "core/terms.py",  # 고객 명부·별칭·모달리티 — parse(융합)·structure(사실 추출)·load(계약 연결)가 "같은 규칙"으로 명시(docstring)
     "core/text.py",  # 토큰·정규화 규칙 — structure(색인 본문 chunk_term)·search(질의 토큰)이 반드시 같아야 함(docs/architecture.md §2)
 )

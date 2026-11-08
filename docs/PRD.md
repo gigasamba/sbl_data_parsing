@@ -7,7 +7,7 @@
 - pl-25 DB 스키마 명세 — dev: 검색 DB(gold — 처리 기록 `doc` 칸 판 0006 포함)·마스터·applog는 구현됨, 서버 판 올리기·ParsingMeta 기록 옮기기는 DB 담당자 승인·실행 대기(refactor.md C-107).
 - 열린 요건(todo): run_pipeline 지휘만 [rn-05](prd/ops.md#rn-05) · 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 확장자 `.hwp` [pl-45](prd/transform.md#pl-45) · 그림 부가 기능 줄이기 [pl-05](prd/transform.md#pl-05) · 전체 e2e [pl-54](prd/ops.md#pl-54) · prd 이미지에 settings.yaml 굽기 [op-12](prd/doc.md#op-12) · 판 묶기(잠재 문제) [pl-56](prd/load.md#pl-56).
 - 서버 확인만 남음(dev): parse_document CPU 우선 [rn-03](prd/ops.md#rn-03).
-- 정리·구조(todo, 사용자 11-08): 대표 결과 교차 병합 [pl-67](prd/transform.md#pl-67) · DB 시험 [e2-22](prd/test.md#e2-22).
+- 정리·구조(todo, 사용자 11-08): DB 시험 [e2-22](prd/test.md#e2-22).
 - 시험 정리(todo): [e2-13](prd/test.md#e2-13) · [e2-20](prd/test.md#e2-20).
 
 ## 수집 (extract) — 서버에서 문서 목록을 정하고 받아 오기까지
@@ -45,7 +45,7 @@
 | VLM 처리 한 길 — 엔진 `qwen_vlm`·쪽 VLM·그림 VLM이 같은 호출(`pipeline/shared/vlmcall.py`)과 같은 설정: 동시 수 `common.models.vlm.vlm_requests_per_doc`(문서 하나 안 4)·`vlm_max_total_requests`(전체 합 8), 호출 1건 제한 `vlm_timeout_sec`(180초)·재시도 `tuning.common.models.vlm.vlm_retries`·`vlm_extra_request_body`(생각 끄기 등), 해상도 `extract.page_render_dpi`(150), 쪽 상한 `transform.vlm.vlm_max_pages_per_doc` | 공유 VLM 서버를 넘치게 하지 않는다. 경로마다 손잡이·요청 모양이 달라 같은 설정이 일부에만 먹던 것을 없앤다(사용자 11-04) | done | [pl-43](prd/transform.md#pl-43) |  |
 | 확장자 `.jpeg`·`.tif`·`.tiff`·`.bmp`는 `.jpg`와, `.mhtml`은 `.mht`와 같은 엔진. `.hwpx` 지원 | 형식마다 임시 견본으로 파싱 시험(`test_ext_formats.py`) | done | [pl-42](prd/transform.md#pl-42) |  |
 | 확장자 `.docm`·`.pptm`·`.rtf`·`.csv`·`.tsv`·`.md`·오픈문서·서식 파일·`.json`·`.xml`·`.log`·`.hwp` 지원 — 엔진 파일은 그대로 두고 등록부(`registry.py`)의 "엔진별 추가 확장자" 표로 | 엔진 지문을 지킨다. `.json`·`.xml`·`.log`는 글 그대로. 사람 검토(등급 A) | todo | [pl-45](prd/transform.md#pl-45) | `.hwp`가 없다 — 실제 `.hwp` 문서로 시험한 뒤 더함 |
-| 대표 결과 고르기(represent): 엔진 결과 중 정확하고 풍부한 것을 대표로 고르고, 줄 단위 투표로 합치고, 엔진 사이 라벨·값을 서로 확인한다(`doc_represent.py`·`fragment_vote.py`·`crosscheck.py`) | 엔진마다 결과가 다르다. 다음 단계로 넘기는 글은 가장 정확해야 한다 | done | [pl-04](prd/transform.md#pl-04) |  |
+| 대표 결과 고르기(represent): 엔진 결과 중 정확하고 풍부한 것을 대표로 고르고, 다른 엔진에만 있는 조각을 끼운다(`doc_represent.py`) | 엔진마다 결과가 다르다. 다음 단계로 넘기는 글은 가장 정확해야 한다 | done | [pl-04](prd/transform.md#pl-04) |  |
 | 표·기호 다듬기 — 여러 엔진의 표를 본문 제자리에 넣고(`table_inline.py`), 표준 표·윗첨자 `^`·아래첨자 `_`, 파싱 품질 점검(`parse_scoring.py`) | 표가 문서 끝에 따로 붙으면 검색 근거가 끊긴다 | done | [pl-04](prd/transform.md#pl-04) |  |
 | 글자 PDF 속 스캔 쪽만 쪽 전체를 VLM으로 읽어 채운다(회전된 쪽·숨은 글자 겹친 쪽 각각 최대 20쪽) | 스캔 쪽 몇 장 때문에 스캔용 엔진을 통째로 돌리지 않는다 | done | [pl-22](prd/transform.md#pl-22) |  |
 | 메일 첨부 — `.eml`·`.msg`의 첨부·메일 안 메일을 깊이 2·20 MB·10개까지 파싱해 본문에 `[첨부 <파일명>]` 절로 붙이고(꺼내기는 받기 단계 — pl-63), 인용 스레드는 접는다(`mail_attachments.py`) | 메일의 핵심 내용이 첨부에 있는 경우가 많다 | done | [pl-36](prd/transform.md#pl-36) | 글자 첨부(text/plain)는 `.eml` 엔진 본문과 `[첨부 …]` 절에 두 번 들어감 |
@@ -66,7 +66,7 @@
 | `dbtool`에 첫 이관 도구(`dbcompare`·`stamp`)가 없고(0.2.0 배포 뒤), 이미지 의존성에는 앱 코드가 쓰는 패키지만 | 첫 이관 도구와 안 쓰는 패키지는 이미지와 점검 범위만 키운다. 패키지를 빼면 새 이미지 버전 | done | [pl-53](prd/transform-cleanup.md#pl-53) |  |
 | 쪽 수 세기는 함수 하나 — `pdf_kind.doc_pages`와 `vlmcall.page_count`가 같은 규칙 | 쪽 수가 자리마다 다르면 제한 시간·쪽 VLM 상한이 어긋난다. `vlmcall.py`는 엔진 지문에 들어가 사람 검토(등급 A) | todo | [pl-60](prd/transform.md#pl-60) | 두 함수가 따로 있음 |
 | 대표 결과가 엔진이 읽은 글을 흐리거나 버리지 않는다 — 표 칸을 다른 칸 글자 안에서 찾지 않음 · 쪽 VLM 글이 없는 쪽의 그림은 빈 블록으로 넣지 않음 · docx에서 anydoc만 읽은 글을 합침 · VLM 엔진 쪽 글도 되풀이 고장을 거름 | 검색 조각에 쓰레기 줄이 섞이거나 글상자·병합 칸 글이 빠진다(0.3.0 엔진 비교 11-06) | todo | [pl-62](prd/transform.md#pl-62) | 표 조각 30줄(stability_trend_ko) · 빈 그림 블록 5개(tt_workflow_en) · anydoc 글 합침 0 · VLM 엔진 되풀이 거름 없음(vlmcall — 사람 검토) |
-| 대표 결과 — 확장자에 성공한 엔진이 하나면 그대로 쓴다. 여럿이 성공하고 내용이 서로 다르면 소제목·표·쪽·위치(bbox) 조각 단위로 교차 병합한다. 먼저 쪽마다 가벼운 값(글 길이·요약값)으로 서로 다른 쪽만 골라 병합해 시간을 줄인다(시간 제한은 두지 않음 — 앞쪽에만 시간을 쓰게 되므로) | 엔진이 서로 보완하는 내용을 잃지 않게(사용자 11-08) | todo | [pl-67](prd/transform.md#pl-67) | 지금은 대표 엔진 하나 + 다른 엔진의 표 행·키-값 보충. 조각 투표(`fragment_vote` — `fused`·`conflicts.jsonl`)와 교차 확인(`crosscheck` — `meta`) 결과는 아무도 읽지 않음 |
+| 대표 결과 — 확장자에 성공한 엔진이 하나면 그대로 쓴다. 여럿이 성공하고 내용이 서로 다르면 소제목·표·쪽·위치(bbox) 조각 단위로 교차 병합한다. 먼저 쪽마다 가벼운 값(글 길이·요약값)으로 서로 다른 쪽만 골라 병합해 시간을 줄인다(시간 제한은 두지 않음 — 앞쪽에만 시간을 쓰게 되므로) | 엔진이 서로 보완하는 내용을 잃지 않게(사용자 11-08) | done | [pl-67](prd/transform.md#pl-67) | 대표 본문은 그대로, 다른 엔진 조각은 낱말 98% 이상이 대표에 있으면 건너뛰고 아니면 앞에 맞은 조각 뒤에 끼움(`rep.rep.merge`). 엑셀 시트처럼 한 조각이 큰 문서는 표기만 달라도 통째로 끼워짐 |
 
 ## 적재 (load) — 검색 DB(pgvector)·게시·저장 구조·DB 스키마
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |

@@ -49,11 +49,9 @@ LAYER_CODE = {
         f"pipeline/transform/represent/{n}.py"
         for n in (
             "doc_represent",
-            "crosscheck",
             "parse_scoring",
             "mail_attachments",
             "figure_context",
-            "fragment_vote",
             "superscripts",
             "table_inline",
             "table_standard",

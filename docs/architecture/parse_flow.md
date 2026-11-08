@@ -69,7 +69,7 @@ flowchart TD
 | 15 | transform | 엔진 실행 | 한 문서의 엔진들을 동시에, 문서×엔진마다 자식 프로세스(엔진이 죽어도 전체는 계속), 쪽 수에 맞춘 제한 시간·재시도, `runs.jsonl`에 한 줄 | 컨테이너(자식) | `pipeline/transform/parse/parse_engines.py` | `_run_pipeline()` → `run_job()` → `_run_with_retry()` → `_isolated()` |
 | 16 | transform | 엔진 하나 | 등록표에서 엔진을 찾아 돌리고(`run()`), 결과 json에 출처(엔진 판·열쇠)를 표시(`stamp()` — `parse_engines.py`) | 컨테이너(자식의 자식) | `pipeline/transform/parse/parse_engines.py` → `engines/registry.py` → `engines/<이름>/parser.py` | `one_main()` → `run()` · `stamp()` |
 | 17 | transform | 엔진 결과 채점 | 엔진마다 결과를 합격선(`criteria.json`)으로 채점 | 컨테이너(자식) | `pipeline/transform/represent/parse_scoring.py` | `main()` → `run()` |
-| 18 | transform | 대표 결과 고르기 | 채점으로 가장 나은 엔진 결과를 고르고, 다른 엔진 글로 문단·쪽·표를 보완 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` | `main()` → `represent()` → `_select_best()`·`_merge_paragraphs()`·`_merge_pages()`·`fix_tables()` |
+| 18 | transform | 대표 결과 고르기 | 채점으로 가장 나은 엔진 결과를 고르고, 다른 엔진에만 있는 조각(소제목·표·문단)을 대표 본문에 끼워 보완 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` | `main()` → `represent()` → `_select_best()`·`cross_merge()`·`fix_tables()` |
 | 19 | transform | 스캔 쪽 채움 | 글자층 PDF 안의 스캔 쪽만 쪽 VLM 글로 바꿈 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` → `pipeline/transform/figures/scan_page_vlm.py` | `fill_scan_pages()` → `page_text_pages()` |
 | 20 | transform | 후보정 ① 쪽 VLM 글 | 쪽마다 VLM이 옮긴 글을 덧붙임(19행이 이미 채운 쪽은 뺌). 레인 설정에 `vlm_page`가 있을 때만 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` → `pipeline/transform/figures/scan_page_vlm.py` | `apply_post()` → `page_text_pages()` |
 | 21 | transform | 후보정 ② 슬라이드 VLM | pptx 슬라이드를 그림으로 그려 VLM이 옮긴 글을 덧붙임. 20행과 같이 `vlm_page`가 있을 때만(pptx가 아니면 바로 빈 결과) | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` → `pipeline/transform/figures/pptx_render.py` | `apply_post()` → `pptx_slide_vlm()` |
@@ -261,24 +261,22 @@ flowchart TD
 ```mermaid
 flowchart TD
     Q["parse_scoring.py: 엔진 결과 채점 (criteria.json 문턱)"]
-    X["crosscheck.py: 계열이 다른 엔진 2개+가 낸 (라벨, 값)"]
     R1["doc_represent.py: 후보 = 구성 엔진 중 성공한 것"]
     R2["대표 고르기 (rep_select: first · acc · best)"]
-    R3["standardize · 다른 엔진 facts 보충 · 쪽/문단 보정 · fragment_vote.py 투표"]
+    R3["standardize · 다른 엔진 facts 보충 · 교차 병합(대표 본문 그대로 + 빠진 조각 끼움)"]
     R4["scan_page_vlm.page_text_pages → fill_scan_pages (스캔 쪽 채움)"]
     R5["apply_post: vlm_page · figures(+context) · charts · supsub · attachments"]
     R6["table_inline.py 표 제자리 넣기"]
-    O["_rep/문서.json · index.json · sources.jsonl · engines.csv · conflicts.jsonl"]
+    O["_rep/문서.json · index.json · sources.jsonl · engines.csv"]
     M["doc_represent.py rep_digest·write_mark: digest 비교 → _rep/_DONE.json"]
-    Q --> X --> R1 --> R2 --> R3 --> R4 --> R5 --> R6 --> O --> M
+    Q --> R1 --> R2 --> R3 --> R4 --> R5 --> R6 --> O --> M
 ```
 
 | 단계 | 파일·함수 | 하는 일 | 입력 → 출력 |
 |---|---|---|---|
-| 채점 | `pipeline.transform.represent.parse_scoring.main()` | 정답 순서 truth(PC) → answer_key → native → consensus로 엔진 결과를 재고 합격선(`resources/config/criteria.json`)으로 판정. 계열 합의는 같은 파일의 `FAMILY` | `parse/<엔진>/` → `parse/qa.json`·`route.json`·`parse_summary.json` |
-| 교차 확인 | `pipeline.transform.represent.crosscheck.build()` | 계열이 다른 엔진 2개 이상이 같은 (라벨, 값)을 냈는지(규칙은 `common/core/repfmt.py`) | 엔진 결과 → `rep.meta.pairs` |
+| 채점 | `pipeline.transform.represent.parse_scoring.main()` | 정답 순서 truth(PC) → answer_key → native → consensus로 엔진 결과를 재고 합격선(`resources/config/criteria.json`)으로 판정. 계열 합의는 같은 파일의 `FAMILY` | `parse/<엔진>/` → `parse/qa.json`·`parse_summary.json` |
 | 대표 고르기 | `pipeline.transform.represent.doc_represent.represent()` | 후보 = 구성이 그 형식에 정한 엔진 중 성공한 것. `transform.represent.engine_pick`(`PARSE_REP_SELECT` — run_pipeline은 `first`)로 고름, 기본은 정확도(`pipeline.transform.represent.parse_scoring.doc_accuracy()`) + 구조 풍부도. 모두 실패하면 구성 밖 성공 엔진(fallback) | `qa.json` + 엔진 결과 → 대표 1개 |
-| 보정 | `pipeline.transform.represent.doc_represent.represent()`·`pipeline.transform.represent.fragment_vote.fuse()`·`pipeline/transform/represent/table_standard.py` | 기호·첨자 표준화(`common/core/text.py`), 다른 엔진의 표 행·키-값 보충, 표/그림을 더 잘 읽은 엔진의 쪽·문단으로 교체, 조각 단위 투표(모델 호출 없음) | → `rep.fused`, `conflicts.jsonl` |
+| 보정 | `pipeline.transform.represent.doc_represent.represent()`·`cross_merge()`·`pipeline/transform/represent/table_standard.py` | 기호·첨자 표준화(`common/core/text.py`), 다른 엔진의 표 행·키-값 보충, 교차 병합 — 대표 본문은 바꾸지 않고, 다른 엔진 조각(빈 줄·쪽 나눔으로 나눈 소제목·표·문단)의 낱말이 98% 이상 대표(쪽 수가 같으면 같은 쪽, 다르면 문서 전체)에 있으면 같은 내용으로 보고 건너뛰고, 아니면 바로 앞에 맞은 대표 조각 뒤에 끼움. 공백을 뺀 글이 같은 쪽은 먼저 걸러 비교하지 않음. 비교 전 줄 끝(`\r\n` → `\n`)을 맞춤(모델 호출 없음) | → `rep.text`, `rep.rep.merge`(엔진별 끼운 조각 수) |
 | 스캔 쪽 채움 | `pipeline.transform.represent.doc_represent.fill_scan_pages()` · `pipeline.transform.figures.scan_page_vlm.scan_pages_detail()` | 글자 PDF 안의 스캔 쪽(글자 거의 없음·숨은 글자·깨진 글자)만 쪽 VLM 글로 채움. 이미 VLM 엔진이 옮긴 이미지·스캔 문서는 건너뜀 | → `rep.rep.scan_fill` |
 | 후보정 | `pipeline.transform.represent.doc_represent.apply_post()` · `pipeline.config.active_features()` | `transform.represent.post_steps`(`PARSE_POST`, 기본 all)에 든 기능만: `vlm_page`(쪽 VLM 옮기기, pptx는 `pipeline.transform.figures.pptx_render.pptx_slide_vlm()`) · `figures`(+`context`) · `charts` · `supsub`(`represent/superscripts.py`) · `attachments`(`represent/mail_attachments.py` — 받기 단계가 꺼낸 `_parts/`의 안 파일을 구성 엔진으로 파싱) | → `rep.text`에 덧붙임, `rep.post`(`code_fp` p1 포함) |
 | 표 넣기 | `pipeline.transform.represent.table_inline.inline_tables()`·`pipeline/transform/represent/figure_context.py` | 엔진들의 표 격자 중 가장 완전한 것을 본문 표 자리에 넣음 | → `rep.rep.table_inline` |
@@ -357,7 +355,7 @@ flowchart TD
 | 읽기 | `pipeline.transform.structure.gold_bundle.main()` | `_rep/index.json`의 대표 결과만 읽음. 원본 키는 `manifest.jsonl`에서 | `parse/_rep/` → 문서 목록 |
 | 청킹 | `pipeline.transform.structure.chunking.chunk_all()` | 본문 → 청크(구조 청커 — 제목 경계·표 블록) + 위치(쪽·줄·문자 범위·절), 쪽 번호 줄은 뺌(`common/core/meaning.py`). 쪽 안 위치(bbox)는 OCR 상자 또는 원본 PDF에서. FAQ 원천은 엑셀 행 단위 | → 청크 |
 | 그림 청크 | `pipeline.transform.structure.gold_bundle.figure_chunk()` | 그림 기록 하나 = 청크 하나(쪽 VLM 쪽의 그림은 본문 청크에 이미지 id만 연결) | `_images/index.jsonl` → 청크 |
-| 고객·메타 | `pipeline/transform/structure/client_roster.py`·`common/core/terms.py`·`common/store/master.py`·`common/core/docmeta.py` | 고객 이름(마스터 표 `<PG_SCHEMA>_master` — 서버에서 못 읽으면 멈춤), 계약 번호(교차 확인 값만), 날짜·개정·구판 | → `docs.jsonl` 칸 |
+| 고객·메타 | `pipeline/transform/structure/client_roster.py`·`common/core/terms.py`·`common/store/master.py`·`common/core/docmeta.py` | 고객 이름(마스터 표 `<PG_SCHEMA>_master` — 서버에서 못 읽으면 멈춤), 날짜·개정·구판 | → `docs.jsonl` 칸 |
 | 임베딩 | `pipeline.transform.structure.gold_bundle.embed_all()` → `common.ai.embed.embed_texts()` | 청크 본문(머리말 포함)을 내부망 임베딩 API로(L2 정규화). 같은 모델·같은 본문은 캐시에서 | → `vectors.npy` |
 | 묶음 정보 | `pipeline.transform.structure.gold_bundle.main()` | 구성 이름·임베딩 모델·차원·청크 수·`master_hash` | → `meta.json` |
 
@@ -367,8 +365,8 @@ flowchart TD
 
 | 산출물 | 자리(문서 폴더 `<out>` 기준) | 다시 쓰는 기준 |
 |---|---|---|
-| 채점 | `parse/qa.json`·`route.json`·`parse_summary.json` | 매 실행 새로 씀(원본이 지워진 문서는 앞 `qa.json` 항목을 이어 씀) |
-| 대표 결과 | `parse/_rep/<문서>.json`, `index.json`, `sources.jsonl`, `engines.csv`, `conflicts.jsonl` | 매 실행 새로 만듦. 성공 엔진이 없으면 원본 sha가 같은 앞 대표 결과를 그대로 올림 |
+| 채점 | `parse/qa.json`·`parse_summary.json` | 매 실행 새로 씀(원본이 지워진 문서는 앞 `qa.json` 항목을 이어 씀) |
+| 대표 결과 | `parse/_rep/<문서>.json`, `index.json`, `sources.jsonl`, `engines.csv` | 매 실행 새로 만듦. 성공 엔진이 없으면 원본 sha가 같은 앞 대표 결과를 그대로 올림 |
 | 끝 표시 | `parse/_rep/_DONE.json` | 대표 결과 digest + `CONTRACT`가 같으면 안 바꿈 |
 | 쪽 VLM 결과 | `parse/raw/vlm/<모델>/page-v1-<sha8>/det-<열쇠16>.json` (`ops.paths.raw_cache_dir` = `PARSE_RAW_ROOT`) — VLM 엔진과 쪽 VLM 후보정이 함께 씀 | 열쇠 = 원본 sha256(회전 전 `orig_sha256`) + 쪽 번호 + DPI(`extract.page_render_dpi` — PDF만)·긴 변 2000 + 회전 각도 + 모델 + 지시서 id. DPI를 바꾸면 열쇠도 바뀜 |
 | 그림 VLM 결과 | `parse/raw/vlm/<모델>/<지시서 id>/<이미지 sha12>.json` | 이미지 sha + 모델 + 지시서 id |
@@ -555,7 +553,7 @@ flowchart TD
    │  ├─ parse/
    │  │  ├─ _source/             manifest.jsonl · processed.jsonl · only.txt
    │  │  ├─ <엔진>/<문서>.json   엔진 결과
-   │  │  ├─ runs.jsonl · qa.json · route.json · parse_summary.json
+   │  │  ├─ runs.jsonl · qa.json · parse_summary.json
    │  │  ├─ _rep/                대표 결과 · index.json · _DONE.json
    │  │  ├─ _images/             그림 PNG · index.jsonl
    │  │  └─ raw/                 P0 캐시(VLM · 첨부)

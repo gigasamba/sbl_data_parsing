@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""파싱 채점 — 엔진 결과를 재고 합격선으로 판정 → <parse>/qa.json · route.json · parse_summary.json.
+"""파싱 채점 — 엔진 결과를 재고 합격선으로 판정 → <parse>/qa.json · parse_summary.json.
 
 정답 우선순위(문서별): truth(PC 가상 문서) → answer_key(사람 정답지, 값만) → native(그 형식의 원본 구조 파서 —
 그 문서 비교에서는 제외) → consensus(인식 계열 여럿이 합의한 수치, 참고) → none. 정답 종류마다 지표가 다르다:
@@ -452,35 +452,6 @@ def aggregate(qa_docs, crit):
     return out
 
 
-def build_route(agg, qa_docs, exts):
-    route = {}
-    for ext in sorted(exts):
-        ran = {eng for dd in qa_docs.values() if dd["format"] == ext for eng, m in dd["engines"].items() if m.get("error") is None}
-        cand = [(eng, agg[eng][ext]) for eng in ran if ext in agg.get(eng, {})]
-        if not cand:
-            continue
-
-        def acc(eng):  # doc_accuracy 평균(실패 = 0) — 요약·선정과 같은 정확도
-            vs = [
-                doc_accuracy(dd["engines"][eng], dd.get("ref")) or 0.0
-                for dd in qa_docs.values()
-                if dd["format"] == ext and eng in dd["engines"]  # noqa: B023 — acc는 같은 반복 안에서만 부름
-            ]
-            return sum(vs) / len(vs) if vs else -1
-
-        cand.sort(
-            key=lambda x: (
-                -round(acc(x[0]), 4),
-                x[1].get("cer") if x[1].get("cer") is not None else 9e9,
-                -x[1].get("ok_rate", 0),
-                x[1].get("sec") if x[1].get("sec") is not None else 9e9,
-                x[0],
-            )
-        )
-        route[ext] = [e for e, _ in cand]
-    return route
-
-
 def run(parse_dir, src_dir, truth_path, akey_dir, prev_docs=None):
     runs, unavailable = {}, {}
     for line in (parse_dir / "runs.jsonl").read_text(encoding="utf-8").splitlines():
@@ -592,7 +563,6 @@ def run(parse_dir, src_dir, truth_path, akey_dir, prev_docs=None):
         }  # 다음 배치가 이전 점수를 들고 올지 가르는 값(원본 sha·엔진 코드 지문)
 
     agg = aggregate(qa_docs, crit)
-    route = build_route(agg, qa_docs, {dd["format"] for dd in qa_docs.values()})
     meta = {
         "parse": str(parse_dir),
         "src": str(src_dir),
@@ -606,7 +576,7 @@ def run(parse_dir, src_dir, truth_path, akey_dir, prev_docs=None):
     }
     if tok_conflicts:  # 갈린 숫자 표기가 있을 때만
         meta["token_conflicts"] = tok_conflicts
-    return {"meta": meta, "docs": qa_docs, "engines": dict(agg)}, route
+    return {"meta": meta, "docs": qa_docs, "engines": dict(agg)}
 
 
 FULL = json.loads(CRITERIA_FILE.read_text(encoding="utf-8"))["run"]["cross_acc_full"]  # 문서 "성공" 판정(criteria.json run)
@@ -742,12 +712,11 @@ def main():
             prev_docs = json.loads(prev_qa.read_text(encoding="utf-8")).get("docs")
         except (OSError, ValueError):
             prev_docs = None
-    qa, route = run(Path(a.parse), Path(a.src), Path(a.truth), Path(a.answer_key) if a.answer_key else None, prev_docs=prev_docs)
+    qa = run(Path(a.parse), Path(a.src), Path(a.truth), Path(a.answer_key) if a.answer_key else None, prev_docs=prev_docs)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "qa.json").write_text(json.dumps(qa, ensure_ascii=False, indent=1), encoding="utf-8")
-    (out_dir / "route.json").write_text(json.dumps(route, ensure_ascii=False, indent=1), encoding="utf-8")
     write_summary(qa, Path(a.src), out_dir)
-    print(f"[parse_qa] qa.json · route.json · parse_summary.json → {out_dir}", flush=True)
+    print(f"[parse_qa] qa.json · parse_summary.json → {out_dir}", flush=True)
 
 
 if __name__ == "__main__":

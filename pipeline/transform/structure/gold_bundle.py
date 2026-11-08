@@ -4,7 +4,7 @@
   청크   : structure 청커(chunking) — 본문은 정제 텍스트(쪽 번호 줄 제외), 위치 = 파일 경로·쪽·줄·문자 범위·제목,
            쪽 안 위치(bbox, pt) = OCR 엔진은 글자 상자 합집합, 텍스트 PDF는 원본 PDF에서 청크 첫·끝 줄을 찾아 합집합
   요약   : 앞부분 발췌
-  메타   : 고객사·계약 번호 — 파싱 모듈 교차 확인 값(_rep rep.meta)(서로 다른 계열 파서 2개+)만
+  메타   : 날짜·개정·구판·문서군(docmeta) — 고객·원천 칸은 적재가 EDW 조인으로 채운다(edw_doc_meta)
   임베딩 : --embed api(EMBED_BASE_URL·EMBED_MODEL — 서버 임베딩 전용 모델) · none(임베딩 없음 — 시험) (L2 정규화 저장, 차원은 첫 응답에서)
 산출: docs.jsonl · chunks.jsonl · vectors.npy(float32, chunks 순서) · meta.json
 사용: python -m pipeline.transform.structure.gold_bundle [--parse-dir output/parse] [--src output/prepared] [--embed api|none] [--out output/edw/bundle]
