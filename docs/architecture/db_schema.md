@@ -147,7 +147,7 @@ EDW 표(`AI.FileStorageMap`, 원천 표 SFDC·CRMS·LAS 등)는 서버에서 운
 
 ### master.glossary
 
-고객 명부·용어 사전·ID 꼴을 합친 표 — melt 꼴(유사값마다 한 줄). 읽는 곳: `common.core.terms` `_aliases`(구조화 고객 판별 `infer_clients` · 검색 질문 고객·별칭) · `load_glossary`(검색 질문 넓히기·근거 상태·고객 별칭의 `org_client`) · `load_id_patterns`(ID 꼴 — 지금 앱 코드는 읽지 않음).
+고객 명부·용어 사전·ID 꼴을 합친 표 — melt 꼴(유사값마다 한 줄). 읽는 곳: `common.core.terms` `_aliases`(구조화 고객 판별 `infer_clients` · 검색 질문 고객·별칭) · `load_glossary`(검색 질문 넓히기·근거 상태·고객 별칭의 `org_client`) · `validate_glossary`(ID 꼴 정규식 검사 — 매칭에 쓰는 앱 코드는 없음).
 
 | 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|---|

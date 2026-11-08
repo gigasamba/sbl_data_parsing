@@ -210,7 +210,7 @@ def infer_clients(docs, head=400, roster=None):
 
     전체 본문(머리 400자만이 아니라)에서 알려진 고객 이름·별칭이 — ⓐ 2회 이상 나오거나 ⓑ 제목/첫 head자 안에
     한 번이라도 나오면(잡음 가드 — 본문 뒤쪽 1회 등장만으로는 "같이 언급된 제3자"와 구분 안 됨) '증거 있음'으로 본다.
-    등장 횟수는 단어 경계·한글 조사 인식 매칭(ST.name_hits·_name_pat, match_clients·expand_query와 같은 규칙)으로 센다 —
+    등장 횟수는 단어 경계·한글 조사 인식 매칭(ST.name_hits·_name_pat, expand_query와 같은 규칙)으로 센다 —
     경계 없는 substring count는 짧은 별칭(예 "MSD")이 "MSDS" 안에서도 걸린다.
     증거 있는 고객은 전부 clients에, 증거 강한 순(제목/머리 등장 먼저 · 그다음 등장 횟수 · 동점은 이름순, 결정적)으로 담는다.
     알려진 고객 = 고객 명부(roster, 기본 T._aliases() — stack.json client_aliases·CLIENT_ROSTER·GLOSSARY_DIR org_client)

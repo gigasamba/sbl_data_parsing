@@ -1,4 +1,4 @@
-"""대표 결과(_rep) 형식 읽기 — 표 행·키-값 쌍·라벨 어휘(고객·공급사·계약 번호·단가·수량). 파싱(교차 확인)·구조화(고객·계약 번호·사실)·
+"""대표 결과(_rep) 형식 읽기 — 표 행·키-값 쌍·라벨 어휘(계약 번호). 파싱(교차 확인)·구조화(고객·계약 번호·사실)·
 평가 도구가 같은 해석을 써야 함.
 10-14 함수별 분리(사용자) — data_parsing에서만 쓰는 doc_accuracy·GOLD는 data_parsing/tools/repfmt.py로 옮김
 (로직 바이트 동일). _pick·extract_label_values는 pick·pairs_of(둘 다 여기 공용에 남음)가 직접 불러 그대로 남긴다."""
@@ -7,15 +7,7 @@ import re
 from common.core.text import normalize_value  # noqa: F401 — pairs_of가 씀
 
 
-CLIENT_RE = re.compile(r"고객|client|customer|거래처|발주처|구매처", re.I)
-
-SUPPLIER_RE = re.compile(r"공급|supplier|vendor|제조사", re.I)
-
 CONTRACT_RE = re.compile(r"계약\s*(번호|no|id)|contract\s*(no|number|#|id)|견적\s*번호|quote\s*(no|number)|주문\s*번호|po\s*(no|number)", re.I)
-
-PRICE_RE = re.compile(r"단가|unit\s*price|금액|amount|price", re.I)
-
-QTY_RE = re.compile(r"수량|qty|quantity|용량|capacity|volume", re.I)
 
 NUM_RE = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
 

@@ -4,7 +4,7 @@ dir 인자(오프라인 도구·시험)를 주면 그 폴더의 CSV를 읽는다
 명부 = stack.json client_aliases + 마스터 client_roster + 용어 사전 org_*(category에 org_client 태그 포함).
 용어 사전(domain-glossary.md): 마스터 domain_terms — concept_id마다 canonical·synonyms·abbreviations·weak_synonyms·broader·related·
 context_required(동음이의 약어 문맥 조건)·case_sensitive·definition_ko/en·status(approved만 검색에 반영)·category(SI43① `|` 구분 다중 태그 가능,
-예 org_client|org_cdmo — 회사가 고객이면서 CDMO). SI43⑦: 이름·개념 표기 뒤 한글 조사가 붙어도 매칭(_name_pat — expand_query·match_clients 공유)."""
+예 org_client|org_cdmo — 회사가 고객이면서 CDMO). SI43⑦: 이름·개념 표기 뒤 한글 조사가 붙어도 매칭(_name_pat — expand_query 공유)."""
 import sys as _sys
 from pathlib import Path as _Path
 import functools
@@ -47,7 +47,7 @@ def _name_pat(name, flags=re.I):
     `re.compile`을 한 번만, 호출부는 매 질문·매 사전 항목마다 결과를 재사용. name이 한글로 끝나고 2자 이상이면 조사
     (PARTICLES) 중 하나가 뒤에 붙어도 매칭(어간이 정확히 name과 같을 때만, 퍼지 없음) · 앞뒤가 한글이면 매칭 안
     함(다른 단어 일부에 오탐 방지 — 'name'이 1자거나 영문·숫자로 끝나면 기존 단어 경계 \\b만).
-    _entry_hit(expand_query)·match_clients 공용 — 한 곳에서만 조사 규칙을 바꾼다. name·flags 쌍의 수는 사전·명부
+    _entry_hit(expand_query)·_name_hit 공용 — 한 곳에서만 조사 규칙을 바꾼다. name·flags 쌍의 수는 사전·명부
     크기로 유한해 캐시가 무한히 안 자람(질문 수가 아니라 이름 수에 비례) — lru_cache(maxsize=None)."""
     esc = re.escape(name)
     if len(name) >= 2 and re.search(r"[가-힣]$", name):
@@ -69,23 +69,6 @@ def _id_rows(dir=None):
     import csv
     with p.open(encoding="utf-8-sig") as fh:
         return list(csv.DictReader(fh))
-
-
-def load_id_patterns_typed(dir=None):
-    """ID 모양(L4-7) 컴파일 — [(id_type, 정규식), …](대소문자 무시). 마스터 id_patterns(pl-38) — dir을 주면 그 폴더 CSV(없으면 빈 목록).
-    검색 tie-break·엔티티 힌트(mcp local)가 id_type(계약 번호·제품 코드 등)으로 씀."""
-    pats = []
-    for r in _id_rows(dir):
-        try:
-            pats.append((r["id_type"], re.compile(r["regex"], re.I)))
-        except re.error:
-            continue   # validate_glossary가 오류를 알림 — 매칭 용도로는 조용히 건너뜀
-    return pats
-
-
-def load_id_patterns(dir=None):
-    """ID 모양 정규식 목록(load_id_patterns_typed에서 id_type만 뺌)."""
-    return [pat for _, pat in load_id_patterns_typed(dir)]
 
 
 def validate_glossary(rows, dir=None, id_rows=None):
@@ -506,17 +489,3 @@ def _name_hit(name, question):
     if name and " " not in name and len(name) >= 2 and re.search(r"[가-힣]$", name):
         return bool(_name_pat(name).search(question))
     return bool(name) and norm(name) in norm(question)
-
-
-def match_clients(question, clients, aliases=None):
-    """질문에 나온 고객(이름 전체 · 별칭(stack.json client_aliases) · 영문 첫 단어 4자+) — 순서 유지."""
-    out, seen = [], set()
-    aliases = _aliases() if aliases is None else aliases
-    for c in sorted((c for c in clients if c), key=len, reverse=True):
-        names = [c] + list(aliases.get(c, []))
-        first = re.match(r"[A-Za-z]{4,}", c)
-        if norm(c) not in seen and (any(_name_hit(n, question) for n in names) or (first and re.search(r"\b" + re.escape(first.group(0)) + r"\b", question, re.I))):
-            out.append(c)
-            seen.add(norm(c))                                # 'Contoso Pharma'·'ContosoPharma'(OCR 공백 차이)는 한 고객
-    return out
-

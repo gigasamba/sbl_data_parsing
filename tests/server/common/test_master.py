@@ -149,7 +149,7 @@ def test_glossary_same_as_old_csv():
     _write_old(d)
     with mock.patch.object(M, "get", lambda: m):
         assert T.load_glossary() == T.load_glossary(d)
-        assert [(t, p.pattern) for t, p in T.load_id_patterns_typed()] == [(t, p.pattern) for t, p in T.load_id_patterns_typed(d)]
+        assert T._id_rows() == T._id_rows(d)
         old = {}  # 파일 쪽 별칭: stack client_aliases + 명부 파일(read_roster) + 용어 사전 org_client(terms._build_aliases와 같은 순서)
         for c, al in T.read_roster(d / "client_roster.csv").items():
             old[c] = sorted(set(old.get(c, [])) | set(al))
@@ -225,7 +225,7 @@ def test_real_glossary_snapshot():
     m = M.Master(M.read_csv(GLOSSARY_ROOT))
     with mock.patch.object(M, "get", lambda: m):
         g, al = T.load_glossary(), T._aliases()
-        ids = [[t, p.pattern] for t, p in T.load_id_patterns_typed()]
+        ids = [[r["id_type"], r["regex"]] for r in T._id_rows()]
     got = {"glossary": (len(g), dig(g)), "ids": (len(ids), dig(ids)), "aliases": (len(al), dig(al))}
     assert got == SNAPSHOT, got
 

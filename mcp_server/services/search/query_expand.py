@@ -84,7 +84,7 @@ def expand_query(q, glossary=None, aliases=None, draft_glossary=None):
     (길이 내림·이름 오름).
     draft_glossary(기본 None → load_draft_glossary(), 즉 output/ 자동 draft CSV의 status=draft 행 — GLOSSARY_DIR/
     마스터 domain_terms가 아님) — 사람 승인 없이 쌓인 새 이름 후보도 BM25에 weak(0.3)로만(승격
-    전엔 approved 취급 안 함 — match_clients·하드 필터에는 안 들어간다, _aliases()는 마스터 domain_terms approved
+    전엔 approved 취급 안 함 — 하드 필터에는 안 들어간다, _aliases()는 마스터 domain_terms approved
     org_client만 봄)."""
     terms = {t: 1.0 for t in tokens(q)}
     notes = []
