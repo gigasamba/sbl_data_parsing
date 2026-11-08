@@ -177,28 +177,28 @@ uv pip install --python .venv/bin/python -r deploy/docker/requirements-core.txt 
 git config core.hooksPath .githooks      # 커밋·push 때 점검 자동 실행(CLAUDE.md §5-2)
 ```
 
-**PC 시험 DB(pgvector) 준비 — 없으면 띄우기.** 배포 판정 시험(selftest)과 pytest의 DB 사례는 이 PG에 붙는다(sqlite 대역 없음). PC(local)에서 settings.yaml `required.deploy.pg_container_name: sbl-mcp-pg`와 `required.pg`가 채워져 있으면 시험이 붙지 못할 때 스스로 2(만들기·켜기)·3(기다리기)을 한다 — 그래도 못 붙으면 그 사례가 FAIL. 손으로 할 때는 아래를 순서대로 한다. 이미지는 `docker run`이 내려받는다(폐쇄망 PC는 먼저 `docker load -i <pgvector tar>`).
+**PC 시험 DB(pgvector) 준비 — 없으면 띄우기.** 배포 판정 시험(selftest)과 pytest의 DB 사례는 이 PG에 붙는다(sqlite 대역 없음). PC(local)에서 settings.yaml `required.deploy.pg_container_name: pgvector`와 `required.pg`가 채워져 있으면 시험이 붙지 못할 때 스스로 2(만들기·켜기)·3(기다리기)을 한다 — 그래도 못 붙으면 그 사례가 FAIL. 손으로 할 때는 아래를 순서대로 한다. 이미지는 `docker run`이 내려받는다(폐쇄망 PC는 먼저 `docker load -i <pgvector tar>`).
 
 1. 상태 보기 — 빈 줄이면 아직 안 만듦, `Exited …`면 멈춤, `Up …`이면 돌고 있음(3으로).
    ```bash
-   docker ps -a --filter name=^sbl-mcp-pg$ --format '{{.Status}}'
+   docker ps -a --filter name=^pgvector$ --format '{{.Status}}'
    ```
 2. 안 만들었으면 만들고, 멈췄으면 켠다.
    ```bash
-   docker run -d --name sbl-mcp-pg --restart no --memory 1g --cpus 2 -p 127.0.0.1:55433:5432 \
-     -v sbl_mcp_pgdata:/var/lib/postgresql/data -e POSTGRES_DB=rag -e POSTGRES_USER=rag \
+   docker run -d --name pgvector --restart no --memory 1g --cpus 2 -p 127.0.0.1:55433:5432 \
+     -v sbl_mcp_pgdata:/var/lib/postgresql/data -e POSTGRES_DB=rag -e POSTGRES_USER=pgvector \
      -e POSTGRES_PASSWORD=<settings.yaml required.pg.pg_password와 같은 값> pgvector/pgvector:pg16
-   docker start sbl-mcp-pg      # 멈춘 것을 켤 때
+   docker start pgvector      # 멈춘 것을 켤 때
    ```
 3. 받을 준비가 될 때까지 기다린다.
    ```bash
-   until docker exec sbl-mcp-pg pg_isready -U rag -d rag; do sleep 1; done
+   until docker exec pgvector pg_isready -U pgvector -d rag; do sleep 1; done
    ```
 4. `POSTGRES_PASSWORD`는 볼륨을 처음 만들 때만 걸린다. 볼륨이 이미 다른 비밀번호로 있으면 직접 바꾼다(값은 화면·기록에 남기지 말고 손으로 친다).
    ```bash
-   docker exec -i sbl-mcp-pg psql -U rag -d rag -c "ALTER USER rag PASSWORD '<settings.yaml 값>'"
+   docker exec -i pgvector psql -U pgvector -d rag -c "ALTER USER pgvector PASSWORD '<settings.yaml 값>'"
    ```
-5. settings.yaml `required.pg`를 모두 채운다 — `127.0.0.1` · `55433` · `rag` · `rag` · 같은 비밀번호(빈 칸이 있으면 시작 거부). 시험이 스스로 띄우게 하려면 `required.deploy.pg_container_name: sbl-mcp-pg`도 적는다.
+5. settings.yaml `required.pg`를 모두 채운다 — `127.0.0.1` · `55433` · `rag`(DB) · `pgvector`(계정) · 같은 비밀번호(빈 칸이 있으면 시작 거부). 시험이 스스로 띄우게 하려면 `required.deploy.pg_container_name: pgvector`도 적는다.
 6. 판 올리기 — §4-4 ④의 `dbtool up --target all --schema <이름> --bundle <묶음> --create-extension`, 그다음 확인.
    ```bash
    .venv/bin/python -m common.store.db.dbtool check --target all   # 최신 판이 아니면 종료 코드 1
@@ -214,7 +214,7 @@ git config core.hooksPath .githooks      # 커밋·push 때 점검 자동 실행
 ```yaml
 required:
   env: {run_env: local}
-  pg: {pg_host: 127.0.0.1, pg_port: 55433, pg_database: rag, pg_user: rag, pg_password: <비밀번호>, pg_schema: demo}   # 적재·검색할 스키마
+  pg: {pg_host: 127.0.0.1, pg_port: 55433, pg_database: rag, pg_user: pgvector, pg_password: <비밀번호>, pg_schema: demo}   # 적재·검색할 스키마
   models:
     # ---- 임베딩 모델 ----
     embed_base_url: <OpenAI 호환 주소>
