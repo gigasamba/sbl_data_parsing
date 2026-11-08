@@ -184,11 +184,6 @@ def configure(settings_file=None):
     inst = instance_of(_root())
     if inst and run_env == "prd":
         return [f"코드 폴더 이름 끝 -{inst}(벌 번호)는 개발 서버(dev)에서만 — 운영(prd)은 한 벌(폴더 이름을 바꿀 것)"]
-    if inst:  # 여러 벌 — 포트가 코드 기본값 그대로면 다른 벌과 겹침(load_settings.sh·앱과 같은 거부)
-        for p in ("mcp.server.port", "common.runtime.data_parsing_port"):
-            d = _const(f"default.{p}")
-            if str(_host().get(doc, p) or d) == d:
-                return [f"여러 벌 — {_host().layout().to_yaml(p)}가 기본값({d}) 그대로: 벌마다 다른 포트를 적음"]
     # 컨테이너 이름 — load_settings가 낸 PIPELINE_CNAME, 없으면 같은 규칙으로: 밑 이름(ops.containers.pipeline.pipeline_container_name > 코드 기본값) + 벌 번호
     PIPE_C = os.environ.get("PIPELINE_CNAME") or (  # env 남김 — 호스트 도구(load_settings.sh load_settings가 냄)
         (_host().get(doc, "common.host.pipeline_container") or _const("default.common.host.pipeline_container"))

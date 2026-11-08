@@ -88,13 +88,9 @@ EOF
   fi
   export DOCKER RAG_OUT EDW_CHAIN_SRC DEVBOX_HOME _SETTINGS_KEYS   # _SETTINGS_KEYS — 내부 신호: 이 load_settings가 낸 이름
   INSTANCE=; [[ $(basename "$RAG_ROOT") =~ -([1-9][0-9]?)$ ]] && INSTANCE=${BASH_REMATCH[1]}   # 벌 번호 — 루트(코드 폴더) 이름 끝 -<1~99>(날짜·판 꼴 숫자는 아님 — run_pipeline.py instance_of와 같은 규칙)
-  if [ -n "$INSTANCE" ]; then   # 여러 벌 — 운영(prd)은 한 벌, 포트는 벌마다 달라야 함
-    [ "${RUN_ENV:-}" = prd ] && { echo "[설정] 코드 폴더 이름 끝 -$INSTANCE(벌 번호)는 개발 서버(dev)에서만 — 운영(prd)은 한 벌(폴더 이름을 바꿀 것)" >&2; return 2; }
-    local d   # 코드 기본 포트
-    d=$(_host_default mcp.server.port)
-    [ "${MCP_PORT:-$d}" = "$d" ] && { echo "[설정] 여러 벌 — search.server.mcp_port가 기본값($d) 그대로: 벌마다 다른 포트를 적음" >&2; return 2; }
-    d=$(_host_default common.runtime.data_parsing_port)
-    [ "${DATA_PARSING_PORT:-$d}" = "$d" ] && { echo "[설정] 여러 벌 — ops.services.data_parsing.data_parsing_port가 기본값($d) 그대로: 벌마다 다른 포트를 적음" >&2; return 2; }
+  # 여러 벌(개발자별)은 개발 서버만 — 운영(prd)은 한 벌. 개발 벌은 data-pipeline 하나만 띄우므로(검색 MCP 포트를 쓰지 않음) 포트 칸은 보지 않는다
+  if [ -n "$INSTANCE" ] && [ "${RUN_ENV:-}" = prd ]; then
+    echo "[설정] 코드 폴더 이름 끝 -$INSTANCE(벌 번호)는 개발 서버(dev)에서만 — 운영(prd)은 한 벌(폴더 이름을 바꿀 것)" >&2; return 2
   fi
   NAME_SUFFIX=${INSTANCE:+-$INSTANCE}; export INSTANCE NAME_SUFFIX   # 여러 벌 — 컨테이너·compose 묶음·타이머 이름 끝(비우면 한 벌, 이름 그대로)
   # 컨테이너·compose 묶음 이름(셸·compose는 이 넷만 씀) = 밑 이름(settings.yaml ops.containers.<서비스>.<서비스>_container_name·
