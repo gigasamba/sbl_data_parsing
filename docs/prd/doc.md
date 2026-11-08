@@ -65,7 +65,7 @@
   3. 서버 상주 컨테이너 셋: 일괄 `data-pipeline`(파싱·구조화·적재 — 문서 폴더 읽기 전용 + 결과 폴더, 자원 `ops.containers.pipeline.pipeline_cpus` 5·`pipeline_mem_limit` 24g), `mcp-data-parsing`([ops.md#rn-03](ops.md#rn-03)), `mcp-server`. pgvector·redis는 우리 것이 아니다.
   4. 운영 작업(`pipe_exec.sh parse|publish`, `pipe_exec.sh <도구>|migrate|show-stack|check`, `dbtool`)은 상주 `data-pipeline` 안에서 `docker exec`(`in_container.sh` `in_pipeline` — 안 떠 있으면 종료 2). 일회성 작업 컨테이너는 없다. 이미지 점검(`docker run --rm … selftest`)만 예외.
   5. `load_settings.sh`는 호스트 python(PyYAML만)의 `settings_to_env.py` + `host_settings.tsv`로 설정을 셸 env로 낸다.
-  6. 재부팅 때 docker 서비스(`systemctl enable docker`)가 `restart: unless-stopped` 컨테이너를 다시 띄운다(사용자 11-09). keepalive 타이머 `mcp-server-keepalive`가 `mcp_keepalive.sh`로 `mcp-server`·`mcp-data-parsing`를 살핀다.
+  6. 재부팅 때 docker 서비스(`systemctl enable docker`)가 `restart: unless-stopped` 컨테이너를 다시 띄운다. keepalive 타이머 `mcp-server-keepalive`가 `mcp_keepalive.sh`로 `mcp-server`·`mcp-data-parsing`를 살핀다.
 - 파일: `README.md` §5, `deploy/host/{scripts,compose,systemd}/`, `deploy/release/{stage_images.sh,load.sh}`.
 - QA: `tests/general/deploy/test_compose.py`·`test_host_env.py`·`test_dc.py` · 통과. 서버 확인 refactor.md C-71·C-82·C-83.
 - Status: done
@@ -96,7 +96,7 @@
 
 <a id="op-19"></a>
 ## op-19 · 서버 문서는 절차마다 원본 하나
-- 이유: 새 서버 설치·판 올리기·설정 바꾸기를 문서만 보고 끝낼 수 있어야 한다. 같은 절차가 여러 곳에 있으면 한쪽만 고쳐져 어긋난다(사용자 11-09).
+- 이유: 새 서버 설치·판 올리기·설정 바꾸기를 문서만 보고 끝낼 수 있어야 한다. 같은 절차가 여러 곳에 있으면 한쪽만 고쳐져 어긋난다.
 - 규칙:
   1. 절차마다 명령 원본은 한 곳 — 새 서버 설치는 README §5-0 "서버 설치 순서", 판 올리기는 upgrade-guide, 설정 칸 확인은 env-guide §4. 다른 문서는 링크만 둔다.
   2. README §5 첫머리에 "새 서버 설치 · 판 올리기 · 설정 바꾸기" 세 갈래 입구 표.

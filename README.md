@@ -192,7 +192,7 @@ git config core.hooksPath .githooks      # 커밋·push 때 점검 자동 실행
    ```
 3. 받을 준비가 될 때까지 기다린다.
    ```bash
-   until docker exec pgvector pg_isready -U pgvector -d rag; do sleep 1; done
+   until docker exec pgvector pg_isready -h 127.0.0.1 -U pgvector -d rag; do sleep 1; done   # -h: 처음 만들 때의 초기화용 서버에 속지 않게
    ```
 4. `POSTGRES_PASSWORD`는 볼륨을 처음 만들 때만 걸린다. 볼륨이 이미 다른 비밀번호로 있으면 직접 바꾼다(값은 화면·기록에 남기지 말고 손으로 친다).
    ```bash
@@ -473,8 +473,42 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 | docker 서비스가 부팅 때 켜짐 | `systemctl is-enabled docker` — 기대 `enabled` | `systemctl enable --now docker`(재부팅 때 컨테이너를 다시 띄우는 것이 이 서비스) |
 | 호스트 python 3.9 이상과 PyYAML | `python3 --version` · `python3 -c 'import yaml'` | 3.9 이상은 서버 관리자에게 요청한다(호스트 스크립트가 읽는 `common/config/layout.py`가 3.9 문법을 씀 — RHEL 8의 기본 `python3`는 3.6). PyYAML은 `dnf install python3-pyyaml` |
 | unzip | `unzip -v` | `dnf install unzip` |
-| PostgreSQL 16 + pgvector, 우리 DB·계정 | DB 담당에게 확인 | DB 담당이 만든다. 확인할 것 셋: ① PG가 **이 서버에 컨테이너로** 떠 있다(백업·문서 수 세기가 그 컨테이너 안에서 `psql`을 씀 — 이름을 `required.deploy.pg_container_name`에 적음) ② 계정에 그 DB의 **스키마 만들기 권한**이 있다(`GRANT CREATE ON DATABASE <DB> TO <계정>` — `migrate up`이 `<pg_schema>`·`<pg_schema>_master`·`<pg_schema>_<원천>`·`applog`를, 개발 서버의 배포 판정 시험이 임시 `test_*`를 만듦) ③ `vector` 확장(관리자가 한 번 — §5-3 ③ 0번) |
+| PostgreSQL 16 + pgvector, 우리 DB·계정 | DB 담당에게 확인 · `docker ps --filter name=pgvector` | DB 담당이 만들거나, 이 서버에 직접 띄운다(아래 [서버 PG 띄우기](#서버-pg-띄우기)). 확인할 것 셋: ① PG가 **이 서버에 컨테이너로** 떠 있다(백업·문서 수 세기가 그 컨테이너 안에서 `psql`을 씀 — 이름을 `required.deploy.pg_container_name`에 적음) ② 계정에 그 DB의 **스키마 만들기 권한**이 있다(`GRANT CREATE ON DATABASE <DB> TO <계정>` — `migrate up`이 `<pg_schema>`·`<pg_schema>_master`·`<pg_schema>_<원천>`·`applog`를, 개발 서버의 배포 판정 시험이 임시 `test_*`를 만듦) ③ `vector` 확장(관리자가 한 번 — §5-3 ③ 0번) |
 | 운영 그룹 | `id -gn <운영 계정>` · `getent group <그룹>` | 서버 관리자에게 받는다 |
+
+<a id="서버-pg-띄우기"></a>
+**서버 PG(pgvector) 띄우기 — 이 서버에 PG를 직접 띄울 때**(DB 담당이 이미 띄웠으면 건너뛰고 접속 정보만 받는다). root 셸에서 차례로 친다.
+```bash
+# ① (인터넷 PC에서) 이미지를 파일로 만든다 → 서버로 옮긴다
+docker pull pgvector/pgvector:pg16 && docker save pgvector/pgvector:pg16 -o pgvector_pg16.tar
+
+# ② (서버) 이미지 불러오기
+docker load -i pgvector_pg16.tar                               # 기대: Loaded image: pgvector/pgvector:pg16
+
+# ③ 데이터 폴더(컨테이너를 지워도 DB는 여기 남음)
+mkdir -p /data/pg/pipeline
+
+# ④ 띄우기 — 비밀번호는 화면·셸 기록에 남지 않게 read로 받는다
+read -rsp 'PG 비밀번호: ' PGPW; echo
+docker run -d --name pgvector --restart unless-stopped \
+  -p 127.0.0.1:5432:5432 \
+  -e POSTGRES_DB=rag -e POSTGRES_USER=<계정> -e POSTGRES_PASSWORD="$PGPW" \
+  -v /data/pg/pipeline:/var/lib/postgresql/data:z \
+  pgvector/pgvector:pg16
+unset PGPW
+docker ps --filter name=^pgvector$ --format '{{.Status}}'      # 기대: Up …
+
+# ⑤ 받을 준비가 될 때까지 기다린다
+until docker exec pgvector pg_isready -h 127.0.0.1 -U <계정> -d rag; do sleep 1; done   # 기대: 127.0.0.1:5432 - accepting connections
+#   -h 127.0.0.1을 꼭 준다 — 처음 띄울 때 PG가 초기화용 서버를 잠깐 띄우는데, -h 없이 물으면 그때도 "준비됨"이 나와 ⑥이 "database does not exist"로 실패한다
+
+# ⑥ vector 확장(DB마다 한 번)
+docker exec pgvector psql -U <계정> -d rag -c 'CREATE EXTENSION IF NOT EXISTS vector'   # 기대: CREATE EXTENSION
+```
+- 설치 순서 4번에서 settings.yaml에 같은 값을 적는다: `required.pg.pg_host: 127.0.0.1` · `pg_port: 5432` · `pg_database: rag` · `pg_user: <계정>` · `pg_password: <④의 값>` · `required.deploy.pg_container_name: pgvector`. 우리 컨테이너는 호스트 네트워크를 쓰므로 `127.0.0.1`로 붙는다.
+- `POSTGRES_USER`로 만든 계정은 관리자 계정이라 스키마 만들기 권한이 있다. 포트는 `127.0.0.1`에만 열었다(밖에서 붙지 못함).
+- `--restart unless-stopped`라 재부팅 뒤 docker 서비스가 다시 띄운다. 손으로 멈췄으면 `docker start pgvector`.
+- `POSTGRES_PASSWORD`는 데이터 폴더가 비어 있을 때(처음)만 걸린다. 비밀번호를 바꾸려면 `docker exec -it pgvector psql -U <계정> -d rag`에 들어가 `\password <계정>`.
 
 **컨테이너 도구는 docker 하나로 쓴다.** 셸을 열면 먼저 `export DOCKER=docker`, settings.yaml에 `ops.host.container_cli: docker`. 일반 사용자 셸이면 `DOCKER="sudo docker"`. 같은 서버에 podman도 있으면 이미지를 podman에 불러오지 않는다(두 도구는 이미지를 따로 보관 — docker로 띄우면 podman에 넣은 이미지는 안 보임).
 
