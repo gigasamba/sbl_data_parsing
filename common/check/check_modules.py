@@ -327,7 +327,22 @@ _ENV_ATTRS = ("environ", "getenv", "environb", "putenv", "unsetenv")
 _APP_DIRS = ("common", "pipeline", "mcp_server")
 _NON_CODE = (tokenize.NL, tokenize.NEWLINE, tokenize.COMMENT, tokenize.INDENT, tokenize.DEDENT)
 # ⑪ env 사전 키("X": …)·env…[ "X" ]·env….pop/setdefault("X")·putenv("X") — env가 든 줄의 글자 이름만
+# ponytail: 줄 단위라 여러 줄에 걸친 env 사전은 env가 든 줄의 키만 봄 — 놓치는 키가 나오면 문장 단위로
 _NAME_SET = re.compile(r"""(?:env\w*\[|env\w*\.(?:pop|setdefault)\(|putenv\()\s*["']([A-Z][A-Z0-9_]*)["']|["']([A-Z][A-Z0-9_]*)["']\s*:""")
+_OS_ALIAS = re.compile(r"^\s*import\s+os\s+as\s+(\w+)", re.M)  # ⑩ import os as X → X.environ
+_FROM_OS = re.compile(r"^\s*from\s+os\s+import\s+\(?([\w\s,]+)", re.M)  # ⑩ from os import environ[ as E] → E
+
+
+def _os_names(text):
+    """(os 별칭들, from os로 들여온 env 이름들) — 글자 훑기(흐름 분석 아님, e2-23)."""
+    aliases = {"os", "_os", *_OS_ALIAS.findall(text)}
+    direct = set()
+    for items in _FROM_OS.findall(text):
+        for item in items.split(","):
+            parts = item.split()
+            if parts and parts[0] in _ENV_ATTRS:
+                direct.add(parts[-1])  # "environ" 또는 "environ as E"의 E
+    return aliases, direct
 
 
 def _setting_names():
@@ -338,20 +353,19 @@ def _setting_names():
 
 
 def env_lines(text, names=frozenset()):
-    """[(줄, 분류 또는 None, ⑩ env 직접 사용?, ⑪ 설정 이름들)] — ⑩ 코드(주석·문자열 빼고)의 os.environ·os.getenv 등(`os.`·`_os.` 뒤),
+    """[(줄, 분류 또는 None, ⑩ env 직접 사용?, ⑪ 설정 이름들)] — ⑩ 코드(주석·문자열 빼고)의 os.environ·os.getenv 등(`os.`·`_os.`·`import os as X`의 `X.` 뒤, `from os import environ[ as E]`의 E),
     ⑪ env가 든 줄의 설정 이름 글자(_NAME_SET). 분류 주석은 그 문장(논리 줄) 안이나 바로 위 주석 줄에서 찾는다."""
     lines, out = text.splitlines(), []
     toks = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    aliases, direct = _os_names(text)
     start, hits = None, set()
     for i, t in enumerate(toks):
         if start is None and t.type not in _NON_CODE:
             start = t.start[0]
-        if (
-            t.type == tokenize.NAME
-            and t.string in _ENV_ATTRS
-            and i > 1
-            and toks[i - 1].string == "."
-            and toks[i - 2].string in ("os", "_os")
+        after_dot = i > 0 and toks[i - 1].string == "."
+        if t.type == tokenize.NAME and (
+            (t.string in _ENV_ATTRS and after_dot and i > 1 and toks[i - 2].string in aliases)
+            or (t.string in direct and not after_dot)  # from os import environ[ as E] — 들여온 줄과 쓰는 줄
         ):
             hits.add(t.start[0])
         if t.type != tokenize.NEWLINE or start is None:

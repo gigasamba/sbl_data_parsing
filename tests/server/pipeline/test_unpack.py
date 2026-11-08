@@ -32,10 +32,11 @@ def _rels(*rels):
     return f'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">{body}</Relationships>'
 
 
-def _docx(objects, same=None):
-    """objects: {이름: 바이트} — 개체마다 문단 하나(앞 문단 글 '앞 글 <i>', same을 주면 모두 그 글)."""
+def _docx(objects, same=None, box=None):
+    """objects: {이름: 바이트} — 개체마다 문단 하나(앞 문단 글 '앞 글 <i>', same을 주면 모두 그 글 · box를 주면 앞 문단 끝에 그 글의 글상자)."""
+    inner = f"<w:r><w:txbxContent><w:p><w:r><w:t>{box}</w:t></w:r></w:p></w:txbxContent></w:r>" if box else ""
     paras = "".join(
-        f'<w:p><w:r><w:t>{same or f"앞 글 {i}"}</w:t></w:r></w:p><w:p><w:r><w:object><o:OLEObject r:id="rId{i}"/></w:object></w:r></w:p>'
+        f'<w:p><w:r><w:t>{same or f"앞 글 {i}"}</w:t></w:r>{inner}</w:p><w:p><w:r><w:object><o:OLEObject r:id="rId{i}"/></w:object></w:r></w:p>'
         for i in range(len(objects))
     )
     doc = (
@@ -153,6 +154,12 @@ CASES = [  # (이름, 파일 이름, 내용, [(안 이름, 종류, 깊이, 위�
         "w.docx",
         _docx({"a.txt": b"a", "b.txt": b"b"}, same="같은 글"),
         [("a.txt", "개체", 1, {"after": "같은 글"}), ("b.txt", "개체", 1, {"after": "같은 글", "nth": 1})],
+    ),
+    (
+        "글상자 속 문단은 따로 세지 않음 — 바깥 문단 글에 이미 듦",
+        "x.docx",
+        _docx({"a.txt": b"a"}, box="상자"),
+        [("a.txt", "개체", 1, {"after": "앞 글 0상자"})],
     ),
     ("같은 내용 첨부는 한 번만(pl-65 ⑨)", "m.eml", _eml({"a.txt": b"same", "b.txt": b"same"}).as_bytes(), [("a.txt", "첨부", 1, {})]),
 ]

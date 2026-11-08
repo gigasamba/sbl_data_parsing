@@ -40,34 +40,42 @@ def _selftest_index_mismatch():
 
 
 def test_embed_retry():
-    """질의 임베딩 — 호출 하나 25초(EMBED_QUERY_SEC) · 연결·시간 초과(OSError)면 한 번만 더."""
+    """질의 임베딩 — 두 번 합쳐 25초(EMBED_QUERY_SEC) · 연결·시간 초과(OSError)면 남은 시간으로 한 번만 더 ·
+    HTTP 오류 상태(HTTPError)는 다시 보내지 않음."""
+    import urllib.error
     from unittest import mock
 
     import numpy as np
 
     from mcp_server.services.search import rank_rules as RR
 
-    cases = [  # (호출마다 결과 — OSError면 그 예외, 기대: 벡터 또는 예외 형식, 호출 수)
-        ([np.ones((1, 2))], "vec", 1),
-        ([OSError("timed out"), np.ones((1, 2))], "vec", 2),
-        ([OSError("timed out"), OSError("timed out")], OSError, 2),
+    vec = np.ones((1, 2))
+    http500 = urllib.error.HTTPError("u", 500, "x", {}, None)
+    cases = [  # (호출마다 (걸린 초, 결과 — 예외면 그 예외), 기대: 벡터 또는 예외 형식, 호출마다 받은 timeout)
+        ([(0, vec)], "vec", [25]),
+        ([(10, OSError("timed out")), (0, vec)], "vec", [25, 15]),
+        ([(5, OSError("refused")), (5, OSError("refused"))], OSError, [25, 20]),
+        ([(24.5, OSError("timed out"))], OSError, [25]),  # 남은 시간 1초 미만 — 다시 안 함
+        ([(0, http500)], urllib.error.HTTPError, [25]),  # 서버 오류 상태 — 다시 안 함
     ]
-    for answers, want, n in cases:
-        seen = []
+    for answers, want, timeouts in cases:
+        seen: list = []
+        clock = [0.0]
 
-        def fake(embed, texts, kind, timeout=None, answers=answers, seen=seen):
+        def fake(embed, texts, kind, timeout=None, answers=answers, seen=seen, clock=clock):
             seen.append(timeout)
-            got = answers[len(seen) - 1]
+            cost, got = answers[len(seen) - 1]
+            clock[0] += cost
             if isinstance(got, Exception):
                 raise got
             return got
 
-        with mock.patch.object(RR, "embed_texts", fake):
+        with mock.patch.object(RR, "embed_texts", fake), mock.patch.object(RR.time, "monotonic", lambda clock=clock: clock[0]):
             try:
                 got = "vec" if len(RR.embed_query({"embed": "api", "dim": 2}, "q")) == 2 else None
             except OSError as e:
                 got = type(e)
-        assert got == want and seen == [RR.EMBED_QUERY_SEC] * n and RR.EMBED_QUERY_SEC < 30, (answers, got, seen)
+        assert got == want and seen == timeouts and RR.EMBED_QUERY_SEC < 30, (answers, got, seen)
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

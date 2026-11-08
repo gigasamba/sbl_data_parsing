@@ -15,6 +15,8 @@ CASES = [  # (이름, numFmtId, 사용자 서식 코드, date1904, A1 칸 XML, �
     ("date1904", 14, None, True, "<v>44893</v>", "2026-11-29"),
     ("time only", 200, "h:mm", False, "<v>0.604166666666667</v>", "14:30"),
     ("elapsed hours", 200, "[h]:mm", False, "<v>1.5</v>", "36:00"),
+    ("elapsed hours upper", 200, "[H]:MM", False, "<v>1.5</v>", "36:00"),
+    ("east asian builtin 31", 31, None, False, "<v>46355</v>", "2026-11-29"),
     ("formula value", 14, None, False, "<f>MAX(B1:B1)</f>", "=MAX(B1:B1) (계산값) 2026-11-29"),
 ]
 

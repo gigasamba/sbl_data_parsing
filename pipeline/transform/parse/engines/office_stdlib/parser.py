@@ -154,7 +154,9 @@ def _eval_formula(formula, cur_sheet, numbers_by_sheet):
 
 _DATE_IDS = {14: "d", 15: "d", 16: "d", 17: "d", 18: "t", 19: "t", 20: "t", 21: "t", 22: "d",
              45: "t", 46: "e", 47: "t"}                    # 기본 날짜·시각 서식 번호 → d(날짜 있음)·t(시각만)·e(경과 시간)
-_FMT_LITERAL = re.compile(r'"[^"]*"|\[(?![hms]+\])[^\]]*\]|[\\_*].')    # 따옴표 글자·[색/조건]·이스케이프는 날짜 기호가 아님
+_DATE_IDS.update({i: "d" for i in (*range(27, 37), *range(50, 59))})   # 동아시아(한국어 엑셀) 내장 서식 — numFmt 없이 씀
+_DATE_IDS.update({32: "t", 33: "t"})                       # 그중 h"시" mm"분"[ ss"초"]는 시각만
+_FMT_LITERAL = re.compile(r'"[^"]*"|\[(?![hms]+\])[^\]]*\]|[\\_*].', re.I)    # 따옴표 글자·[색/조건]·이스케이프는 날짜 기호가 아님
 
 
 def _date_styles(z):

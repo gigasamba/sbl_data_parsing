@@ -147,7 +147,11 @@ def _word_anchors(z):
     """워드 — 연결 id → 위치 {"after": 개체가 든 문단의 글(없으면 바로 앞 글 있는 문단)의 끝 40자, "nth": 그 글이 앞에 몇 번 더
     나왔나(0이면 뺌 — 같은 글이 앞에도 있으면 첫 자리가 아니라 그 차례에 표시)}. 문서를 한 번만 읽는다."""
     out, last, seen = {}, "", ""  # seen = 지금까지 글 있는 문단을 줄로 이은 것
-    for p in ET.fromstring(z.read("word/document.xml")).iter(_W + "p"):
+    paras = list(ET.fromstring(z.read("word/document.xml")).iter(_W + "p"))
+    inner = {q for p in paras for q in p.iter(_W + "p") if q is not p}  # 글상자(w:txbxContent) 속 문단 — 글은 바깥 문단에 이미 듦
+    for p in paras:
+        if p in inner:
+            continue
         text = "".join(t.text or "" for t in p.iter(_W + "t")).strip()
         if text:
             seen += text + "\n"

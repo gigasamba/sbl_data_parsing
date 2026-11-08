@@ -49,3 +49,17 @@ def test_pg_read():
         dbtool.upgrade("applog", log)
         pgcase.fill_master(base)
         _read(base, log)
+
+
+def test_no_docker_cli():
+    """PC에 docker 명령이 없으면(FileNotFoundError) 시험 PG를 못 띄움 — False(→ 'PG에 붙지 못함' 메시지), 예외로 안 죽음."""
+    from types import SimpleNamespace
+    from unittest import mock
+
+    for err in (FileNotFoundError("docker"), PermissionError("docker")):
+        with (
+            mock.patch("common.config.settings.cfg", return_value=SimpleNamespace(host=SimpleNamespace(pg_container="pgvector"))),
+            mock.patch("common.core.paths.LOCAL_RUN", True),
+            mock.patch("subprocess.run", side_effect=err),
+        ):
+            assert pgcase._start_local_pg({}) is False, err

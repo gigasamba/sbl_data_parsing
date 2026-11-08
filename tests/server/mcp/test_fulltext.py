@@ -288,11 +288,14 @@ def test_get_batch():
 
 
 def test_storage_client():
-    """원문 도구의 저장소 클라이언트 — 호출 하나 25초(도구 30초 안)·실패면 한 번만 더·연결 풀 16(get 자리 2 × 동시 8)."""
-    M._client.cache_clear()
-    try:
-        with patch("common.store.objectstore.client") as made:
-            M._client()
-        assert made.call_args.kwargs == {"timeout": 25, "retries": 1, "max_pool": 16} and FT.FILE_TIMEOUT_SEC < 30, made.call_args
-    finally:
+    """원문 도구의 저장소 클라이언트 — 호출 하나 25초(도구 30초 안)·실패면 한 번만 더 ·
+    연결 풀 = (공용 자리 — list_doc_fulltext + get 자리 2) × 동시 8."""
+    for shared, pool in [(None, 80), ("4", 48)]:  # (MCP_MAX_CONCURRENCY — None은 기본 8, 기대 풀)
         M._client.cache_clear()
+        try:
+            with patch("common.store.objectstore.client") as made, mc.senv(MCP_MAX_CONCURRENCY=shared):
+                M._client()
+            want = {"timeout": 25, "retries": 1, "max_pool": pool}
+            assert made.call_args.kwargs == want and FT.FILE_TIMEOUT_SEC < 30, made.call_args
+        finally:
+            M._client.cache_clear()

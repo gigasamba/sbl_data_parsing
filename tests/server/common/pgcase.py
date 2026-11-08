@@ -59,9 +59,12 @@ def _start_local_pg(c):
     name = cfg().host.pg_container
     if not paths.LOCAL_RUN or not name:
         return False
-    st = subprocess.run(["docker", "ps", "-a", "--filter", f"name=^{name}$", "--format", "{{.Status}}"], capture_output=True, text=True)
+    try:
+        st = subprocess.run(["docker", "ps", "-a", "--filter", f"name=^{name}$", "--format", "{{.Status}}"], capture_output=True, text=True)
+    except OSError:  # docker 명령이 없음(FileNotFoundError) — 뒤의 docker 호출은 이 첫 호출이 된 뒤에만
+        return False
     if st.returncode:
-        return False  # docker 없음
+        return False  # docker 데몬 없음
     if not st.stdout.strip():
         env = S.child_env(None)
         env["POSTGRES_PASSWORD"] = c["PG_PASSWORD"]  # env 남김 — 하위 프로세스(docker run -e 이름만 — 값은 명령 줄에 안 보임)

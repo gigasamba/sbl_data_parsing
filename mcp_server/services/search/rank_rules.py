@@ -1,9 +1,13 @@
 """검색 공용 도우미(pgsearch·retriever) — 질의 임베딩·가중치·ID 문턱. 검색은 PG 하나(PC도)."""
 
+import math
+import time
+import urllib.error
+
 from common.ai.embed import embed_texts, query_model_mismatch
 from mcp_server import config as mc
 
-EMBED_QUERY_SEC = 25  # 질의 임베딩 호출 하나 제한(초) — 도구 시간 상한(MCP_TOOL_TIMEOUT_SEC 30초) 안
+EMBED_QUERY_SEC = 25  # 질의 임베딩 전체 제한(초, 다시 시도 포함) — 도구 시간 상한(MCP_TOOL_TIMEOUT_SEC 30초) 안
 ID_MAX_DF = 5  # ID 우선 검색에 쓰는 ID: 이 수 이하의 "문서"에만 나오는 것(로컬·pgvector 같은 값).
 # BR32 — 청크 수가 아니라 문서 수로 센다(원래 의도 "여러 문서에 흔한 제품 코드는 문서를 특정 못 함"은 문서 단위
 # 개념인데, 예전엔 청크 단위로 셌다 — 같은 문서를 청크 여러 개로 쪼개면(G9 머리말은 그 문서의 모든 청크에 같은
@@ -43,12 +47,15 @@ def embed_query(meta, text):
     bad = query_model_mismatch(meta)  # api는 모델 이름이 이 프로세스 env(EMBED_MODEL) — 색인과 다르면 거부
     if bad:
         raise IndexMismatch(bad)
-    for attempt in range(2):  # 호출 하나 EMBED_QUERY_SEC + 연결·시간 초과면 한 번 더
-        try:
-            v = embed_texts(meta["embed"], [text], "query", timeout=EMBED_QUERY_SEC)[0]
+    deadline = time.monotonic() + EMBED_QUERY_SEC  # 두 번 합쳐 EMBED_QUERY_SEC 안 — 다시 시도는 남은 시간만
+    for attempt in range(2):
+        try:  # 첫 시도는 정수 25초 그대로(_query_vec 캐시 열쇠가 timeout을 포함)
+            v = embed_texts(meta["embed"], [text], "query", timeout=math.ceil(deadline - time.monotonic()))[0]
             break
-        except OSError:  # URLError·socket timeout
-            if attempt:
+        except urllib.error.HTTPError:  # 서버가 답한 오류 상태 — 다시 보내도 같음
+            raise
+        except OSError:  # 연결 실패·시간 초과만 한 번 더(남은 시간이 1초 미만이면 포기)
+            if attempt or deadline - time.monotonic() < 1:
                 raise
     if len(v) != meta["dim"]:  # 적재 뒤 임베딩 모델(EMBED_MODEL)을 바꾸면 차원이 달라 검색이 깨짐 — 다시 적재
         raise SystemExit(
