@@ -3,7 +3,6 @@
 import sys
 import threading
 import time
-import types
 
 from common.store.db.models import search_tables as ST
 from common.store.pg import PGPool, _standin_schema, _warn_standin, conf, has_conn  # 시험이 has_conn을 바꿔 끼움
@@ -18,7 +17,7 @@ _RELOAD_LOCK = threading.Lock()
 def _version_of(dbs):
     """적재 버전 표식(load 뒤 다시 읽기 확인) — 원천 스키마마다 (MAX(doc_id), COUNT(*)).
     --replace는 문서를 지우고 다시 넣어 새(더 큰) doc_id를 받으므로 개수가 같아도 MAX가 바뀐다. 표가 없거나 접속이 흔들리면 그 원천은 None
-    (바뀜으로 보지 않음)."""
+    (_retriever는 None이 하나라도 있으면 확인 실패 = 안 바뀜으로 본다 — DB가 흔들릴 때 다시 만들다 줄줄이 실패하지 않게)."""
     out = []
     for src in sorted(dbs):
         db = dbs[src]
@@ -28,20 +27,6 @@ def _version_of(dbs):
         except Exception:
             out.append((src, None, None))
     return tuple(out)
-
-
-def _close_pool_later(pool, delay=5):
-    """재적재로 교체된 이전 PGPool을 늦게 닫음 — 이미 시작된 요청이 끝날 시간을 줌.
-    ponytail: 완벽한 보장은 아님(그 사이 두 번째 .q() 호출이 있으면 실패 가능) — 재적재 간격(기본 30초)에 비해 요청은 보통 짧아 실무 위험은 낮음."""
-
-    def _close():
-        time.sleep(delay)
-        try:
-            pool.pool.close()
-        except Exception:
-            pass
-
-    threading.Thread(target=_close, daemon=True).start()
 
 
 def check_store():
@@ -56,10 +41,8 @@ def check_store():
 
 
 def _build_retriever():
-    from common.store import pg as PGC
     from mcp_server.services.search import retriever as RT
 
-    old = _STATE.get("Rs")
     try:
         check_store()  # 시작 때 이미 확인(main) — 설정이 그 뒤 바뀐 경우만 여기서 걸림
         from common.store import master
@@ -68,8 +51,6 @@ def _build_retriever():
         master.get()  # (요청 처리 중 처음 읽다 SystemExit로 예열 스레드만 조용히 죽지 않게)
     except SystemExit as e:  # 스레드·요청 안에서는 오류로(조용히 스레드만 죽지 않게)
         raise RuntimeError(str(e)) from None
-    a = types.SimpleNamespace(pg=False, local=False, edw=False, edw_client=False)
-    PGC.connect(a)  # PC — Docker pgvector 주소 찾기(못 찾으면 SQLite 대역 — 검색은 PG 하나)
     dbs = connect_sources()  # 원천 스키마 5벌 + 있는 DEV 원천 — 실 PG는 풀 하나를 함께 씀
     Rs, bad = {}, set()
     for src, db in list(dbs.items()):  # 색인 정보는 원천마다 PG에서
@@ -82,9 +63,6 @@ def _build_retriever():
     _STATE["bad_dev"] = bad
     _STATE["Rs"], _STATE["dbs"] = Rs, dbs
     _STATE["version"], _STATE["checked_at"] = _version_of(dbs), time.time()
-    old_pool, _STATE["pool"] = _STATE.get("pool"), getattr(next(iter(dbs.values())), "pool_obj", None)
-    if old is not None and old_pool is not None and old_pool is not _STATE["pool"]:
-        _close_pool_later(old_pool)  # 실 PG 풀(대역은 None)
 
 
 def _retriever(src):
@@ -101,7 +79,8 @@ def _retriever(src):
     if time.time() - _STATE.get("checked_at", 0) >= interval and _RELOAD_LOCK.acquire(blocking=False):
         try:
             _STATE["checked_at"] = time.time()
-            if _version_of(_STATE["dbs"]) != _STATE.get("version"):
+            ver = _version_of(_STATE["dbs"])
+            if None not in (m for _, m, _ in ver) and ver != _STATE.get("version"):  # 확인 실패(None)는 안 바뀜
                 _build_retriever()  # 마스터 표도 다시 읽음(`dbtool master load` 뒤 반영)
         finally:
             _RELOAD_LOCK.release()
@@ -221,10 +200,11 @@ class SchemaView:
 
 
 def connect_sources():
-    """원천 이름 → 그 원천 스키마 연결(`<PG_SCHEMA>_<원천>`) — 5벌 + 있는 DEV 원천(op-17 — prd는 5벌만). 실 PG는 풀 하나 + SchemaView,
+    """원천 이름 → 그 원천 스키마 연결(`<PG_SCHEMA>_<원천>`) — 5벌 + 있는 DEV 원천(op-17 — prd는 5벌만). 실 PG는 프로세스에 풀 하나(처음 한 번 만들고 재적재 때도 그대로 — _STATE["pool"]) + SchemaView,
     대역은 스키마마다 파일 하나(StandinPG)."""
     if has_conn():
-        pool = PGPool(conf())
+        pool = _STATE.get("pool") or PGPool(conf())
+        _STATE["pool"] = pool
         return {src: SchemaView(pool, ST.src_schema(pool.schema, src)) for src in ST.all_sources(pool.schema, pool.q)}
     _warn_standin()
     from common.store.pg_standin import StandinPG

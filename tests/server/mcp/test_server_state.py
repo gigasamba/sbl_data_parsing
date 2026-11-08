@@ -1,5 +1,6 @@
 """mcp_server.services.search.server_state 시험."""
 
+from mcp_server import config as mc
 from mcp_server.services.search import server_state as M
 from mcp_server.services.search.server_state import _STATE, _retriever, _warmup_bg, health_body
 from tests.server.mcp import pgfix
@@ -92,12 +93,67 @@ def test_main():  # 옛 main.py selftest가 부르던 순서(이 모듈 몫만) 
     _selftest_warmup_bg_failure_keeps_server_up()
 
 
+def test_reload_keeps_pool():
+    """재적재 확인 — 확인 질의가 실패하면(None) 안 바뀜으로 보고 다시 만들지 않는다(풀·검색기 그대로) · 판이 바뀌면 다시 만든다 ·
+    다시 만들어도 실 PG 풀은 프로세스에 하나(connect_sources가 새로 만들지 않음). 실 PG 없이 가짜 연결로."""
+    from unittest import mock
+
+    class DB:
+        schema = "t_other"
+
+        def __init__(self, row):
+            self.row = row
+
+        def q(self, sql, params=None):
+            if self.row is None:
+                raise OSError("db down")
+            return [self.row]
+
+    cases = [  # (확인 질의가 돌려줄 행 — None이면 실패, 다시 만들었나)
+        (None, False),
+        ({"m": 1, "n": 1}, False),
+        ({"m": 2, "n": 2}, True),
+    ]
+    saved = dict(_STATE)
+    try:
+        with mc.senv(MCP_RELOAD_CHECK_SEC="0"):
+            for row, rebuilt in cases:
+                pool, R = object(), object()
+                _STATE.clear()
+                _STATE.update(Rs={"other": R}, dbs={"other": DB(row)}, version=(("other", 1, 1),), checked_at=0, pool=pool)
+                with mock.patch.object(M, "_build_retriever") as build:
+                    assert _retriever("other") is R
+                assert build.called is rebuilt and _STATE["pool"] is pool, (row, build.called)
+
+        made = []
+
+        class Pool:
+            schema = "t"
+
+            def __init__(self, c):
+                made.append(self)
+
+            q = scope = None  # SchemaView가 묶기만 함(all_sources는 가짜)
+
+        _STATE.clear()
+        with (
+            mock.patch.object(M, "has_conn", return_value=True),
+            mock.patch.object(M, "conf", return_value={}),
+            mock.patch.object(M, "PGPool", Pool),
+            mock.patch.object(M.ST, "all_sources", lambda base, q=None: ["other"]),
+        ):
+            first, second = M.connect_sources(), M.connect_sources()
+        assert len(made) == 1 and first["other"].pool_obj is second["other"].pool_obj is _STATE["pool"]
+    finally:
+        _STATE.clear()
+        _STATE.update(saved)
+
+
 def test_check_store_server_guard():
     """op-09 — 서버(dev·prd)는 PG 접속 칸이 비면 시작 거부(대역으로 빠지지 않음), PC는 통과(대역)."""
     from unittest import mock
 
     from common.core import paths
-    from mcp_server import config as mc
     from mcp_server.services.search.server_state import check_store
 
     with mc.senv(PG_HOST=None, PG_PASSWORD=None):
