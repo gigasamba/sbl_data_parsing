@@ -105,12 +105,12 @@
 - 규칙:
   1. 목록: 원천 스키마 5벌 + 있는 DEV 원천 스키마(dev·local — op-17)(또는 `source_system`이 고른 하나 — 개발 서버는 있는 `DEV-<숫자>`도, prd는 5개 값만)의 gold `doc`에서 거른다 — `source_system`·`doc_class`·`sf_op_id`(둘은 `attrs` 키)·`created_since/until`·`docs`. 공용 `doc_id` 순으로 합치고 `cursor` = 마지막 `doc_id`.
   2. `docs` 항목은 파일 이름(확장자 포함 — 경로 끝 조각) · 원본 전체 경로(정확히 하나) · 64자 `doc_key`(`doc.sha256`) 중 하나.
-  3. 결과 폴더 = 그 `doc` 행 `silver_key`의 폴더(`silver_bucket` 안). 폴더가 없는 값이면 목록을 보지 않는다.
+  3. 결과 폴더 = 그 `doc` 행 `silver_key`의 폴더(`silver_bucket` 안). 폴더가 없는 값이면 목록을 보지 않는다. 돌려줄 문서들의 폴더 목록은 동시에(8개씩) 보고, 결과는 행 순서 그대로다.
   4. 파일 = 결과 폴더 바로 아래 최신 `<이름>_<parse_date>.md`·`.json`만(`engine/`·`source.json` 제외). 출력 `doc_key` = `doc.sha256`, `source_system` = 스키마 원천 이름(`SFDC`·`DEV-1` 등 — 입력 값과 같은 꼴).
   5. `since`/`until`(게시 시각)은 `doc.parsed_at`으로 같은 질의에서 거른다.
   6. sfid = `sf1.<base64url(버킷/키)>.<HMAC-SHA256>`, 서명 키 `required.tokens.fulltext_sign_key`.
-  7. `get_doc_fulltext`의 등록 시각 가드: sfid 폴더 → 그 폴더를 `silver_key`로 가진 gold `doc`의 `created_at`.
-  8. 한도: `docs` 200 · `limit` 기본 50, 상한 200 · get 한 번 20개 · 파일 16 MiB(`too_large`) · 합계 24 MiB(나머지 `batch_full`) · 파일 하나 60초.
+  7. `get_doc_fulltext`의 등록 시각 가드: sfid의 대표 결과 .md 키(.json이면 같은 이름 .md)를 `silver_key`로 가진 gold `doc`의 `created_at` — 요청한 키 전부를 원천 스키마마다 질의 한 번으로 읽는다.
+  8. 한도: `docs` 200 · `limit` 기본 50, 상한 200 · get 한 번 20개 · 파일 16 MiB(`too_large`) · 합계 24 MiB(나머지 `batch_full`) · 파일 하나 60초. 크기 확인·받기는 동시에(8개씩) 하되 판정과 출력 순서는 요청한 순서대로다(한 개씩 받을 때와 같은 결과).
   9. 오류: 서명 키가 비면 `not_configured` · 키를 바꾸면 옛 sfid는 `bad_sfid` · PG(gold `doc`)를 못 읽으면 `registry_unavailable` · Object Storage를 못 읽으면 `source_storage_unavailable` · 처리 기록(`silver_key`)이 없는 적재 문서는 `no_files`.
 - 운영과 다른 점:
   - `rep_engine` 출력 없음.

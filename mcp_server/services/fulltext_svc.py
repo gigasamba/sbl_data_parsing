@@ -9,21 +9,26 @@ import base64
 import hashlib
 import hmac
 import json
+import operator
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from functools import cache
 
 from common.config.settings import cfg as common_cfg
 from common.config.settings import reveal
 from common.store.db.models import search_tables as ST
 from mcp_server import config as mc
 from mcp_server.schemas import fulltext as FT
-from mcp_server.services.search.search_svc import KST, kst_bound
+from mcp_server.services.search.search_svc import KST, _like, kst_bound
 from mcp_server.services.search.server_state import _retriever, dev_hint, dev_served
 
 _HEX64 = re.compile(r"[0-9a-f]{64}")
 _REP_FILE = re.compile(r"_(\d{4}-\d{2}-\d{2}_\d{6})\.(md|json)$")  # <stem>_<parse_date>.md|json — publish_parse_result.rep_md_key
 _NAIVE = re.compile(r"\d{4}-\d{2}-\d{2}( \d{2}:\d{2}:\d{2})?")
+_OPS = {"<": operator.lt, "<=": operator.le, ">=": operator.ge}  # kst_bound가 주는 연산자
+_WORKERS = 8  # 저장소 목록·받기 동시 수(boto3 기본 연결 풀 10 안)
 
 
 class BadRequest(ValueError):
@@ -89,6 +94,12 @@ def _storage():
     """boto3 클라이언트 — Object Storage 설정이 없으면 None(source_storage_unavailable)."""
     if not common_cfg().connections.object_storage.endpoint:
         return None
+    return _client()
+
+
+@cache
+def _client():
+    """boto3 클라이언트 하나를 계속 씀(스레드 안전) — 요청마다 새로 만들지 않음."""
     from common.store.objectstore import client
 
     return client(timeout=FT.FILE_TIMEOUT_SEC)
@@ -97,7 +108,7 @@ def _storage():
 def _rep_files(s3, bucket, folder):
     """대표 결과 폴더 바로 아래의 최신 .md·.json(engine/ 하위·source.json 제외) → (parse_date, {"md": obj|None, "json": obj|None})."""
     best = {}
-    for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=folder):
+    for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=folder, Delimiter="/"):  # 바로 아래만
         for o in page.get("Contents", []):
             name = o["Key"][len(folder) :]
             m = _REP_FILE.search(name)
@@ -190,7 +201,7 @@ def do_list(
             vals.append(paths)
         for n in names:  # 원본 파일 이름(확장자 포함) = 경로 마지막 조각
             alt.append("(file_path = %s OR file_path LIKE %s ESCAPE '!')")
-            vals += [n, "%/" + _esc(n)]
+            vals += [n, "%/" + _like(n)]
         conds.append("(" + " OR ".join(alt) + ")" if alt else "1 = 0")
     if cursor not in (None, ""):
         conds.append("doc_id > %s")
@@ -210,17 +221,19 @@ def do_list(
     s3 = _storage()
     if s3 is None and rows:
         return {"error": "source_storage_unavailable"}
+    locs = [(r["silver_bucket"], _folder(r["silver_key"])) for r in rows]
+    try:  # 폴더 목록은 동시에 — 결과는 행 순서대로, 하나라도 실패하면 source_storage_unavailable
+        with ThreadPoolExecutor(max_workers=_WORKERS) as ex:
+            listed = list(ex.map(lambda loc: _rep_files(s3, *loc) if loc[0] and loc[1] else None, locs))
+    except Exception:
+        return {"error": "source_storage_unavailable"}
     out, total = [], 0
-    for r in rows:
-        bucket, folder = r["silver_bucket"], _folder(r["silver_key"])
+    for r, (bucket, folder), got in zip(rows, locs, listed):
         files = {"md": None, "json": None}
         hit = _REP_FILE.search(r["silver_key"] or "")
         parse_date = hit.group(1) if hit else None
-        if bucket and folder:  # 폴더가 있는 결과 위치만 — 빈 값은 목록을 보지 않음
-            try:
-                parse_date, files = _rep_files(s3, bucket, folder)
-            except Exception:
-                return {"error": "source_storage_unavailable"}
+        if got is not None:  # 폴더가 있는 결과 위치만 — 빈 값은 목록을 보지 않음
+            parse_date, files = got
         ok = any(files.values())
         fl = None
         if ok:
@@ -259,11 +272,6 @@ def do_list(
     return {"batch": batch, "documents": out, "ms": round((time.perf_counter() - t0) * 1000, 1)}
 
 
-def _esc(x):
-    """LIKE 안에서 글자 그대로(ESCAPE '!')."""
-    return x.replace("!", "!!").replace("%", "!%").replace("_", "!_")
-
-
 def _select(pg, src, conds, vals, has_cursor, lim):
     """원천 스키마 하나 — (이 쪽 행 lim+1개, 쪽과 무관한 matched). cursor 조건·값은 늘 맨 끝. doc_class·sf_op_id는 doc.attrs 키 —
     그 키가 없는 원천은 거르면 0건, 출력은 NULL. source_system 출력 = 스키마의 원천 이름(저장값)."""
@@ -280,24 +288,34 @@ def _select(pg, src, conds, vals, has_cursor, lim):
     return [{**r, "source_system": ST.label(src)} for r in rows], matched
 
 
-def _created_ok(bucket, key, lo, hi, cache):
-    """등록 시각 가드 — 이 대표 결과 파일(.md 또는 같은 이름 .json)의 gold doc 행(silver_bucket·silver_key = 그 .md 키 — 정확히 같음)의
-    created_at이 범위 안인지. 행이 없거나(재게시로 옛 날짜가 된 파일 포함) created_at이 비면 False(확인 못 하면 통과시키지 않음)."""
-    md = key[: -len(".json")] + ".md" if key.endswith(".json") else key
-    if (bucket, md) not in cache:
-        ts = []
-        if "srcs" not in cache:  # cache = 이 요청의 확인 결과 — 원천 목록도 요청마다 한 번
-            cache["srcs"] = _sources()
-        for src in cache["srcs"]:
-            pg = _pg(src)
-            rows = pg.q(f"SELECT created_at FROM {pg.schema}.doc WHERE silver_bucket = %s AND silver_key = %s", (bucket, md))
-            ts += [t for t in (_aware(r["created_at"]) for r in rows) if t]
-        cache[(bucket, md)] = any((lo is None or _cmp(t, *lo)) and (hi is None or _cmp(t, *hi)) for t in ts)
-    return cache[(bucket, md)]
+def _created_ok(locs, lo, hi):
+    """등록 시각 가드 — 대표 결과 파일(.md 또는 같은 이름 .json)마다 gold doc 행(silver_bucket·silver_key = 그 .md 키 — 정확히 같음)의
+    created_at이 범위 안인지. 원천 스키마마다 질의 한 번(요청한 .md 키 전부). 반환 = 범위 안인 (버킷, .md 키) 집합 —
+    행이 없거나(재게시로 옛 날짜가 된 파일 포함) created_at이 비면 빠짐(확인 못 하면 통과시키지 않음)."""
+    want = {(b, _md_key(k)) for b, k in locs}
+    ok: set = set()
+    if not want:
+        return ok
+    mds = sorted({k for _, k in want})
+    for src in _sources():
+        pg = _pg(src)
+        for r in pg.q(f"SELECT silver_bucket, silver_key, created_at FROM {pg.schema}.doc WHERE silver_key = ANY(%s)", (mds,)):
+            t, loc = _aware(r["created_at"]), (r["silver_bucket"], r["silver_key"])
+            if loc in want and t and (lo is None or _OPS[lo[0]](t, lo[1])) and (hi is None or _OPS[hi[0]](t, hi[1])):
+                ok.add(loc)
+    return ok
 
 
-def _cmp(t, op, bound):
-    return {"<": t < bound, "<=": t <= bound, ">=": t >= bound}[op]
+def _md_key(key):
+    return key[: -len(".json")] + ".md" if key.endswith(".json") else key
+
+
+def _try(fn):
+    """(값, None) 또는 (None, 예외) — 동시 실행 결과를 입력 순서대로 따질 때."""
+    try:
+        return fn(), None
+    except Exception as e:
+        return None, e
 
 
 def do_get(files=None, json_section=None, created_since=None, created_until=None):
@@ -316,13 +334,39 @@ def do_get(files=None, json_section=None, created_since=None, created_until=None
     s3 = _storage()
     if s3 is None:
         return {"error": "source_storage_unavailable"}
-    return _get_files(files, keys, json_section, s3, secret, lo, hi, {}, t0)  # 가드를 걸었을 때만 gold를 읽음(안 걸면 저장소만)
+    return _get_files(files, keys, json_section, s3, secret, lo, hi, t0)  # 가드를 걸었을 때만 gold를 읽음(안 걸면 저장소만)
 
 
-def _get_files(files, keys, json_section, s3, secret, lo, hi, guard_cache, t0):
+def _get_files(files, keys, json_section, s3, secret, lo, hi, t0):
+    """head는 모두 동시에 → 입력 순서대로 head 크기로 받을 파일을 미리 골라 동시에 받음 → 입력 순서대로 지금까지와 같은 판정.
+    미리 받지 않은 파일(앞 파일이 받기 실패·깨진 JSON이라 자리가 남은 경우)은 그 자리에서 받음 — 결과는 한 줄씩 받던 때와 같다."""
+    locs = [read_sfid(secret, sfid) for sfid in files]
+    in_range = None
+    if lo or hi:
+        try:
+            in_range = _created_ok({loc for loc in locs if loc}, lo, hi)
+        except Exception:
+            return {"error": "registry_unavailable"}  # 가드를 걸었는데 확인 못 하면 조용히 통과시키지 않음
+    cand = [i for i, loc in enumerate(locs) if loc and (in_range is None or (loc[0], _md_key(loc[1])) in in_range)]
+
+    def head(i):
+        return _try(lambda: int(s3.head_object(Bucket=locs[i][0], Key=locs[i][1])["ContentLength"]))
+
+    def fetch(i):  # head 뒤에 커져도 상한까지만 읽음
+        return _try(lambda: s3.get_object(Bucket=locs[i][0], Key=locs[i][1])["Body"].read(FT.FILE_MAX_BYTES + 1))
+
+    with ThreadPoolExecutor(max_workers=_WORKERS) as ex:
+        heads = dict(zip(cand, ex.map(head, cand)))
+        pre, room = [], 0
+        for i in cand:
+            size = heads[i][0]
+            if size is not None and size <= FT.FILE_MAX_BYTES and room + size <= FT.BATCH_MAX_BYTES:
+                pre.append(i)
+                room += size
+        reads = dict(zip(pre, ex.map(fetch, pre)))
     out, ok_n, total, truncated = [], 0, 0, False
-    for sfid in files:
-        loc = read_sfid(secret, sfid)
+    for i, sfid in enumerate(files):
+        loc = locs[i]
         if loc is None:
             out.append({"sfid": str(sfid)[:32], "skip_reason": "bad_sfid"})
             continue
@@ -330,16 +374,11 @@ def _get_files(files, keys, json_section, s3, secret, lo, hi, guard_cache, t0):
         name = key.rsplit("/", 1)[-1]
         kind = "md" if name.endswith(".md") else "json"
         skip = {"sfid": sfid, "name": name, "kind": kind}
-        if lo or hi:
-            try:
-                if not _created_ok(bucket, key, lo, hi, guard_cache):
-                    out.append({**skip, "skip_reason": "created_out_of_range"})
-                    continue
-            except Exception:
-                return {"error": "registry_unavailable"}  # 가드를 걸었는데 확인 못 하면 조용히 통과시키지 않음
-        try:
-            size = int(s3.head_object(Bucket=bucket, Key=key)["ContentLength"])
-        except Exception as e:
+        if i not in heads:
+            out.append({**skip, "skip_reason": "created_out_of_range"})
+            continue
+        size, e = heads[i]
+        if size is None:
             out.append({**skip, "skip_reason": "missing" if _not_found(e) else "download_failed"})
             continue
         if size > FT.FILE_MAX_BYTES:
@@ -349,9 +388,8 @@ def _get_files(files, keys, json_section, s3, secret, lo, hi, guard_cache, t0):
             out.append({**skip, "skip_reason": "batch_full"})
             truncated = True
             continue
-        try:
-            raw = s3.get_object(Bucket=bucket, Key=key)["Body"].read(FT.FILE_MAX_BYTES + 1)  # head 뒤에 커져도 상한까지만 읽음
-        except Exception as e:
+        raw, e = reads.get(i) or fetch(i)
+        if raw is None:
             out.append({**skip, "skip_reason": "missing" if _not_found(e) else "download_failed"})
             continue
         if len(raw) > FT.FILE_MAX_BYTES:
