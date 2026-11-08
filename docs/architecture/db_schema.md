@@ -298,7 +298,7 @@ gold에 적재되지 않은 원본 1개·종류 1개당 1행(op-17). 기본 키 
 | 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|---|
 | source_key | TEXT PK | `SFDC/2a9c…/kvx_drm_copy.pdf` | 원본 키(Object Storage `s3_key`, 폴더 원천은 상대 경로·이름) | except_docs | candidate_pick | 새로 |
-| except_type | TEXT PK | `skip` | 종류 — `skip`(영구 뺌: 지원 안 하는 확장자·확장자 없음·DRM·암호·내용 중복) · `error`(파싱·적재 실패 — 기록만) | 〃 | candidate_pick(`skip`만) | 새로 |
+| except_type | TEXT PK | `skip` | 종류 — `skip`(영구 뺌: 지원 안 하는 확장자·확장자 없음·DRM·암호·내용 중복) · `error`(파싱·적재 실패 — 기록만) · `part`(수준 `warn` — 안 문서를 일부 못 꺼냄, 성한 안 파일은 적재됨 — 기록만, pl-65) | 〃 | candidate_pick(`skip`만) | 새로 |
 | source_system | TEXT | `SFDC` | 원천(FileStorageMap `source_system`) | 〃 | 없음 | 새로 |
 | file_name | TEXT | `kvx_drm_copy.pdf` | 파일 이름 | 〃 | 없음 | 새로 |
 | reason | TEXT NOT NULL | `drm_fasoo` | 이유 — `skip`: `unsupported_archive`·`encrypted_archive`·`broken_archive`·`archive_too_big`·`unsupported_format`·`no_extension`·`drm_*`·`encrypted_*`·`duplicate_sha256` · `error`: `parse_failed`·`publish_failed`·`load_failed`·`classify_failed` | 〃 | 없음 | 새로 |

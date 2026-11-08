@@ -174,3 +174,42 @@ def test_old_standin_gets_new_columns():
         cn.close()
         assert SD.record_error([{"source_key": "SFDC/a/a.PDF", "file_name": "a.PDF", "file_size": "4", "reason": "parse_failed"}]) == 1
         assert _ext_size(d, "error") == {"SFDC/a/a.PDF": ("pdf", 4)}
+
+
+def _mail_with_locked_zip():
+    """첨부 in.zip — 첫 항목 a.txt만 '암호' 표시(플래그 0번 비트), b.txt는 성함."""
+    import io
+    import zipfile
+    from email.message import EmailMessage
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("a.txt", b"a")
+        z.writestr("b.txt", b"b")
+    b = bytearray(buf.getvalue())
+    for sig, off in ((b"PK\x03\x04", 6), (b"PK\x01\x02", 8)):
+        b[b.find(sig) + off] |= 1
+    m = EmailMessage()
+    m["Subject"] = "s"
+    m.set_content("본문")
+    m.add_attachment(bytes(b), maintype="application", subtype="zip", filename="in.zip")
+    return m.as_bytes()
+
+
+def test_part_row():
+    """pl-65 — 안 문서를 못 꺼낸 원본: 성한 안 파일은 꺼내고(문서는 그대로 남음), 받기가 part 행(수준 warn, 이유 = 못 꺼낸 이름과 까닭)을
+    원본 키당 한 행 남긴다. 다시 돌리면(다시 풀지 않아도) 횟수가 오른다. 대상 목록에서 빼는 키가 아니다."""
+    with tempfile.TemporaryDirectory() as d, standin(Path(d) / "pg"):
+        src, prepared, state = Path(d) / "src", Path(d) / "prepared", Path(d) / "state"
+        src.mkdir()
+        state.mkdir()
+        (src / "m.eml").write_bytes(_mail_with_locked_zip())
+        (state / "manifest.jsonl").write_text(
+            json.dumps({"file_name": "m.eml", "key": "SFDC/m/m.eml", "source_system": "SFDC"}) + "\n", encoding="utf-8"
+        )
+        for n in (1, 2):
+            _filter(["filter_and_rotate", "--src", src, "--out", prepared])
+            CR._record_filtered(prepared, state)
+            got = _rows(Path(d) / "pg", "part")
+            assert got == {"SFDC/m/m.eml": ("SFDC", "in.zip/a.txt(encrypted)", "warn", n, *got["SFDC/m/m.eml"][4:])}, got
+        assert (prepared / "m.eml").exists() and SD.skipped_keys() == set()

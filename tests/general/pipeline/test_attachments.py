@@ -45,7 +45,7 @@ def selftest():
         _, blocks, stats = mail_blocks(eml, "본문: 첨부 확인 바랍니다.")
         assert stats["n"] == 1 and stats["parsed"] == 1 and stats["cached"] == 0
         assert stats["sources"] == ["mail.eml#price.xlsx"]
-        assert any(b.startswith("[첨부 price.xlsx]") and "85" in b for b in blocks)
+        assert any(b.startswith("## [첨부 price.xlsx]") and "85" in b for b in blocks)
 
         _, blocks2, stats2 = mail_blocks(eml, "본문: 첨부 확인 바랍니다.")  # 두 번째 — P0 캐시 적중
         assert stats2["parsed"] == 1 and stats2["cached"] == 1
@@ -66,7 +66,7 @@ def selftest():
         emlp.write_bytes(mp.as_bytes())
         _names(emlp)
         _, bp, sp = mail_blocks(emlp, "본문")
-        assert sp["parsed"] == 1 and any(b.startswith("[첨부 c.pdf]") and "1,234,567" in b for b in bp), (sp, bp)
+        assert sp["parsed"] == 1 and any(b.startswith("## [첨부 c.pdf]") and "1,234,567" in b for b in bp), (sp, bp)
         print("[selftest] eml → pdf 첨부(.pdf_text 엔진) 통과")
 
         # 2) 이미지 첨부(인라인 아님)도 image/* — figure_extract.py 담당, attachments는 건너뜀
@@ -92,7 +92,7 @@ def selftest():
         m3 = MIMEMultipart()
         m3["Subject"] = "첨부 여러 개"
         for i in range(12):
-            a = MIMEApplication(b"x" * 20, _subtype="txt")
+            a = MIMEApplication(f"x{i:02d}".encode() * 5, _subtype="txt")  # 내용이 달라야 함 — 같은 내용은 한 번만 꺼냄(pl-65)
             a.add_header("Content-Disposition", "attachment", filename=f"f{i}.txt")
             m3.attach(a)
         eml3 = d / "mail3.eml"

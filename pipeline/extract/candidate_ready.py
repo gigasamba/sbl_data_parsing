@@ -400,20 +400,23 @@ def _skip_row(key, name, reason, man_row):
 
 
 def _record_filtered(prepared, state):
-    """거르기(filter_and_rotate)가 이번에 뺀 문서(`prepared/_records/skipped.csv`)를 except_doc_info skip에(영구 이유만 — except_docs.record).
-    원본 키 = manifest의 "key"(없으면 이름 — 게시와 같은 규칙)."""
+    """거르기(filter_and_rotate)가 이번에 뺀 문서(`prepared/_records/skipped.csv`)를 except_doc_info skip에(영구 이유만 — except_docs.record),
+    안 문서를 못 꺼낸 문서(`parts_failed.csv` — pl-65)를 part 행에(except_docs.record_part). 원본 키 = manifest의 "key"(없으면 이름 — 게시와 같은 규칙)."""
     import csv
 
     from pipeline.shared import except_docs
 
-    f = Path(prepared) / "_records" / "skipped.csv"
-    if not f.exists():
-        return
-    with f.open(encoding="utf-8-sig", newline="") as fh:
-        rows = list(csv.DictReader(fh))
-    man = _read_manifest(state)
-    keys = {r["file"]: (man.get(r["file"]) or {}).get("key") or r["file"] for r in rows}
-    except_docs.record([_skip_row(keys[r["file"]], r["file"], r["reason"], man.get(r["file"])) for r in rows])
+    man = None
+    for name, write in (("skipped.csv", except_docs.record), ("parts_failed.csv", except_docs.record_part)):
+        f = Path(prepared) / "_records" / name
+        if not f.exists():
+            continue
+        with f.open(encoding="utf-8-sig", newline="") as fh:
+            rows = list(csv.DictReader(fh))
+        if not rows:
+            continue
+        man = _read_manifest(state) if man is None else man
+        write([_skip_row((man.get(r["file"]) or {}).get("key") or r["file"], r["file"], r["reason"], man.get(r["file"])) for r in rows])
 
 
 def _stage_cmd(argv):

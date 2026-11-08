@@ -425,8 +425,17 @@ def main():
         w = csv.DictWriter(f, fieldnames=["file", "reason"])
         w.writeheader()
         w.writerows(skipped)
+    dropped = {s["file"] for s in skipped}
+    # 안 문서를 못 꺼낸 문서(pl-65 — 받기가 part 행으로)
+    with (records / "parts_failed.csv").open("w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["file", "reason"])
+        w.writeheader()
+        for p in files:  # 이번 실행 문서 모두(다시 풀지 않은 것도 — 재실행마다 마지막 시각·횟수가 오름)
+            failed = [] if p.name in dropped else unpack.failed_of(p, parts)
+            if failed:
+                w.writerow({"file": p.name, "reason": unpack.miss_reason(failed)})
     gone = 0
-    names = {p.name for p in files} - {s["file"] for s in skipped} | {
+    names = {p.name for p in files} - dropped | {
         "rotation.csv",
         ".gitkeep",
     }  # 원본에서 지워졌거나 중복으로 빠진 파일 → out에서도 뺌(기록은 _records/ 폴더라 대상 아님)

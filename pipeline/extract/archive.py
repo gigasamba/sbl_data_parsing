@@ -26,15 +26,31 @@ def _open(src, kind):
     return tarfile.open(name=src, mode="r:*") if isinstance(src, Path) else tarfile.open(fileobj=src, mode="r:*")
 
 
-def _cap_bytes():
+def cap_bytes():
     return pc.cfg().extract.archive.max_total_mb * 1024 * 1024
 
 
+def _name(raw):
+    """안 파일 이름 바이트 → 글자 — utf-8, 아니면 cp949(한국어 윈도 압축), 그래도 아니면 cp437(zip 옛 기본 — 늘 풀림)."""
+    for enc in ("utf-8", "cp949"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            pass
+    return raw.decode("cp437")
+
+
 def _members(a, kind):
-    """(이름, 풀린 크기, 암호?, 항목) — 폴더·링크는 뺌. 항목(ZipInfo·TarInfo)으로 읽는다(이름으로 다시 찾지 않음)."""
+    """(이름, 풀린 크기, 암호?, 항목) — 폴더·링크는 뺌. 항목(ZipInfo·TarInfo)으로 읽는다(이름으로 다시 찾지 않음).
+    이름은 원래 바이트에서 다시 읽는다(pl-65): zip은 utf-8 표시(플래그 11번 비트)가 없으면 cp437로 읽혀 있고, tar는 깨진 바이트가
+    surrogateescape로 남아 있다(그대로 두면 parts.json을 쓸 때 UnicodeEncodeError)."""
     if kind == "zip":
-        return [(i.filename, i.file_size, bool(i.flag_bits & 1), i) for i in a.infolist() if not i.is_dir()]
-    return [(m.name, m.size, False, m) for m in a.getmembers() if m.isfile()]
+        return [
+            (i.filename if i.flag_bits & 0x800 else _name(i.filename.encode("cp437")), i.file_size, bool(i.flag_bits & 1), i)
+            for i in a.infolist()
+            if not i.is_dir()
+        ]
+    return [(_name(m.name.encode(a.encoding, a.errors)), m.size, False, m) for m in a.getmembers() if m.isfile()]
 
 
 def _read(a, kind, item):
@@ -44,7 +60,7 @@ def _read(a, kind, item):
 def _walk(p, kind):
     """거르기용 목록 (안 경로, 풀린 크기, 암호?) — 안의 압축은 크기가 상한 안일 때만 한 단계 풀고, 풀리지 않으면(tar 아닌 .gz·깨짐)
     보통 파일로 둔다(바깥 압축 전체를 버리지 않게). 안의 압축은 남은 상한(합계 − 지금까지)보다 작을 때만 연다."""
-    cap, seen = _cap_bytes(), 0
+    cap, seen = cap_bytes(), 0
     with _open(p, kind) as a:
         for name, size, enc, item in _members(a, kind):
             inner, b, sub = kind_of(name), None, []
@@ -74,7 +90,7 @@ def check(p):
         return None
     if p.suffix.lower() == ".gz" and not tarfile.is_tarfile(p):
         return "unsupported_archive"
-    max_files, cap = pc.cfg().extract.archive.max_files, _cap_bytes()
+    max_files, cap = pc.cfg().extract.archive.max_files, cap_bytes()
     total = n = 0
     try:
         for _name, size, enc in _walk(p, kind):
@@ -88,10 +104,10 @@ def check(p):
     return None
 
 
-def members(p):
-    """한 단계 안 파일을 하나씩 (이름, 바이트)로 내는 반복자 — 꺼내기(unpack, pl-63)가 쓴다. 폴더·링크·암호 항목은 빼고,
-    그림 파일은 풀지 않고 뺀다(글자만). 합계·개수 상한에 닿으면 거기서 멈춘다(맨 바깥 원본은 check가 이미 봄 — 메일에 붙은
-    압축 등). 열기·목록은 여기서 바로 해서 못 열면 BROKEN을 낸다(읽는 도중 깨짐은 반복 중에 BROKEN)."""
+def members(p, miss):
+    """한 단계 안 파일을 하나씩 (이름, 바이트)로 내는 반복자 — 꺼내기(unpack, pl-63)가 쓴다. 폴더·링크는 빼고,
+    그림 파일은 풀지 않고 뺀다(글자만). 암호 항목과 합계·개수 상한을 넘은 항목은 miss(이름, 까닭)로 알리고 뺀다(pl-65 — 맨 바깥
+    원본은 check가 이미 봄 — 메일에 붙은 압축 등). 열기·목록은 여기서 바로 해서 못 열면 BROKEN을 낸다(읽는 도중 깨짐은 반복 중에 BROKEN)."""
     p = Path(p)
     kind = kind_of(p.name)
     a = _open(p, kind)
@@ -100,16 +116,22 @@ def members(p):
     except BROKEN:
         a.close()
         raise
-    max_files, cap = pc.cfg().extract.archive.max_files, _cap_bytes()
+    max_files, cap = pc.cfg().extract.archive.max_files, cap_bytes()
 
     def read_all():
         total = 0
         with a:
             for i, (name, size, enc, item) in enumerate(items):
                 total += size
-                if i >= max_files or total > cap:
+                if Path(name).suffix.lower() in IMG_EXTS:
+                    continue
+                if i >= max_files or total > cap:  # 여기서 멈춤 — 남은 것은 한 줄로(목록이 압축만큼 길어지지 않게)
+                    rest = sum(1 for n, *_ in items[i + 1 :] if Path(n).suffix.lower() not in IMG_EXTS)
+                    miss(name + (f" 외 {rest}개" if rest else ""), "too_many" if i >= max_files else "too_big")
                     return
-                if not enc and Path(name).suffix.lower() not in IMG_EXTS:
+                if enc:
+                    miss(name, "encrypted")
+                else:
                     yield name, _read(a, kind, item)
 
     return read_all()

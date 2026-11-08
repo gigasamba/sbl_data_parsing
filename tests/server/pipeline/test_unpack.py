@@ -1,6 +1,8 @@
 """문서 안 문서 꺼내기(pl-63) — pipeline.extract.unpack(받기 단계 `_parts/`) + 첨부 단계의 절·개체 위치 표시."""
 
+import gzip
 import io
+import os
 import struct
 import tempfile
 import zipfile
@@ -30,10 +32,10 @@ def _rels(*rels):
     return f'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">{body}</Relationships>'
 
 
-def _docx(objects):
-    """objects: {이름: 바이트} — 개체마다 문단 하나(앞 문단 글 '앞 글 <i>')."""
+def _docx(objects, same=None):
+    """objects: {이름: 바이트} — 개체마다 문단 하나(앞 문단 글 '앞 글 <i>', same을 주면 모두 그 글)."""
     paras = "".join(
-        f'<w:p><w:r><w:t>앞 글 {i}</w:t></w:r></w:p><w:p><w:r><w:object><o:OLEObject r:id="rId{i}"/></w:object></w:r></w:p>'
+        f'<w:p><w:r><w:t>{same or f"앞 글 {i}"}</w:t></w:r></w:p><w:p><w:r><w:object><o:OLEObject r:id="rId{i}"/></w:object></w:r></w:p>'
         for i in range(len(objects))
     )
     doc = (
@@ -146,7 +148,103 @@ CASES = [  # (이름, 파일 이름, 내용, [(안 이름, 종류, 깊이, 위�
         _eml({"old.eml": _eml({"c.txt": b"c"}).as_bytes()}).as_bytes(),
         [("old.eml", "첨부", 1, {}), ("old.eml/c.txt", "첨부", 2, {})],
     ),
+    (
+        "같은 글 문단 둘 — 둘째 개체는 둘째 자리(pl-65 ⑫)",
+        "w.docx",
+        _docx({"a.txt": b"a", "b.txt": b"b"}, same="같은 글"),
+        [("a.txt", "개체", 1, {"after": "같은 글"}), ("b.txt", "개체", 1, {"after": "같은 글", "nth": 1})],
+    ),
+    ("같은 내용 첨부는 한 번만(pl-65 ⑨)", "m.eml", _eml({"a.txt": b"same", "b.txt": b"same"}).as_bytes(), [("a.txt", "첨부", 1, {})]),
 ]
+
+
+def _enc_zip(files):
+    """첫 항목만 '암호' 표시(일반 목적 플래그 0번 비트) — 표준 라이브러리는 암호 zip을 못 만든다."""
+    b = bytearray(_zip(files))
+    for sig, off in ((b"PK\x03\x04", 6), (b"PK\x01\x02", 8)):
+        b[b.find(sig) + off] |= 1
+    return bytes(b)
+
+
+FAILED = [  # (이름, 파일 이름, 내용, 설정, 꺼낸 안 이름, 못 꺼낸 [(안 이름, 까닭)]) — pl-65 ⑥: 성한 것은 꺼내고 못 꺼낸 것은 parts.json failed에
+    (
+        "못 벗기는 .bin·안 열리는 안 docx",
+        "b.xlsx",
+        _xlsx(),
+        {},
+        ["plan.docx"],
+        [("oleObject1.bin", "no_unwrap"), ("plan.docx", "cannot_open")],
+    ),
+    (
+        "첨부 압축 안 암호 항목",
+        "m.eml",
+        _eml({"in.zip": _enc_zip({"a.txt": b"a", "b.txt": b"b"})}).as_bytes(),
+        {},
+        ["in.zip/b.txt"],
+        [("in.zip/a.txt", "encrypted")],
+    ),
+    (
+        "원본 하나의 꺼낸 합계 상한(pl-65 ②)",
+        "m.eml",
+        _eml({"a.txt": b"12345678", "b.txt": b"abcdefgh"}).as_bytes(),
+        {"ARCHIVE_MAX_TOTAL_MB": "0.00001"},  # 약 10바이트
+        ["a.txt"],
+        [("b.txt", "total_cap")],
+    ),
+    (
+        "첨부 개수 상한",
+        "m.eml",
+        _eml({f"a{i:02d}.txt": f"{i}".encode() for i in range(11)}).as_bytes(),
+        {},
+        [f"a{i:02d}.txt" for i in range(10)],
+        [("a10.txt", "too_many")],
+    ),
+    (
+        "안 압축은 합계에 안 파일만 셈",
+        "z.zip",
+        _zip({"in.zip": _zip({"a.txt": b"x" * 100})}),  # in.zip 약 210바이트 — 상자와 안 파일을 둘 다 세면 300을 넘음
+        {"ARCHIVE_MAX_TOTAL_MB": str(300 / 1024 / 1024)},
+        ["in.zip/a.txt"],
+        [],
+    ),
+    (
+        "같은 내용은 합계 상한보다 먼저 거름",
+        "m.eml",
+        _eml({"a.txt": b"12345678", "b.txt": b"12345678"}).as_bytes(),
+        {"ARCHIVE_MAX_TOTAL_MB": "0.00001"},
+        ["a.txt"],
+        [],
+    ),
+    ("tar 아닌 안 .gz는 보통 파일", "x.zip", _zip({"a.txt": b"a", "app.log.gz": gzip.compress(b"log")}), {}, ["a.txt", "app.log.gz"], []),
+    (
+        "압축 개수 상한은 한 줄",
+        "m.eml",
+        _eml({"in.zip": _zip({f"f{i}.txt": f"{i}".encode() for i in range(5)})}).as_bytes(),
+        {"ARCHIVE_MAX_FILES": "2"},
+        ["in.zip/f0.txt", "in.zip/f1.txt"],
+        [("in.zip/f2.txt 외 2개", "too_many")],
+    ),
+]
+
+
+def test_failed_parts():
+    with tempfile.TemporaryDirectory() as td:
+        for label, fname, data, env, names, failed in FAILED:
+            d = Path(td) / label.replace(" ", "_")
+            d.mkdir()
+            p = d / fname
+            p.write_bytes(data)
+            with pc.PIPE.env(**env):
+                got = unpack.unpack(p, d / "_parts")
+            assert [it["name"] for it in got] == names, (label, got)
+            miss = unpack.failed_of(p, d / "_parts")
+            assert [(f["name"], f["why"]) for f in miss] == failed, (label, miss)
+            assert unpack.miss_reason(miss) == "; ".join(f"{n}({w})" for n, w in failed), label
+
+
+def test_miss_reason_short():
+    failed = [{"name": f"f{i}.txt", "why": "too_big"} for i in range(12)]
+    assert unpack.miss_reason(failed) == "; ".join(f"f{i}.txt(too_big)" for i in range(10)) + " 외 2개"
 
 
 def test_unpack_cases():
@@ -194,6 +292,8 @@ MARKS = [  # (이름, 본문, 위치, 기대 본문)
     ("마지막 시트", "요약\n1\n매출\n3", {"sheet": "매출", "next": None}, "요약\n1\n매출\n3\n[개체 o]"),
     ("문단 뒤", "가\n앞 글 0 끝\n나", {"after": "앞 글 0"}, "가\n앞 글 0 끝\n[개체 o]\n나"),
     ("못 찾음", "가\n나", {"after": "없는 글"}, "가\n나"),
+    ("같은 글 둘째 자리(pl-65 ⑫)", "같은 글\n가\n같은 글\n나", {"after": "같은 글", "nth": 1}, "같은 글\n가\n같은 글\n[개체 o]\n나"),
+    ("차례가 모자라면 마지막 자리", "같은 글\n가", {"after": "같은 글", "nth": 3}, "같은 글\n[개체 o]\n가"),
 ]
 
 
@@ -209,12 +309,48 @@ def test_blocks_and_marks():
         unpack.unpack(p, Path(td) / "_parts")
 
         def fake(entry, store=None):
-            return f"{entry['bytes'].decode()} 글이 열다섯 글자를 넘습니다", False, "plaintext"
+            return f"{entry['bytes'].decode()} 글이\f열다섯 글자를 넘습니다", False, "plaintext"
 
         with patch.object(ma, "parse_attachment", fake):
             text, blocks, stats = ma.mail_blocks(p, "제목\n앞 글 0\n끝")
         assert text == "제목\n앞 글 0\n[개체 in.txt]\n끝", text
-        assert blocks == ["[개체 in.txt]\ninner 글이 열다섯 글자를 넘습니다"] and stats["sources"] == ["r.docx#in.txt"], (blocks, stats)
+        # 제목 줄로 시작하고 첨부 글의 쪽 나눔은 줄바꿈(pl-65 ③)
+        assert blocks == ["## [개체 in.txt]\ninner 글이\n열다섯 글자를 넘습니다"] and stats["sources"] == ["r.docx#in.txt"], (blocks, stats)
+
+
+def test_attach_temp_names():
+    """같은 첨부를 두 번 파싱해도 임시 파일 이름이 겹치지 않는다(pl-65 ⑧ — 문서 둘이 동시에 돌 때)."""
+    from pipeline.transform.parse import parse_engines
+
+    seen = []
+
+    def isolated(eng, tmp, out_json, mode, timeout):
+        seen.append(Path(tmp).name)
+        Path(out_json).write_text('{"text": "짧음"}', encoding="utf-8")  # 15자 못 넘음 — 캐시에 안 남아 두 번째도 엔진을 부름
+
+    with tempfile.TemporaryDirectory() as td:
+        with (
+            patch.object(ma, "attach_dir", lambda: Path(td) / "attach"),
+            patch.object(ma, "_stack_parse", lambda: {".txt": ["plaintext"]}),
+            patch.object(parse_engines, "_isolated", isolated),
+        ):
+            for _ in range(2):
+                ma.parse_attachment({"name": "a.txt", "bytes": b"same"}, store=Path(td) / "raw")
+        assert len(seen) == 2 and seen[0] != seen[1], seen
+        assert list((Path(td) / "attach").iterdir()) == []  # 다 지움
+
+
+def test_parts_json_atomic():
+    """parts.json은 다 쓴 뒤에만 보인다(pl-65 ④) — 바꿔 놓기(os.replace)가 실패하면 목록이 없다."""
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "z.zip"
+        p.write_bytes(_zip({"a.txt": b"a"}))
+        with patch("os.replace", side_effect=OSError("disk")):
+            try:
+                unpack.unpack(p, Path(td) / "_parts")
+            except OSError:
+                pass
+        assert not (Path(td) / "_parts" / "z.zip" / "parts.json").exists()
 
 
 def test_unsupported_method():
@@ -242,3 +378,10 @@ def test_fresh():
         assert not unpack.is_fresh(p, Path(td) / "_parts")
         unpack.unpack(p, Path(td) / "_parts")
         assert unpack.is_fresh(p, Path(td) / "_parts")
+        p.write_bytes(_zip({"b.txt": b"b"}))  # 내용이 바뀌었는데 고친 시각은 더 옛날 — 원본 sha256으로 본다(pl-65 ⑤)
+        os.utime(p, (0, 0))
+        assert not unpack.is_fresh(p, Path(td) / "_parts")
+        unpack.unpack(p, Path(td) / "_parts")
+        j = Path(td) / "_parts" / "z.zip" / "parts.json"
+        j.write_text('[{"file": "00001.txt"}]', encoding="utf-8")  # 옛 목록 형식(sha256 없음)은 다시 품
+        assert not unpack.is_fresh(p, Path(td) / "_parts")
