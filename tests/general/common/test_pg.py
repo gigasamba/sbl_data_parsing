@@ -49,7 +49,9 @@ def _selftest_pool():
             return False
 
     class FakePool:
-        def __init__(self, kwargs=None, min_size=1, max_size=4, open=True):
+        check_connection = _pp.ConnectionPool.check_connection
+
+        def __init__(self, kwargs=None, min_size=1, max_size=4, open=True, check=None):
             self.sem = threading.Semaphore(max_size)
 
         def connection(self, timeout=None):
@@ -119,6 +121,28 @@ def _selftest_conf():
         except ValueError as e:
             assert "PG_PORT" in str(e) and "abc" not in str(e)
     print("[selftest] conf() — 빈 PG_PASSWORD는 접속 파일 값 유지·형식 틀린 PG_PORT 실패 통과")
+
+
+def test_pool_options():
+    """PGPool — 꺼낼 때 연결 확인(check_connection — 끊긴 연결은 새로) · 질의 시간 제한 PG_STATEMENT_TIMEOUT(초 → ms, 0·비움 = 없음)."""
+    from unittest.mock import patch
+
+    import psycopg_pool as _pp
+
+    c = {"PG_HOST": "x", "PG_PORT": "5432", "PG_DB": "x", "PG_USER": "x", "PG_PASSWORD": "x", "PG_SCHEMA": "ai"}
+    cases = [  # (PG_STATEMENT_TIMEOUT, 기대 options)
+        (None, "-c statement_timeout=120000"),  # 기본 120초
+        ("5", "-c statement_timeout=5000"),
+        ("0", None),
+    ]
+    check = _pp.ConnectionPool.check_connection
+    for v, want in cases:
+        with COMMON.env(PG_STATEMENT_TIMEOUT=v), patch.object(_pp, "ConnectionPool") as fake:
+            fake.check_connection = check
+            PGPool(c)
+        kw = fake.call_args.kwargs
+        assert kw["kwargs"].get("options") == want and kw["check"] == check, (v, kw)
+    print("[selftest] PGPool — 연결 확인(check)·질의 시간 제한(options) 전달 통과")
 
 
 def test_main():

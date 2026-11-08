@@ -3,6 +3,7 @@
 from functools import partial
 
 import anyio
+import psycopg
 
 from mcp_server import config as mc  # 요청마다 읽는 값은 호출 때 cfg()
 from mcp_server.services import call_log
@@ -28,7 +29,8 @@ _INFLIGHT = 0  # _bg가 받아들인(실행 중+대기 중) 요청 수. 체크�
 
 
 async def _dispatch(fn, timeout, a, kw):
-    """_bg·_bg_long 공통 — busy 판정, 스레드 실행, 시간 상한(초, None이면 무제한 — 0은 바로 시간 초과), 감사 1행."""
+    """_bg·_bg_long 공통 — busy 판정, 스레드 실행, 시간 상한(초, None이면 무제한 — 0은 바로 시간 초과), 감사 1행.
+    도구가 던진 PG 오류(풀이 끊긴 연결을 한 번 바꾼 뒤에도): 질의 시간 제한(QueryCanceled)은 timeout, 그 밖의 접속 오류는 db_unavailable."""
     global _INFLIGHT
     limiter = _limiter()
     queue_cap = _queue_cap(limiter)
@@ -50,6 +52,12 @@ async def _dispatch(fn, timeout, a, kw):
             raise
         audit.finish({"error": "timeout"}, status="timeout")
         return {"error": "timeout"}
+    except psycopg.errors.QueryCanceled as exc:  # PG_STATEMENT_TIMEOUT — OperationalError의 하위라 먼저
+        audit.finish({"error": "timeout"}, status="timeout", err=str(exc))
+        return {"error": "timeout"}
+    except psycopg.OperationalError as exc:
+        audit.finish({"error": "db_unavailable"}, status="error", err=str(exc))
+        return {"error": "db_unavailable"}
     except BaseException as exc:
         audit.finish(status="error", err=str(exc))
         raise

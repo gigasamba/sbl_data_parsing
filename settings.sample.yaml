@@ -261,6 +261,7 @@ tuning:
     connections:
       pg:
         pg_connect_timeout_sec: 10            # PG 연결 제한(초) · 정수
+        pg_statement_timeout_sec: 120         # 검색 MCP PG 질의 하나의 제한(초) · 0 = 끔
         pg_pool_max_connections: 8            # 검색 MCP의 PG 연결 풀 크기 · 정수
     models:
       embed:

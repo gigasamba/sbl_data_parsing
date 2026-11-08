@@ -257,6 +257,7 @@ PLACED = {
     # tuning
     "common.connections.pg.connect_timeout": "tuning.common.connections.pg.pg_connect_timeout_sec",
     "common.connections.pg.pool_max": "tuning.common.connections.pg.pg_pool_max_connections",
+    "common.connections.pg.statement_timeout_sec": "tuning.common.connections.pg.pg_statement_timeout_sec",
     "common.models.embed.query_cache_max": "tuning.common.models.embed.embed_query_cache_max_rows",
     "common.models.embed.timeout": "tuning.common.models.embed.embed_timeout_sec",
     "common.models.llm.empty_retry_max": "tuning.common.models.llm.llm_empty_retry_max_tokens",

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PG(pgvector) 스탠드인(연결 정보 없을 때만 — common/store/pg.py의 connect()·connect_pool()이 단일 전환점).
+"""PG(pgvector) 스탠드인(연결 정보 없을 때만 — common/store/pg.py has_conn()이 적재 connect()·검색 connect_sources()의 단일 전환점).
 Docker·새 패키지 없이 sqlite3(표준 라이브러리)만으로 적재·검색(pgsearch.py)이 실제로 내는 SQL을
 스키마 하나당 파일 하나(PG_STANDIN_DIR, 기본 output/pg_standin/<schema>.sqlite)로 돌린다 — 여러 프로세스(단계마다
 따로 띄우는 subprocess들)가 같은 파일을 보게.

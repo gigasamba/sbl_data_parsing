@@ -2,8 +2,9 @@
 접속: PG_HOST · PG_PORT · PG_DB · PG_USER · PG_PASSWORD — 모두 필수, 코드 기본값 없음 · PG_SCHEMA는 비우면 data_parsing.
 PG_CONNECT_TIMEOUT(기본 10초) — 공유 PG가 방화벽·주소 문제로 안 보일 때 수십 초씩 매달리지 않게.
 PG_POOL_MAX(기본 8, PGPool) — 공유 PG의 max_connections 여유 안에서 잡을 것(다른 팀 서비스도 같은 PG를 씀).
-connect()는 적재(pipeline/load/pgvector_load.py — 단일 연결), connect_pool()은 검색 MCP(mcp_server/services/search/server_state.py —
-상주 Retriever)에 있다. has_conn·conf·_standin_schema·_warn_standin·PG·PGPool·vec은 두 쪽이 같이 쓰고
+PG_STATEMENT_TIMEOUT(기본 120초, PGPool만) — 질의 하나가 넘으면 DB가 멈춤(QueryCanceled → 도구는 timeout).
+connect()는 적재(pipeline/load/pgvector_load.py — 단일 연결), PGPool은 검색 MCP(mcp_server/services/search/server_state.py
+connect_sources() — 상주 Retriever)가 쓴다. has_conn·conf·_standin_schema·_warn_standin·PG·PGPool·vec은 두 쪽이 같이 쓰고
 점검 도구도 PG·conf를 직접 쓰므로 여기(공용)에 둔다."""
 
 import os
@@ -44,7 +45,7 @@ def conf():
 
 def has_conn():
     """연결 정보가 실제로 있는지(기본값만 있는 상태는 '없음') — PG_PASSWORD 또는 PG_HOST.
-    connect()·connect_pool()의 단일 전환점: 있으면 진짜 PG, 없으면 스탠드인(sqlite, common/pg_standin.py)."""
+    connect()(적재)·server_state.connect_sources()(검색 MCP)의 단일 전환점: 있으면 진짜 PG, 없으면 스탠드인(sqlite, common/store/pg_standin.py)."""
     # PG_HOST·libpq 표준(PGPASSWORD·PGPASSFILE)도 '있음' — 비밀번호 없이 .pgpass·trust 인증 쓰는 서버가 스탠드인으로 빠지지 않게
     st = cfg().connections.pg
     return any((reveal(st.password), st.host)) or any(
@@ -115,12 +116,14 @@ class PG(_ScopedConn):
 class PGPool:
     """PG와 같은 인터페이스(schema·q) — 여러 스레드가 동시에 같은 객체를 쓸 때만(검색 MCP의 상주 Retriever.pg).
     연결 1개를 공유하면 스레드끼리 같은 커서를 동시에 건드려 깨짐 — psycopg_pool로 호출마다 빈 연결을 꺼내 쓰고 돌려줌.
-    한 연결을 트랜잭션으로 묶어 쓰는 쪽(적재)은 PG를 그대로 쓴다(단일 호출자·명시적 커밋)."""
+    한 연결을 트랜잭션으로 묶어 쓰는 쪽(적재)은 PG를 그대로 쓴다(단일 호출자·명시적 커밋).
+    꺼낼 때 연결을 확인해(check) 끊긴 연결은 새 연결로 바꾼다 — 재시도는 이 한 번뿐(그래도 실패하면 도구가 db_unavailable)."""
 
     def __init__(self, c, max_size=None):
         from psycopg_pool import ConnectionPool
 
         self.schema = c["PG_SCHEMA"]
+        st = cfg().connections.pg
         kwargs = dict(
             host=c["PG_HOST"],
             port=int(c["PG_PORT"]),
@@ -128,9 +131,13 @@ class PGPool:
             user=c["PG_USER"],
             password=c["PG_PASSWORD"],
             autocommit=True,
-            connect_timeout=cfg().connections.pg.connect_timeout,
+            connect_timeout=st.connect_timeout,
         )
-        self.pool = ConnectionPool(kwargs=kwargs, min_size=1, max_size=max_size or cfg().connections.pg.pool_max, open=True)
+        if st.statement_timeout_sec:  # 0·비움 = 제한 없음
+            kwargs["options"] = f"-c statement_timeout={int(st.statement_timeout_sec) * 1000}"
+        self.pool = ConnectionPool(
+            kwargs=kwargs, min_size=1, max_size=max_size or st.pool_max, open=True, check=ConnectionPool.check_connection
+        )
 
     def q(self, sql, params=None):
         with self.pool.connection() as cn, cn.cursor() as cur:

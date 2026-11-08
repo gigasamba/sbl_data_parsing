@@ -258,6 +258,7 @@ NOTES = {
     # tuning
     "common.connections.pg.connect_timeout": "PG 연결 제한(초)",
     "common.connections.pg.pool_max": "검색 MCP의 PG 연결 풀 크기",
+    "common.connections.pg.statement_timeout_sec": "검색 MCP PG 질의 하나의 제한(초) · 0 = 끔",
     "common.models.embed.query_cache_max": "질의 캐시 행 상한 · 0 = 무제한",
     "common.models.embed.timeout": "임베딩 호출 제한(초)",
     "common.models.llm.empty_retry_max": "빈 응답 때 다시 요청할 토큰 상한",
