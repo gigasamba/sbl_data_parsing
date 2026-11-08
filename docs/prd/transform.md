@@ -273,5 +273,5 @@
   4. 비교 전 줄 끝(`\r\n`)을 `\n`으로 맞춘다(옛 버그: kreuzberg 본문의 `\r\n` 때문에 문단이 길어 보여 `kvx_rfp_main.pdf` 문단 7개 중 6개가 바뀌었다).
   5. 끼운 조각 수를 엔진별로 `rep.rep.merge`에 남긴다.
 - 반영: `pipeline/transform/represent/doc_represent.py` `cross_merge()`. 지운 것 — 조각 투표 `fragment_vote.py`(`rep.fused`·`_rep/conflicts.jsonl`), 교차 확인 `crosscheck.py`(`rep.meta` 내용 — 인계 계약 칸이라 빈 값 `{}`만 남김), 옛 쪽·문단 교체(`_merge_pages`·`_merge_paragraphs`), 채점의 `route.json`(교차 확인만 읽음), `common/core/repfmt.py`의 `pairs_of`·`nlabel`·`pick`과 그것만 쓰던 것(핸드오프 지문 바뀜 — 서버 문서 전체 다시 처리, [C-113](../refactoring/refactor.md)). 시험 `tests/server/pipeline/test_cross_merge.py`.
-- 비고: 엑셀처럼 시트 전체가 한 조각인 문서는 날짜 표기만 달라도(예 office `46355` ↔ kreuzberg `2026-11-29`) 시트 조각이 통째로 끼워진다(`arg_abx101_stability_trend_ko.xlsx` 본문 15,555 → 32,085자).
+- 비고: 엑셀 날짜 칸은 모든 엔진이 `YYYY-MM-DD[ HH:MM]` 한 가지로 쓴다(office는 칸 서식을 읽어 일련번호 `46355` → `2026-11-29`, kreuzberg·markitdown은 `2026-11-29 00:00:00` → `2026-11-29`). 날짜 표기 차이로 시트 조각이 통째로 끼워지던 일이 없어졌다(`arg_abx101_stability_trend_ko.xlsx` 끼운 조각 1 → 0, 본문 32,085 → 16,455자). 시험 `tests/server/pipeline/test_office_dates.py`.
 - Status: done

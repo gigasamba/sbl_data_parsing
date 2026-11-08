@@ -152,23 +152,83 @@ def _eval_formula(formula, cur_sheet, numbers_by_sheet):
            else min(vals) if func == "MIN" else max(vals) if func == "MAX" else len(vals))
     return int(val) if val == int(val) else round(val, 4)
 
-def _cell_value(c, sheet_key, ss, numbers_by_sheet):
+_DATE_IDS = {14: "d", 15: "d", 16: "d", 17: "d", 18: "t", 19: "t", 20: "t", 21: "t", 22: "d",
+             45: "t", 46: "e", 47: "t"}                    # 기본 날짜·시각 서식 번호 → d(날짜 있음)·t(시각만)·e(경과 시간)
+_FMT_LITERAL = re.compile(r'"[^"]*"|\[(?![hms]+\])[^\]]*\]|[\\_*].')    # 따옴표 글자·[색/조건]·이스케이프는 날짜 기호가 아님
+
+
+def _date_styles(z):
+    """styles.xml cellXfs 순번 → "d"/"t"(날짜·시각 서식인 칸만) + workbook.xml date1904 기준일.
+    날짜는 어느 엔진이든 YYYY-MM-DD[ HH:MM] 한 가지로 보인다(pl-67 — 사용자 11-08)."""
+    import datetime as dt
+    try:
+        base = dt.datetime(1904, 1, 1) if re.search(rb'date1904="(1|true)"', z.read("xl/workbook.xml")) else dt.datetime(1899, 12, 30)
+    except KeyError:
+        base = dt.datetime(1899, 12, 30)
+    try:
+        st = ET.fromstring(z.read("xl/styles.xml"))
+    except (KeyError, ET.ParseError):
+        return {}, base
+    kinds = dict(_DATE_IDS)
+    for n in st.iter(_S + "numFmt"):
+        code = _FMT_LITERAL.sub("", (n.get("formatCode") or "").split(";")[0]).lower()
+        fid = int(n.get("numFmtId") or 0)
+        if re.search(r"\[[hms]+\]", code):
+            kinds[fid] = "e"                                   # 경과 시간 [h]:mm — 24시간 넘어도 그대로
+        elif re.search(r"[dy]", code) or (re.search(r"m", code) and not re.search(r"[hs]", code)):
+            kinds[fid] = "d"
+        elif re.search(r"[hs]", code):
+            kinds[fid] = "t"
+        else:
+            kinds.pop(fid, None)                               # 같은 번호를 숫자 서식으로 다시 정의
+    xfs = st.find(_S + "cellXfs")
+    styles = {i: kinds[int(xf.get("numFmtId") or 0)] for i, xf in enumerate(xfs if xfs is not None else [])
+              if int(xf.get("numFmtId") or 0) in kinds}
+    return styles, base
+
+
+def _as_date(c, raw, dates):
+    """날짜·시각 서식 칸의 일련번호 → 2026-11-29 · 2026-11-29 14:30 · 14:30(초는 0이 아닐 때만). 아니면 raw 그대로.
+    ponytail: 1900-03-01 이전(일련번호 60 이하, 엑셀 윤년 버그)은 하루 어긋남 — 그런 문서가 나오면 보정."""
+    styles, base = dates
+    kind = styles.get(int(c.get("s") or 0))
+    if kind is None:
+        return raw
+    try:
+        secs = round(float(raw) * 86400)
+    except (TypeError, ValueError):
+        return raw
+    if not 0 <= secs < 2958466 * 86400:                       # 9999-12-31까지
+        return raw
+    import datetime as dt
+    d = base + dt.timedelta(seconds=secs)
+    hm = d.strftime("%H:%M") + (d.strftime(":%S") if d.second else "")
+    if kind == "t":
+        return hm
+    if kind == "e":
+        return f"{secs // 3600:02d}:{secs // 60 % 60:02d}" + (f":{secs % 60:02d}" if secs % 60 else "")
+    return d.strftime("%Y-%m-%d") + ("" if hm == "00:00" else " " + hm)
+
+
+def _cell_value(c, sheet_key, ss, numbers_by_sheet, dates):
     """<c> 하나 → 글자값(수식·공유문자열·inlineStr·일반값) — 기존 _xlsx_stdlib 본문 루프에서 그대로 옮김
-    (AD23 — _xlsx_table_grid와 공유, 동작 불변)."""
+    (AD23 — _xlsx_table_grid와 공유, 동작 불변). 날짜 서식 칸은 _as_date로(pl-67)."""
     f_el, v = c.find(_S + "f"), c.find(_S + "v")
     it = c.find(f".//{_S}t")
     if f_el is not None and not (v is not None and (v.text or "").strip()):
         val = _eval_formula(f_el.text or "", sheet_key, numbers_by_sheet)
-        return f"={(f_el.text or '').strip()}" + (f" (계산값) {val}" if val is not None else "")
+        return f"={(f_el.text or '').strip()}" + (f" (계산값) {_as_date(c, val, dates)}" if val is not None else "")
     if c.get("t") == "s" and v is not None:
         return ss[int(v.text)]
     if it is not None:
         return "".join(t.text or "" for t in c.iter(_S + "t"))   # 서식 조각(<r>)이 여러 개인 inlineStr
+    if v is not None and c.get("t") in (None, "n"):
+        return _as_date(c, v.text or "", dates)
     return (v.text or "") if v is not None else ""
 
 _CELL_REF = re.compile(r"^([A-Za-z]+)(\d+)$")
 
-def _xlsx_table_grid(root, sheet_key, ss, numbers_by_sheet):
+def _xlsx_table_grid(root, sheet_key, ss, numbers_by_sheet, dates):
     """AD23 — 시트 XML → (조밀 그리드, 병합): 실제 칸 참조(r="B2")로 행·열을 채우고(참조 없는 칸은 ""),
     mergeCells 범위는 좌상단 글자로 펼쳐 같은 값을 채운다. 기존 rows(위치 기반, 성긴 칸 — 빈 칸은 XML에
     없을 수 있어 순서가 실제 열과 안 맞을 수 있음)와는 독립 — 이 그리드는 표 원본 보존(tables_std)에만 쓴다."""
@@ -178,7 +238,7 @@ def _xlsx_table_grid(root, sheet_key, ss, numbers_by_sheet):
         if not m:
             continue
         col, row = _col_num(m.group(1)), int(m.group(2))
-        cell_map[(row, col)] = _cell_value(c, sheet_key, ss, numbers_by_sheet)
+        cell_map[(row, col)] = _cell_value(c, sheet_key, ss, numbers_by_sheet, dates)
         max_r, max_c = max(max_r, row), max(max_c, col)
     if not cell_map:
         return [], []
@@ -217,6 +277,7 @@ def _xlsx_stdlib(path):
                 roots[sh] = ET.fromstring(z.read(sh))
             except (KeyError, ET.ParseError):
                 roots[sh] = None
+        dates = _date_styles(z)
         numbers_by_sheet = {name or sh: _sheet_numbers(roots[sh]) for name, _, sh in sheets if roots[sh] is not None}
         texts, tables, grids = [], [], []
         for name, hidden, sh in sheets:
@@ -227,13 +288,13 @@ def _xlsx_stdlib(path):
                 texts.append(f"[숨김 시트] {name}" if hidden else name)   # 시트 이름표(숨긴/매우 숨긴은 표시 — 백로그 L3-4)
             rows = []
             for row in root.iter(_S + "row"):
-                cells = [_cell_value(c, name or sh, ss, numbers_by_sheet) for c in row.iter(_S + "c")]
+                cells = [_cell_value(c, name or sh, ss, numbers_by_sheet, dates) for c in row.iter(_S + "c")]
                 if any(str(x).strip() for x in cells):
                     rows.append(cells)
             if rows:
                 tables.append(rows)
                 texts.append(" ".join(str(c) for r in rows for c in r))
-                grids.append(_xlsx_table_grid(root, name or sh, ss, numbers_by_sheet))   # AD23 — 병합 펼침 그리드(독립)
+                grids.append(_xlsx_table_grid(root, name or sh, ss, numbers_by_sheet, dates))   # AD23 — 병합 펼침 그리드(독립)
     return texts, tables, grids
 
 

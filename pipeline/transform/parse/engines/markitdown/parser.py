@@ -4,7 +4,18 @@
 단독 실행: python -m data_parsing.parse_one --engine markitdown <문서> <out.json>
 """
 
+import re
+
 from pipeline.transform.parse.engines._common.contract import _md_tables, _with_tables
+
+_SHEETS = (".xlsx", ".xlsm", ".xls")
+_DT = re.compile(r"\b(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(:\d{2})?(?:\.\d+)?(?![\d:])")
+
+
+def _iso_date(m):
+    """시트 날짜 2026-11-29 00:00:00 → 2026-11-29 · 14:30:00 → 2026-11-29 14:30(초는 0이 아닐 때만) — 엔진 날짜 표기 통일(pl-67)."""
+    hm = m[2] + ("" if m[3] in (None, ":00") else m[3])
+    return m[1] if hm == "00:00" else f"{m[1]} {hm}"
 
 
 def parse_markitdown(path):
@@ -13,6 +24,8 @@ def parse_markitdown(path):
     병합인지 구분 불가라 추측하지 않고 그대로 둔다."""
     from markitdown import MarkItDown
     md = MarkItDown(enable_plugins=False).convert(path).text_content
+    if str(path).lower().endswith(_SHEETS):
+        md = _DT.sub(_iso_date, md)
     return _with_tables(md, _md_tables(md), "markitdown")
 
 

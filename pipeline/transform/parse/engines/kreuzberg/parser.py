@@ -10,6 +10,14 @@ from pipeline.transform.parse.engines._common.contract import _md_tables, _with_
 import re
 
 _SENT_END = re.compile(r"(\.|다\.|음\.|요\.|[.!?。])\s*$")
+_SHEETS = (".xlsx", ".xlsm", ".xls", ".xlsb", ".ods", ".xltx", ".xlt")
+_DT = re.compile(r"\b(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(:\d{2})?(?:\.\d+)?(?![\d:])")
+
+
+def _iso_date(m):
+    """시트 날짜 2026-11-29 00:00:00 → 2026-11-29 · 14:30:00 → 2026-11-29 14:30(초는 0이 아닐 때만) — 엔진 날짜 표기 통일(pl-67)."""
+    hm = m[2] + ("" if m[3] in (None, ":00") else m[3])
+    return m[1] if hm == "00:00" else f"{m[1]} {hm}"
 
 
 def _prose_grid(rows):
@@ -45,18 +53,19 @@ def parse_kreuzberg(path):
         r = extract_file_sync(path, config=ExtractionConfig(force_ocr=False))
     except TypeError:
         r = extract_file_sync(path)
+    fix = (lambda s: _DT.sub(_iso_date, s)) if str(path).lower().endswith(_SHEETS) else (lambda s: s)
     groups = []
     for t in getattr(r, "tables", None) or []:
         cells = getattr(t, "cells", None) or (t.get("cells") if isinstance(t, dict) else None)
         if cells:
             if _prose_grid(cells):                                            # BR49 — 평문 번호 목록은 표로 넘기지 않음(글자는 content에 그대로)
                 continue
-            groups += split_tables([[str(c) for c in row] for row in cells])   # AD24② 시트 1개 = 표 1개로 합쳐지는 문제
+            groups += split_tables([[fix(str(c)) for c in row] for row in cells])   # AD24② 시트 1개 = 표 1개로 합쳐지는 문제
         else:
             md = getattr(t, "markdown", None) or (t.get("markdown") if isinstance(t, dict) else "")
-            for tb in _md_tables(md or ""):
+            for tb in _md_tables(fix(md or "")):
                 groups += split_tables(tb)
-    return _with_split_tables(r.content, groups, "kreuzberg")
+    return _with_split_tables(fix(r.content), groups, "kreuzberg")
 
 
 ENGINES = {"kreuzberg": parse_kreuzberg}
