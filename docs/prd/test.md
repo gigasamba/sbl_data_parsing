@@ -120,8 +120,9 @@
 <a id="e2-23"></a>
 ## e2-23 · 모듈 경계 점검 줄이기
 - 요건: import 경계(①~⑨·⑫)는 남기고 ⑩⑪ 흐름 분석을 글자 검색(분류 주석 없는 `os.environ`·`os.getenv`)으로 바꾼다.
-- 반영: 없음(사용자 11-08 결정 — 다음 작업).
-- Status: todo
+- 반영: `common/check/check_modules.py` `env_lines`·`env_violations` — 앱 코드(common·pipeline·mcp_server)만 본다. ⑩ 코드(주석·문자열 빼고)에서 `os.`·`_os.` 뒤 `environ`·`getenv` 등을 쓰는 줄은 그 문장이나 바로 위 주석 줄에 분류 주석 `env 남김 — <분류>`가 있어야 한다. ⑪ `env`가 든 줄에서 설정 이름을 글자로 env 사전 키·`env[…]`·`pop`·`setdefault`·`putenv`에 쓰면 위반(분류 `라이브러리`·`시험`·`호스트 도구`는 허용). 잡지 않는 것: `from os import environ`·다른 os 별칭, `dict(os.environ, X=…)` 키워드 꼴, 변수에 담은 이름(`for k in (…): env.pop(k)`), `env`가 안 든 이름의 사전을 나중에 자식에 넘기는 꼴, `tests/`·`validation/`·`deploy/`.
+- QA: `tests/server/common/test_check_modules.py`(`ENV_CASES` 표 · 심은 위반 `pipeline/v_env.py`·`common/v_child.py`) · `python -m common.check.check_modules` · "모듈 경계 통과".
+- Status: done
 
 ## 코드와 다른 점 · 지울 코드
 

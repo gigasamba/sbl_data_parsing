@@ -7,7 +7,7 @@
 - pl-25 DB 스키마 명세 — dev: 검색 DB(gold — 처리 기록 `doc` 칸 판 0006 포함)·마스터·applog는 구현됨, 서버 판 올리기·ParsingMeta 기록 옮기기는 DB 담당자 승인·실행 대기(refactor.md C-107).
 - 열린 요건(todo): run_pipeline 지휘만 [rn-05](prd/ops.md#rn-05) · 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 확장자 `.hwp` [pl-45](prd/transform.md#pl-45) · 그림 부가 기능 줄이기 [pl-05](prd/transform.md#pl-05) · 전체 e2e [pl-54](prd/ops.md#pl-54) · prd 이미지에 settings.yaml 굽기 [op-12](prd/doc.md#op-12) · 판 묶기(잠재 문제) [pl-56](prd/load.md#pl-56).
 - 서버 확인만 남음(dev): parse_document CPU 우선 [rn-03](prd/ops.md#rn-03).
-- 정리·구조(todo, 사용자 11-08): 옛 오피스 검사기 [pl-66](prd/extract.md#pl-66) · 대표 결과 교차 병합 [pl-67](prd/transform.md#pl-67) · 실버 먼저 적재 [pl-68](prd/load.md#pl-68) · DB 시험 [e2-22](prd/test.md#e2-22) · 경계 점검 [e2-23](prd/test.md#e2-23).
+- 정리·구조(todo, 사용자 11-08): 옛 오피스 검사기 [pl-66](prd/extract.md#pl-66) · 대표 결과 교차 병합 [pl-67](prd/transform.md#pl-67) · 실버 먼저 적재 [pl-68](prd/load.md#pl-68) · DB 시험 [e2-22](prd/test.md#e2-22).
 - 시험 정리(todo): [e2-13](prd/test.md#e2-13) · [e2-20](prd/test.md#e2-20).
 
 ## 수집 (extract) — 서버에서 문서 목록을 정하고 받아 오기까지
@@ -202,7 +202,7 @@
 | PC 평가 도구는 검색 점검 페이지·답변 점검 둘뿐 | PC 전용 설정 약 50개의 관리 비용 | done | [e2-10](prd/test.md#e2-10) |  |
 | 요건에 닿지 않는 함수·코드(시험만 부르는 것 포함)는 없다 | 죽은 코드 비용. MCP 도구 이름·입출력은 그대로 | done | [e2-17](prd/test.md#e2-17) · [e2-18](prd/test.md#e2-18) |  |
 | 배포 판정 시험의 DB 시험은 진짜 pgvector로 돈다 — PC는 시험 pgvector 컨테이너(없으면 띄움), 개발 서버(dev)는 쓰는 시험까지(임시 스키마 `test_*`를 만들고 지움), 운영 서버(prd)는 읽기만(접속·vector 확장·판 번호·표·색인·검색 1회). sqlite 대역 없음 | 대역과 실 DB 차이로 판정이 틀리지 않게. 운영 DB에는 쓰지 않는다(사용자 11-08) | todo | [e2-22](prd/test.md#e2-22) | 지금 서버 판정 시험은 sqlite 대역(`common/store/pg_standin.py`)으로 돈다 |
-| 모듈 경계 점검은 import 규칙(앱 사이·단계 방향·`validation`/`tests` import 금지·routers)만 코드 분석으로, 설정 env 읽기 규칙(⑩⑪)은 글자 검색으로 본다 | 점검 코드를 줄인다(사용자 11-08) | todo | [e2-23](prd/test.md#e2-23) | 지금 ⑩⑪이 약 400줄 흐름 분석 |
+| 모듈 경계 점검은 import 규칙(앱 사이·단계 방향·`validation`/`tests` import 금지·routers)만 코드 분석으로, 설정 env 읽기 규칙(⑩⑪)은 글자 검색으로 본다 | 점검 코드를 줄인다(사용자 11-08) | done | [e2-23](prd/test.md#e2-23) | 글자 검색은 앱 코드(common·pipeline·mcp_server)만 본다 |
 
 ## 문서·릴리스 (doc) — 문서 배치·버전·이미지·서버 설치
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
