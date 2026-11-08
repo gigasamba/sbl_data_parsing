@@ -78,7 +78,6 @@ common:
   # ---- 모델 호출 — 임베딩·LLM·VLM ----
   models:
     embed:
-      embed_query_cache_file: null            # 질의 임베딩 캐시 sqlite · 0이면 끔 (null = PC output/query_cache.sqlite · mcp 이미지 /tmp)
       embed_query_instruction: null           # 질의 앞에 붙이는 지시문 · 예 'Query: ' (null = 질의 그대로)
     llm:
       llm_response_cache_dir: null            # LLM 응답 캐시 폴더 (null = output/eval/llm_cache)
@@ -261,7 +260,6 @@ tuning:
         pg_pool_max_connections: 8            # 검색 MCP의 PG 연결 풀 크기 · 정수
     models:
       embed:
-        embed_query_cache_max_rows: 20000     # 질의 캐시 행 상한 · 0 = 무제한
         embed_timeout_sec: 60                 # 임베딩 호출 제한(초) · 정수
       llm:
         llm_empty_retry_max_tokens: 8000      # 빈 응답 때 다시 요청할 토큰 상한 · 정수

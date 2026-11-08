@@ -67,7 +67,7 @@ IMAGE_PATHS = {
 IMAGE_PATHS["prepared_out"] = IMAGE_PATHS["output_root"] + "/prepared"  # 원본 사본(prepare) 자리(pipeline DOC_DIR_PREPARED 기본값)
 # 이미지 안 모델 기본값 — 규칙은 "settings.yaml > 코드 기본값" 하나라 Dockerfile ENV로 굽지 않고 여기 둔다.
 # 이미지 신호 RAG_MODULE로 그 이미지 값만 고른다. PC·시험 하위 프로세스(RAG_MODULE 없음)는 PC 기본값.
-_IMAGE_DEFAULTS = {
+_IMAGE_DEFAULTS: dict[str, dict[str, object]] = {
     "pipeline": {
         "DOC_DIR": IMAGE_PATHS["docs_mount"],
         "DOC_DIR_PREPARED": IMAGE_PATHS["prepared_out"],
@@ -76,7 +76,6 @@ _IMAGE_DEFAULTS = {
         "APPLOG_DB_ENABLED": True,  # 서버 로그는 Postgres(applog)
     },
     "mcp": {
-        "EMBED_QUERY_CACHE": "/tmp/mcp_query_cache.sqlite",  # 질의 캐시
         "APPLOG_DB_ENABLED": True,  # 서버 로그는 Postgres(applog)
     },
 }
@@ -1347,12 +1346,6 @@ class CommonModelsEmbed(Section):
     base_url: str | None = F(None, "EMBED_BASE_URL", "임베딩 엔드포인트 주소(OpenAI 호환 …/v1)")
     est_usd: float | None = F(0.001, "EMBED_EST_USD", "임베딩 호출 1건당 예상 비용($) — 예산 선차감용")
     model: str | None = F(None, "EMBED_MODEL", "임베딩 모델 이름(색인과 같아야 함 — 질의 임베딩·캐시 열쇠에도 씀)")
-    query_cache: str | None = F(
-        image_default("EMBED_QUERY_CACHE"),
-        "EMBED_QUERY_CACHE",
-        "질의 임베딩 캐시 sqlite 경로(0이면 캐시 끔 — mcp 이미지 안 기본 /tmp/mcp_query_cache.sqlite: 결과 폴더가 읽기 전용)",
-    )
-    query_cache_max: int | None = F(20000, "EMBED_QUERY_CACHE_MAX", "질의 임베딩 캐시 최대 행 수(넘으면 오래된 것부터 삭제, 0이면 무제한)")
     query_prefix: str | None = F(None, "EMBED_QUERY_PREFIX", "질의 임베딩 앞에 붙이는 지시 문구(예: 'Instruct: …\\nQuery: ')")
     timeout: int | None = F(60, "EMBED_TIMEOUT", "임베딩 API 호출 제한 시간(초)")
 

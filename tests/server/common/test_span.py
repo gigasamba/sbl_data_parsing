@@ -30,7 +30,7 @@ def test_no_run_is_noop():
     rows, patched = _capture()
     threads = threading.active_count()
     logger_before = span._STATE["log"]
-    with patched, settings.isolated(EMBED_QUERY_CACHE="0"):
+    with patched, settings.isolated():
         with span.span("extract.parse", doc_id="a.pdf") as sp:
             assert sp is span.NULL
             sp.add(pages=3).observe("x", 1).set(engine="e").result("fail", "doc", "ignored")

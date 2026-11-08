@@ -143,7 +143,6 @@ PLACED = {
     "common.connections.rdb.connect_kwargs": "common.connections.edw.edw_extra_connect_args",
     "common.connections.object_storage.region": "common.connections.object_storage.object_storage_region",
     "common.connections.object_storage.verify_tls": "common.connections.object_storage.object_storage_verify_tls",
-    "common.models.embed.query_cache": "common.models.embed.embed_query_cache_file",
     "common.models.embed.query_prefix": "common.models.embed.embed_query_instruction",
     "common.models.llm.extra_body": "common.models.llm.llm_extra_request_body",
     "common.models.llm.rpm": "common.models.llm.llm_max_calls_per_minute",
@@ -256,7 +255,6 @@ PLACED = {
     "common.connections.pg.connect_timeout": "tuning.common.connections.pg.pg_connect_timeout_sec",
     "common.connections.pg.pool_max": "tuning.common.connections.pg.pg_pool_max_connections",
     "common.connections.pg.statement_timeout_sec": "tuning.common.connections.pg.pg_statement_timeout_sec",
-    "common.models.embed.query_cache_max": "tuning.common.models.embed.embed_query_cache_max_rows",
     "common.models.embed.timeout": "tuning.common.models.embed.embed_timeout_sec",
     "common.models.llm.empty_retry_max": "tuning.common.models.llm.llm_empty_retry_max_tokens",
     "common.models.llm.timeout": "tuning.common.models.llm.llm_timeout_sec",
@@ -373,7 +371,6 @@ MOVED = {"required.edw.edw_local_sqlite_file": "dev.local.local_edw_sqlite_file"
 
 # tuning — 거의 안 바꾸는 값(sample 아래쪽에 분류별로 모음 — 비우면 코드 기본값).
 TUNING_INTERNAL = (  # 내부 조정값 — 재시도·내부 대기·묶음 크기·출력 상한
-    "common.models.embed.query_cache_max",
     "common.models.llm.empty_retry_max",
     "common.models.vlm.retry",
     "common.models.transport.connect_timeout",
