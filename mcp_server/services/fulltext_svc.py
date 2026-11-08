@@ -34,9 +34,9 @@ _WORKERS = 8  # 요청 하나 안의 저장소 목록·받기 동시 수
 def _pool():
     """저장소 연결 풀 = (공용 자리 MCP_MAX_CONCURRENCY — list_doc_fulltext + get_doc_fulltext 자리) × 동시 _WORKERS.
     모자라면 boto3가 연결을 버렸다 다시 맺음."""
-    from mcp_server.services.tool_runner import _OWN_SLOTS
+    from mcp_server.services.tool_runner import GET_SLOTS
 
-    return (int(mc.cfg().server.max_concurrency or 0) + _OWN_SLOTS["do_get"]) * _WORKERS
+    return (int(mc.cfg().server.max_concurrency or 0) + GET_SLOTS) * _WORKERS
 
 
 class BadRequest(ValueError):

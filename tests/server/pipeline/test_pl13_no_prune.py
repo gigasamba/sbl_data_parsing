@@ -87,7 +87,7 @@ def _run_twice(tmp):
         db = pgcase.connect(S)
         sf = M._Src(db, f"{S}_sfdc")  # 원천 스키마(pl-28) — SFDC 문서가 들어감
         la = M._Src(db, f"{S}_las")  # 원천이 바뀐 문서가 옮겨 갈 곳
-        with patch.object(M, "pg_connect", return_value=db):
+        with patch.object(M, "PG", return_value=db):
             M.main(["load", "--bundle", str(_bundle(["SFDC/u/a.txt", "SFDC/u/b.txt"], tmp))])
             M.main(
                 ["load", "--bundle", str(_bundle(["SFDC/u/c.txt", "SFDC/u/a.txt"], tmp))]

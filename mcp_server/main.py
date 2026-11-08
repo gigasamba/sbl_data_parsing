@@ -26,7 +26,7 @@
     벡터·임베딩·LLM·pgvector 불개입(rule-based — 비-RAG 원칙) · 데이터는 EDW_META_DIR(기본 /app/config/edw_meta)의
     catalog.json+columns.jsonl, mtime 재확인(기본 30초)으로 재빌드 반영 · sample_values는 어떤 응답에도 실리지 않음 ·
     데이터셋 부재·조회 실패 시 {"error": …} fail-soft(서버·다른 도구 계속).
-저장소: common/store/pg.py connect(설정의 PostgreSQL — 없으면 거부, --local이면 로컬 묶음), 임베딩·LLM은 .env 내부망 주소만.
+저장소: common/store/pg.py PGPool(설정의 PostgreSQL — 없으면 거부), 임베딩·LLM은 settings.yaml의 내부망 주소만.
 
 보안(G5): MCP_HOST(기본 127.0.0.1 · auto = 컨테이너 자기 사설 IP)는 내부망 주소만 · 루프백이 아니면 MCP_TOKEN 필수(Authorization: Bearer) ·
   루프백이 아니면 DNS 리바인딩 보호도 기본 켬(L8 — SDK TransportSecuritySettings, MCP_HOST[+포트]만 자동 허용 · 어긋난

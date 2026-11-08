@@ -490,7 +490,7 @@ def main(argv=None):
     ap.add_argument("--rep-dir", default=None, help="대표 결과 폴더(_rep) — 분류 본문을 게시 .md와 같게(pl-33). 비우면 묶음 full_text")
     ap.add_argument("--silver", default=None, help="게시 처리 기록(publish/silver.jsonl) — doc의 sha256·silver 위치·엔진·상태 칸(op-17)")
     a = ap.parse_args(argv)
-    db = pg_connect()
+    db = PG(conf())  # required.pg 접속 정보 — 비면 conf()가 채울 자리를 적고 멈춘다(로컬 대체 DB 없음)
     print(
         f"[pgstore] PG · 스키마 {db.schema}",
         file=sys.stderr,
@@ -530,15 +530,6 @@ def main(argv=None):
             sp.add(**{k: v for k, v in counts.items() if k in ("docs", "chunks", "terms", "sec")})
             runtrace.docs(total=counts["docs"])  # pipe_run 문서 수(이번에 새로 넣은 문서)
         print(json.dumps(counts, ensure_ascii=False))
-
-
-# ---- PG 단일 연결 전환점
-def pg_connect(c=None, pg_schema=None):
-    """required.pg 접속 정보로 PG(PG 클래스) — 비면 conf()가 채울 자리를 적고 멈춘다(로컬 대체 DB 없음). main()이 씀."""
-    c = c or conf()
-    if pg_schema:
-        c = {**c, "PG_SCHEMA": pg_schema}
-    return PG(c)
 
 
 if __name__ == "__main__":

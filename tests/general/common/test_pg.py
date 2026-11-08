@@ -124,26 +124,24 @@ def _selftest_conf():
 
 
 def test_pool_options():
-    """PGPool — 꺼낼 때 연결 확인(check_connection — 끊긴 연결은 새로) · 질의 시간 제한 PG_STATEMENT_TIMEOUT(초 → ms, 0·비움 = 없음)."""
+    """PGPool — 꺼낼 때 연결 확인(check_connection — 끊긴 연결은 새로) · 질의 시간 제한 statement_timeout_sec(초 → ms, 0·비움 = 없음)."""
     from unittest.mock import patch
 
     import psycopg_pool as _pp
 
     c = {"PG_HOST": "x", "PG_PORT": "5432", "PG_DB": "x", "PG_USER": "x", "PG_PASSWORD": "x", "PG_SCHEMA": "ai"}
-    cases = [  # (PG_STATEMENT_TIMEOUT, 부르는 쪽 statement_timeout_sec, 기대 options)
-        (None, None, "-c statement_timeout=120000"),  # 기본 120초
-        (None, 25, "-c statement_timeout=25000"),  # 검색 MCP가 덮음(mcp.server.pg_statement_timeout_sec)
-        ("5", 0, None),  # 덮은 0 = 제한 없음
-        ("5", None, "-c statement_timeout=5000"),
-        ("0", None, None),
+    cases = [  # (부르는 쪽 statement_timeout_sec, 기대 options)
+        (25, "-c statement_timeout=25000"),  # 검색 MCP(mcp.server.pg_statement_timeout_sec)
+        (0, None),  # 0 = 제한 없음
+        (None, None),
     ]
     check = _pp.ConnectionPool.check_connection
-    for v, mine, want in cases:
-        with COMMON.env(PG_STATEMENT_TIMEOUT=v), patch.object(_pp, "ConnectionPool") as fake:
+    for mine, want in cases:
+        with patch.object(_pp, "ConnectionPool") as fake:
             fake.check_connection = check
             PGPool(c, statement_timeout_sec=mine)
         kw = fake.call_args.kwargs
-        assert kw["kwargs"].get("options") == want and kw["check"] == check, (v, mine, kw)
+        assert kw["kwargs"].get("options") == want and kw["check"] == check, (mine, kw)
     print("[selftest] PGPool — 연결 확인(check)·질의 시간 제한(options) 전달 통과")
 
 

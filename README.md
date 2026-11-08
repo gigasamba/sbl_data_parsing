@@ -256,7 +256,7 @@ tuning:
       local_source_dir: valid_env/object_storage           # 파싱 원본 — --source·source_input_location이 없을 때
       local_max_new_docs_per_run: 5                        # 한 번에 새로 파싱할 문서 수 — --max-new·max_new_docs_per_run이 없을 때
   ```
-  게시 폴더에 `<prefix>/<출처>/<원본 경로>/<파일명>_<날짜>.md`로 쓴다(게시 폴더는 원본 목록에서 빠진다). 원본 폴더(`ops.paths.source_docs_dir`)·파싱 원본(`extract.source.source_input_location` — 폴더 또는 `rdb:csv:<경로>`)·PG 대체 폴더(`dev.pg_standin.pg_standin_dir`)도 상대 경로를 받는다.
+  게시 폴더에 `<prefix>/<출처>/<원본 경로>/<파일명>_<날짜>.md`로 쓴다(게시 폴더는 원본 목록에서 빠진다). 원본 폴더(`ops.paths.source_docs_dir`)·파싱 원본(`extract.source.source_input_location` — 폴더 또는 `rdb:csv:<경로>`)도 상대 경로를 받는다.
   `run_env: local`은 서버 전용 칸(`required.edw.edw_host`·EDW 계정, `required.object_storage.*`, 원천 버킷, `required.publish.publish_bucket`)을 **무시한다** — 적혀 있어도 비우고 `[settings] local(PC) — 서버 전용 칸을 무시함(비움): …` 한 줄에 칸 이름만 찍은 뒤 시작한다. 그래서 PC는 실제 EDW·Object Storage에 닿지 않는다. 서버(dev·prd)는 이 칸들을 쓰고 `dev.local`은 읽지 않는다.
 - **PG 접속 칸을 채운 PC는 파싱 전에 한 번 `.venv/bin/python -m common.store.db.dbtool up --target applog`** — 받기가 DRM·암호·지원 안 함·내용 중복 문서를 적재 안 된 문서 표 `applog.except_doc_info`에 쓰는데, 표가 없으면 그 문서에서 파싱이 멈춘다(PG를 비운 PC는 SQLite 대역이 표를 만든다). ④의 `up --target all`에도 들어 있다.
 - PG 접속 칸(`required.pg`의 `pg_host`·`pg_port`·`pg_database`·`pg_user`·`pg_password` 다섯 칸)은 **모두 채운다.** 빈 칸이 있으면 채울 자리를 알려 주고 멈춘다(PC·서버 모두 — sqlite 대역 없음).

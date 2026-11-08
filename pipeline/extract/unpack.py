@@ -295,7 +295,7 @@ def _expand(path, label, depth, dst, out, ctx):
     return True
 
 
-def _manifest(doc, parts_root):
+def manifest(doc, parts_root):
     """parts.json → {"sha256": 원본 sha256, "parts": [...], "failed": [...]} 또는 None(없음·깨짐·옛 목록 형식)."""
     try:
         m = json.loads((Path(parts_root) / Path(doc).name / "parts.json").read_text(encoding="utf-8"))
@@ -308,13 +308,13 @@ def is_fresh(doc, parts_root):
     """상자가 아니거나 꺼낸 목록이 지금 원본(sha256)에서 나온 것이면 True — 원본이 안 바뀐 재실행은 다시 거르거나 풀지 않는다."""
     if box_kind(Path(doc).name) is None:
         return True
-    m = _manifest(doc, parts_root)
+    m = manifest(doc, parts_root)
     return m is not None and m.get("sha256") == sha_of(doc)
 
 
 def failed_of(doc, parts_root):
     """못 꺼낸 안 파일 목록 [{name, why}] — 꺼낸 적 없으면 빈 목록."""
-    return (_manifest(doc, parts_root) or {}).get("failed") or []
+    return (manifest(doc, parts_root) or {}).get("failed") or []
 
 
 def miss_reason(failed, n=10):

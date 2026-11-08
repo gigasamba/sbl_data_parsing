@@ -110,7 +110,6 @@
 | `MCP_METHODS` | `vector,bm25,id` | 이 셋만 있음 |
 | `MCP_ALLOWED_HOSTS` | 비움 | 루프백이 아닐 때, 리버스 프록시 등 다른 Host로도 부르면 쉼표로 추가 |
 | `MCP_PG_STATEMENT_TIMEOUT`(`tuning.search.server.mcp_pg_statement_timeout_sec`) | `25` | 검색 MCP 연결 풀의 PostgreSQL 질의 하나의 시간 제한(초) — 도구 시간 상한(`mcp_tool_timeout_sec` 30초)보다 짧게 둔다. 넘으면 DB가 그 질의를 멈추고 도구는 `timeout`. `0`이면 제한 없음. DB에 닿지 못하면(끊긴 연결은 한 번 새 연결로 바꾼 뒤에도) 도구는 `db_unavailable` |
-| `PG_STATEMENT_TIMEOUT`(`tuning.common.connections.pg.pg_statement_timeout_sec`) | `120` | PG 연결 풀의 기본 질의 제한(초). 검색 MCP는 위 칸을 쓴다 |
 
 ### EDW 쿼리 도구(`query_edw`·`edw_meta`)
 `required.edw`의 **읽기 계정**만 쓴다(파이프라인 원천 조회와 같은 계정 — 운영 준비는 [server-guide §4-1](server-guide.md#4-1-edw-쿼리-도구-설정--edw_metaquery_edw)).

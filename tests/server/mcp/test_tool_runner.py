@@ -187,6 +187,14 @@ def test_slot_held():
     assert out == [want for _, _, want in cases] and ran == ["slow", "fast"], (out, ran)
 
 
+def test_own_slot_names():
+    """_OWN_SLOTS는 함수 이름으로 고른다 — 이름이 바뀌면 그 도구가 조용히 공용 자리로 빠지므로 진짜 함수 이름인지 고정."""
+    from mcp_server.services import fulltext_svc, parse_proxy
+
+    fns = {f.__name__ for f in (parse_proxy.do_parse_document, fulltext_svc.do_get)}
+    assert set(M._OWN_SLOTS) == fns and M._OWN_SLOTS["do_get"] == M.GET_SLOTS, M._OWN_SLOTS
+
+
 def test_main():  # 옛 자기 점검 사례(__main__이 없어 import해 부르던 순서 — main.py 옛 selftest)
     _selftest_concurrency()
     _selftest_overload()

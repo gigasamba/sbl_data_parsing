@@ -48,7 +48,7 @@ from pipeline import config as pc
 from pipeline.shared.except_docs import PERMANENT
 
 ROOT = APP_ROOT  # output/ 등 런타임 경로용
-_KST = datetime.timezone(datetime.timedelta(hours=9))  # parsed_at 표기(적재 created_at과 같은 시간대 — 대역 글자 비교도 맞음)
+_KST = datetime.timezone(datetime.timedelta(hours=9))  # parsed_at 표기(적재 created_at과 같은 시간대)
 _CROSS_ACC_FULL = json.loads(CRITERIA_FILE.read_text(encoding="utf-8"))["run"][
     "cross_acc_full"
 ]  # partial 사유 글자도 같은 정본(판정은 parse_scoring이 이미 함)

@@ -1307,9 +1307,6 @@ class CommonConnectionsRdb(Section):
 
 class CommonConnectionsPg(Section):
     connect_timeout: int | None = F(10, "PG_CONNECT_TIMEOUT", "PostgreSQL 연결 시도 제한 시간")
-    statement_timeout_sec: int | None = F(
-        120, "PG_STATEMENT_TIMEOUT", "검색 MCP PostgreSQL 질의 하나의 시간 제한(초) — 넘으면 DB가 그 질의를 멈추고 도구는 timeout"
-    )
     db: str | None = F(None, "PG_DB", "PostgreSQL 데이터베이스 이름(필수 — op-09)")
     host: str | None = F(None, "PG_HOST", "PostgreSQL 서버 호스트 — 필수(자동 탐지·코드 기본값 없음, op-09)")
     password: SecretStr | None = F(None, "PG_PASSWORD", "PostgreSQL 비밀번호")

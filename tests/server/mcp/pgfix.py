@@ -12,7 +12,6 @@ import shutil
 import tempfile
 from collections import Counter
 from pathlib import Path
-from unittest.mock import patch
 
 from common.core.contract import jl
 from common.core.text import index_text, tokens
@@ -136,10 +135,9 @@ def mk_bundle(docs, chunks, meta=None, vectors=None, load_pg=True):
 
 
 def use(bundle, **names):
-    """Settings for the schema of `bundle` + extra senv names; pg.connect (PG connection pick for parse tools) no-ops.
+    """Settings for the schema of `bundle` + extra senv names.
     Returns an ExitStack (with … or .close()); closing it closes the search pool opened meanwhile and removes the bundle's temp dir
     (the schema is dropped when the test process ends — another use() of the same bundle may follow)."""
-    from common.store import pg as PGC
     from mcp_server.services.search import server_state
 
     def _close_pool():
@@ -152,7 +150,6 @@ def use(bundle, **names):
     st.callback(_close_pool)
     _close_pool()  # a pool of an earlier schema must not serve this one
     st.enter_context(mc.senv(PG_SCHEMA=schema_of(bundle), **names))
-    st.enter_context(patch.object(PGC, "connect", lambda a: None))
     return st
 
 

@@ -13,7 +13,8 @@ from mcp_server.services import call_log
 PARSE_MAX_SEC = 600.0  # parse_document 기다림 상한(초) — time_out_threshold가 더 커도 10분에서 자름
 # 자기 자리를 따로 쓰는 도구(함수 이름 → 자리 수). 나머지는 공용 자리(MCP_MAX_CONCURRENCY).
 # parse_document는 최대 10분 걸려 공용 자리를 오래 쥐고, get_doc_fulltext는 한 번에 최대 24 MB를 메모리에 올린다.
-_OWN_SLOTS = {"do_parse_document": 2, "do_get": 2}
+GET_SLOTS = 2  # get_doc_fulltext(do_get) 자기 자리 — fulltext_svc 저장소 연결 풀 크기에도 씀
+_OWN_SLOTS = {"do_parse_document": 2, "do_get": GET_SLOTS}  # 함수 이름 → 자기 자리 수
 _LANES: dict = {}  # 자리 이름("shared" 또는 _OWN_SLOTS의 이름) → _Lane
 
 

@@ -1,6 +1,5 @@
 """검색 공용 도우미(pgsearch·retriever) — 질의 임베딩·가중치·ID 문턱. 검색은 PG 하나(PC도)."""
 
-import math
 import time
 import urllib.error
 
@@ -49,8 +48,8 @@ def embed_query(meta, text):
         raise IndexMismatch(bad)
     deadline = time.monotonic() + EMBED_QUERY_SEC  # 두 번 합쳐 EMBED_QUERY_SEC 안 — 다시 시도는 남은 시간만
     for attempt in range(2):
-        try:  # 첫 시도는 정수 25초 그대로(_query_vec 캐시 열쇠가 timeout을 포함)
-            v = embed_texts(meta["embed"], [text], "query", timeout=math.ceil(deadline - time.monotonic()))[0]
+        try:
+            v = embed_texts(meta["embed"], [text], "query", timeout=deadline - time.monotonic() if attempt else EMBED_QUERY_SEC)[0]
             break
         except urllib.error.HTTPError:  # 서버가 답한 오류 상태 — 다시 보내도 같음
             raise

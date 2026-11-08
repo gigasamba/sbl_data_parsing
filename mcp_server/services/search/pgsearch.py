@@ -11,6 +11,7 @@ from mcp_server.services.search.bm25_weights import term_weights
 from mcp_server.services.search.rank_rules import ID_MAX_DF, weights
 
 RERANK = 200  # 이진 양자화 후보 수 → 원 벡터 코사인으로 재정렬
+METHODS = frozenset({"vector", "bm25", "id"})  # search 방법 — methods를 안 주면 셋 다
 
 
 def dim_of(db):
@@ -92,7 +93,7 @@ def search(
     question(G14) = 원문 질문 글자(weights()에 그대로 건넴 — 안 주면 전과 바이트 동일)."""
     s = db.schema
     q = vec(qv) if qv is not None else None  # 질의 임베딩이 없으면(장애) 키워드·ID만 — 부르는 쪽이 methods에서 vector를 뺌
-    m = set(methods) if methods else {"vector", "bm25", "id"}
+    m = set(methods) if methods else METHODS
     w = weights(question)
     restrict = _scope_restrict(db, scope) if scope else None  # 하드 거르기 범위 안 문서만(고객도 이 범위로 — client_edw)
     lists = []

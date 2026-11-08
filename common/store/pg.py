@@ -2,14 +2,13 @@
 접속: PG_HOST · PG_PORT · PG_DB · PG_USER · PG_PASSWORD — 모두 필수, 코드 기본값 없음 · PG_SCHEMA는 비우면 data_parsing.
 PG_CONNECT_TIMEOUT(기본 10초) — 공유 PG가 방화벽·주소 문제로 안 보일 때 수십 초씩 매달리지 않게.
 PG_POOL_MAX(기본 8, PGPool) — 공유 PG의 max_connections 여유 안에서 잡을 것(다른 팀 서비스도 같은 PG를 씀).
-PG_STATEMENT_TIMEOUT(기본 120초, PGPool만 — 부르는 쪽이 statement_timeout_sec로 덮음: 검색 MCP는 mcp.server.pg_statement_timeout_sec 25초) — 질의 하나가 넘으면 DB가 멈춤(QueryCanceled → 도구는 timeout).
-connect()는 적재(pipeline/load/pgvector_load.py — 단일 연결), PGPool은 검색 MCP(mcp_server/services/search/server_state.py
+PGPool(statement_timeout_sec — 부르는 쪽이 줌: 검색 MCP는 mcp.server.pg_statement_timeout_sec 25초, 0 = 없음) — 질의 하나가 넘으면 DB가 멈춤(QueryCanceled → 도구는 timeout).
+PG는 적재(pipeline/load/pgvector_load.py — 단일 연결), PGPool은 검색 MCP(mcp_server/services/search/server_state.py
 connect_sources() — 상주 Retriever)가 쓴다. 접속 정보가 없으면 conf()가 채울 자리를 적고 멈춘다(로컬 대체 DB 없음 — PC도 pgvector).
 conf·PG·PGPool·vec은 두 쪽이 같이 쓰고
 점검 도구도 PG·conf를 직접 쓰므로 여기(공용)에 둔다."""
 
 import re
-import sys
 from contextlib import contextmanager
 
 from common.config.settings import cfg, checked, given, guard_run_env, reveal
@@ -89,7 +88,7 @@ class PGPool:
     한 연결을 트랜잭션으로 묶어 쓰는 쪽(적재)은 PG를 그대로 쓴다(단일 호출자·명시적 커밋).
     꺼낼 때 연결을 확인해(check) 끊긴 연결은 새 연결로 바꾼다 — 재시도는 이 한 번뿐(그래도 실패하면 도구가 db_unavailable)."""
 
-    def __init__(self, c, max_size=None, statement_timeout_sec=None):
+    def __init__(self, c, max_size=None, statement_timeout_sec=0):
         from psycopg_pool import ConnectionPool
 
         self.schema = c["PG_SCHEMA"]
@@ -103,9 +102,8 @@ class PGPool:
             autocommit=True,
             connect_timeout=st.connect_timeout,
         )
-        limit = st.statement_timeout_sec if statement_timeout_sec is None else statement_timeout_sec
-        if limit:  # 0·비움 = 제한 없음
-            kwargs["options"] = f"-c statement_timeout={int(limit) * 1000}"
+        if statement_timeout_sec:  # 0·비움 = 제한 없음
+            kwargs["options"] = f"-c statement_timeout={int(statement_timeout_sec) * 1000}"
         self.pool = ConnectionPool(
             kwargs=kwargs, min_size=1, max_size=max_size or st.pool_max, open=True, check=ConnectionPool.check_connection
         )
@@ -153,16 +151,3 @@ def detect_pg():
     except Exception as e:
         return False, f"{c['PG_HOST']}:{c['PG_PORT']}: 접속 실패({type(e).__name__})"
     return ok, f"{c['PG_HOST']}:{c['PG_PORT']}" + ("" if ok else f": {why}")
-
-
-def connect(a):
-    """명령 인자 a(--pg·--local): --local이면 로컬 묶음, 아니면 PostgreSQL 필수(op-09 — 못 붙으면 거부, 로컬로 조용히 빠지지 않음)."""
-    if getattr(a, "local", False):
-        a.pg = False
-        print("[연결] 저장소: 로컬 묶음(--local)", file=sys.stderr, flush=True)  # stdout은 --json 출력 몫
-        return
-    ok, why = detect_pg()
-    if not ok:
-        raise SystemExit(f"[연결] PostgreSQL에 붙지 못함: {why}")
-    a.pg = True
-    print(f"[연결] 저장소: pgvector({why})", file=sys.stderr, flush=True)

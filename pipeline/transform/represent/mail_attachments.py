@@ -13,7 +13,7 @@ from pathlib import Path
 
 from common.core.paths import APP_ROOT  # output/ 경계(attach_dir)
 from pipeline import config as pc
-from pipeline.extract.unpack import PARTS
+from pipeline.extract.unpack import PARTS, manifest
 from pipeline.shared.ext_groups import MAIL_EXTS
 from pipeline.shared.raw_cache import raw_engine_path, raw_root
 from pipeline.shared.vlmcall import sha
@@ -37,11 +37,8 @@ def attach_dir():
 
 def parts_of(doc_path):
     """받기 단계가 꺼내 둔 안 파일 목록(parts.json의 parts)과 그 폴더 — 없으면 빈 목록(상자가 아님·받기 단계를 안 거침)."""
-    d = Path(doc_path).parent / PARTS / Path(doc_path).name
-    try:
-        return d, json.loads((d / "parts.json").read_text(encoding="utf-8"))["parts"]
-    except (OSError, ValueError, KeyError, TypeError):
-        return d, []
+    root = Path(doc_path).parent / PARTS
+    return root / Path(doc_path).name, (manifest(doc_path, root) or {}).get("parts") or []
 
 
 def place_marks(text, items):

@@ -72,7 +72,7 @@ def _start_local_pg(c):
         cmd = ["docker", "run", "-d", "--name", name, "--restart", "no", "--memory", "1g", "--cpus", "2",
                "-p", f"127.0.0.1:{c['PG_PORT']}:5432", "-v", "sbl_mcp_pgdata:/var/lib/postgresql/data",
                "-e", f"POSTGRES_DB={c['PG_DB']}", "-e", f"POSTGRES_USER={c['PG_USER']}", "-e", "POSTGRES_PASSWORD",
-               "pgvector/pgvector:pg16"]  # 이미지가 없으면 내려받음(폐쇄망 PC는 먼저 docker load -i <pgvector tar>)
+               cfg().dev.docker.pg_image]  # 이미지가 없으면 내려받음(폐쇄망 PC는 먼저 docker load -i <pgvector tar>)
         # fmt: on
         ok = subprocess.run(cmd, env=env, capture_output=True).returncode == 0
     elif not st.stdout.startswith("Up"):

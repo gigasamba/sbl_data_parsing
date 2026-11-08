@@ -39,7 +39,7 @@ class Retriever:
             ) as ex:  # 임베딩 서버 장애·라이브러리 없음(rag-core 이미지) — 검색을 멈추지 않고 키워드·ID로(근거 via에 v 없음, G11)
                 print(f"(질의 임베딩 실패 — 키워드·ID 검색만: {type(ex).__name__}: {str(ex)[:120]})", file=sys.stderr, flush=True)
         if qv is None:
-            want = set(methods) if methods else {"vector", "bm25", "id"}
+            want = set(methods) if methods else pgsearch.METHODS
             methods = sorted(want - {"vector"}) or ["bm25", "id"]
         t0 = time.perf_counter()
         rows = pgsearch.search(self.pg, qv, terms, k, methods=methods, question=q, scope=scope)

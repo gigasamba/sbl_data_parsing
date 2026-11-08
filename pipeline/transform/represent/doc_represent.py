@@ -16,7 +16,7 @@ import hashlib
 import json
 import re
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from common.core import span as SP
@@ -91,12 +91,17 @@ def cross_merge(rep, other):
     starts = [0] + [i + 1 for i, ch in enumerate(text) if ch == "\f"]
     r_pages, o_pages = text.split("\f"), otext.split("\f")
     inserts: dict = {}  # 대표 본문 위치 → 끼울 조각들(순서대로)
+    r_by, o_by = defaultdict(list), defaultdict(list)  # 쪽 번호 → 그 쪽 조각들(순서대로)
+    for b in rb:
+        r_by[b[2]].append(b)
+    for b in ob:
+        o_by[b[2]].append(b)
     for p in range(len(r_pages)) if same_pages else [None]:
         if p is None:
             rs, os_ = rb, ob
             same = "".join(text.split()) == "".join(otext.split())
         else:
-            rs, os_ = [b for b in rb if b[2] == p], [b for b in ob if b[2] == p]
+            rs, os_ = r_by[p], o_by[p]
             same = "".join(r_pages[p].split()) == "".join(o_pages[p].split())
         if same:
             continue
