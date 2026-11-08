@@ -35,12 +35,56 @@ def connect(schema=None):
         c = conf()
     except SystemExit as e:
         raise AssertionError(f"DB 시험 — PG 접속 정보 없음({e}) · 판정 명령에 설정 파일(required.pg)이 있어야 함") from None
-    try:
-        return PG({**c, "PG_SCHEMA": schema or c["PG_SCHEMA"]})
-    except Exception as e:
-        raise AssertionError(
-            f"DB 시험 — PG {c['PG_HOST']}:{c['PG_PORT']}에 붙지 못함({type(e).__name__}) · 판정 명령이 PG에 닿아야 함(host 네트워크)"
-        ) from None
+    for tries in (1, 0):
+        try:
+            return PG({**c, "PG_SCHEMA": schema or c["PG_SCHEMA"]})
+        except Exception as e:
+            if tries and _start_local_pg(c):
+                continue
+            raise AssertionError(
+                f"DB 시험 — PG {c['PG_HOST']}:{c['PG_PORT']}에 붙지 못함({type(e).__name__}) · 판정 명령이 PG에 닿아야 함(host 네트워크)"
+            ) from None
+    raise AssertionError("unreachable")
+
+
+def _start_local_pg(c):
+    """PC(local)만 — 시험 pgvector 컨테이너(required.deploy.pg_container_name)가 멈춰 있으면 docker start, 없으면 docker run
+    (settings.yaml required.pg의 포트·DB·계정·비밀번호로 — 1 GB·2 CPU), 그다음 pg_isready를 60초까지 기다린다. 띄웠으면 True."""
+    import subprocess
+    import time
+
+    from common.config.settings import cfg
+    from common.core import paths
+
+    name = cfg().host.pg_container
+    if not paths.LOCAL_RUN or not name:
+        return False
+    st = subprocess.run(["docker", "ps", "-a", "--filter", f"name=^{name}$", "--format", "{{.Status}}"], capture_output=True, text=True)
+    if st.returncode:
+        return False  # docker 없음
+    if not st.stdout.strip():
+        env = S.child_env(None)
+        env["POSTGRES_PASSWORD"] = c["PG_PASSWORD"]  # env 남김 — 하위 프로세스(docker run -e 이름만 — 값은 명령 줄에 안 보임)
+        # fmt: off
+        cmd = ["docker", "run", "-d", "--name", name, "--restart", "no", "--memory", "1g", "--cpus", "2",
+               "-p", f"127.0.0.1:{c['PG_PORT']}:5432", "-v", "sbl_mcp_pgdata:/var/lib/postgresql/data",
+               "-e", f"POSTGRES_DB={c['PG_DB']}", "-e", f"POSTGRES_USER={c['PG_USER']}", "-e", "POSTGRES_PASSWORD",
+               "pgvector/pgvector:pg16"]  # 이미지가 없으면 내려받음(폐쇄망 PC는 먼저 docker load -i <pgvector tar>)
+        # fmt: on
+        ok = subprocess.run(cmd, env=env, capture_output=True).returncode == 0
+    elif not st.stdout.startswith("Up"):
+        ok = subprocess.run(["docker", "start", name], capture_output=True).returncode == 0
+    else:
+        return False  # 이미 떠 있는데 못 붙음 — 접속 정보 문제
+    for _ in range(60):
+        if (
+            ok
+            and subprocess.run(["docker", "exec", name, "pg_isready", "-U", c["PG_USER"], "-d", c["PG_DB"]], capture_output=True).returncode
+            == 0
+        ):
+            return True
+        time.sleep(1)
+    return False
 
 
 def drop(name):

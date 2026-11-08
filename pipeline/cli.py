@@ -189,7 +189,7 @@ def case_env(mod):
             "LLM_SPEND_FILE": str(Path(tempfile.mkdtemp(prefix="selftest_spend_")) / "spend.txt"),
         }
         base = child_env({"PYTHONUTF8": "1"})
-        if own:  # PC — 개발자 루트 settings.yaml(모델 키 등) 대신 시험 전용 최소 설정 위에 덮음(시험 격리) · PG 접속만 이어받음(DB 사례는 진짜 pgvector — e2-22)
+        if own:  # PC — 개발자 루트 settings.yaml(모델 키 등) 대신 시험 전용 최소 설정 위에 덮음(시험 격리) · PG 접속·시험 PG 컨테이너 이름만 이어받음(DB 사례는 진짜 pgvector — e2-22)
             base["SETTINGS_FILE"] = _case_settings()
             pg = C.cfg().connections.pg
             got = dict(PG_HOST=pg.host, PG_PORT=pg.port, PG_DB=pg.db, PG_USER=pg.user, PG_PASSWORD=C.reveal(pg.password))
@@ -199,12 +199,17 @@ def case_env(mod):
 
 
 def _case_settings():
-    """PC 시험 사례의 바탕 설정 파일 — run_env: local만(키 없음 → 모델 호출 없음 · PG 접속은 case_env가 덮음). 한 번 만든다."""
+    """PC 시험 사례의 바탕 설정 파일 — run_env: local + 시험 PG 컨테이너 이름(꺼져 있으면 pgcase가 띄움)만(키 없음 → 모델 호출
+    없음 · PG 접속은 case_env가 덮음). 한 번 만든다."""
     if "file" not in _CASE_ENVS:
+        import json
         import tempfile
 
         fd, path = tempfile.mkstemp(prefix="case_settings_", suffix=".yaml")
-        os.write(fd, b"required:\n  env:\n    run_env: local\n")
+        body = "required:\n  env:\n    run_env: local\n"
+        if name := C.cfg().host.pg_container:
+            body += f"  deploy:\n    pg_container_name: {json.dumps(name)}\n"
+        os.write(fd, body.encode("utf-8"))
         os.close(fd)
         _CASE_ENVS["file"] = path
     return _CASE_ENVS["file"]

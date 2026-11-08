@@ -131,7 +131,7 @@ export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자�
 ```
 - 루트 `settings.yaml`에는 `required.env.run_env: local`, 전용 PG 접속 정보(`required.pg`), 임베딩·LLM·VLM 주소·모델·키(`required.models`), (부하가 높은 PC라면) `tuning.ops.runtime.max_cpu_load`를 둔다. 예시는 README §4-2에 있다.
 - 작업 폴더(worktree)에는 `settings.yaml`이 없다 — 거기서 점검·시험은 `export RUN_ENV=local`을 먼저(없으면 `output/`이 저장소 한 단계 위에 생긴다 — `paths.PROJ_ROOT`). 하위 에이전트 지시에도 넣는다.
-- 전용 pgvector 컨테이너(PG 16 + pgvector, 예: `127.0.0.1:55433`)를 쓴다 — 없거나 멈췄으면 README §4-1 "PC 시험 DB 준비" 순서로 띄운다(DB 시험은 이 PG가 없으면 FAIL). PG 접속 항목(`required.pg`)은 모두 채운다 — 빈 칸이 있으면 시작을 거부한다(자동 탐색 없음, sqlite 대역 없음). 다른 작업의 DB와 포트를 쓰지 않는다.
+- 전용 pgvector 컨테이너(PG 16 + pgvector, 예: `127.0.0.1:55433`)를 쓴다 — 없거나 멈췄으면 DB 시험이 스스로 띄우고(settings.yaml `required.deploy.pg_container_name`) 손으로는 README §4-1 "PC 시험 DB 준비" 순서로 띄운다(DB 시험은 이 PG가 없으면 FAIL). PG 접속 항목(`required.pg`)은 모두 채운다 — 빈 칸이 있으면 시작을 거부한다(자동 탐색 없음, sqlite 대역 없음). 다른 작업의 DB와 포트를 쓰지 않는다.
 - 백그라운드 프로세스는 PID를 파일에 남기고 **PID로만** 종료한다(`pkill -f` 패턴 금지).
 - 검색 스키마 테이블은 마이그레이션이 만든다(`dbtool up --target all --schema <이름> --bundle <묶음>` — README §4-4).
 

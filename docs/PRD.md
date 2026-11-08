@@ -201,7 +201,7 @@
 | 검색 점검 페이지 `validation/search_ui`(기본 포트 8790, MCP `127.0.0.1:8765/mcp`) | 사람이 브라우저로 근거를 본다 | done | [e2-07](prd/test.md#e2-07) |  |
 | PC 평가 도구는 검색 점검 페이지·답변 점검 둘뿐 | PC 전용 설정 약 50개의 관리 비용 | done | [e2-10](prd/test.md#e2-10) |  |
 | 요건에 닿지 않는 함수·코드(시험만 부르는 것 포함)는 없다 | 죽은 코드 비용. MCP 도구 이름·입출력은 그대로 | done | [e2-17](prd/test.md#e2-17) · [e2-18](prd/test.md#e2-18) |  |
-| 배포 판정 시험의 DB 시험은 진짜 pgvector로 돈다 — PC는 시험 pgvector 컨테이너(없으면 띄움), 개발 서버(dev)는 쓰는 시험까지(임시 스키마 `test_*`를 만들고 지움), 운영 서버(prd)는 읽기만(접속·vector 확장·판 번호·표·색인·검색 1회). sqlite 대역 없음 | 대역과 실 DB 차이로 판정이 틀리지 않게. 운영 DB에는 쓰지 않는다(사용자 11-08) | done | [e2-22](prd/test.md#e2-22) | PC에 시험 pgvector가 없으면 띄우지 않고 DB 사례가 FAIL(이유를 적음 — 사용자 11-08) |
+| 배포 판정 시험의 DB 시험은 진짜 pgvector로 돈다 — PC는 시험 pgvector 컨테이너(없으면 띄움), 개발 서버(dev)는 쓰는 시험까지(임시 스키마 `test_*`를 만들고 지움), 운영 서버(prd)는 읽기만(접속·vector 확장·판 번호·표·색인·검색 1회). sqlite 대역 없음 | 대역과 실 DB 차이로 판정이 틀리지 않게. 운영 DB에는 쓰지 않는다(사용자 11-08) | done | [e2-22](prd/test.md#e2-22) | PC는 DB 사례가 붙지 못하면 시험 컨테이너(`required.deploy.pg_container_name`)를 만들거나 켜고 기다린 뒤 다시 붙는다 — 그래도 못 붙으면 FAIL(사용자 11-08) |
 | 모듈 경계 점검은 import 규칙(앱 사이·단계 방향·`validation`/`tests` import 금지·routers)만 코드 분석으로, 설정 env 읽기 규칙(⑩⑪)은 글자 검색으로 본다 | 점검 코드를 줄인다(사용자 11-08) | done | [e2-23](prd/test.md#e2-23) | 글자 검색은 앱 코드(common·pipeline·mcp_server)만 본다 |
 
 ## 문서·릴리스 (doc) — 문서 배치·버전·이미지·서버 설치

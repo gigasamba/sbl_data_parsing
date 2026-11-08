@@ -177,7 +177,7 @@ uv pip install --python .venv/bin/python -r deploy/docker/requirements-core.txt 
 git config core.hooksPath .githooks      # 커밋·push 때 점검 자동 실행(CLAUDE.md §5-2)
 ```
 
-**PC 시험 DB(pgvector) 준비 — 없으면 띄우기.** 배포 판정 시험(selftest)과 pytest의 DB 사례는 이 PG에 붙는다(sqlite 대역 없음 — 없으면 그 사례가 FAIL). 시험이 컨테이너를 대신 띄우지는 않으니 아래를 순서대로 한다.
+**PC 시험 DB(pgvector) 준비 — 없으면 띄우기.** 배포 판정 시험(selftest)과 pytest의 DB 사례는 이 PG에 붙는다(sqlite 대역 없음). PC(local)에서 settings.yaml `required.deploy.pg_container_name: sbl-mcp-pg`와 `required.pg`가 채워져 있으면 시험이 붙지 못할 때 스스로 2(만들기·켜기)·3(기다리기)을 한다 — 그래도 못 붙으면 그 사례가 FAIL. 손으로 할 때는 아래를 순서대로 한다. 이미지는 `docker run`이 내려받는다(폐쇄망 PC는 먼저 `docker load -i <pgvector tar>`).
 
 1. 상태 보기 — 빈 줄이면 아직 안 만듦, `Exited …`면 멈춤, `Up …`이면 돌고 있음(3으로).
    ```bash
@@ -198,7 +198,7 @@ git config core.hooksPath .githooks      # 커밋·push 때 점검 자동 실행
    ```bash
    docker exec -i sbl-mcp-pg psql -U rag -d rag -c "ALTER USER rag PASSWORD '<settings.yaml 값>'"
    ```
-5. settings.yaml `required.pg`를 모두 채운다 — `127.0.0.1` · `55433` · `rag` · `rag` · 같은 비밀번호(빈 칸이 있으면 시작 거부).
+5. settings.yaml `required.pg`를 모두 채운다 — `127.0.0.1` · `55433` · `rag` · `rag` · 같은 비밀번호(빈 칸이 있으면 시작 거부). 시험이 스스로 띄우게 하려면 `required.deploy.pg_container_name: sbl-mcp-pg`도 적는다.
 6. 판 올리기 — §4-4 ④의 `dbtool up --target all --schema <이름> --bundle <묶음> --create-extension`, 그다음 확인.
    ```bash
    .venv/bin/python -m common.store.db.dbtool check --target all   # 최신 판이 아니면 종료 코드 1
