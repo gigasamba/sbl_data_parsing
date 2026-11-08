@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md) 카테고리. [extract.md](extract.md) 다음, [load.md](load.md) 앞: 엔진 구성 파싱(pl-03·pl-22·pl-43·pl-42·pl-45) → represent(pl-04·pl-36·pl-37) → 그림(pl-05) → 구조화(pl-06) → 분류(pl-33). 지문이 바뀌는 정리 묶음은 [transform-cleanup.md](transform-cleanup.md).
 
-순서: pl-03 · pl-22 · pl-43 · pl-42 · pl-45 · pl-04 · pl-36 · pl-37 · pl-05 · pl-06 · pl-33 · pl-60 · pl-62.
+순서: pl-03 · pl-22 · pl-43 · pl-42 · pl-45 · pl-04 · pl-36 · pl-37 · pl-05 · pl-06 · pl-33 · pl-60 · pl-62 · pl-67.
 
 <a id="pl-03"></a>
 ## pl-03 · 엔진 구성 파싱
@@ -261,4 +261,10 @@
 
 ### QA
 - 정할 것: 규칙마다 `valid_env` 해당 문서의 대표 결과 전후 비교 + 단위 시험 표 한 줄.
+- Status: todo
+
+<a id="pl-67"></a>
+## pl-67 · 대표 결과 교차 병합
+- 요건: 엔진 하나면 그대로, 여럿이면 다른 쪽만 조각 단위로 병합(소제목·표·쪽·bbox). 시간 제한 대신 비교를 가볍게. 읽는 곳 없는 조각 투표·교차 확인은 이 구조로 바꾸며 지운다. 설계는 코드 확인 뒤 사용자 확인.
+- 반영: 없음(사용자 11-08 결정 — 다음 작업).
 - Status: todo

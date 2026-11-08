@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md) 카테고리. [transform.md](transform.md) 다음: EDW 메타(pl-29) → pgvector 적재(pl-07·pl-13·pl-16·pl-51·pl-19) → 게시(silver — pl-09·pl-26) → FAQ 다시 올리기(pl-41) → 정형 DB·문서 대장 없음(pl-08·pl-12) → 마스터 표(pl-38). 저장 구조·DB 스키마는 [load-schema.md](load-schema.md).
 
-순서: pl-29 · pl-07 · pl-13 · pl-16 · pl-51 · pl-19 · pl-09 · pl-26 · pl-41 · pl-08 · pl-12 · pl-38 · pl-56 · pl-61.
+순서: pl-29 · pl-07 · pl-13 · pl-16 · pl-51 · pl-19 · pl-09 · pl-26 · pl-41 · pl-08 · pl-12 · pl-38 · pl-56 · pl-61 · pl-68.
 
 <a id="pl-29"></a>
 ## pl-29 · EDW 고객·원천 메타를 적재 때 붙인다
@@ -200,3 +200,9 @@ FAQ는 판을 잇지 않는다. 새 FAQ가 오면 gold faq를 비우고 FAQ 전�
 ### QA
 - `tests/server/pipeline/test_publish_parse.py` — gold에 있는 문서 다시 게시 → 업로드 0·`upload_skip_existing` 1·처리 기록 없음 · `--reparse`는 새 날짜 폴더로 올림 · 통과.
 - Status: done
+
+<a id="pl-68"></a>
+## pl-68 · 실버 먼저 적재(단계 순서의 예외 하나)
+- 요건: 골드 변환 중 프로세스가 꺼져도 실버 결과가 검색되게. 실버 게시·적재만 변환보다 먼저 올 수 있고, 그 밖의 역방향 호출은 없다. 골드 실패·중단·실버까지만 실행은 상태 기록으로 판단.
+- 반영: 없음(사용자 11-08 결정 — 다음 작업).
+- Status: todo

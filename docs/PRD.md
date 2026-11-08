@@ -7,6 +7,7 @@
 - pl-25 DB 스키마 명세 — dev: 검색 DB(gold — 처리 기록 `doc` 칸 판 0006 포함)·마스터·applog는 구현됨, 서버 판 올리기·ParsingMeta 기록 옮기기는 DB 담당자 승인·실행 대기(refactor.md C-107).
 - 열린 요건(todo): run_pipeline 지휘만 [rn-05](prd/ops.md#rn-05) · 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 확장자 `.hwp` [pl-45](prd/transform.md#pl-45) · 그림 부가 기능 줄이기 [pl-05](prd/transform.md#pl-05) · 전체 e2e [pl-54](prd/ops.md#pl-54) · prd 이미지에 settings.yaml 굽기 [op-12](prd/doc.md#op-12) · 판 묶기(잠재 문제) [pl-56](prd/load.md#pl-56).
 - 서버 확인만 남음(dev): parse_document CPU 우선 [rn-03](prd/ops.md#rn-03).
+- 정리·구조(todo, 사용자 11-08): 안 문서 기록 [pl-65](prd/extract.md#pl-65) · 옛 오피스 검사기 [pl-66](prd/extract.md#pl-66) · 대표 결과 교차 병합 [pl-67](prd/transform.md#pl-67) · 실버 먼저 적재 [pl-68](prd/load.md#pl-68) · 설정 칸 [op-18](prd/ops-settings.md#op-18) · DB 시험 [e2-22](prd/test.md#e2-22) · 경계 점검 [e2-23](prd/test.md#e2-23).
 - 시험 정리(todo): [e2-13](prd/test.md#e2-13) · [e2-20](prd/test.md#e2-20).
 
 ## 수집 (extract) — 서버에서 문서 목록을 정하고 받아 오기까지
@@ -29,6 +30,8 @@
 | FAQ 원천 — 질의응답 엑셀을 행 단위로(시트 = FAQ 묶음, 행 하나 = 청크 하나). `FAQ/<uuid>/<파일>`을 FileStorageMap에 등록 | 질의응답을 문서 통째가 아니라 질문 하나 단위로 찾는다 | done | [pl-39](prd/extract.md#pl-39) |  |
 | 같은 밤에 받은 같은 내용 문서는 하나만 파싱한다 — 문서마다 따로 받는(stage) 서버 흐름에서도 이번 실행이 이미 받은 sha256과 같으면 건너뜀 + `applog.except_doc_info` `skip` `duplicate_sha256`(먼저 받은 원본 키는 `pipe_event` `dup_of`) · staging 재사용은 내용이 같을 때만(ETag) | 같은 파일을 두 번 파싱·적재하지 않는다. 크기만 같은 새 판을 옛 파일로 파싱하지 않는다 | dev | [pl-59](prd/extract.md#pl-59) | 러너 `stage_one`이 앞 실행 문서 폴더를 원본 키만 보고 다시 씀(ETag 비교·이번 실행 표지 없음) · 원본 삭제가 `.etag` 옆 파일을 남김 |
 | 고르기·받기(extract)는 변환(transform)을 import하지 않는다 — 지원 확장자 목록은 `pipeline/shared`에 · 원천 이름은 FileStorageMap `source_system` 값 하나 | ETL 방향을 지킨다(rn-08). 원천 이름이 자리마다 다르면 게시·구조화·건너뜀 기록의 원천이 어긋난다 | todo | [pl-59](prd/extract.md#pl-59) | `candidate_pick`·`filter_and_rotate`가 `transform.parse.engines.registry`를 import |
+| 안 문서를 꺼내지 못한 경우(깨짐·암호·상한) 성한 안 파일은 그대로 붙여 적재하고, `applog.except_doc_info`에 원본 키당 종류 `part`·수준 `warn` 한 행(이유 = 못 꺼낸 안 파일 이름과 까닭)을 남긴다. 꺼내기는 이름 글자(cp949·cp437)를 바로 읽고, 원본 하나의 꺼낸 합계 크기 상한을 두고, 목록 `parts.json`은 다 쓴 뒤에만 보이게 쓰고, 신선도는 원본 sha256으로 본다. 같은 내용 첨부는 한 번만, 이름 속 줄바꿈은 지워 절 제목이 깨지지 않게 | 무엇이 빠졌는지 알 수 있게(사용자 11-08). 표 구조는 그대로 — 새 종류 값 `part`는 DB 담당자에게 알림 | todo | [pl-65](prd/extract.md#pl-65) | 지금은 못 꺼낸 안 파일이 기록 없이 빠짐 · cp949 tar 이름에서 받기가 멈춤 · 오피스 개체로 크기 폭탄 가능 · 목록이 반쯤 쓰여도 새것으로 봄(수정 시각 기준) · 같은 첨부 중복 · 첨부 절이 제목이 아니라 조각·절·쪽이 틀림 |
+| 옛 형식 오피스(`.doc`·`.xls`·`.ppt`)의 암호·DRM·안 구조 검사는 읽기 코드 하나(olefile)로 한다 — 견본 문서로 두 코드 결과가 같음을 시험으로 확인한 뒤 | 같은 일을 두 벌로 하지 않는다. 옛 형식도 지금처럼 잘 돌아야 한다(사용자 11-08) | todo | [pl-66](prd/extract.md#pl-66) | 지금 olefile과 직접 짠 `_cfb_sectors` 두 벌 |
 
 ## 변환 (transform) — 파싱·대표 결과 고르기·그림·구조화
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -63,6 +66,7 @@
 | `dbtool`에 첫 이관 도구(`dbcompare`·`stamp`)가 없고(0.2.0 배포 뒤), 이미지 의존성에는 앱 코드가 쓰는 패키지만 | 첫 이관 도구와 안 쓰는 패키지는 이미지와 점검 범위만 키운다. 패키지를 빼면 새 이미지 버전 | done | [pl-53](prd/transform-cleanup.md#pl-53) |  |
 | 쪽 수 세기는 함수 하나 — `pdf_kind.doc_pages`와 `vlmcall.page_count`가 같은 규칙 | 쪽 수가 자리마다 다르면 제한 시간·쪽 VLM 상한이 어긋난다. `vlmcall.py`는 엔진 지문에 들어가 사람 검토(등급 A) | todo | [pl-60](prd/transform.md#pl-60) | 두 함수가 따로 있음 |
 | 대표 결과가 엔진이 읽은 글을 흐리거나 버리지 않는다 — 표 칸을 다른 칸 글자 안에서 찾지 않음 · 쪽 VLM 글이 없는 쪽의 그림은 빈 블록으로 넣지 않음 · docx에서 anydoc만 읽은 글을 합침 · VLM 엔진 쪽 글도 되풀이 고장을 거름 | 검색 조각에 쓰레기 줄이 섞이거나 글상자·병합 칸 글이 빠진다(0.3.0 엔진 비교 11-06) | todo | [pl-62](prd/transform.md#pl-62) | 표 조각 30줄(stability_trend_ko) · 빈 그림 블록 5개(tt_workflow_en) · anydoc 글 합침 0 · VLM 엔진 되풀이 거름 없음(vlmcall — 사람 검토) |
+| 대표 결과 — 확장자에 성공한 엔진이 하나면 그대로 쓴다. 여럿이 성공하고 내용이 서로 다르면 소제목·표·쪽·위치(bbox) 조각 단위로 교차 병합한다. 먼저 쪽마다 가벼운 값(글 길이·요약값)으로 서로 다른 쪽만 골라 병합해 시간을 줄인다(시간 제한은 두지 않음 — 앞쪽에만 시간을 쓰게 되므로) | 엔진이 서로 보완하는 내용을 잃지 않게(사용자 11-08) | todo | [pl-67](prd/transform.md#pl-67) | 지금은 대표 엔진 하나 + 다른 엔진의 표 행·키-값 보충. 조각 투표(`fragment_vote` — `fused`·`conflicts.jsonl`)와 교차 확인(`crosscheck` — `meta`) 결과는 아무도 읽지 않음 |
 
 ## 적재 (load) — 검색 DB(pgvector)·게시·저장 구조·DB 스키마
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -97,6 +101,7 @@
 | 원천 시스템별 PG 스키마 5벌(`<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`), 각자 `doc`·`chunk`·BM25 표, `doc_id` 시퀀스는 기준 스키마 하나를 함께 | 원천마다 메타가 다르고 BM25 점수를 섞지 않는다. MCP `source_system` 필수(등급 A) | done | [pl-28](prd/load-schema.md#pl-28) |  |
 | 원천 = EDW `AI.FileStorageMap.source_system` 칸 값 하나 — 고르기·구조화·적재(`SFDC`·`CRMS`·`LAS`·`FAQ`, 그 밖은 `other`)·게시가 모두 그 값을 쓴다(목록 파일·manifest로 넘김, PC 폴더는 맨 위 폴더 이름). `faq` 스키마만 `chunk.faq_group` 칸 | 원본 경로에서 원천을 다시 구하지 않는다 — 원천 칸 하나로 정함 | done | [pl-28](prd/load-schema.md#pl-28) |  |
 | 게시는 gold `doc`에 같은 원본 키가 이미 있는지 먼저 보고, 있으면 올리지 않는다(`--reparse` 목록만 예외) | 끝난 문서의 결과를 Object Storage에 또 쌓지 않는다 | done | [pl-61](prd/load.md#pl-61) |  |
+| 단계 순서는 받기 → 변환(실버 → 골드) → 적재다. 예외 하나 — 실버 대표 결과는 골드 변환 전에 먼저 게시·적재해도 된다(골드 중 프로세스가 꺼져도 실버가 남게). 골드가 실패·중단되었거나 실버까지만 돌린 실행은 상태 기록을 보고 실버만 게시한다 | 사용자 11-08. 이 예외 말고 변환이 적재를 부르는 역방향 호출은 없다 | todo | [pl-68](prd/load.md#pl-68) | 설계 전 — 지금 흐름과 차이 확인 필요 |
 
 ## 검색 MCP (mcp) — AI 클라이언트가 부르는 도구 서버(이미지 `mcp-server`)
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -172,6 +177,7 @@
 | run_pipeline 명령은 아무도 안 읽는 env(`FIG_OCR_BUDGET`·`SERVICE_MASTER_CSV`·`DIVISION_MASTER_CSV`·`PROD_MASTER_CSV`)를 넘기지 않는다 | C-51 | done | [pl-30](prd/ops-settings.md#pl-30) |  |
 | 서버 러너의 컨테이너 명령은 한 도우미가 만든다(`docker exec` · `PYTHONPATH` · 라이브러리 env 같게) · 게시·구조화가 시간 초과면 그 문서의 컨테이너 안 프로세스도 끈다 · 벌 번호 규칙은 한 곳 · 스캔 회전 정책은 설정 칸 하나를 컨테이너가 직접 읽는다 · 레인 분류는 받기 단계 안에서(문서마다 따로 `docker exec` 없음) · 분류 캐시는 덧붙여 쓴다 | 명령마다 env가 다르면 같은 코드가 다르게 돈다. 끄지 않은 프로세스는 다음 문서와 CPU·메모리를 다툰다 | todo | [rn-09](prd/ops.md#rn-09) | 한 도우미·시간 초과 정리는 반영. 스캔 회전 값이 run_pipeline → `stage --no-scan-rotate` → `stage_batch(scan_rotate)` → `filter_and_rotate --no-scan-rotate` 네 겹으로 전달. 분류는 문서마다 `docker exec`, 캐시는 문서마다 파일 전체를 다시 씀 |
 | 문서 1건의 반복 비용을 줄인다 — 원본 sha256은 한 번만 구하고 넘겨 씀 · 적재의 스키마 확인 질의는 하나(UNION) · 설정 파일은 프로세스마다 한 번 읽음 · `--set` 처리(`setarg.apply`)는 무거운 import 전에 | 문서 수천 건에서 같은 일을 되풀이하지 않는다 | todo | [rn-10](prd/ops.md#rn-10) | sha256은 받기가 한 번 구해 manifest로 넘기고 중복 제외·거르기·파싱·구조화·게시가 씀 — 대표 결과(`contract.source_record`, 핸드오프 파일)만 다시 구함. `pgvector_load`가 원천 스키마마다 따로 묻는다. 측정 전 — 줄일 크기는 `perf_report`로 먼저 잰다 |
+| 코드가 읽지 않는 설정 칸은 없다 — 지운 칸은 판 올리기 안내(upgrade-guide)에 적고 서버 `settings.yaml`에서도 지운다. PC 덮어쓰기 설정 파일 도구는 없다 — 한 번만 다른 값은 모든 진입점(`mcp_server.main`·`ask` 포함)의 `--set` | 사용자 11-08 | todo | [op-18](prd/ops-settings.md#op-18) | 지금 남은 칸: 건너뜀 기록 위치(`skipped_log`)·받기 동시 개수 2개·내용 버전 칸 이름·구성 파일 `retrieve`·`k` · `mcp_server.main`·`ask`는 `--set` 없이 `common.config.overrides`를 씀 |
 
 ## 테스트·평가 (test) — 변경을 어떻게 증명하나
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -195,6 +201,8 @@
 | 검색 점검 페이지 `validation/search_ui`(기본 포트 8790, MCP `127.0.0.1:8765/mcp`) | 사람이 브라우저로 근거를 본다 | done | [e2-07](prd/test.md#e2-07) |  |
 | PC 평가 도구는 검색 점검 페이지·답변 점검 둘뿐 | PC 전용 설정 약 50개의 관리 비용 | done | [e2-10](prd/test.md#e2-10) |  |
 | 요건에 닿지 않는 함수·코드(시험만 부르는 것 포함)는 없다 | 죽은 코드 비용. MCP 도구 이름·입출력은 그대로 | done | [e2-17](prd/test.md#e2-17) · [e2-18](prd/test.md#e2-18) |  |
+| 배포 판정 시험의 DB 시험은 진짜 pgvector로 돈다 — PC는 시험 pgvector 컨테이너(없으면 띄움), 개발 서버(dev)는 쓰는 시험까지(임시 스키마 `test_*`를 만들고 지움), 운영 서버(prd)는 읽기만(접속·vector 확장·판 번호·표·색인·검색 1회). sqlite 대역 없음 | 대역과 실 DB 차이로 판정이 틀리지 않게. 운영 DB에는 쓰지 않는다(사용자 11-08) | todo | [e2-22](prd/test.md#e2-22) | 지금 서버 판정 시험은 sqlite 대역(`common/store/pg_standin.py`)으로 돈다 |
+| 모듈 경계 점검은 import 규칙(앱 사이·단계 방향·`validation`/`tests` import 금지·routers)만 코드 분석으로, 설정 env 읽기 규칙(⑩⑪)은 글자 검색으로 본다 | 점검 코드를 줄인다(사용자 11-08) | todo | [e2-23](prd/test.md#e2-23) | 지금 ⑩⑪이 약 400줄 흐름 분석 |
 
 ## 문서·릴리스 (doc) — 문서 배치·버전·이미지·서버 설치
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |

@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md) 카테고리. [ops.md](ops.md)의 하위 문서. 실행 환경 `RUN_ENV`(op-02), settings.yaml 하나(op-05)·배치(op-08)·하드코딩 0(op-09), 지운 칸(pl-21·pl-30). 전체 칸과 기본값: `settings.sample.yaml`(생성: `python -m common.config.sample`).
 
-순서: op-02 · op-05 · op-08 · op-09 · op-14 · pl-21 · pl-30.
+순서: op-02 · op-05 · op-08 · op-09 · op-14 · pl-21 · pl-30 · op-18.
 
 <a id="op-02"></a>
 ## op-02 · RUN_ENV는 `local`·`dev`·`prd` 셋 · 가짜 LLM은 `local`에서만
@@ -99,6 +99,12 @@
 - 규칙: 코드·호스트 스크립트는 `FIG_OCR_BUDGET`·`SERVICE_MASTER_CSV`·`DIVISION_MASTER_CSV`·`PROD_MASTER_CSV`를 쓰지 않는다.
 - QA: `grep -rn "FIG_OCR_BUDGET\|SERVICE_MASTER_CSV\|DIVISION_MASTER_CSV\|PROD_MASTER_CSV" --include=*.py --include=*.sh --include=*.yml .` · `docs/` 밖 0줄.
 - Status: done
+
+<a id="op-18"></a>
+## op-18 · 안 읽는 설정 칸 없음 · 덮어쓰기는 `--set` 하나
+- 요건: 지운 칸은 upgrade-guide에 적는다(서버 `settings.yaml`에 남으면 모르는 칸으로 시작 거부). `common.config.overrides`는 진입점마다 `--set`을 넣은 뒤 지운다.
+- 반영: 없음(사용자 11-08 결정 — 다음 작업).
+- Status: todo
 
 ## 코드와 다른 점 · 지울 코드
 

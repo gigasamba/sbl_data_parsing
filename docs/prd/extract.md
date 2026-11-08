@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md) 카테고리. 원천에서 문서를 받아(pl-01·pl-48) 준비(중복·회전·DRM — pl-02)하기까지와 FAQ 원천(pl-39). 다음 단계는 [transform.md](transform.md).
 
-순서: pl-01 · pl-02 · pl-58 · pl-59 · pl-48 · pl-39.
+순서: pl-01 · pl-02 · pl-58 · pl-59 · pl-48 · pl-39 · pl-65 · pl-66.
 
 <a id="pl-01"></a>
 ## pl-01 · 원천과 가져오기
@@ -160,4 +160,16 @@ A: `, 절 `DS`. 5행 = `divider`만 → 건너뜀. 머리글 없는 시트 `memo
 ### QA
 - `tests/server/pipeline/test_stage_batch.py` `test_same_night_dup`(문서마다 stage 사례 표: 같은 밤 같은 내용 → `dup_run`·`except_doc_info` `skip` `duplicate_sha256`, 같은 원본 다시 받기·다른 내용 → 남음, 1건 중복 제외는 `keep.txt`만) · `test_rdb_stage_once`(크기 같고 ETag 다름 → 다시 받음, 같은 ETag → 다시 씀, manifest 한 번·sha256 담음) · `test_skip_docs.py`(`list`가 표지 폴더를 비움) · `test_candidate.py` `test_rerun_keeps_source`(같은 결과 폴더 다시 실행 사례 표: 이번 목록은 이번 문서만, 묶음의 앞 문서는 원천·원본 키 그대로 — other로 안 감, 실행 사이 같은 파일 이름·같은 키 다시).
 - 정할 것: `check_modules`에 extract → transform import 거부 규칙.
+- Status: todo
+
+<a id="pl-65"></a>
+## pl-65 · 안 문서를 못 꺼낸 경우의 기록과 꺼내기 바로잡기
+- 요건: pl-63 꺼내기에서 빠지는 것이 보이고, 이름·크기·목록이 안전하게(사용자 11-08). 꺼내는 깊이는 pl-63 규칙 2(2단계) 그대로, 속도(안 파일마다 한 프로세스)는 이번에 다루지 않는다.
+- 반영: 없음(사용자 11-08 결정 — 다음 작업).
+- Status: todo
+
+<a id="pl-66"></a>
+## pl-66 · 옛 형식 오피스 검사기 하나로
+- 요건: 같은 검사를 두 벌로 두지 않는다. 남길 쪽은 olefile — 견본 `.doc`·`.xls`·`.ppt`(암호 있음·없음)로 두 코드 결과가 같은지 먼저 시험.
+- 반영: 없음(사용자 11-08 결정 — 다음 작업).
 - Status: todo
