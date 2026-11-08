@@ -716,13 +716,12 @@ WHERE stage = 'load.embed_guard' AND ts_start > now() - interval '7 days' ORDER 
 |---|---|
 | 검색 MCP·`mcp-data-parsing` 상주 확인 | systemd `mcp-server-keepalive.timer` — 부팅 1분 뒤 + 2분마다 `mcp_keepalive.sh` |
 | 새벽 배치 | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `ops.nightly.nightly_start_time: "HH:MM"`(그 시각부터 5분 안에 시작) · `ops.nightly.nightly_max_docs`(새 문서 수 상한, 1 이상) · `ops.nightly.nightly_stop_time: "HH:MM"`(마감 — 시작보다 5분 넘게 뒤). **셋 중 하나라도 비면 돌지 않는다**(기본 비움) |
-| 재부팅 뒤 되살리기(podman) | `systemctl enable --now podman-restart` — `restart: unless-stopped` 컨테이너를 부팅 때 다시 띄운다. 일괄 `data-pipeline`은 keepalive가 보지 않으니 재부팅 뒤 `host_ctl.sh ps`로 보고 없으면 `host_ctl.sh up -d data-pipeline` |
+| 재부팅 뒤 | 사람이 다시 띄운다(`podman-restart`는 켜지 않는다) — [server-guide §2-5](docs/operations/server-guide.md#2-5-서버를-다시-켠-뒤) 순서. 검색 MCP 두 개는 그 전에 keepalive 타이머(부팅 1분 뒤)가 먼저 띄울 수 있고, 일괄 `data-pipeline`은 사람이 띄우기 전까지 꺼져 있다 |
 
 systemd 설치(DB 판과 컨테이너를 확인한 뒤 — 벌마다 그 벌 폴더에서, 새 판으로 덮어쓴 뒤에도 다시):
 
 ```bash
 bash deploy/host/scripts/host_ctl.sh timers        # 단위 4개의 코드 폴더 자리를 이 코드 폴더로 채워 /etc/systemd/system에 쓰고 두 타이머를 켬
-sudo systemctl enable --now podman-restart
 ```
 
 새벽 배치 타이머는 켜져 있어도 `ops.nightly` 세 칸을 채우기 전에는 아무것도 하지 않는다.
