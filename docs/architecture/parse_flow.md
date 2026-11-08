@@ -205,7 +205,7 @@ PC에서는 `run_pipeline.py`를 돌리지 않는다(운영 EDW·Object Storage�
 
 `pipeline.cli.parse_module()`이 아래 단계를 차례로 부른다. 원본 가져오기·중복 확인·거르기는 `pipeline.extract.candidate_ready.stage_batch()` 하나(서버는 `candidate_ready stage`가 먼저 끝내고 `parse --staged`는 그 목록만 읽음), `--max-new` 고르기는 `pipeline.extract.candidate_pick.pick_new()`가 맡는다. 대부분 자식 프로세스 묶음(`pipeline.cli._run_step()`)으로 돈다.
 
-- extract(원본을 고르고 받아 파싱 입력으로 준비 — 결과는 staging): `candidate_pick.py`(대상 고르기 — 받기 전에 끝난 문서·처리 기록·미지원 형식을 뺌) · `candidate_ready.py`(받기·중복·거르기 묶음 `stage`·끝 정리) · `deduplication.py`(중복 문서 감지) · `filter_and_rotate.py`(준비 — 지원 안 되는·보호된 파일 거르기, 회전(기본 꺼짐), prepared로 복사) · `doc_lane_group.py`(run_pipeline 레인 분류, §2-1) · `protected_docs.py`·`discover_columns.py`(흐름 밖 도구).
+- extract(원본을 고르고 받아 파싱 입력으로 준비 — 결과는 staging): `candidate_pick.py`(대상 고르기 — 받기 전에 끝난 문서·처리 기록·미지원 형식을 뺌) · `candidate_ready.py`(받기·중복·거르기 묶음 `stage`·끝 정리) · `deduplication.py`(중복 문서 감지) · `filter_and_rotate.py`(준비 — 지원 안 되는·보호된 파일 거르기, 회전(기본 꺼짐), prepared로 복사) · `doc_lane_group.py`(run_pipeline 레인 분류, §2-1) · `discover_columns.py`(흐름 밖 도구).
 - transform/parse(엔진 파싱 — 결과는 silver): `parse_engines.py`(문서마다 구성된 엔진을 모두 동시에, 엔진마다 자식 프로세스 `--one` · 엔진 판·캐시 열쇠·중간 캐시 정리·형식 키) · `engine_check.py`(엔진 구성 검사) · `engines/`(엔진).
 
 ```mermaid
@@ -236,7 +236,7 @@ flowchart TD
 
 엔진 구성(형식 → 엔진 목록)과 바꾸는 법: [resources.md §1](resources.md#1-엔진-구성pipeline_stack). 요건: [extract.md#pl-01](../prd/extract.md#pl-01) · [extract.md#pl-02](../prd/extract.md#pl-02) · [transform.md#pl-03](../prd/transform.md#pl-03) · [transform.md#pl-22](../prd/transform.md#pl-22).
 
-**흐름 밖 도구**(사람이 따로 돌림): `pipeline.extract.protected_docs.main()`(`scan`·`decrypt`·`purge` — 보안 문서 판별·복호화 사본, DRM PC용), `pipeline.extract.discover_columns.main()`(원천 표 열 이름 탐색).
+**흐름 밖 도구**(사람이 따로 돌림): `pipeline.extract.discover_columns.main()`(원천 표 열 이름 탐색).
 
 ### extract 산출물
 
