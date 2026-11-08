@@ -45,7 +45,10 @@ class _Ticket:
             with lane.slots:
                 if self.gone:  # 자리를 기다리는 동안 호출자가 시간 초과로 떠남 — 도구를 돌리지 않음
                     return None
-                return call()
+                try:
+                    return call()
+                except SystemExit as e:  # 요청 안의 SystemExit(설정 거부·차원 불일치 등) — 이벤트 루프로 올라가면 서버가 끝나므로 오류로
+                    raise RuntimeError(str(e)) from None
         finally:
             with lane.lock:
                 lane.accepted -= 1

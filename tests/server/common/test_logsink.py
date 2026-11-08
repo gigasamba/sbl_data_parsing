@@ -18,6 +18,41 @@ def _rows(directory):
     return [json.loads(line) for path in Path(directory).glob("*.jsonl") for line in path.read_text(encoding="utf-8").splitlines()]
 
 
+def test_one_engine():
+    """DB 기록 — 배치마다 엔진을 새로 만들지 않고 프로세스에 하나를 계속 쓴다(닫지 않음). 실 PG 없이 가짜 엔진으로."""
+    import contextlib
+    from unittest import mock
+
+    from common.store.db import dbtool
+
+    made, batches = [], []
+
+    class Conn:
+        def exec_driver_sql(self, sql, values):
+            batches.append(len(values))
+
+    class Eng:
+        @contextlib.contextmanager
+        def begin(self):
+            yield Conn()
+
+        def dispose(self):
+            raise AssertionError("배치 뒤에 엔진을 닫음")
+
+    def engine(**kw):
+        made.append(kw)
+        return Eng()
+
+    logsink._engine.cache_clear()
+    try:
+        with mock.patch.object(dbtool, "engine", engine):
+            for _ in range(3):
+                logsink._write_db([("mcp_log", {"request_id": "00000000-0000-0000-0000-000000000000"})])
+        assert len(made) == 1 and batches == [1, 1, 1], (made, batches)
+    finally:
+        logsink._engine.cache_clear()
+
+
 def test_db_fallback():
     def failed(batch):
         raise RuntimeError("password=never-print-exception")

@@ -3,7 +3,8 @@
 내부 행(tool, user_id, err, ts)은 sink로 보내기 직전 `_columns`가 applog.mcp_log 칸 이름으로 바꾼다.
 
 모든 공개 진입점은 fail-soft다. 도구 반환/예외는 바꾸지 않는다.
-result_sha256/bytes는 마스킹 전 전체 JSON 기준, 저장 본문은 마스킹 후 UTF-8 앞부분이다.
+result_sha256/bytes는 마스킹 전 전체 JSON 기준, 저장 본문은 마스킹 후 UTF-8 앞부분이다(원문 도구 두 개는 본문 대신 result_keys 요약).
+행 전체의 가림은 공통 sink(logsink.emit)가 한 번 한다.
 """
 
 import base64
@@ -143,7 +144,12 @@ def configure_stdio():
         pass
 
 
-def _body(value, limit):
+# 원문 도구는 본문 대신 요약(result_keys)만 저장 — 최대 24 MB를 가리고 베끼지 않게
+_SUMMARY_ONLY = ("list_doc_fulltext", "get_doc_fulltext")
+
+
+def _body(value, limit, shown=None):
+    """(저장 본문, 전체 바이트, 잘림, 전체 sha256). 저장 본문 = shown(없으면 value)을 가려 limit 바이트까지 — 크기·sha256은 value 전체."""
     encoder = json.JSONEncoder(ensure_ascii=False, default=str)
     digest, size = hashlib.sha256(), 0
     for chunk in encoder.iterencode(value):
@@ -152,7 +158,7 @@ def _body(value, limit):
             digest.update(raw)
             size += len(raw)
     saved, safe_size = bytearray(), 0
-    for chunk in encoder.iterencode(jsonlog.masked(value)):
+    for chunk in encoder.iterencode(jsonlog.masked(value if shown is None else shown)):
         for offset in range(0, len(chunk), 65536):
             raw = chunk[offset : offset + 65536].encode("utf-8")
             saved.extend(raw[: max(0, limit - len(saved))])
@@ -200,7 +206,7 @@ def result_keys(tool, result):
             **{k: b[k] for k in ("matched", "returned", "next_cursor", "files_total_bytes") if k in b},
             "doc_keys": [d.get("doc_key") for d in result.get("documents", []) if isinstance(d, dict)],
         }
-    if tool == "get_doc_fulltext":  # 본문(content)은 빼고 파일 요약만 — 본문은 args/result 상한 안에서 따로 남음
+    if tool == "get_doc_fulltext":  # 본문(content)은 빼고 파일 요약만 — 원문 도구는 이 요약이 저장 본문(result)도 된다(_SUMMARY_ONLY)
         b = result.get("batch") or {}
         files = [f for f in result.get("files", []) if isinstance(f, dict)]
         return {
@@ -340,17 +346,18 @@ class Call:
     def _write(self, result, row, emit):
         try:
             self._prepare()
-            text, size, truncated, digest = _body(result, self.output_limit)
+            keys = result_keys(self.row["tool"], result)
+            text, size, truncated, digest = _body(result, self.output_limit, keys if self.row["tool"] in _SUMMARY_ONLY else None)
             row.update(
                 **{k: self.row[k] for k in ("args", "args_bytes", "args_truncated") if k in self.row},
                 result=text,
                 result_bytes=size,
                 result_truncated=truncated,
                 result_sha256=digest,
-                result_keys=result_keys(self.row["tool"], result),
+                result_keys=keys,
             )
             # 원본 args/result는 읽기만 한다. 공통 sink가 DB/대체 파일을 맡는다.
-            emit(jsonlog.masked(_columns(row)))
+            emit(_columns(row))  # 가림은 sink가 한 번(본문 args/result는 _body가 자르기 전에 이미 가림)
             if row["status"] == "timeout":
                 _debug("mcp.thread.abandoned", request_id=row["request_id"], running=self.abandoned, ended_at=self.thread_ended)
             with jsonlog.context(request_id=row["request_id"]):
@@ -400,7 +407,7 @@ class Worker:
             result_keys={"audit_body_omitted": "queue_full"},
             err="audit_queue_full",
         )
-        logsink.emit("mcp_log", jsonlog.masked(_columns(row)))
+        logsink.emit("mcp_log", _columns(row))  # 가림은 sink가
 
     def _run(self):
         while True:

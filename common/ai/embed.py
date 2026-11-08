@@ -1,9 +1,9 @@
 """임베딩 호출 — 구조화(문서 청크 'passage')와 검색(질문 'query')이 같은 모델·접두·정규화를 써야 함.
 API(OpenAI 호환 /embeddings, 내부망 주소만)만 쓴다."""
 
+import functools
 import json
 import time
-from pathlib import Path
 
 import numpy as np
 
@@ -13,9 +13,6 @@ from common.ai.guard import urlopen_metered as _g_urlopen_metered
 from common.ai.llm import profile as _profile
 from common.config.settings import by_env, cfg, reveal
 from common.core import span as _span
-from common.core.paths import APP_ROOT
-
-ROOT = APP_ROOT  # output/query_cache.sqlite 기준
 
 
 def _embed_api(texts, kind="passage", timeout=None):
@@ -52,44 +49,6 @@ def _embed_api(texts, kind="passage", timeout=None):
     return v / np.maximum(np.linalg.norm(v, axis=1, keepdims=True), 1e-12)
 
 
-def _query_cache():
-    """질문 임베딩 재사용 — 같은 질문을 조합·k마다 API로 다시 보내지 않게.
-    기본 켬: EMBED_QUERY_CACHE 미설정·빈 값이면 ROOT/output/query_cache.sqlite(EMBED_CACHE의
-    output/edw/embed_cache.sqlite 관례와 같은 자리) · EMBED_QUERY_CACHE=0이면 끔.
-    (S7b — 빈 값은 옛 코드에서 sqlite3.connect('')=호출마다 임시 DB였음 → 기본 경로로 고침, D-028 ⑩·refactor.md C-27)
-    열쇠 = sha256(모델·접두·질문) — 질문 원문은 저장하지 않음(해시만). WAL(동시 읽기·쓰기가 서로 안 막음) +
-    timeout(쓰기 잠금이면 기다림, 여러 MCP 워커·동시 질의가 같은 파일을 써도 죽지 않음)."""
-    path = cfg().models.embed.query_cache
-    if not path:  # None(미설정) 또는 ''(빈 값) → 기본 경로(캐시 켬)
-        path = str(ROOT / "output" / "query_cache.sqlite")
-    if path == "0":
-        return None
-    import sqlite3
-
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(path, timeout=5)  # 질의 경로 — 오래 기다리느니 캐시 없이 계산(MCP 30초 상한)
-    try:
-        db.execute("PRAGMA journal_mode=WAL")
-        db.execute("CREATE TABLE IF NOT EXISTS q (k TEXT PRIMARY KEY, v BLOB)")
-    except Exception:
-        db.close()
-        raise
-    return db
-
-
-def _evict_query_cache(db):
-    """용량 상한(EMBED_QUERY_CACHE_MAX, 기본 20000행). 넘으면 가장 오래된 것부터 지움(INSERT OR REPLACE는
-    rowid를 새로 받으므로 rowid 오름차순 = 오래된 순). =0이면 상한 없음(장기 운영 무한 증가 방지가 목적이라
-    기본은 켬)."""
-    cap = cfg().models.embed.query_cache_max
-    if not cap:
-        return
-    n = db.execute("SELECT COUNT(*) FROM q").fetchone()[0]
-    if n > cap:
-        db.execute("DELETE FROM q WHERE rowid IN (SELECT rowid FROM q ORDER BY rowid LIMIT ?)", (n - cap,))
-        db.commit()
-
-
 def model_key(name):
     """비교용 모델 이름 — `openai/` 앞붙이를 뗀 것(같은 모델의 두 표기를 같게 봄)."""
     return str(name).removeprefix("openai/")
@@ -109,40 +68,22 @@ def query_model_mismatch(meta):
 
 
 def embed_texts(embed, texts, kind, timeout=None):
-    """embed: api만. kind = query·passage. timeout(초) = 호출 하나 제한(없으면 common.models.embed.timeout)."""
+    """embed: api만. kind = query·passage. timeout(초) = 호출 하나 제한(없으면 common.models.embed.timeout).
+    질문('query')은 프로세스 안 LRU로 다시 씀 — 같은 질문을 조합·k마다 API로 다시 보내지 않게(질문 원문은 메모리에만)."""
     if not texts:
         return np.zeros((0, 1), dtype=np.float32)
     if kind == "query":
-        import sqlite3
-
-        try:
-            return _embed_query_cached(embed, texts, kind, timeout)
-        except sqlite3.Error:  # 캐시 잠금·손상 — 질의는 캐시 없이
-            pass
+        e = cfg().models.embed
+        return np.stack([_query_vec(embed, e.model or "", e.query_prefix or "", t, timeout) for t in texts])
     return _embed_uncached(embed, texts, kind, timeout)
 
 
-def _embed_query_cached(embed, texts, kind, timeout=None):
-    if (db := _query_cache()) is None:
-        return _embed_uncached(embed, texts, kind, timeout)
-    try:
-        import hashlib
-
-        e = cfg().models.embed
-        mid = f"{embed}|{e.model or ''}|{e.query_prefix or ''}"
-        keys = [hashlib.sha256((mid + "\n" + t).encode("utf-8")).hexdigest() for t in texts]
-        got = dict(db.execute(f"SELECT k, v FROM q WHERE k IN ({','.join('?' * len(keys))})", keys).fetchall())
-        todo = [i for i, k in enumerate(keys) if k not in got]
-        if todo:
-            new = _embed_uncached(embed, [texts[i] for i in todo], kind, timeout)
-            for i, v in zip(todo, new):
-                got[keys[i]] = np.asarray(v, dtype=np.float32).tobytes()
-            db.executemany("INSERT OR REPLACE INTO q VALUES (?, ?)", [(keys[i], got[keys[i]]) for i in todo])
-            db.commit()
-            _evict_query_cache(db)
-        return np.stack([np.frombuffer(got[k], dtype=np.float32) for k in keys])
-    finally:
-        db.close()
+@functools.lru_cache(maxsize=2048)  # ponytail: 프로세스마다 따로·재시작하면 비움 — 여러 프로세스가 나눠 써야 하면 공용 캐시로
+def _query_vec(embed, model, prefix, text, timeout):
+    """질문 하나의 벡터. model·prefix는 캐시 열쇠로만 받음(설정이 바뀌면 다른 열쇠)."""
+    v = _embed_uncached(embed, [text], "query", timeout)[0]
+    v.setflags(write=False)  # 캐시가 든 배열을 부르는 쪽이 고치지 않게
+    return v
 
 
 def _embed_uncached(embed, texts, kind, timeout=None):

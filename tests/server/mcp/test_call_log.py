@@ -36,7 +36,7 @@ def test_payload():
     def do_parse_document(content_b64, filename, api_key):
         return result
 
-    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):
+    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(audit.jsonlog.masked(r))):
         call = audit.start(do_parse_document, kwargs=source)
         call.finish(result)
         assert audit.drain()
@@ -59,7 +59,7 @@ def test_payload():
     def do_search(question):
         return None
 
-    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):
+    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(audit.jsonlog.masked(r))):
         call = audit.start(do_search, ("한" * 9000,))
         call.finish({"error": "token=do-not-store"})
         assert audit.drain()
@@ -73,7 +73,7 @@ def test_result_keys():
     hits = [{"text": "body", "file_name": "a.pdf", "page": 1, "chunk_key": f"k{i}"} for i in range(2000)]
     result = {"question": "q", "evidence": hits, "evidence_status": "found", "filter": {"source_system": ["SFDC"]}, "scope_docs": 3}
     rows = []
-    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):
+    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(audit.jsonlog.masked(r))):
         with audit.request_context({}) as context:
             audit.update_request(context, {"method": "tools/call", "params": {"name": "search"}})
             audit.start(lambda: None).finish(result)
@@ -105,6 +105,32 @@ def test_result_keys():
         "schema": "AI",
         "column_count": 1,
     }
+
+
+def test_fulltext_summary():
+    """원문 도구 감사 행 — 저장 본문(result)은 요약(result_keys)뿐, 원문은 싣지 않음 · 크기·sha256은 전체 응답 기준. 다른 도구는 본문 그대로."""
+    big = "원문" * 50000
+    got = {"batch": {"requested": 1, "ok": 1}, "files": [{"sfid": "s1", "name": "a.md", "kind": "md", "size": 3, "content": big}]}
+    cases = [  # (도구, 응답, 저장 본문에 원문이 있나)
+        ("get_doc_fulltext", got, False),
+        ("list_doc_fulltext", {"batch": {"matched": 1}, "documents": [{"doc_key": "d1", "file_name": big}]}, False),
+        ("search", {"evidence": [{"chunk_key": "c", "text": big}]}, True),
+    ]
+    for tool, result, stored in cases:
+        rows = []
+        with (
+            patch.object(audit.logsink, "emit", side_effect=lambda t, r, rows=rows: rows.append(audit.jsonlog.masked(r))),
+            audit.request_context({}) as ctx,
+        ):
+            audit.update_request(ctx, {"method": "tools/call", "params": {"name": tool, "arguments": {}}})
+            audit.start(lambda: None).finish(result)
+            assert audit.drain()
+        row = rows[-1]
+        full = json.dumps(result, ensure_ascii=False).encode()
+        assert (big[:100] in row["result"]) is stored and row["result_bytes"] == len(full), (tool, row["result"][:80])
+        assert row["result_sha256"] == hashlib.sha256(full).hexdigest(), tool
+        if not stored:
+            assert json.loads(row["result"]) == row["result_keys"], tool
 
 
 def test_dispatch_audit():
@@ -182,7 +208,7 @@ def test_dispatch_audit():
             assert await tool_runner._bg(lambda: 43) == 43
 
     with (
-        patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)),
+        patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(audit.jsonlog.masked(r))),
         patch.object(audit, "_debug", side_effect=lambda e, **kw: events.append(e)),
     ):
         try:
@@ -237,7 +263,7 @@ def test_http_context():
         assert audit._REQUEST.get() is None
         assert len(rows) == 3, (len(rows), [(row.get("tool_name"), row.get("status"), row.get("request_id")) for row in rows])
 
-    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):
+    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(audit.jsonlog.masked(r))):
         try:
             asyncio.run(run())
         finally:
@@ -355,7 +381,7 @@ def test_initialize_contract():
             assert rows[-1]["session_id"] is None
             assert audit._REQUEST.get() is None
 
-    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):
+    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(audit.jsonlog.masked(r))):
         try:
             asyncio.run(run())
         finally:
@@ -445,7 +471,7 @@ def test_setting_audit():
     with (
         settings.isolated(PG_PASSWORD=secret),
         mc.senv(MCP_TOKEN="mcp-secret-value"),
-        patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)),
+        patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(audit.jsonlog.masked(r))),
     ):
         call = audit.start(lambda query: None, ({"nested": [secret, "mcp-secret-value"]},))
         call.finish({"nested": [secret, "mcp-secret-value"]}, err=secret)
@@ -526,7 +552,7 @@ def test_audit_off_loop():
     with (
         patch.object(audit, "_input", side_effect=observed_input),
         patch.object(audit, "_body", side_effect=observed_body),
-        patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)),
+        patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(audit.jsonlog.masked(r))),
     ):
         try:
             asyncio.run(run())

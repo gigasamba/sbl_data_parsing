@@ -475,7 +475,7 @@ flowchart TD
     H["거르기 범위: edw_chain.yaml 이름 → gold doc 칸·attrs"]
     R["server_state.py _retriever → retriever.py Retriever"]
     P["pgsearch.py: 벡터(HNSW) + BM25 + 드문 ID → RRF"]
-    Q["common/ai/embed.py 질문 임베딩 (query_cache.sqlite)"]
+    Q["common/ai/embed.py 질문 임베딩 (프로세스 안 LRU)"]
     O["evidence_shape.py → schemas/evidence.py 근거 13칸"]
     FT["fulltext_tool.py → services/fulltext_svc.py: gold doc의 silver 위치 → Object Storage"]
     PD["parse_tool.py → parse_proxy.py → mcp-data-parsing 의 pipeline/run_mcp_parsing.py"]
@@ -591,7 +591,7 @@ flowchart TD
 |---|---|
 | `common.ai.guard.require_internal()`·`common.ai.guard.precheck()`·`common.ai.guard.spend_reserve()` | 주소가 내부망(사설 IP·회사 접미사 등)이 아니면 거부. 외부 허용은 `dev.models.<역할>.allow_external`(`LLM_ALLOW_EXTERNAL`·`VLM_ALLOW_EXTERNAL`·`EMBED_ALLOW_EXTERNAL`)이 켜지고 `run_env`가 정확히 local일 때만. 리다이렉트로 밖에 나가는 것도 막음. 하루 지출 장부로 예산을 미리 떼고 정산 |
 | `common.ai.llm.chat()`·`common.ai.llm.complete()` | OpenAI 호환 호출, 응답 캐시, 가짜 LLM(`dev.fake_llm`, local만), 빈 응답 한 번 재요청, 모델 서버 '다운' 판정(`tuning.common.models.transport.*`). VLM은 `pipeline.shared.vlmcall.ask()`만 이 함수를 부름(§4-2) |
-| `common.ai.embed.embed_texts()` | 문서 청크('passage')와 질문('query')을 같은 모델·접두·정규화로, 질문 캐시 `output/query_cache.sqlite` |
+| `common.ai.embed.embed_texts()` | 문서 청크('passage')와 질문('query')을 같은 모델·접두·정규화로, 질문은 프로세스 안 LRU(2048개)로 다시 씀 |
 | `common/ai/agent_prompts.py` | `resources/prompts/**` 지시서 읽기(글자 해시가 캐시 열쇠에 들어감) |
 
 `pipeline.cli parse`는 자식 프로세스에 `LLM_BASE_URL`을 비워 넘긴다(파싱 모듈은 LLM을 부르지 않음 — VLM·임베딩만). 비용 규칙: [CLAUDE.md §7](../../CLAUDE.md), 요건 [ops.md#pl-11](../prd/ops.md#pl-11).

@@ -28,7 +28,8 @@ _HEX64 = re.compile(r"[0-9a-f]{64}")
 _REP_FILE = re.compile(r"_(\d{4}-\d{2}-\d{2}_\d{6})\.(md|json)$")  # <stem>_<parse_date>.md|json — publish_parse_result.rep_md_key
 _NAIVE = re.compile(r"\d{4}-\d{2}-\d{2}( \d{2}:\d{2}:\d{2})?")
 _OPS = {"<": operator.lt, "<=": operator.le, ">=": operator.ge}  # kst_bound가 주는 연산자
-_WORKERS = 8  # 저장소 목록·받기 동시 수(boto3 기본 연결 풀 10 안)
+_WORKERS = 8  # 요청 하나 안의 저장소 목록·받기 동시 수
+_POOL = 2 * _WORKERS  # 저장소 연결 풀 = get_doc_fulltext 자리 2(tool_runner) × 동시 8 — 모자라면 boto3가 연결을 버렸다 다시 맺음
 
 
 class BadRequest(ValueError):
@@ -102,7 +103,7 @@ def _client():
     """boto3 클라이언트 하나를 계속 씀(스레드 안전) — 요청마다 새로 만들지 않음."""
     from common.store.objectstore import client
 
-    return client(timeout=FT.FILE_TIMEOUT_SEC, retries=1)
+    return client(timeout=FT.FILE_TIMEOUT_SEC, retries=1, max_pool=_POOL)
 
 
 def _rep_files(s3, bucket, folder):

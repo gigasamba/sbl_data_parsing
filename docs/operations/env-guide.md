@@ -13,7 +13,6 @@
 | 옛 이름 | 파일 자리 | 서버 값 |
 |---|---|---|
 | `PARSE_POST` | `transform.represent.post_steps` | `all` |
-| `EMBED_QUERY_CACHE` | `common.models.embed.embed_query_cache_file` | `''`(빈 글자 — 비운 칸과 결과가 다름) |
 
 ## 0. 파일 위치 · 적용 방법
 

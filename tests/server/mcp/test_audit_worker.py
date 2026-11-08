@@ -84,7 +84,10 @@ def test_response_deadlines():
             tool_runner._LANES.clear()
 
     assert audit.drain()
-    with patch.object(audit.Call, "_prepare", delayed), patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(row)):
+    with (
+        patch.object(audit.Call, "_prepare", delayed),
+        patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(audit.jsonlog.masked(row))),
+    ):
         asyncio.run(run())
 
 
@@ -103,7 +106,7 @@ def test_queue_metadata():
         with (
             patch.object(audit, "_WORKER", worker),
             patch.object(audit.Call, "_prepare", blocked),
-            patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(row)),
+            patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(audit.jsonlog.masked(row))),
         ):
             try:
                 first = audit.start(lambda query: None, ("zqz",))
@@ -243,7 +246,7 @@ def test_byte_budget():
     with (
         patch.object(audit, "_WORKER", worker),
         patch.object(audit.Call, "_prepare", blocked),
-        patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(row)),
+        patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(audit.jsonlog.masked(row))),
     ):
         try:
             call.finish(result)
@@ -281,7 +284,7 @@ def test_large_integer_byte_budget():
     with (
         patch.object(audit, "_WORKER", worker),
         patch.object(audit.Call, "_write") as write,
-        patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(row)),
+        patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(audit.jsonlog.masked(row))),
     ):
         try:
             # 입력·결과 각각의 큰 정수를 큐나 활성 처리에 보관하지 않고 메타로 보낸다.
@@ -339,7 +342,7 @@ def test_large_metadata():
     with (
         patch.object(audit, "_WORKER", worker),
         patch.object(audit.jsonlog, "masked", side_effect=observe),
-        patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(row)),
+        patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(audit.jsonlog.masked(row))),
         audit.request_context({"x-mcp-user": huge, "x-mcp-client": huge}),
     ):
         try:

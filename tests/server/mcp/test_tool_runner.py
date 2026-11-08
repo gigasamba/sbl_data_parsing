@@ -91,6 +91,7 @@ def test_db_errors():
         (psycopg.OperationalError("server closed the connection"), {"error": "db_unavailable"}, "error"),
         (psycopg_pool.PoolTimeout("couldn't get a connection"), {"error": "db_unavailable"}, "error"),
         (ValueError("bug"), ValueError, "error"),
+        (SystemExit("PG 접속 정보 없음"), RuntimeError, "error"),  # 요청 안의 SystemExit는 오류 응답 — 서버가 끝나지 않음
     ]
     _env = mc.senv(MCP_MAX_CONCURRENCY="2", MCP_TOOL_TIMEOUT_SEC=None, MCP_MAX_QUEUE=None)
     M._LANES.clear()
