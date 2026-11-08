@@ -12,7 +12,7 @@ set -uo pipefail
 if [ -n "${SETTINGS_FILE:-}" ] || [ -f "$RAG_ROOT/settings.yaml" ]; then
   load_settings || echo "[prune_images] 설정 파일을 읽지 못함 — 기본값으로 계속" >&2
 fi
-DOCKER=${DOCKER:-$(docker_default)}   # 두 낱말(`sudo podman`)도 — 아래는 따옴표 없이 펼침
+DOCKER=${DOCKER:-$(docker_default)}   # 두 낱말(`sudo docker`)도 — 아래는 따옴표 없이 펼침
 
 APPLY=0
 STAGE_DIR=${IMAGE_STAGE_DIR:-}

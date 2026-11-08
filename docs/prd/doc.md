@@ -47,7 +47,7 @@
 - 이유: 운영에는 개발 서버에서 시험한 실행 이미지 그 판과 코드 폴더를 그대로 굽는다.
 - 규칙:
   1. `deploy/docker/Dockerfile.bake`: `FROM ${RUNTIME_IMAGE}` + 코드 COPY(Dockerfile `pipeline`·`mcp` 타깃과 같은 자리), ENTRYPOINT `/app/docker/entrypoint.sh`, 라벨 코드 커밋(`revision`)·실행 이미지 ID(`base.digest`). 패키지 설치·네트워크 없음.
-  2. `bash deploy/release/bake_prod_image.sh <실행 이미지 판> [pipeline mcp]`(개발 서버): ① 코드 `DEPS_HASH` = 실행 이미지 지문 ② 빌드(문맥 = 코드 폴더) ③ `selftest_gate.sh` `[판정] 통과` ④ `stage_images.sh`로 저장·gzip·45m 조각·sha256 → `$OUT/sbl_images/<TAG>/<이미지>/` + `load.sh`·`BUILD.txt` + 시험한 코드 폴더 묶음. 태그 = 코드 `VERSION`(다르면 멈춤). `OUT` 기본 `/var/tmp/bake`. 컨테이너 도구 기본 podman.
+  2. `bash deploy/release/bake_prod_image.sh <실행 이미지 판> [pipeline mcp]`(개발 서버): ① 코드 `DEPS_HASH` = 실행 이미지 지문 ② 빌드(문맥 = 코드 폴더) ③ `selftest_gate.sh` `[판정] 통과` ④ `stage_images.sh`로 저장·gzip·45m 조각·sha256 → `$OUT/sbl_images/<TAG>/<이미지>/` + `load.sh`·`BUILD.txt` + 시험한 코드 폴더 묶음. 태그 = 코드 `VERSION`(다르면 멈춤). `OUT` 기본 `/var/tmp/bake`. 컨테이너 도구 기본 docker.
   3. 구운 이미지 파일·조각에 비밀(settings.yaml)이 들면 비밀과 같이 다룬다 — 운영 서버와 권한 있는 반입 경로에만, 키를 바꾸면 다시 굽고 옛 이미지·조각을 지운다, 이미지 이력·`inspect`·시작 로그에 값이 안 보이는지 본다, 굽는 데 쓴 사본은 지운다([op-12](#op-12)).
 - 파일: `deploy/docker/Dockerfile.bake`, `deploy/release/{bake_prod_image.sh,stage_images.sh,load.sh}`.
 - Status: done
@@ -58,14 +58,14 @@
 - Status: todo
 
 <a id="op-10"></a>
-## op-10 · 서버 설치·업그레이드 — 길 하나, podman 기본
+## op-10 · 서버 설치·업그레이드 — 길 하나, docker 기본
 - 규칙:
   1. 설치 길은 README §5-0·§5-3에만 쓰고 다른 문서는 링크한다. 운영 중인 서버의 판 올리기·되돌리기는 [upgrade-guide.md](../operations/upgrade-guide.md) 하나(판 번호와 상관없는 순서 — 지난 0.2.0 배포 절차는 [history/deploy_0_2_0.md](../history/deploy_0_2_0.md)).
-  2. 컨테이너 도구 = 셸 `DOCKER` > settings.yaml `ops.host.container_cli` > podman > docker(`load_settings.sh` `docker_default`, 설정을 읽은 뒤 정함). `stage_images.sh`·`load.sh`도 podman 우선.
+  2. 컨테이너 도구 = 셸 `DOCKER` > settings.yaml `ops.host.container_cli` > docker > podman(`load_settings.sh` `docker_default`, 설정을 읽은 뒤 정함). `stage_images.sh`·`load.sh`도 podman 우선.
   3. 서버 상주 컨테이너 셋: 일괄 `data-pipeline`(파싱·구조화·적재 — 문서 폴더 읽기 전용 + 결과 폴더, 자원 `ops.containers.pipeline.pipeline_cpus` 5·`pipeline_mem_limit` 24g), `mcp-data-parsing`([ops.md#rn-03](ops.md#rn-03)), `mcp-server`. pgvector·redis는 우리 것이 아니다.
   4. 운영 작업(`pipe_exec.sh parse|publish`, `pipe_exec.sh <도구>|migrate|show-stack|check`, `dbtool`)은 상주 `data-pipeline` 안에서 `docker exec`(`in_container.sh` `in_pipeline` — 안 떠 있으면 종료 2). 일회성 작업 컨테이너는 없다. 이미지 점검(`docker run --rm … selftest`)만 예외.
   5. `load_settings.sh`는 호스트 python(PyYAML만)의 `settings_to_env.py` + `host_settings.tsv`로 설정을 셸 env로 낸다.
-  6. 재부팅 뒤에는 사람이 다시 띄운다(`podman-restart`는 켜지 않음 — 사용자 11-09, server-guide §2-5). keepalive 타이머 `mcp-server-keepalive`가 `mcp_keepalive.sh`로 `mcp-server`·`mcp-data-parsing`를 살핀다.
+  6. 재부팅 때 docker 서비스(`systemctl enable docker`)가 `restart: unless-stopped` 컨테이너를 다시 띄운다(사용자 11-09). keepalive 타이머 `mcp-server-keepalive`가 `mcp_keepalive.sh`로 `mcp-server`·`mcp-data-parsing`를 살핀다.
 - 파일: `README.md` §5, `deploy/host/{scripts,compose,systemd}/`, `deploy/release/{stage_images.sh,load.sh}`.
 - QA: `tests/general/deploy/test_compose.py`·`test_host_env.py`·`test_dc.py` · 통과. 서버 확인 refactor.md C-71·C-82·C-83.
 - Status: done
@@ -85,9 +85,9 @@
   2. 루트(코드 폴더) 바로 아래 코드와 함께: `settings.yaml`(git의 `settings.sample.yaml`을 복사해 이름을 바꾸고, 맨 위 `required`의 빈 필수값을 직접 채움) · `edw_chain.yaml` · `output/`(결과 — `output/_mcp_parse/jobs` 포함) · `home/`(`option.devbox.ssh_port`를 적었을 때만). 넷 다 git 제외(`.gitignore`). `host_ctl.sh init`은 `backup/`을 만들지 않고, 권한 정리(`a+rX`)에서 이 넷을 뺀다. 이미지 폴더(`sbl_images-main/`)와 공용 `opencode.json`은 한 단계 위 공용 폴더(예 `/home/sbl/`)에 하나 — 여러 벌(op-15)이 같이 쓴다(사용자 11-04·11-06).
   3. `/srv/rag`, `env/`(`SERVER_ENV_DIR`), `code/live` 링크를 만들거나 쓰지 않는다.
   4. 새 판 = 사람이 새 코드를 벌 폴더에 덮어씀(옛 것은 각자 백업 — gitea에도 올림). `settings.yaml`·`edw_chain.yaml`·`output/`·`home/`은 zip에 없어 남는다. 새 판에서 지운 파일도 남는다. 검색 DB는 같은 PG를 그대로 본다. 되돌리기 = 백업을 되살려 다시 띄움(upgrade-guide §11).
-  5. 컨테이너는 compose로 띄운다(`host_ctl.sh up`). 상태 보기는 둘 다 안내 — 서버 전체는 `podman ps`·`docker ps`(root로 띄웠으면 `sudo`), 우리 묶음만은 `host_ctl.sh ps`.
+  5. 컨테이너는 compose로 띄운다(`host_ctl.sh up`). 상태 보기는 둘 다 안내 — 서버 전체는 `docker ps`(일반 사용자 셸이면 `sudo`), 우리 묶음만은 `host_ctl.sh ps`.
   6. systemd 타이머(새벽 배치·MCP 살리기)의 경로는 루트(코드 폴더) 기준으로 채운다 — 다른 폴더에서 다시 설치하면 그 폴더로 바뀐다.
-  7. 로그는 Postgres(applog — op-01)만 쓴다. 서버 기본값 `ops.log.log_db_enabled: true`. 파일은 DB에 못 쓸 때의 예비 한 곳 `output/logs/`뿐 — 콘솔 기록 파일(`logs/<시각>_<도구>.log`·`RUNLOG.md`·`runlog.jsonl`)과 `qa_log/` 파일은 없앤다(사람이 보는 실행 출력은 컨테이너 로그 `podman logs`, 질의는 DB `mcp_log`). 외부 모델 하루 지출 상한(`dev.models.guard.daily_budget_usd`)을 지키려면 여러 프로세스가 같은 합계를 봐야 해서 장부 기록이 필요하다 — 장부는 임시 자리 `output/_llm_spend/<날짜>.txt`(외부 호출은 PC만이라 서버에는 생기지 않음).
+  7. 로그는 Postgres(applog — op-01)만 쓴다. 서버 기본값 `ops.log.log_db_enabled: true`. 파일은 DB에 못 쓸 때의 예비 한 곳 `output/logs/`뿐 — 콘솔 기록 파일(`logs/<시각>_<도구>.log`·`RUNLOG.md`·`runlog.jsonl`)과 `qa_log/` 파일은 없앤다(사람이 보는 실행 출력은 컨테이너 로그 `docker logs`, 질의는 DB `mcp_log`). 외부 모델 하루 지출 상한(`dev.models.guard.daily_budget_usd`)을 지키려면 여러 프로세스가 같은 합계를 봐야 해서 장부 기록이 필요하다 — 장부는 임시 자리 `output/_llm_spend/<날짜>.txt`(외부 호출은 PC만이라 서버에는 생기지 않음).
   8. `output/` 안의 임시 자리는 이름 앞에 `_`를 붙여 역할이 보이게 한다: `_docflow/<번호>/`(문서 하나의 파싱 → 구조화·적재 작업 — 구조화·적재는 로컬 파싱 결과를 읽고, 끝나면 지움), `_staging/`(미리 받기), `_mcp_parse/jobs/`(`parse_document` 작업 — 결과는 호출한 쪽에 돌려주고 최근 30개만 보관), `_llm_spend/`(규칙 7). `_`가 없는 것은 `logs/`(DB 예비)뿐.
   9. 게시는 늘 한다(pl-09). 실제 Object Storage·EDW 없이 시험할 때는 가짜 EDW(sqlite)·가짜 Object Storage(`file://<폴더>`)를 상대 경로로 넣는다.
 - 파일: `deploy/host/scripts/{load_settings.sh,host_ctl.sh,run_pipeline.py,prune_images.sh,…}`(루트 구하기·`host_ctl.sh init`·`host_ctl.sh timers`) · `deploy/host/compose/*.yml`(`${RAG_ROOT}` 마운트) · `deploy/host/systemd/*.service`(`@CODE_DIR@` 틀) · `deploy/release/{bake_prod_image.sh,build_ship.sh,load.sh}` · `common/config/{settings.py,layout.py,sample.py,keyscan.py,setarg.py}`(서버 이미지 기본 `APPLOG_DB_ENABLED`·`log_fallback_dir` `output/logs`·지운 칸 경고) · `common/core/{runlog.py,paths.py}` · `common/ai/guard.py` · `mcp_server/services/{edw_query.py,search/search_svc.py}`(`qa_log.py` 삭제) · `pipeline/run_mcp_parsing.py` · README §5 · `docs/operations/{release-and-patch,server-guide,env-guide,mcp-guide}.md`.
@@ -105,5 +105,5 @@
   5. 지난 판에서만 하는 일(0.1.0·0.2.0 갈래)은 `docs/history/`로 옮기고, upgrade-guide 맨 위 "이번 판에서 바뀐 것" 표만 판마다 바꾼다.
   6. 문서와 코드가 다른 칸 설명(필수·선택)은 코드(설정 모델 설명)를 고쳐 맞춘다.
 - 파일: `README.md` §5, `docs/operations/{upgrade-guide,release-and-patch,server-guide,env-guide,handover-guide}.md`, `docs/INDEX.md`, `common/config/settings.py`·`pipeline/config.py`(칸 설명), `deploy/host/scripts/host_ctl.sh`(init의 빈 필수 칸 목록).
-- QA: 새 사람이 README §5-0만 보고 새 서버(또는 PC의 podman 시험 서버)에 설치해 `[host_ctl check] 통과 — 6개`까지 간다. 문서 링크·앵커 점검이 0건.
+- QA: 새 사람이 README §5-0만 보고 새 서버(또는 PC의 docker 시험 서버)에 설치해 `[host_ctl check] 통과 — 6개`까지 간다. 문서 링크·앵커 점검이 0건.
 - Status: todo

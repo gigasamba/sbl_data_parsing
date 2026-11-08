@@ -48,10 +48,10 @@
 ## 1. 서버 준비 확인(처음 한 번)
 
 ```bash
-export DOCKER=podman                      # 셸을 열 때마다(또는 root ~/.bashrc에)
-podman compose version                    # 판 번호가 나오면 됨
+export DOCKER=docker                      # 셸을 열 때마다(또는 root ~/.bashrc에)
+docker compose version                    # 판 번호가 나오면 됨
 python3 -c 'import yaml' && echo ok       # ok — 호스트 스크립트가 settings.yaml을 읽는 데 필요
-podman images | grep -E 'data-pipeline-runtime|mcp-server-runtime'   # 불러온 실행 이미지 태그 — 3단계에서 씀
+docker images | grep -E 'data-pipeline-runtime|mcp-server-runtime'   # 불러온 실행 이미지 태그 — 3단계에서 씀
 ```
 - 하나라도 없으면 [README §5-0 "미리 있어야 하는 것"](../../README.md#5-0-배포-단계와-개발-서버-설치)대로 준비한다. 이미지가 없으면 같은 절 "서버 설치 순서" 2번(`load.sh`)부터.
 - 다른 벌이 쓰는 포트를 피한다 — 쓸 포트가 비었는지 본다(줄이 안 나오면 빈 포트):
@@ -119,7 +119,7 @@ required:
     pg_schema: data_parsing                   # 기준 스키마 — 모든 벌이 같게(바꾸지 않는다)
   # models · edw · publish · object_storage · tokens: 다른 벌과 같게
   deploy:
-    pipeline_image: data-pipeline-runtime:<이미지 판>   # 1단계 podman images에서 본 태그
+    pipeline_image: data-pipeline-runtime:<이미지 판>   # 1단계 docker images에서 본 태그
     mcp_image: mcp-server-runtime:<이미지 판>
     host_docs_dir: <있는 호스트 폴더(절대 경로)>         # 컨테이너 /data/docs로 붙음
     pg_container_name: <PG 컨테이너 이름>               # run_pipeline이 문서 수를 셀 때 씀
@@ -128,7 +128,7 @@ search:
     mcp_port: 8771                            # 검색 MCP — 벌마다 다르게(8765 그대로면 시작 거부)
 ops:
   host:
-    container_cli: podman
+    container_cli: docker
   services:
     data_parsing:
       data_parsing_port: 8772                 # 파싱 작업 서비스 — 벌마다 다르게(8766 그대로면 시작 거부)
@@ -276,7 +276,7 @@ tail -f deploy/host/scripts/test_space/batch_progress/progress.log  # Ctrl+C로 
 
 적재 기록은 원천 스키마의 `doc` 표에 남는다(`<기준>_dev_1.doc`):
 ```bash
-podman exec <PG 컨테이너> psql -U <계정> -d <DB 이름> -c "SELECT file_path, parse_status, silver_key, parsed_at, loaded_at, gold_version FROM data_parsing_dev_1.doc ORDER BY loaded_at DESC NULLS LAST LIMIT 5"
+docker exec <PG 컨테이너> psql -U <계정> -d <DB 이름> -c "SELECT file_path, parse_status, silver_key, parsed_at, loaded_at, gold_version FROM data_parsing_dev_1.doc ORDER BY loaded_at DESC NULLS LAST LIMIT 5"
 ```
 - **성공이면** 처리한 문서 수만큼 행, `parse_status`가 `ok` 또는 `partial`, `silver_key`·`loaded_at`·`gold_version`이 채워져 있다. `silver_key`는 Object Storage 게시 위치(`DEV-1/…` 아래)다.
 - 행이 없으면 `progress.log`에서 그 문서의 `FAIL` 줄과 `doc_<번호>.log`를 본다(§10).
@@ -289,14 +289,14 @@ podman exec <PG 컨테이너> psql -U <계정> -d <DB 이름> -c "SELECT file_pa
 **(1) 컨테이너 안에서 바로 검색** — 토큰 없이 DB 검색만 본다:
 ```bash
 cd /home/sbl/sbl_data_parsing-main-1
-podman exec mcp-server-1 python -m mcp_server.cli.search_ask ask --source DEV-1 --k 3 --q "<처리한 문서에 있는 낱말>"
+docker exec mcp-server-1 python -m mcp_server.cli.search_ask ask --source DEV-1 --k 3 --q "<처리한 문서에 있는 낱말>"
 ```
 **성공이면** `질문: … (원천 DEV-1 · 근거 <N>건)` 줄 뒤에 `[1] <파일 경로>  p.<쪽> L.<줄>`처럼 근거가 나온다. `[ask] …`로 끝나면 그 오류 글자를 읽는다(원천 스키마가 없으면 5단계).
 
 **(2) MCP로 바깥처럼 불러 보기** — 실제 클라이언트와 같은 길(HTTP + 토큰):
 ```bash
 read -rs -p "MCP 토큰: " TOK; echo                 # settings.yaml required.tokens.mcp_token 값 — 화면·셸 기록에 남지 않게 입력
-podman exec mcp-server-1 python -m mcp_server.cli.mcp_smoke --url http://127.0.0.1:8771/mcp --source DEV-1 --q "<낱말>" --token "$TOK"
+docker exec mcp-server-1 python -m mcp_server.cli.mcp_smoke --url http://127.0.0.1:8771/mcp --source DEV-1 --q "<낱말>" --token "$TOK"
 unset TOK
 ```
 - **성공이면** `도구: [...]`(도구 6개) → `search: 원천 DEV-1 · 근거 <N>건 · 상태 …` → 끝 줄 `MCP 바깥 호출 통과`.

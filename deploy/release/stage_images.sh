@@ -19,7 +19,7 @@ esac
 if [ "$#" -gt 0 ]; then TARGETS=("$@"); else TARGETS=(pipeline mcp); fi
 OUT="${OUT:-output/ship}"
 CHUNK="${CHUNK:-45m}"
-. deploy/host/scripts/load_settings.sh   # docker_default 한 곳(podman 우선, bake_prod_image.sh와 같음)
+. deploy/host/scripts/load_settings.sh   # docker_default 한 곳(docker 우선, bake_prod_image.sh와 같음)
 DOCKER="${DOCKER:-$(docker_default)}"
 REPO="${SHIP_REPO:-sbl_images}"
 

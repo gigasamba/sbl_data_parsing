@@ -15,12 +15,12 @@
 - 개발 서버는 실행 이미지(`*-runtime`)에 코드 폴더를 `/app/deploy`에 읽기 전용으로 붙인다 — `host_ctl.sh`·`mcp_keepalive.sh`가 자기 코드 폴더를 `CODE_DIR`로 잡는다(셸에 `CODE_DIR`가 있으면 그 값). 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2) — 실행 이미지 판은 `BUILD.txt`의 `DEPS_HASH`가 코드의 `deploy/docker/DEPS_HASH`와 같은 판을 쓴다. 운영 서버는 개발 서버에서 구운 코드가 든 이미지(`bake_prod_image.sh`)를 마운트 없이 쓴다. 모드(local·dev·prd)별 이미지·코드·띄우는 명령은 [README §1-3 실행 모드 표](../../README.md#실행-모드).
 - 서버로 옮기기: 처음 설치(PC → 개발 서버)는 [README §5-0 서버 설치 순서](../../README.md#서버-설치-순서), 코드만 바꿀 때는 [release-and-patch §1-1](release-and-patch.md#1-1-개발-서버--코드-폴더-덮어쓰기), 개발 서버 → 운영(수집) 서버는 [release-and-patch §1-2](release-and-patch.md#1-2-개발--운영--시험한-그대로-굽기)(`bake_prod_image.sh` → `load.sh` → `host_ctl.sh`). 컨테이너는 compose를 직접 부르지 않고 `host_ctl.sh`로 다룬다.
 - 명령은 모두 코드 폴더(`cd /home/sbl/sbl_data_parsing-main-<번호>`)에서, root 셸에서 실행한다.
-- 컨테이너 상태: 서버 전체는 `podman ps`·`docker ps`(root로 띄웠으면 `sudo podman ps`), 우리 묶음만은 `bash deploy/host/scripts/host_ctl.sh ps`.
+- 컨테이너 상태: 서버 전체는 `docker ps`(일반 사용자 셸이면 `sudo docker ps`), 우리 묶음만은 `bash deploy/host/scripts/host_ctl.sh ps`.
 
 ## 1. 설정
 
 ```bash
-export DOCKER=podman                                   # 운영 계정 ~/.bashrc에 두거나 명령 앞에 붙인다
+export DOCKER=docker                                   # 운영 계정 ~/.bashrc에 두거나 명령 앞에 붙인다
 bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>   # 코드 폴더 안 output/·settings.yaml·edw_chain.yaml(없을 때만)·home/(ssh_port를 적었을 때만) — README §5-0 3번
 . deploy/host/scripts/load_settings.sh && load_settings   # init 뒤(settings.yaml이 있어야 함) · 벌 폴더에서 — $PIPELINE_CNAME·$MCP_CNAME·$DATA_PARSING_CNAME(컨테이너 이름 = 밑 이름 + 벌 번호) · DOCKER
 ```
@@ -105,11 +105,12 @@ MCP 토큰은 settings.yaml `required.tokens.mcp_token`, 모델은 `required.mod
 - 문제가 있으면 §7 형식으로 `issues.md`에 적는다. DB에서 더 보려면 §8의 SQL.
 
 ### 2-5. 서버를 다시 켠 뒤
-컨테이너·타이머를 사람이 다시 띄운다(자동 재시작에 맡기지 않는다). root 셸, 그 벌 폴더(코드 폴더)에서:
+docker 서비스가 부팅 때 세 컨테이너를 다시 띄운다(`restart: unless-stopped`). 사람은 떴는지 확인하고, 안 뜬 것만 띄운다. root 셸, 그 벌 폴더(코드 폴더)에서:
 ```bash
-export DOCKER=podman
+export DOCKER=docker
+systemctl is-active docker                                                # 기대: active
+bash deploy/host/scripts/host_ctl.sh ps                                   # 기대: 세 줄 Up — 없으면 다음 줄
 bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp
-bash deploy/host/scripts/host_ctl.sh ps                                   # 기대: 세 줄 Up
 systemctl start mcp-server-keepalive.timer data-pipeline-nightly.timer   # 꺼져 있었으면
 systemctl list-timers 'mcp-server-keepalive*' 'data-pipeline-nightly*'   # 기대: 두 타이머 다음 실행 시각
 bash deploy/host/scripts/host_ctl.sh check                                # 기대 마지막 줄: [host_ctl check] 통과 — 6개

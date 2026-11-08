@@ -48,7 +48,7 @@ ROOT = Path(__file__).resolve().parent
 #   ops.host.host_output_dir(RAG_OUT — 컨테이너 /app/output의 원본 그대로), 비우면 <루트>/output(load_settings.sh와 같음).
 TEST = PROG = DOCSPACE = DOCFLOW = STAGING = None  # configure()가 채움
 PIPE_C = None  # docker exec 대상 상주 컨테이너(목록·받기·파싱·게시·구조화·정리) — configure()가 밑 이름 + 벌 번호로 채움
-DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.container_cli(없으면 podman, 그것도 없으면 docker)로 채움
+DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.container_cli(없으면 docker, 그것도 없으면 podman)로 채움
 CODE_DIR = None  # --code(설정 배치 모듈 layout.py·이미지 경로 표를 찾을 코드 폴더 — 운영자 폴더에서 돌릴 때, 기본 배치 경로 없음)
 SOURCE_BUCKET = PG_CONTAINER = PG_USER = PG_DB = PG_SCHEMA = None  # staging 파일 이름의 원천 버킷 · 문서 수 세기(psql)
 SETTINGS_REQUIRED = (  # (칸 경로, 무엇에 쓰나) — 없으면 시작 거부
@@ -179,7 +179,7 @@ def configure(settings_file=None):
     DOCKER = (
         os.environ.get("DOCKER")  # env 남김 — 호스트 도구(셸 env > ops.host.container_cli — load_settings.sh와 같은 순서)
         or _host().get(doc, "common.host.docker")
-        or ("podman" if shutil.which("podman") else "docker")
+        or ("docker" if shutil.which("docker") else "podman")
     )
     inst = instance_of(_root())
     if inst and run_env == "prd":

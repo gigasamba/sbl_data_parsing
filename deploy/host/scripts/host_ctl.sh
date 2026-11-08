@@ -127,7 +127,7 @@ dc_check() {
   _vol() { vol=(); case "$1" in *-runtime:*) vol=(-v "$(pwd):$APP_CODE_ROOT:ro,z") ;; esac; }   # 실행 이미지(개발)는 이 코드 폴더를 붙임
   # 판정 시험의 DB 사례는 서버 PG에 붙는다(e2-22 — prd는 읽기만): 상주 컨테이너(compose x-settings)와 같은 설정 파일·host 네트워크·RUN_ENV
   local gate=(--network host -v "${SETTINGS_FILE:?SETTINGS_FILE 필요 — load_settings}:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e "RUN_ENV=${RUN_ENV:?RUN_ENV 필요 — load_settings}")
-  # shellcheck disable=SC2086 — DOCKER는 낱말 나눔(sudo podman)
+  # shellcheck disable=SC2086 — DOCKER는 낱말 나눔(sudo docker)
   _step check_env "출력의 FAIL 줄 확인(server-guide §2)" bash deploy/host/scripts/pipe_exec.sh check_env || return 1
   _step ping_models "모델 주소·키(settings.yaml required.models) — 서버는 내부망 모델만" bash deploy/host/scripts/pipe_exec.sh ping_models || return 1
   _step "migrate check" "migrate up --target all · master load(upgrade-guide §6)" bash deploy/host/scripts/pipe_exec.sh migrate check --target all || return 1
@@ -189,5 +189,5 @@ for f in ${extra[@]+"${extra[@]}"}; do
   [ -f "$f" ] || { echo "[host_ctl] ops.host.extra_compose 파일 없음: $f — 만들거나 settings.yaml에서 지울 것" >&2; exit 2; }
   files="$files -f $f"
 done
-# shellcheck disable=SC2086 — DOCKER(sudo podman처럼 두 낱말)·파일 인자는 낱말 나눔
+# shellcheck disable=SC2086 — DOCKER(sudo docker처럼 두 낱말)·파일 인자는 낱말 나눔
 exec $DOCKER compose -p "$COMPOSE_PNAME" $files "$@"   # 묶음 이름 — 한 벌은 compose 기본(폴더 이름 compose) 그대로, 여러 벌은 compose-<벌 번호>

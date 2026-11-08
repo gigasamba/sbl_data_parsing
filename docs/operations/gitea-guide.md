@@ -23,7 +23,7 @@
 
 root 셸에서(`<번호>` = 다른 벌과 겹치지 않는 벌 번호):
 ```bash
-export DOCKER=podman
+export DOCKER=docker
 cd /home/sbl
 git clone -b <내 브랜치> <gitea 저장소 주소> sbl_data_parsing-main-<번호>    # 벌 폴더 = 코드 폴더 = 내 작업 폴더
 cd sbl_data_parsing-main-<번호> && git rev-parse --short HEAD > CODE_COMMIT   # clone은 CODE_COMMIT을 채우지 않음 — 시작 로그의 커밋 표시용

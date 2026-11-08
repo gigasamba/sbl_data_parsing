@@ -40,7 +40,7 @@
 ## 1. 지금 판 확인
 
 ```bash
-export DOCKER=podman
+export DOCKER=docker
 cd <벌 폴더>                                                                  # 0.2.0 서버면 <옛 루트>/sbl_data_parsing-<앞 판>
 . deploy/host/scripts/load_settings.sh && load_settings                     # 컨테이너 이름 $PIPELINE_CNAME·$MCP_CNAME(밑 이름 + 벌 번호)
 cat VERSION CODE_COMMIT                                                       # 코드 폴더의 판·커밋
@@ -81,7 +81,7 @@ unzip -q <코드 zip>                                                           
 cat sbl_data_parsing-<새 판>/deploy/docker/DEPS_HASH                          # 코드 지문
 grep -H DEPS_HASH sbl_images-main/*/BUILD.txt                                 # 서버에 있는 이미지 판마다 지문 — 같은 값이 있으면 그 판을 쓰고 아래 두 줄은 건너뜀
 unzip -q <새 이미지 저장소 zip>                                                # 같은 지문이 없을 때만 — sbl_images-main/
-DOCKER=podman bash sbl_images-main/load.sh <이미지 판>                        # 기대: 조각 sha256 확인 → load → <판>/BUILD.txt(DEPS_HASH가 코드 지문과 같음)
+DOCKER=docker bash sbl_images-main/load.sh <이미지 판>                        # 기대: 조각 sha256 확인 → load → <판>/BUILD.txt(DEPS_HASH가 코드 지문과 같음)
 ```
 - 0.3.0은 실행 이미지에 개발 도구가 들어가고 패키지 목록이 바뀌어 **새 실행 이미지가 꼭 필요하다**(0.2.0 실행 이미지로는 시작하지 않음). 코드만 바뀐 판(지문이 같음)은 이미지를 불러오는 두 줄만 건너뛴다(코드 zip 풀기는 한다).
 - 운영 서버: 개발 서버에서 `bake_prod_image.sh`로 구운 조각을 옮겨 `load.sh <VERSION>`([release-and-patch §1-2](release-and-patch.md#1-2-개발--운영--시험한-그대로-굽기)).

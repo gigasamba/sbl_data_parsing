@@ -7,7 +7,7 @@
 #   개발 작업 공간 파일·관문만 뺌(작업 공간 설정이 검색 MCP 살리기를 막지 않게 · data-pipeline은 건드리지 않음)
 # 설정: settings.yaml(SETTINGS_FILE, 기본 <루트>/settings.yaml — 루트 = 코드 폴더 자체) — 호스트 칸
 #      (MCP_SERVER_IMAGE·RAG_OUT·MCP_HOST·MCP_PORT)을 load_settings.sh load_settings가 셸 env로, 컨테이너는 같은 파일을 붙여 읽음(토큰·PG 접속 등 비밀)
-#      DOCKER(셸 env > settings.yaml ops.host.container_cli > podman, 없으면 docker · 두 낱말도 됨: DOCKER="sudo podman")
+#      DOCKER(셸 env > settings.yaml ops.host.container_cli > docker, 없으면 podman · 두 낱말도 됨: DOCKER="sudo docker")
 # 종료 코드: 0 응답 확인(원래 떠 있었거나 다시 띄움) · 1 다시 띄웠는데도 응답 없음(로그 마지막 줄 출력)
 set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트

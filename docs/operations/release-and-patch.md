@@ -26,11 +26,11 @@
 
 운영 이미지는 PC에서 빌드하지 않는다. 개발 서버에 불러온 **실행 이미지 그 판** 위에 **시험한 코드 폴더**를 COPY만 해서 앱마다 코드가 든 이미지 하나(`data-pipeline:<VERSION>`·`mcp-server:<VERSION>`)를 다시 빌드한다(`deploy/docker/Dockerfile.bake` — 패키지 설치·네트워크 없음). 구운 이미지는 코드 폴더 없이 뜬다. 순서: 개발 서버에서 굽기·판정 → 조각을 운영 서버로 옮김 → 운영 서버에서 불러오기·띄우기.
 
-1. 개발 서버(시험한 코드 폴더에서): `bash deploy/release/bake_prod_image.sh <실행 이미지 판>`(개발 서버가 지금 쓰는 실행 이미지 판 — settings.yaml 이미지 칸의 태그, 대상 하나만이면 뒤에 `pipeline` 또는 `mcp`). 코드 폴더는 스크립트가 든 폴더(다른 폴더면 `CODE_DIR=`), 새 태그는 코드 `VERSION`(다른 `TAG=`는 거부), 컨테이너 도구는 podman(없으면 docker — `DOCKER=`), 저장 폴더 `/var/tmp/bake`(`OUT=`).
+1. 개발 서버(시험한 코드 폴더에서): `bash deploy/release/bake_prod_image.sh <실행 이미지 판>`(개발 서버가 지금 쓰는 실행 이미지 판 — settings.yaml 이미지 칸의 태그, 대상 하나만이면 뒤에 `pipeline` 또는 `mcp`). 코드 폴더는 스크립트가 든 폴더(다른 폴더면 `CODE_DIR=`), 새 태그는 코드 `VERSION`(다른 `TAG=`는 거부), 컨테이너 도구는 docker(없으면 podman — `DOCKER=`), 저장 폴더 `/var/tmp/bake`(`OUT=`).
 2. 스크립트 순서: ① 코드 `DEPS_HASH` = 실행 이미지 지문인지(다르면 멈춤) ② 빌드 — 라벨 `org.opencontainers.image.revision`(코드 커밋)·`org.opencontainers.image.base.digest`(실행 이미지 ID) ③ `selftest_gate.sh` 판정(`[판정] 통과`가 아니면 멈춤) ④ 저장·45 MB 분할·sha256 → `/var/tmp/bake/sbl_images/`(`load.sh` · `<태그>/BUILD.txt` · `<태그>/<이미지>/` + 같은 태그 폴더에 코드 묶음 `code-<태그>-<커밋>.tar.gz`·sha256). 코드 묶음에는 `.git`·`deploy/host/scripts/test_space/`·`valid_env/`·`validation/`·`settings*.yaml`(sample 빼고)·`output/`이 들어가지 않는다(코드 폴더가 git clone이면 `git archive`로 추적 파일만).
 3. 옮기기: `/var/tmp/bake/sbl_images/`를 운영 서버로 옮긴다.
-4. 운영 서버: `DOCKER=podman bash sbl_images/load.sh <태그>` → 코드 묶음을 벌 폴더(`/home/sbl/sbl_data_parsing-main` — 운영은 한 벌이라 번호 없이)에 풀고(호스트 스크립트만 씀) settings.yaml 이미지 칸을 `data-pipeline:<VERSION>`·`mcp-server:<VERSION>`으로 → §1-1 2·3으로 띄우고 `host_ctl.sh check`. 셸·unit에 `CODE_DIR`을 두지 않는다(두면 compose가 코드 폴더를 덮어 붙임).
-5. 어느 판인지: `podman image inspect <태그> --format '{{json .Config.Labels}}'`.
+4. 운영 서버: `DOCKER=docker bash sbl_images/load.sh <태그>` → 코드 묶음을 벌 폴더(`/home/sbl/sbl_data_parsing-main` — 운영은 한 벌이라 번호 없이)에 풀고(호스트 스크립트만 씀) settings.yaml 이미지 칸을 `data-pipeline:<VERSION>`·`mcp-server:<VERSION>`으로 → §1-1 2·3으로 띄우고 `host_ctl.sh check`. 셸·unit에 `CODE_DIR`을 두지 않는다(두면 compose가 코드 폴더를 덮어 붙임).
+5. 어느 판인지: `docker image inspect <태그> --format '{{json .Config.Labels}}'`.
 
 ## 2. 서버에서 직접 고친 코드
 

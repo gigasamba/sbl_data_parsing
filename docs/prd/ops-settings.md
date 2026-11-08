@@ -57,7 +57,7 @@
   1. 설정 값은 settings.yaml(코드 기본값은 설정 모델에 한 번) 또는 이미지 기본값 표 `common/config/settings.py` `IMAGE_PATHS` 하나에서만 온다. 저장소 안 경로는 `common/core/paths.py` 상수로만.
   2. 환경마다 다른 경로·접속(게시 대상·Object Storage·EDW·PG·호스트 경로)은 필수 — 코드 기본값이 없고 비면 시작 거부. PG 자동 찾기는 없다.
   3. 컨테이너 안 경로(`output_root` `/app/output` · `code_root` `/app/deploy` 등)는 `IMAGE_PATHS`가 원본이다. `deploy/release/gen_host_keys.py`가 이 표를 `deploy/host/scripts/host_settings.tsv`(`image.<이름>`·`APP_<이름>` 줄)로 내고, `load_settings.sh`가 `APP_*` env로 내준다 — compose는 `${APP_OUTPUT_ROOT}`·`${APP_CODE_ROOT}`·`${APP_DOCS_MOUNT}`, `run_pipeline.py`는 코드 폴더의 표를 읽는다. 생성: `PYTHONPATH=. python deploy/release/gen_host_keys.py`.
-  4. 호스트 스크립트는 `load_settings.sh`(`settings_to_env.py` — PyYAML만)가 내준 값만 쓴다. 컨테이너 명령 = settings.yaml `ops.host.container_cli` > podman > docker(`run_pipeline.py`와 같게, rn-07).
+  4. 호스트 스크립트는 `load_settings.sh`(`settings_to_env.py` — PyYAML만)가 내준 값만 쓴다. 컨테이너 명령 = settings.yaml `ops.host.container_cli` > docker > podman(`run_pipeline.py`와 같게, rn-07).
   5. 앱은 env에서 설정을 읽지 않는다 — 남은 env 줄은 분류 주석 필수(`python -m common.check.check_modules` ⑩·⑪).
 - 파일: `common/config/settings.py`(`IMAGE_PATHS`), `common/config/keyscan.py`, `deploy/release/gen_host_keys.py`, `deploy/host/scripts/{load_settings.sh,settings_to_env.py,host_settings.tsv}`.
 - QA: `python -m common.check.check_modules` · "모듈 경계 통과". `tests/general/deploy/test_host_env.py` · 통과. 서버 확인 refactor.md C-70.

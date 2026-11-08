@@ -14,7 +14,7 @@ runtime_image() {   # runtime_image <이미지 변수 이름> — 실행 이미�
 in_pipeline() {   # in_pipeline <상주 컨테이너> <명령> [인자…] — 종료 코드는 그 명령 그대로 · 컨테이너가 안 떠 있으면 2
   local c=$1
   shift
-  # shellcheck disable=SC2086 — DOCKER는 낱말 나눔(sudo podman)
+  # shellcheck disable=SC2086 — DOCKER는 낱말 나눔(sudo docker)
   if [ "$($DOCKER inspect -f '{{.State.Running}}' "$c" 2>/dev/null)" != true ]; then
     echo "[오류] 상주 컨테이너 $c가 떠 있지 않음 — 먼저 띄울 것: \`bash deploy/host/scripts/host_ctl.sh up -d data-pipeline\`(실행 이미지면 compose.code.yml도 — host_ctl.sh가 붙임)" >&2
     return 2

@@ -4,7 +4,7 @@
 
 ### 0. 읽기 전에 — 꼭 알아 둘 것
 
-> **⚠️ `docker compose`·`podman compose`를 직접 부르지 않는다.** 서버 컨테이너는 늘 `bash deploy/host/scripts/host_ctl.sh …`로 다룬다(§5-3 ①).
+> **⚠️ `docker compose`를 직접 부르지 않는다.** 서버 컨테이너는 늘 `bash deploy/host/scripts/host_ctl.sh …`로 다룬다(§5-3 ①).
 >
 > **⚠️ 실제 값(비밀번호·키·토큰·서버 주소)은 문서·채팅·커밋에 쓰지 않는다.** 이 README의 예시 값은 모두 가짜다.
 >
@@ -46,7 +46,7 @@
 | 실행 이미지(`*-runtime`) | 코드가 없는 이미지 — 개발 서버는 코드 폴더를 붙여 쓴다 |
 | 루트 · 코드 폴더 · 벌 | 코드 폴더 = 코드 zip을 푼 폴더(예 `/home/sbl/sbl_data_parsing-main-1/`). 루트 = 코드 폴더 자체 — `settings.yaml`·`edw_chain.yaml`·`output/`이 그 안에 있다. 벌 = 한 서버에 따로 띄운 컨테이너 한 묶음(코드 폴더 하나) |
 | 핑거프린트 | 결과를 다시 쓸지 정하는 값 — 바뀌면 서버가 문서를 다시 처리한다 |
-| `$DOCKER` | 컨테이너 명령 — 서버는 `podman`(root 셸). 셸에서 `export DOCKER=podman` |
+| `$DOCKER` | 컨테이너 명령 — 서버는 `docker`(root 셸). 셸에서 `export DOCKER=docker` |
 
 **목차** — [1. 한눈에 보기](#1-한눈에-보기) · [2. 폴더 구조](#2-폴더-구조) · [3. 설정](#3-설정) · [4. PC에서 실행하기](#4-pc에서-실행하기) · [5. 서버(내부망)에 배포하고 실행하기](#5-서버내부망에-배포하고-실행하기) · [6. 꼭 지킬 것](#6-꼭-지킬-것) · [7. 문서](#7-문서)
 
@@ -413,9 +413,9 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 > 개발 서버를 처음 맡았다면 [handover-guide.md](docs/operations/handover-guide.md)를 먼저 따라 한다 — 자기 벌 하나를 만들어 `DEV-<숫자>` 문서를 처리하고 검색까지, 단계마다 `cd`할 폴더·명령·성공 출력을 차례로 적었다.
 
 <a id="핵심-명령"></a>
-**핵심 명령**(root 셸 · 셸을 열면 먼저 `export DOCKER=podman` · `<루트>` = 벌 폴더 = 코드 폴더, 예 `/home/sbl/sbl_data_parsing-main-1`)
+**핵심 명령**(root 셸 · 셸을 열면 먼저 `export DOCKER=docker` · `<루트>` = 벌 폴더 = 코드 폴더, 예 `/home/sbl/sbl_data_parsing-main-1`)
 
-서버에서는 `docker run`·`docker start`·`docker compose`를 직접 치지 않는다. 이미지 불러오기는 `load.sh`, 컨테이너 띄우기·멈추기·로그는 `host_ctl.sh`가 맡는다 — `host_ctl.sh`는 compose를 감싸 settings.yaml에서 컨테이너 이름·포트·볼륨을 채우고, 컨테이너 도구는 `$DOCKER`(podman 또는 docker — 없으면 `ops.host.container_cli`)를 쓴다. 아래 `host_ctl.sh`·`pipe_exec.sh`는 `deploy/host/scripts/`에 있다.
+서버에서는 `docker run`·`docker start`·`docker compose`를 직접 치지 않는다. 이미지 불러오기는 `load.sh`, 컨테이너 띄우기·멈추기·로그는 `host_ctl.sh`가 맡는다 — `host_ctl.sh`는 compose를 감싸 settings.yaml에서 컨테이너 이름·포트·볼륨을 채우고, 컨테이너 도구는 `$DOCKER`(서버는 docker — 없으면 `ops.host.container_cli`)를 쓴다. 아래 `host_ctl.sh`·`pipe_exec.sh`는 `deploy/host/scripts/`에 있다.
 
 | 하고 싶은 일 | 들어갈 폴더(`cd`) | 명령 | 성공하면 보이는 것 |
 |---|---|---|---|
@@ -469,18 +469,19 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 | 무엇 | 확인 명령 | 없으면 |
 |---|---|---|
-| podman과 compose 하위 명령 | `podman compose version` | `dnf install podman-compose`(사내 RHEL 저장소). 없으면 인터넷 PC에서 서버와 같은 python 판으로 `pip download podman-compose -d pc-wheels` → 서버에서 `python3 -m pip install --no-index --find-links pc-wheels podman-compose` |
+| Docker Engine과 compose 플러그인 | `docker version`(`Server: Docker Engine` 줄이 있어야 함 — `podman-docker` 꾸러미의 가짜 `docker`면 `Server:` 줄이 podman) · `docker compose version` | 서버 관리자에게 설치를 요청한다(폐쇄망은 `docker-ce`·`docker-ce-cli`·`containerd.io`·`docker-compose-plugin` rpm을 반입해 `dnf install ./*.rpm`) |
+| docker 서비스가 부팅 때 켜짐 | `systemctl is-enabled docker` — 기대 `enabled` | `systemctl enable --now docker`(재부팅 때 컨테이너를 다시 띄우는 것이 이 서비스) |
 | 호스트 python 3.9 이상과 PyYAML | `python3 --version` · `python3 -c 'import yaml'` | 3.9 이상은 서버 관리자에게 요청한다(호스트 스크립트가 읽는 `common/config/layout.py`가 3.9 문법을 씀 — RHEL 8의 기본 `python3`는 3.6). PyYAML은 `dnf install python3-pyyaml` |
 | unzip | `unzip -v` | `dnf install unzip` |
 | PostgreSQL 16 + pgvector, 우리 DB·계정 | DB 담당에게 확인 | DB 담당이 만든다. 확인할 것 셋: ① PG가 **이 서버에 컨테이너로** 떠 있다(백업·문서 수 세기가 그 컨테이너 안에서 `psql`을 씀 — 이름을 `required.deploy.pg_container_name`에 적음) ② 계정에 그 DB의 **스키마 만들기 권한**이 있다(`GRANT CREATE ON DATABASE <DB> TO <계정>` — `migrate up`이 `<pg_schema>`·`<pg_schema>_master`·`<pg_schema>_<원천>`·`applog`를, 개발 서버의 배포 판정 시험이 임시 `test_*`를 만듦) ③ `vector` 확장(관리자가 한 번 — §5-3 ③ 0번) |
 | 운영 그룹 | `id -gn <운영 계정>` · `getent group <그룹>` | 서버 관리자에게 받는다 |
 
-**컨테이너 도구는 root podman 하나로 쓴다.** 셸을 열면 먼저 `export DOCKER=podman`, settings.yaml에 `ops.host.container_cli: podman`. 일반 사용자 셸이면 `DOCKER="sudo podman"`. 이미지를 불러온 저장소와 띄우는 저장소가 같아야 한다(rootless와 root podman은 이미지를 따로 보관).
+**컨테이너 도구는 docker 하나로 쓴다.** 셸을 열면 먼저 `export DOCKER=docker`, settings.yaml에 `ops.host.container_cli: docker`. 일반 사용자 셸이면 `DOCKER="sudo docker"`. 같은 서버에 podman도 있으면 이미지를 podman에 불러오지 않는다(두 도구는 이미지를 따로 보관 — docker로 띄우면 podman에 넣은 이미지는 안 보임).
 
 <a id="서버-설치-순서"></a>
 **서버 설치 순서**(처음 한 번 — root 셸, `<루트>` = 벌 폴더 = 코드 폴더)
 
-0. `export DOCKER=podman` — 위 "미리 있어야 하는 것"을 확인한다.
+0. `export DOCKER=docker` — 위 "미리 있어야 하는 것"을 확인한다.
 1. 공용 폴더를 만들고 이미지 zip과 코드 zip을 거기에 푼 뒤, 코드 폴더 이름을 벌 폴더 이름으로 바꾼다.
    ```bash
    mkdir -p /home/sbl && cd /home/sbl                # 공용 폴더(자리는 아무 곳)
@@ -489,7 +490,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
    B=/home/sbl/sbl_data_parsing-main                  # 아래 <루트> — 새 셸을 열면 다시 적는다
    ```
    개발자마다 벌을 나누는 개발 서버만 `sbl_data_parsing-main-1`처럼 끝에 번호를 붙인다. 번호가 있으면 4번의 포트 두 칸을 꼭 바꾼다(아래 "한 서버에 여러 벌").
-2. 이미지를 불러온다(공용 폴더에서 — 서버에 한 번, 이미 불러온 판이면 건너뜀). `<이미지 판>`은 `ls sbl_images-main/`에 보이는 판 폴더 이름이다: `cd /home/sbl && DOCKER=podman bash sbl_images-main/load.sh <이미지 판>` — 조각 sha256 확인 → 합치기 → load, 끝에 `<판>/BUILD.txt`(빌드 커밋·DEPS_HASH). **코드의 `deploy/docker/DEPS_HASH`가 `BUILD.txt`의 DEPS_HASH와 같은 판**을 고른다(확인 명령 — [§1-3](#실행-모드)).
+2. 이미지를 불러온다(공용 폴더에서 — 서버에 한 번, 이미 불러온 판이면 건너뜀). `<이미지 판>`은 `ls sbl_images-main/`에 보이는 판 폴더 이름이다: `cd /home/sbl && DOCKER=docker bash sbl_images-main/load.sh <이미지 판>` — 조각 sha256 확인 → 합치기 → load, 끝에 `<판>/BUILD.txt`(빌드 커밋·DEPS_HASH). **코드의 `deploy/docker/DEPS_HASH`가 `BUILD.txt`의 DEPS_HASH와 같은 판**을 고른다(확인 명령 — [§1-3](#실행-모드)).
 3. 루트 채우기: `cd <루트> && bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>` — `output/`·`output/_mcp_parse/jobs`(UID 10001, 2775)(settings.yaml에 `option.devbox.ssh_port`가 있으면 `home/`도 — 10001, 700), 코드 a+rX(`settings.yaml`·`edw_chain.yaml`·`output/`·`home/`은 빼고), `settings.sample.yaml` → `<루트>/settings.yaml`, `resources/config/edw_chain.yaml` → `<루트>/edw_chain.yaml`(둘 다 없을 때만, 10001:<운영 그룹> 640). 끝에 빈 필수 칸 **이름**을 찍는다. 여러 번 불러도 안전하다.
 4. 설정을 채운다 — `<루트>/settings.yaml` 맨 위 `required`의 빈 값(§5-3 ② "꼭 채울 값"). 이미지 칸에는 2에서 불러온 실행 이미지 태그(`data-pipeline-runtime:<이미지 판>`·`mcp-server-runtime:<이미지 판>`). 자원 상한도 본다(아래).
    - **번호가 붙은 벌 폴더**(`…-main-1`)면 `search.server.mcp_port`·`ops.services.data_parsing.data_parsing_port`를 기본값(8765·8766)이 아닌 값으로 적는다 — 그대로면 5번에서 `[설정] 여러 벌 — … 기본값 그대로`로 멈춘다.
@@ -636,7 +637,7 @@ bash deploy/release/stage_images.sh pipeline-runtime mcp-runtime                
 | `required.deploy.host_docs_dir` | 원본 문서 폴더(서버에 이미 있는 폴더) | 서버 관리자 | `/data/docs` | dev·prd | `host_ctl.sh up`이 `:?` 안내로 멈춤 |
 | `ops.host.host_output_dir` | 결과 폴더 — 비우면 `<루트>/output` | 서버 관리자 | (비움) | dev·prd | — |
 | `required.deploy.pg_container_name` | `pg_dump`·`psql`을 exec할 PG 컨테이너 이름 | DB 담당 | `<컨테이너>` | dev·prd | 백업 명령([upgrade-guide §2](docs/operations/upgrade-guide.md#2-백업)) |
-| `ops.host.container_cli` | 컨테이너 도구 | 정해진 값 | `podman` | dev·prd | 호스트 스크립트가 다른 도구를 부름 |
+| `ops.host.container_cli` | 컨테이너 도구 | 정해진 값 | `docker` | dev·prd | 호스트 스크립트가 다른 도구를 부름 |
 
 그 밖 칸은 비워 두면 코드 기본값을 쓴다([env-guide "서버 값으로 적는 칸"](docs/operations/env-guide.md)도 본다). 모델 주소는 모두 내부망 주소여야 한다.
 
@@ -699,7 +700,7 @@ tail -f <run_pipeline 작업 폴더>/batch_progress/progress.log              # 
 tail -n 50 <결과 폴더>/_docflow/<seq>/structure.log                    # 그 문서의 구조화·적재 출력 — 문서가 끝나면 지워짐(남기려면 run_pipeline --no-cleanup)
 ```
 
-**로그는 Postgres(`applog` 스키마)에 남는다.** 서버(두 이미지)는 `ops.log.log_db_enabled` 기본 켬이라 `migrate up --target all`(applog 포함)이 먼저다. DB에 못 쓰면 그 행만 `<결과 폴더>/logs/`에 JSON Lines로 남는다. 사람이 보는 실행 출력은 컨테이너 로그(`podman logs <컨테이너>`·`host_ctl.sh logs`), MCP 호출(질문·SQL 포함)은 `applog.mcp_log`이다.
+**로그는 Postgres(`applog` 스키마)에 남는다.** 서버(두 이미지)는 `ops.log.log_db_enabled` 기본 켬이라 `migrate up --target all`(applog 포함)이 먼저다. DB에 못 쓰면 그 행만 `<결과 폴더>/logs/`에 JSON Lines로 남는다. 사람이 보는 실행 출력은 컨테이너 로그(`docker logs <컨테이너>`·`host_ctl.sh logs`), MCP 호출(질문·SQL 포함)은 `applog.mcp_log`이다.
 
 **적재 거부 — 임베딩 모델이 다른 묶음.** 묶음의 임베딩 모델이 검색 스키마에 이미 적재된 문서의 모델과 다르면 적재는 아무것도 쓰지 않고 종료 2(`[load] 임베딩 모델이 다름 — 적재 거부 …`). `applog.pipe_event`에 남는다:
 
@@ -716,7 +717,7 @@ WHERE stage = 'load.embed_guard' AND ts_start > now() - interval '7 days' ORDER 
 |---|---|
 | 검색 MCP·`mcp-data-parsing` 상주 확인 | systemd `mcp-server-keepalive.timer` — 부팅 1분 뒤 + 2분마다 `mcp_keepalive.sh` |
 | 새벽 배치 | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `ops.nightly.nightly_start_time: "HH:MM"`(그 시각부터 5분 안에 시작) · `ops.nightly.nightly_max_docs`(새 문서 수 상한, 1 이상) · `ops.nightly.nightly_stop_time: "HH:MM"`(마감 — 시작보다 5분 넘게 뒤). **셋 중 하나라도 비면 돌지 않는다**(기본 비움) |
-| 재부팅 뒤 | 사람이 다시 띄운다(`podman-restart`는 켜지 않는다) — [server-guide §2-5](docs/operations/server-guide.md#2-5-서버를-다시-켠-뒤) 순서. 검색 MCP 두 개는 그 전에 keepalive 타이머(부팅 1분 뒤)가 먼저 띄울 수 있고, 일괄 `data-pipeline`은 사람이 띄우기 전까지 꺼져 있다 |
+| 재부팅 뒤 되살리기 | docker 서비스(`systemctl enable docker`)가 부팅 때 세 컨테이너를 다시 띄운다(`restart: unless-stopped` — 사람이 `host_ctl.sh stop`으로 멈춘 것은 그대로 둠). 검색 MCP 두 개는 keepalive 타이머가 2분마다 한 번 더 본다. 재부팅 뒤 확인은 [server-guide §2-5](docs/operations/server-guide.md#2-5-서버를-다시-켠-뒤) |
 
 systemd 설치(DB 판과 컨테이너를 확인한 뒤 — 벌마다 그 벌 폴더에서, 새 판으로 덮어쓴 뒤에도 다시):
 
@@ -727,7 +728,7 @@ bash deploy/host/scripts/host_ctl.sh timers        # 단위 4개의 코드 폴�
 새벽 배치 타이머는 켜져 있어도 `ops.nightly` 세 칸을 채우기 전에는 아무것도 하지 않는다.
 
 띄우기·멈추기·로그·설정 바꾼 뒤 다시 만들기는 [핵심 명령](#핵심-명령). 그 밖:
-- 서버의 모든 컨테이너: `podman ps`(root로 띄웠으면 `sudo podman ps`) — 우리 벌만은 `host_ctl.sh ps`.
+- 서버의 모든 컨테이너: `docker ps`(일반 사용자 셸이면 `sudo docker ps`) — 우리 벌만은 `host_ctl.sh ps`.
 - 검색 MCP가 응답하나: `curl -s http://127.0.0.1:<search.server.mcp_port>/health`.
 - 타이머 기록: `journalctl -u mcp-server-keepalive.service -n 50`.
 - 다시 켜기: `host_ctl.sh up -d data-pipeline mcp-data-parsing mcp` → `systemctl start mcp-server-keepalive.timer data-pipeline-nightly.timer`(끌 때는 타이머부터 — 안 그러면 2분 안에 검색 MCP를 다시 띄운다).
