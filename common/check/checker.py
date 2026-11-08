@@ -159,11 +159,6 @@ def check_pg_schema():
     except Exception as ex:
         line(True, "PG_SCHEMA 권한", f"건너뜀({type(ex).__name__})")
         return
-    line(
-        True,
-        "AD41 모드",
-        "실 PG(연결 정보 있음)" if PG.has_conn() else "스탠드인(sqlite, output/pg_standin) — required.pg를 채우면 코드 변경 없이 실 PG로",
-    )
     try:
         c = PG.conf()
     except (SystemExit, ValueError) as ex:  # ValueError — 형식 틀린 PG_PORT(conf()가 읽는 자리에서 실패, 값은 안 찍음)

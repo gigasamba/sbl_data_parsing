@@ -2,16 +2,16 @@
 
 [PRD.md](../PRD.md)의 카테고리 하나 — 변경을 어떻게 증명하나: 시험 층, 이미지 반입 판정, 스모크, 시험 자료, 답변 점검.
 
-순서: 시험 층·반입 e2-02·e2-11·e2-08·e2-15·e2-21 → 스모크·시험 자료 e2-01·e2-13·e2-09 → 점검 e2-04·e2-05·e2-19·e2-20·e2-07 → 범위 e2-10·e2-17·e2-18 → 코드와 다른 점.
+순서: 시험 층·반입 e2-02·e2-11·e2-08·e2-15·e2-21 → 스모크·시험 자료 e2-01·e2-13·e2-09 → 점검 e2-04·e2-05·e2-19·e2-20·e2-07 → 범위 e2-10·e2-17·e2-18 → DB 시험·경계 점검 e2-22·e2-23 → 코드와 다른 점.
 
 <a id="e2-02"></a>
 ## e2-02 · 시험 층과 기준선
 - 이유: 반입 판정은 네트워크 없이 이미지 안에서 돌아야 한다.
 - 규칙:
-  1. `tests/server/`(이미지 반입 관문 — `python -m pipeline.cli selftest`가 `tests/runner.py`로 실행, 외부 접속 없음) · `tests/general/`(PC 전용: PG, Docker, 느린 것 — pytest).
+  1. `tests/server/`(이미지 반입 관문 — `python -m pipeline.cli selftest`가 `tests/runner.py`로 실행, PG 말고는 외부 접속 없음 — [e2-22](#e2-22)) · `tests/general/`(PC 전용: PG, Docker, 느린 것 — pytest).
   2. 알려진 실패 목록: 반입 `deploy/release/known_fail.txt`, PC `tests/conftest.py` `GENERAL_KNOWN_FAIL`. 목록에 있는 시험이 통과하면 XPASS 경고(목록에서 지움).
-  3. PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕(`run_env: local`만, 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `_PC_SETTINGS_CASES`(지금 빔).
-- 기준선(11-06, feature/pl-57-archive — 0.3.0 + 압축 원본 풀기·문서 안 문서 꺼내기 pl-63): `selftest` 110개 모두 통과 · `pytest tests/` 171 통과 · 3 건너뜀 · 알려진 실패 0(두 목록 모두 빔) · FINGERPRINT `18142592accca442` · code_fp p0 `6a28a3933a40` · p1 `1c5e13dacf01` · r `cdb2625d37e9` · s `e5664b1e5b72`(기록용 — 0.3.0과 달라 서버는 다시 처리) · 엔진 지문(`engine_code_fp`, 기록용): anydoc `01d0d7813c77` · archive `563e19556b61`(새 엔진) · docx2python `9ba622227470` · html_stdlib·mhtml·msg_extract `6b86d3b876c3` · hwpx `1ce4058a3a0a` · kreuzberg `f8cf85542789` · markitdown `00fa7c1d36fc` · office `c18d228eb2e6` · plaintext `e61fe9d86b40` · pymupdf `8611e97ce9ec` · qwen_vlm `a0fd63c5062a`(엔진 폴더는 그대로 — 함께 셈하는 `pipeline/shared/vlmcall.py`의 설정 이름이 바뀜) · rapidocr_ko `1e08f27b5ddd`.
+  3. PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕(`run_env: local`과 부모의 PG 접속만, 다른 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `_PC_SETTINGS_CASES`(지금 빔).
+- 기준선(11-08, slim/load — 0.3.0 + 압축 원본 풀기·문서 안 문서 꺼내기 pl-63·pl-65 · 옛 오피스 검사기 하나로 pl-66 · 실버만 게시 상태 기록 pl-68 · 대표 결과 교차 병합·엑셀 날짜 표기 통일 pl-67 · 검색 MCP 동시 요청 mc-09 · 배포 판정 DB 시험 실 pgvector e2-22): `selftest` 113개 모두 통과(시험 함수 SKIP 0 — e2-22 뒤) · `pytest tests/` 177 통과 · 0 건너뜀 · 알려진 실패 0(두 목록 모두 빔) · FINGERPRINT `50588adec5d6d525` · code_fp p0 `e46c37a6e03f` · p1 `7aaabd66a297` · r `16e085b9ff38` · s `ddaf805dc00a`(기록용 — 0.3.0과 달라 서버는 다시 처리, refactor.md C-114 · e2-22에서 공용 `settings.py`·`layout.py` 설명이 바뀜) · 엔진 지문(`engine_code_fp`, 기록용): anydoc `01d0d7813c77` · archive `563e19556b61`(새 엔진) · docx2python `9ba622227470` · html_stdlib·mhtml·msg_extract `6b86d3b876c3` · hwpx `1ce4058a3a0a` · kreuzberg `e7797391d046` · markitdown `c6263c0c0984` · office `3a5c3859de9c` · plaintext `e61fe9d86b40` · pymupdf `8611e97ce9ec` · qwen_vlm `a0fd63c5062a`(엔진 폴더는 그대로 — 함께 셈하는 `pipeline/shared/vlmcall.py`의 설정 이름이 바뀜) · rapidocr_ko `1e08f27b5ddd`.
 - 지문 확인 명령: [CLAUDE.md](../../CLAUDE.md) §4. 공용·레이어 파일을 고친 커밋은 전후 값을 커밋 메시지에 적는다.
 - QA: `python -m pipeline.cli selftest` · `[판정]` 통과, 기준선보다 나빠지지 않음.
 - Status: done
@@ -109,6 +109,20 @@
 <a id="e2-18"></a>
 ## e2-18 · 요건 없는 코드 두지 않기
 - 규칙: PRD 행이 요청하지 않은 코드는 카테고리 파일 끝 "요건 없는 코드"에 적고 지울지 사람이 정한다. 지울 때 MCP 도구 이름·입출력이 바뀌면 멈추고 묻는다.
+- Status: done
+
+<a id="e2-22"></a>
+## e2-22 · 배포 판정 DB 시험은 진짜 pgvector
+- 요건: PC·dev는 쓰는 시험(임시 스키마 만들고 지움), prd는 읽기만. sqlite 대역과 그 갈림길(`has_conn`)은 지운다.
+- 반영: 11-08 slim/load — `common/store/pg_standin.py`·`has_conn` 갈림길 삭제(앱에 sqlite 대역 없음 — PC도 PG 필수). 시험 도우미 `tests/server/common/pgcase.py`(임시 스키마 `test_<임의 8자>` — `test_`인지 확인 뒤 DROP, `db_write_allowed()` local·dev만 참, prd는 `need_write()`가 SKIP). `tests/runner.py`가 SKIP을 FAIL로 세지 않고 selftest 요약에 `시험 함수 SKIP N`. 읽기 시험 `tests/server/common/test_pg_read.py`(접속·vector 확장·판 번호 끝·표·색인·검색 1회, 세션 읽기 전용). PG에 못 붙으면 DB 사례 FAIL(이유를 적음). 판정 명령: `host_ctl.sh`·`build_ship.sh`가 설정 파일·`--network host`·`RUN_ENV`를 넣는다(release-and-patch §3).
+- QA: `python -m pipeline.cli selftest` 113/113 · `RUN_ENV=prd` 모의(이주한 임시 스키마)에서 쓰는 사례 SKIP·`test_pg_read` 통과.
+- Status: done
+
+<a id="e2-23"></a>
+## e2-23 · 모듈 경계 점검 줄이기
+- 요건: import 경계(①~⑨·⑫)는 남기고 ⑩⑪ 흐름 분석을 글자 검색(분류 주석 없는 `os.environ`·`os.getenv`)으로 바꾼다.
+- 반영: `common/check/check_modules.py` `env_lines`·`env_violations` — 앱 코드(common·pipeline·mcp_server)만 본다. ⑩ 코드(주석·문자열 빼고)에서 `os.`·`_os.` 뒤 `environ`·`getenv` 등을 쓰는 줄은 그 문장이나 바로 위 주석 줄에 분류 주석 `env 남김 — <분류>`가 있어야 한다. ⑪ `env`가 든 줄에서 설정 이름을 글자로 env 사전 키·`env[…]`·`pop`·`setdefault`·`putenv`에 쓰면 위반(분류 `라이브러리`·`시험`·`호스트 도구`는 허용). 잡지 않는 것: `from os import environ`·다른 os 별칭, `dict(os.environ, X=…)` 키워드 꼴, 변수에 담은 이름(`for k in (…): env.pop(k)`), `env`가 안 든 이름의 사전을 나중에 자식에 넘기는 꼴, `tests/`·`validation/`·`deploy/`.
+- QA: `tests/server/common/test_check_modules.py`(`ENV_CASES` 표 · 심은 위반 `pipeline/v_env.py`·`common/v_child.py`) · `python -m common.check.check_modules` · "모듈 경계 통과".
 - Status: done
 
 ## 코드와 다른 점 · 지울 코드

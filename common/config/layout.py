@@ -13,7 +13,7 @@
 SECTIONS = ("required", "common", "extract", "transform", "load", "search", "ops", "tuning", "dev", "option")
 
 # required — (카테고리 열쇠, 제목, [(칸 이름, 모델 경로, 필수 조건)]). 조건은 sample 주석 머리에 그대로 — "필수 · <언제·어느 앱>" 또는 "선택".
-_PG_NEED = "필수 · dev·prd(pipeline·mcp) — local은 비우면 sqlite 대역"
+_PG_NEED = "필수 · 모두(local·dev·prd — pipeline·mcp)"
 _SERVER_NEED = "필수 · dev·prd(pipeline·mcp) — local은 무시(비움)"
 REQUIRED_GROUPS = (
     ("env", "실행 환경", (("run_env", "common.run_env", "필수 · 모두(local·dev·prd)"),)),
@@ -24,7 +24,7 @@ REQUIRED_GROUPS = (
     ),
     (
         "pg",
-        "PostgreSQL(pgvector) — local은 접속 5칸을 모두 비우면 sqlite 대역(일부만 적으면 거부)",
+        "PostgreSQL(pgvector) — 접속 5칸 모두 필수(PC는 시험 pgvector 컨테이너 — 비거나 일부만 적으면 거부)",
         (
             *(
                 (f"pg_{k}", f"common.connections.pg.{m}", _PG_NEED)
@@ -143,7 +143,6 @@ PLACED = {
     "common.connections.rdb.connect_kwargs": "common.connections.edw.edw_extra_connect_args",
     "common.connections.object_storage.region": "common.connections.object_storage.object_storage_region",
     "common.connections.object_storage.verify_tls": "common.connections.object_storage.object_storage_verify_tls",
-    "common.models.embed.query_cache": "common.models.embed.embed_query_cache_file",
     "common.models.embed.query_prefix": "common.models.embed.embed_query_instruction",
     "common.models.llm.extra_body": "common.models.llm.llm_extra_request_body",
     "common.models.llm.rpm": "common.models.llm.llm_max_calls_per_minute",
@@ -160,8 +159,6 @@ PLACED = {
     "pipeline.extract.rapidocr_page_workers": "extract.ocr.rapidocr_page_threads",
     "pipeline.extract.ocr.dpi": "extract.page_render_dpi",
     "pipeline.extract.prepare.rotate": "extract.prepare.rotate_pages",
-    "pipeline.connections.secure_doc.passwords_file": "extract.secure_doc.secure_doc_passwords_file",
-    "pipeline.extract.skipped_log": "extract.skipped_docs_log",
     "pipeline.connections.rdb.bucket": "extract.source.source_default_bucket",
     "pipeline.extract.source.fetch_workers": "extract.source.source_fetch_threads",
     "pipeline.extract.input_source": "extract.source.source_input_location",
@@ -257,7 +254,6 @@ PLACED = {
     # tuning
     "common.connections.pg.connect_timeout": "tuning.common.connections.pg.pg_connect_timeout_sec",
     "common.connections.pg.pool_max": "tuning.common.connections.pg.pg_pool_max_connections",
-    "common.models.embed.query_cache_max": "tuning.common.models.embed.embed_query_cache_max_rows",
     "common.models.embed.timeout": "tuning.common.models.embed.embed_timeout_sec",
     "common.models.llm.empty_retry_max": "tuning.common.models.llm.llm_empty_retry_max_tokens",
     "common.models.llm.timeout": "tuning.common.models.llm.llm_timeout_sec",
@@ -282,7 +278,6 @@ PLACED = {
     "pipeline.extract.hidden_overlap_max": "tuning.extract.max_hidden_overlap_pages",
     "pipeline.extract.rotated_max": "tuning.extract.max_rotated_pages",
     "pipeline.extract.ocr.table_grid": "tuning.extract.ocr.table_grid_from_boxes",
-    "pipeline.connections.rdb.columns.content_version": "tuning.extract.source_columns.source_column_content_version",
     "pipeline.connections.rdb.columns.doc_id": "tuning.extract.source_columns.source_column_doc_id",
     "pipeline.connections.rdb.columns.size": "tuning.extract.source_columns.source_column_file_size",
     "pipeline.connections.rdb.columns.filename": "tuning.extract.source_columns.source_column_filename",
@@ -319,6 +314,7 @@ PLACED = {
     "mcp.search.pg.filter_exact_max": "tuning.search.pg.exact_search_max_chunks",
     "mcp.search.methods": "tuning.search.search_default_methods",
     "mcp.server.max_queue": "tuning.search.server.mcp_max_queued_tools",
+    "mcp.server.pg_statement_timeout_sec": "tuning.search.server.mcp_pg_statement_timeout_sec",
     "mcp.server.reload_check_sec": "tuning.search.server.mcp_reload_check_sec",
     "mcp.server.tool_timeout_sec": "tuning.search.server.mcp_tool_timeout_sec",
     "mcp.search.weights.bm25_table": "tuning.search.weights.bm25_table_weight",
@@ -359,8 +355,6 @@ PLACED = {
     "common.models.llm.price_out": "dev.models.llm.llm_price_out_usd_per_mtok",
     "common.models.vlm.allow_external": "dev.models.vlm.vlm_allow_external",
     "common.models.vlm.est_usd": "dev.models.vlm.vlm_est_usd_per_call",
-    "common.connections.pg.standin_dir": "dev.pg_standin.pg_standin_dir",
-    "common.connections.pg.standin_schema": "dev.pg_standin.pg_standin_schema",
     "mcp.dev.mcp_url": "dev.search_ui.search_ui_mcp_url",
     "mcp.dev.ui_port": "dev.search_ui.search_ui_port",
     # dev — local(PC) 전용 값(op-14: local은 서버 전용 칸을 무시하고 이 값을 씀)
@@ -374,7 +368,6 @@ MOVED = {"required.edw.edw_local_sqlite_file": "dev.local.local_edw_sqlite_file"
 
 # tuning — 거의 안 바꾸는 값(sample 아래쪽에 분류별로 모음 — 비우면 코드 기본값).
 TUNING_INTERNAL = (  # 내부 조정값 — 재시도·내부 대기·묶음 크기·출력 상한
-    "common.models.embed.query_cache_max",
     "common.models.llm.empty_retry_max",
     "common.models.vlm.retry",
     "common.models.transport.connect_timeout",
@@ -395,6 +388,7 @@ TUNING_INTERNAL = (  # 내부 조정값 — 재시도·내부 대기·묶음 크
     "pipeline.service.data_parsing.queue_max",
     "pipeline.service.data_parsing.text_page_sec",
     "pipeline.service.data_parsing.warmup_sec",
+    "mcp.server.pg_statement_timeout_sec",
     "mcp.server.reload_check_sec",
     "mcp.server.tool_timeout_sec",
     "mcp.edw_meta.max_bytes",
@@ -429,7 +423,6 @@ TUNING_RARE = (  # 결과 파라미터(청크·순위·그림 고르기)·내부
     "common.log.db_timeout_sec",
     "common.log.shutdown_sec",
     "pipeline.connections.rdb.increment_col",
-    "pipeline.connections.rdb.columns.content_version",
     "pipeline.connections.rdb.columns.doc_id",
     "pipeline.connections.rdb.columns.filename",
     "pipeline.connections.rdb.columns.key",
@@ -475,7 +468,7 @@ TUNING_RARE = (  # 결과 파라미터(청크·순위·그림 고르기)·내부
 )
 TUNING = frozenset(TUNING_INTERNAL + TUNING_RESOURCE + TUNING_RARE)
 
-# PC 전용 칸 — 서버(dev·prd)는 외부 모델·로컬 대체 DB를 거부하므로 비워 둔다. 파일 자리 dev.<역할 자리>(sample 맨 아래 절).
+# PC 전용 칸 — 서버(dev·prd)는 외부 모델을 거부하므로 비워 둔다. 파일 자리 dev.<역할 자리>(sample 맨 아래 절).
 LOCAL = (
     "common.models.embed.allow_external",
     "common.models.llm.allow_external",
@@ -487,8 +480,6 @@ LOCAL = (
     "common.models.llm.price_out",
     "common.models.guard.budget_usd",
     "common.models.guard.spend_file",
-    "common.connections.pg.standin_dir",
-    "common.connections.pg.standin_schema",
 )
 
 
@@ -620,7 +611,7 @@ def to_model(doc, source=""):
 
 
 def to_file(model_doc):
-    """모델 배치 사전 → 파일 사전(SECTIONS 순서). sample·시험이 쓴다."""
+    """모델 배치 사전 → 파일 사전(SECTIONS 순서). 시험이 설정 파일을 만들 때 쓴다."""
     out = {}
     for p, v in _leaves(model_doc or {}):
         set_path(out, to_yaml(p), v)

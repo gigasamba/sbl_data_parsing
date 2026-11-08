@@ -1,6 +1,6 @@
 """마스터 표 읽기·채우기(pl-38·op-17) — 용어집·고객 명부·ID 꼴의 원본은 git CSV `resources/vocab/glossary/glossary.csv`, 실행 중에는
 검색 PG의 `<PG_SCHEMA>_master.glossary` 표만 읽는다. 읽는 곳: common.core.terms(구조화 고객 판별·검색) — 프로세스마다 한 번(get()).
-서버(dev·prd)는 마스터를 못 읽으면 멈춘다(SystemExit). PC·시험(PG 접속 없음)은 같은 CSV로 채운 SQLite 대역(output/pg_standin/<스키마>_master.sqlite).
+마스터를 못 읽으면 멈춘다(SystemExit — PC도 같음: `dbtool up --target master` 뒤 `dbtool master load`).
 glossary는 melt 꼴(유사값마다 한 줄 — 구분·원본 값·유사값·유사 종류·설명·문맥 필요·대소문자 구분). terms.py(핸드오프 파일 — 고치지 않음)가
 읽던 행 모양(`rows("domain_terms")`·`rows("client_roster")`·`rows("id_patterns")`)으로 되돌려 넘긴다(op-17 규칙 21).
 해시 = 머리글·row_no 순서 행의 sha256(16진) — 읽을 때 계산. `gold_version` `<VERSION>+m<앞 8자>`(적재 — 구조화가 읽은 값을 묶음 meta.json으로 넘김)."""
@@ -208,7 +208,7 @@ def convert(src, out):
 
 
 def load(db, rows=None):
-    """glossary 내용을 CSV로 통째로 바꾼다(한 트랜잭션). db = PG·StandinPG(schema = 마스터 스키마). 반환: 해시.
+    """glossary 내용을 CSV로 통째로 바꾼다(한 트랜잭션). db = PG(schema = 마스터 스키마). 반환: 해시.
     쓰기 전에 옛 행 모양으로 되돌려 본다 — 읽을 때 거부될 내용(모르는 구분·유사 종류 등)은 표를 바꾸지 않고 SystemExit."""
     rows = read_csv() if rows is None else rows
     to_tables(rows)
@@ -239,42 +239,19 @@ def read(db):
     return Master(rows)
 
 
-def _standin(base):
-    """PC 대역 — 표가 없으면 만들고 CSV로 채움(실 PG와 같은 칸). git CSV가 바뀌었으면 다시 채움(PC 대역만 — 서버는 `dbtool master load`)."""
-    from sqlalchemy.dialects import postgresql
-    from sqlalchemy.schema import CreateTable
-
-    from common.store.db.models.master_tables import master_metadata
-    from common.store.pg_standin import StandinPG
-
-    db = StandinPG(schema_name(base))
-    if not db.q("SELECT name FROM sqlite_master WHERE type='table' AND name=%s", (TABLE,)):
-        d = postgresql.dialect()
-        for t in master_metadata(db.schema).tables.values():
-            db.q(str(CreateTable(t).compile(dialect=d)).strip())
-    rows = read_csv()
-    if content_hash(_select(db)) != content_hash(rows):
-        load(db, rows)
-    return db
-
-
 def get():
-    """이 프로세스의 마스터(처음 한 번 읽음). 실 PG(common.store.pg 접속)는 `<PG_SCHEMA>_master`, 접속 정보가 없으면 PC 대역 — 서버는 대역을 쓰지 않고 멈춤."""
+    """이 프로세스의 마스터(처음 한 번 읽음) — common.store.pg 접속의 `<PG_SCHEMA>_master`."""
     with _GOT_LOCK:
         m = _GOT.get("m")
         if m is None:
-            from common.store.pg import PG, _standin_schema, _warn_standin, conf, has_conn
+            from common.store.pg import PG, conf
 
-            if has_conn():
-                c = conf()
-                db = PG({**c, "PG_SCHEMA": schema_name(c["PG_SCHEMA"])})
-                try:
-                    m = read(db)
-                finally:
-                    db.cn.close()
-            else:
-                _warn_standin()  # 서버(dev·prd)는 여기서 SystemExit
-                m = read(_standin(_standin_schema(None)))
+            c = conf()
+            db = PG({**c, "PG_SCHEMA": schema_name(c["PG_SCHEMA"])})
+            try:
+                m = read(db)
+            finally:
+                db.cn.close()
             _GOT["m"] = m
         return m
 

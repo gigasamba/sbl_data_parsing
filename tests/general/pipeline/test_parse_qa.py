@@ -53,7 +53,7 @@ def selftest():
         truth_path = td / "truth.json"
         truth_path.write_text(json.dumps(truth, ensure_ascii=False), encoding="utf-8")
 
-        qa, route = run(parse_dir, src_dir, truth_path, None)
+        qa = run(parse_dir, src_dir, truth_path, None)
         d1 = qa["docs"]["doc1.txt"]["engines"]
         assert d1["good"]["cer"] == 0.0, d1["good"]
         assert d1["good"]["value_recall"] == 1.0, d1["good"]
@@ -63,12 +63,10 @@ def selftest():
         assert d1["halluc"]["num_halluc"] > 0, d1["halluc"]
         assert d1["empty"]["ok"] is False
         assert qa["docs"]["doc2.txt"]["ref"] == "consensus", qa["docs"]["doc2.txt"]["ref"]
-        assert route[".txt"][0] == "good" and route[".txt"][-1] == "empty", route
         print(
             "selftest OK —",
             json.dumps(
                 {
-                    "route": route,
                     "doc1_good_cer": d1["good"]["cer"],
                     "doc1_halluc_num_halluc": d1["halluc"]["num_halluc"],
                     "doc2_ref": qa["docs"]["doc2.txt"]["ref"],

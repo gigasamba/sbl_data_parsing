@@ -7,7 +7,7 @@ mcp_server/config.py(common + mcp 절). 이 파일은 common 절 모델과 두 �
   · env에서 읽는 것은 신호 둘(RUN_ENV·SETTINGS_FILE)뿐이다. 칸의 env 이름으로 env에 준 값은 읽지 않는다.
     엔진·인계 파일도 설정 객체로 읽는다.
   · 덮기 파일: 최상위 `base:`(다른 설정 파일 경로 — 먼저 읽음)와 `overrides:`({env 이름: 글자|null}, null = 그 칸 비움)만 든
-    작은 yaml. 프로세스 안 put()·자식용 child_env()·PC 한 번 실행용 `python -m common.config.overrides`가 만들고 SETTINGS_FILE로 가리킨다(원본 비밀을
+    작은 yaml. 프로세스 안 put()·자식용 child_env()·명령 인자 `--set`(common.config.setarg)이 만들고 SETTINGS_FILE로 가리킨다(원본 비밀을
     복사하지 않음 — 원본은 base로 가리킴). overrides 값은 env 글자 꼴로 판정한다(켜기 칸 '1'·'0' 등).
   · 모델 기본값 None은 "읽는 코드가 정함"이다: 코드가 계산하는 기본값(경로·CPU 수 등) · 자리마다 다른 기본값 · 있고 없음을 코드가 가르는
     칸 · JSON 칸(없으면 안 붙임).
@@ -67,7 +67,7 @@ IMAGE_PATHS = {
 IMAGE_PATHS["prepared_out"] = IMAGE_PATHS["output_root"] + "/prepared"  # 원본 사본(prepare) 자리(pipeline DOC_DIR_PREPARED 기본값)
 # 이미지 안 모델 기본값 — 규칙은 "settings.yaml > 코드 기본값" 하나라 Dockerfile ENV로 굽지 않고 여기 둔다.
 # 이미지 신호 RAG_MODULE로 그 이미지 값만 고른다. PC·시험 하위 프로세스(RAG_MODULE 없음)는 PC 기본값.
-_IMAGE_DEFAULTS = {
+_IMAGE_DEFAULTS: dict[str, dict[str, object]] = {
     "pipeline": {
         "DOC_DIR": IMAGE_PATHS["docs_mount"],
         "DOC_DIR_PREPARED": IMAGE_PATHS["prepared_out"],
@@ -76,7 +76,6 @@ _IMAGE_DEFAULTS = {
         "APPLOG_DB_ENABLED": True,  # 서버 로그는 Postgres(applog)
     },
     "mcp": {
-        "EMBED_QUERY_CACHE": "/tmp/mcp_query_cache.sqlite",  # 질의 캐시
         "APPLOG_DB_ENABLED": True,  # 서버 로그는 Postgres(applog)
     },
 }
@@ -457,32 +456,6 @@ def is_secret(field):
 def is_host(path):
     """호스트(compose·systemd·셸) 절 — 앱 프로세스 안에서는 쓰지 않음(호스트 스크립트가 export로 받음)."""
     return "host" in path.split(".")[:-1]
-
-
-def type_label(annotation):
-    names = []
-    for a in _args(annotation):
-        if a is CsvList:
-            names.append("목록(쉼표 또는 YAML 목록)")
-        elif a is CsvText:
-            names.append("글자(쉼표 목록 — 원문 그대로, YAML 목록은 쉼표로 이음)")
-        elif a is WordList:
-            names.append("목록(공백 또는 YAML 목록)")
-        elif a is JsonValue:
-            names.append("JSON(사전·목록)")
-        elif a is AutoWord:
-            names.append("auto")
-        elif a is Port:
-            names.append("int(포트 — 정수만)")
-        elif a is LibEnv:
-            names.append("사전(라이브러리 env 이름: 글자)")
-        elif get_origin(a) is Literal:
-            names.append("|".join(map(str, get_args(a))))
-        elif get_origin(a) in (list, dict):
-            names.append(get_origin(a).__name__)
-        else:
-            names.append(getattr(a, "__name__", str(a)))
-    return " | ".join(names)
 
 
 def env_map(model_cls, *, hosts=False):
@@ -1011,7 +984,7 @@ def app_classes(names=("pipeline", "mcp")):
     return out
 
 
-# ── 덮기 파일 — 같은 프로세스(put)·자식(child_env)·PC 한 번 실행(common.config.overrides) ─────────────
+# ── 덮기 파일 — 같은 프로세스(put)·자식(child_env)·한 번 실행(--set — common.config.setarg) ─────────────
 _GEN = [0]  # put()이 올림 — 모든 Cache가 다음 get()에서 다시 읽음
 
 
@@ -1039,20 +1012,6 @@ def _check_names(names):
     return known
 
 
-def overridden(environ=None):
-    """지금 설정 파일(SETTINGS_FILE 덮기 파일 사슬)의 overrides에 든 이름 — 공유 settings.yaml 위에 한 번 덮은 값
-    (mcp_eval client_only_env가 씀). 덮기 파일이 아니거나 못 읽으면 빈 묶음."""
-    environ = os.environ if environ is None else environ  # env 남김 — 설정 파일 자리 신호
-    run = environ.get("RUN_ENV") or None
-    path = find_file(environ, run if run in RUN_ENVS else None)
-    if path is None:
-        return frozenset()
-    try:
-        return frozenset(read_settings(path)[1])
-    except SettingsError:
-        return frozenset()
-
-
 def _env_text(v):
     if v is None:
         return None
@@ -1065,7 +1024,7 @@ def overlay_file(names, base=None, environ=None):
     """덮기 파일을 만든다 — base(설정 파일 — 없으면 지금 SETTINGS_FILE·로컬 파일)를 가리키고 names({env 이름: 값|None})를 overrides로 든
     yaml을 임시 파일(mktemp — 권한 600)로 쓴다. 원본 내용(비밀)은 복사하지 않는다(base로 가리킴). base가 덮기 파일이면
     그 base·overrides를 이어받아 한 단으로. 지우는 것은 부른 쪽 몫 — put·child_env는 이 프로세스가 끝날 때(exitclean, 자식을 먼저
-    끝낸 뒤), isolated는 블록이 끝날 때, overrides 도구(경로를 다른 프로세스에 넘김)는 안 지움. 반환: 경로."""
+    끝낸 뒤), isolated는 블록이 끝날 때. 반환: 경로."""
     import tempfile
 
     import yaml
@@ -1354,10 +1313,6 @@ class CommonConnectionsPg(Section):
     pool_max: int | None = F(8, "PG_POOL_MAX", "검색 MCP PostgreSQL 연결 풀 최대 연결 수")
     port: Port | None = F(None, "PG_PORT", "PostgreSQL 포트(필수 — op-09)")
     db_schema: str | None = F("data_parsing", "PG_SCHEMA", "pgvector 기본 스키마 이름(소문자·숫자·_ — 여러 벌도 같은 스키마, op-09·op-17)")
-    standin_dir: str | None = F(None, "PG_STANDIN_DIR", "PG 접속 정보가 없을 때 쓰는 로컬 대체 DB(sqlite) 폴더", repo=True)
-    standin_schema: str | None = F(
-        "data_parsing", "PG_STANDIN_SCHEMA", "로컬 대체 DB(sqlite)의 스키마 이름 — PG_SCHEMA가 비었을 때(PC 전용, op-09)"
-    )
     user: str | None = F(None, "PG_USER", "PostgreSQL 접속 계정 이름(필수 — op-09)")
 
 
@@ -1384,12 +1339,6 @@ class CommonModelsEmbed(Section):
     base_url: str | None = F(None, "EMBED_BASE_URL", "임베딩 엔드포인트 주소(OpenAI 호환 …/v1)")
     est_usd: float | None = F(0.001, "EMBED_EST_USD", "임베딩 호출 1건당 예상 비용($) — 예산 선차감용")
     model: str | None = F(None, "EMBED_MODEL", "임베딩 모델 이름(색인과 같아야 함 — 질의 임베딩·캐시 열쇠에도 씀)")
-    query_cache: str | None = F(
-        image_default("EMBED_QUERY_CACHE"),
-        "EMBED_QUERY_CACHE",
-        "질의 임베딩 캐시 sqlite 경로(0이면 캐시 끔 — mcp 이미지 안 기본 /tmp/mcp_query_cache.sqlite: 결과 폴더가 읽기 전용)",
-    )
-    query_cache_max: int | None = F(20000, "EMBED_QUERY_CACHE_MAX", "질의 임베딩 캐시 최대 행 수(넘으면 오래된 것부터 삭제, 0이면 무제한)")
     query_prefix: str | None = F(None, "EMBED_QUERY_PREFIX", "질의 임베딩 앞에 붙이는 지시 문구(예: 'Instruct: …\\nQuery: ')")
     timeout: int | None = F(60, "EMBED_TIMEOUT", "임베딩 API 호출 제한 시간(초)")
 

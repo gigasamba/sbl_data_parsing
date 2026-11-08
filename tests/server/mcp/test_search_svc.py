@@ -9,7 +9,7 @@ from mcp_server.schemas.evidence import EVIDENCE_KEYS, SEARCH_TOP_KEYS
 from mcp_server.services.search import search_svc as M
 from mcp_server.services.search.evidence_shape import evidence_status
 from mcp_server.services.search.server_state import _STATE
-from tests.server.mcp import pgfix  # mc-01(11-01) — 검색은 PG 하나: 묶음을 SQLite 대역에 적재(임시 폴더, 실 PG 안 닿음)
+from tests.server.mcp import pgfix  # mc-01(11-01) — 검색은 PG 하나: 묶음을 실 pgvector 임시 스키마(`test_*`)에 적재
 
 
 def do_search(question=None, k=8, **filters):
@@ -459,3 +459,31 @@ def test_date_bound():
         except ValueError as e:
             got_search = str(e)
         assert (got_ft, got_search) == (want_ft, want_search), (v, upper, got_ft, got_search)
+
+
+def test_source_docs():
+    """scope_docs(source_system만) — 재적재 확인이 든 개수(_STATE["version"])를 쓰고, 그 원천 값이 없거나 None이면 COUNT(*) 질의."""
+    from types import SimpleNamespace
+
+    calls = []
+    pg = SimpleNamespace(schema="s_sfdc", q=lambda sql, p=None: calls.append(sql) or [{"n": 9}])
+    cases = [  # (_STATE["version"], 기대 개수, 질의 수)
+        ((("crms", 3, 2), ("sfdc", 40, 7)), 7, 0),
+        ((("sfdc", None, None),), 9, 1),  # 접속이 흔들려 개수 없음
+        ((("crms", 3, 2),), 9, 1),  # 그 원천 값 없음
+        (None, 9, 1),  # 버전 표식 없음
+    ]
+    saved = dict(_STATE)
+    try:
+        for version, want, n_q in cases:
+            _STATE.clear()
+            if version is not None:
+                _STATE["version"] = version
+            calls.clear()
+            with patch.object(M, "_retriever", return_value=SimpleNamespace(pg=pg)):
+                got = M._source_docs("sfdc")
+            assert (got, len(calls)) == (want, n_q), (version, got, calls)
+    finally:
+        _STATE.clear()
+        _STATE.update(saved)
+    print("[selftest] scope_docs — 적재 버전의 개수를 씀(없을 때만 COUNT) 통과")

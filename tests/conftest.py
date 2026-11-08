@@ -65,6 +65,11 @@ class RunnerItem(pytest.Item):
             if reason:
                 pytest.xfail(f"알려진 FAIL — {reason}")
             raise RunnerFailed((r.stdout + r.stderr)[-4000:])
+        skipped = [ln for ln in r.stdout.splitlines() if ln.startswith("[시험] SKIP ")]
+        if skipped and "[시험] PASS " not in r.stdout:
+            pytest.skip("; ".join(skipped))
+        if skipped:  # 일부만 SKIP — 통과로 두고 경고 요약에 알림
+            warnings.warn(pytest.PytestWarning("; ".join(skipped)), stacklevel=1)
         if (
             reason
         ):  # VS9 R-4 — 알려진 FAIL이 통과: PASS로 두되 경고 요약에 알림(목록에서 지울 수 있음 — 이미지 selftest_gate.sh와 같은 신호)

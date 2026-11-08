@@ -19,7 +19,7 @@
 | `deploy/docker/` | Dockerfile, requirements, entrypoint, `wheels/` | 앱 로직 | (빌드 원본) |
 | `deploy/release/` | 빌드·전송·굽기·배포 판정 스크립트, `known_fail.txt`, `lint_changed.sh` | 앱 로직 | 일부(배포 판정 파일) |
 | `deploy/host/` | **서버 호스트**에서 실행하는 compose, systemd, 셸 스크립트, `run_pipeline.py` | 컨테이너 안에서 실행되는 코드 | 아니요 |
-| `tests/` | 테스트 — `server/`(이미지 안에서 배포 판정에 쓰는 테스트, 외부 접속 없이 실행됨), `general/`(PC 전용 — PG·Docker가 필요하거나 느린 테스트), `runner.py` | 앱 코드 | `server/`만 |
+| `tests/` | 테스트 — `server/`(이미지 안에서 배포 판정에 쓰는 테스트, PG 말고는 외부 접속 없이 실행됨), `general/`(PC 전용 — PG·Docker가 필요하거나 느린 테스트), `runner.py` | 앱 코드 | `server/`만 |
 | `validation/` | PC 전용 **검증 도구 코드** — `search_ui/`(검증 페이지), `e2e/`(평가·비교·answer_gen) | 서버에서 실행되는 코드, 데이터 번들 | 아니요 |
 | `valid_env/` | PC 전용 **데이터** — 외부 시스템 대역: 테스트 문서(`object_storage/` — 버킷 모양, `CRMS`·`SFDC`·`LAS`·`FAQ`), 합성 EDW·회사 DB 표(`edw/`), 답변 점검 agent(`answer_test/`), PC 테스트 Docker(`docker/`) | 코드 로직, 비밀값, 운영 데이터 | 아니요 |
 | `docs/` | 사람이 읽는 문서 — `PRD.md`·`prd/`(요건), `operations/`, `architecture/`, `refactoring/`(`refactor.md` — 서버·사람 확인 사항), `history/`(지난 기록) | 코드 | 아니요 |
@@ -27,7 +27,7 @@
 **모듈 경계(자동 점검 — `python -m common.check.check_modules`):**
 - `pipeline`과 `mcp_server`는 서로 import하지 않는다. 함께 쓸 코드는 `common`으로 올린다.
 - 앱(`common`, `pipeline`, `mcp_server`)은 `validation`과 `tests`를 import하지 않는다. PC에서만 쓰는 기능은 `importlib`에 모듈 이름 문자열을 넘겨 불러온다.
-- `pipeline` 안에서는 extract → transform → load 방향을 지킨다. 거꾸로 import하지 않는다(⑫ "단계 방향" — 함수 안 늦은 import도 센다).
+- `pipeline` 안에서는 extract → transform → load 방향을 지킨다. 거꾸로 import하지 않는다(⑫ "단계 방향" — 함수 안 늦은 import도 센다. 허용 예외는 [pl-68](docs/prd/load.md#pl-68)의 둘뿐).
 - 설정 값을 환경변수에서 직접 읽지 않는다(⑩ "os.environ 0", ⑪ "자식 프로세스 env에 설정 이름 0" — §3).
 - `mcp_server/routers`에는 도구 등록만 두고 로직은 `services`에, 출력 구조는 `schemas`에 둔다.
 
@@ -59,7 +59,7 @@
 - 코드는 설정 객체로 값을 읽는다 — 공용은 `common.config.settings.cfg()`, 파이프라인은 `pipeline.config.cfg()`, 검색은 `mcp_server.config.cfg()`. **`os.environ`이나 `os.getenv`로 설정을 읽지 않는다**(남은 env 줄은 라이브러리용, 하위 프로세스용, 내부 신호용뿐이며 분류 주석이 필수다 — check_modules ⑩).
 - **새 설정 항목을 추가할 때:** 해당 섹션의 모델(`common/config/settings.py`, `pipeline/config.py`, `mcp_server/config.py`)에 항목·설명·기본값·옛 env 이름(alias)을 넣는다 → `python -m common.config.sample`로 sample을 다시 만든다 → `python -m common.config.keyscan --check`를 실행한다 → 운영에 영향이 있으면 [docs/operations/env-guide.md](docs/operations/env-guide.md)와 `refactor.md`에 적는다.
 - 기본값은 코드에, 환경마다 다른 값은 settings.yaml에 둔다. 비워 둔 항목은 코드 기본값을 쓴다.
-- 자식 프로세스에 값을 넘길 때는 env dict가 아니라 `settings.child_env(base, X=…)`(그 자식에게만) 또는 `settings.put(X=…)`(현재 프로세스와 이후 자식 모두)를 쓴다. 한 번만 다른 값으로 실행할 때는 명령 인자 `--set 이름=값`을 쓴다(진입 모듈에서 `setarg.apply()`). PC에서는 덮어쓰기 설정 파일 `python -m common.config.overrides`도 쓸 수 있다.
+- 자식 프로세스에 값을 넘길 때는 env dict가 아니라 `settings.child_env(base, X=…)`(그 자식에게만) 또는 `settings.put(X=…)`(현재 프로세스와 이후 자식 모두)를 쓴다. 한 번만 다른 값으로 실행할 때는 명령 인자 `--set 이름=값`을 쓴다(모든 진입 모듈에서 `setarg.apply()` — `mcp_server.main`·`ask` 포함).
 - `RUN_ENV`(`required.env.run_env`)는 `local`, `dev`, `prd` 중 하나다(그 밖의 값이면 시작 거부). 서버(dev, prd)는 외부 모델 호출을 거부하고, `dev.fake_llm`(가짜 LLM 응답)가 켜져 있으면 시작하지 않으며, 설정 파일을 읽지 못하면 시작하지 않는다. 외부 모델·가짜 LLM은 `local`에서만 쓴다. PC 전용 분기는 `paths.LOCAL_RUN` 하나로만 가른다.
 - 비밀값은 문서, 로그, 커밋, 채팅, 오류 메시지에 쓰지 않는다. 화면에 키를 출력하지 않는다.
 
@@ -131,7 +131,7 @@ export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자�
 ```
 - 루트 `settings.yaml`에는 `required.env.run_env: local`, 전용 PG 접속 정보(`required.pg`), 임베딩·LLM·VLM 주소·모델·키(`required.models`), (부하가 높은 PC라면) `tuning.ops.runtime.max_cpu_load`를 둔다. 예시는 README §4-2에 있다.
 - 작업 폴더(worktree)에는 `settings.yaml`이 없다 — 거기서 점검·시험은 `export RUN_ENV=local`을 먼저(없으면 `output/`이 저장소 한 단계 위에 생긴다 — `paths.PROJ_ROOT`). 하위 에이전트 지시에도 넣는다.
-- 전용 pgvector 컨테이너(PG 16 + pgvector, 예: `127.0.0.1:55433`)를 쓴다. PG 접속 항목(`required.pg`)은 모두 채우거나 모두 비운다 — 일부만 채우면 시작을 거부한다(자동 탐색 없음). 다른 작업의 DB와 포트를 쓰지 않는다.
+- 전용 pgvector 컨테이너(PG 16 + pgvector, 예: `127.0.0.1:55433`)를 쓴다 — 없거나 멈췄으면 DB 시험이 스스로 띄우고(settings.yaml `required.deploy.pg_container_name`) 손으로는 README §4-1 "PC 시험 DB 준비" 순서로 띄운다(DB 시험은 이 PG가 없으면 FAIL). PG 접속 항목(`required.pg`)은 모두 채운다 — 빈 칸이 있으면 시작을 거부한다(자동 탐색 없음, sqlite 대역 없음). 다른 작업의 DB와 포트를 쓰지 않는다.
 - 백그라운드 프로세스는 PID를 파일에 남기고 **PID로만** 종료한다(`pkill -f` 패턴 금지).
 - 검색 스키마 테이블은 마이그레이션이 만든다(`dbtool up --target all --schema <이름> --bundle <묶음>` — README §4-4).
 
@@ -151,19 +151,19 @@ export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자�
 - 알려진 실패가 통과하면 "XPASS — 목록에서 지울 수 있음" 경고가 나온다. 그때는 목록에서 지운다. **새 실패를 알려진 실패 목록에 추가하는 것은 고장을 숨기는 일이다** — 원인과 결정을 refactor.md에 적고 사람의 승인을 받은 뒤에만 추가한다.
 
 ### 6-4. 테스트 작성
-- 서버 이미지 안에서 외부 접속 없이 실행되고 배포 판정에 쓰는 테스트는 `tests/server/<common|pipeline|mcp>/`에, PC 전용(PG·Docker·외부 모델이 필요하거나 느린 것) 테스트는 `tests/general/<…>/`에 둔다. 파일 이름은 `test_<모듈>.py`다(20자 규칙 — 길면 줄인다).
+- 서버 이미지 안에서 PG 말고는 외부 접속 없이 실행되고 배포 판정에 쓰는 테스트는 `tests/server/<common|pipeline|mcp>/`에, PC 전용(PG·Docker·외부 모델이 필요하거나 느린 것) 테스트는 `tests/general/<…>/`에 둔다. 파일 이름은 `test_<모듈>.py`다(20자 규칙 — 길면 줄인다).
 - 테스트는 pytest 형식(`test_*` 함수 + `assert`)으로 쓴다. 이미지에서는 `pipeline.cli selftest`(`tests/runner.py`)가, PC에서는 pytest가 실행한다. 이미지에는 pytest가 없다.
-- 테스트는 **멱등**하게 만든다. 공용 개발 PG에 흔적을 남기지 말고 임시 SQLite나 임시 스키마(`orca_*`, `test_*`)를 쓰며, 이름을 다시 확인한 뒤 정리한다. 설정은 `with pc.PIPE.env(X=…)`, `settings.isolated()` 같은 테스트 도우미로 덮어쓴다(os.environ을 건드리지 않는다). 함수를 바꿔 끼울 때는 `unittest.mock.patch.object`를 쓴다.
+- 테스트는 **멱등**하게 만든다. 공용 개발 PG에 흔적을 남기지 말고 임시 SQLite나 임시 스키마(`orca_*`, `test_*`)를 쓰며, 이름을 다시 확인한 뒤 정리한다. 배포 판정 시험의 DB 사례는 `tests/server/common/pgcase.py`(임시 스키마 `test_*`, prd에서는 쓰는 사례 SKIP)를 쓴다. 설정은 `with pc.PIPE.env(X=…)`, `settings.isolated()` 같은 테스트 도우미로 덮어쓴다(os.environ을 건드리지 않는다). 함수를 바꿔 끼울 때는 `unittest.mock.patch.object`를 쓴다.
 - 앱 모듈 안에 `selftest()`나 `if __name__ == "__main__":` 점검 코드를 새로 두지 않는다. 테스트는 `tests/`에 둔다.
 - 고정 데이터: 외부 시스템을 흉내 내는 데이터(문서·정답·EDW 대역)는 `valid_env/`에 둔다([e2-09](docs/prd/test.md#e2-09)). 서버 배포 테스트는 `valid_env`가 없는 이미지에서도 돌게 데이터를 임시 폴더에 만들어 쓴다.
 
 ### 6-5. 스모크 테스트 — 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색
-README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. 실행마다 다른 값은 `--set`(파이프라인 진입점)이나 덮어쓰기 설정 파일(`python -m common.config.overrides` — `mcp_server.main`, `ask`처럼 `--set`을 받지 않는 명령)로 준다. 테스트 문서는 `valid_env/object_storage/{SFDC,CRMS}/`에 있고(문서 목록은 README §4-4), 임베딩 캐시는 `output/edw/embed_cache.sqlite`다(같은 청크는 다시 호출하지 않는다 — 실제 호출을 확인하려면 `EMBED_CACHE=<빈 sqlite>`).
+README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. 실행마다 다른 값은 `--set`으로 준다(파이프라인 진입점·`mcp_server.main`·`ask` 모두). 테스트 문서는 `valid_env/object_storage/{SFDC,CRMS}/`에 있고(문서 목록은 README §4-4), 임베딩 캐시는 `output/edw/embed_cache.sqlite`다(같은 청크는 다시 호출하지 않는다 — 실제 호출을 확인하려면 `EMBED_CACHE=<빈 sqlite>`).
 
 ### 6-6. 검증 페이지와 이미지 빌드
 - 검증 페이지: `validation/search_ui/start_mcp.sh`와 `start_ui.sh`로 띄운다(설정은 루트 `settings.yaml` 하나 — `search.server`, `dev.search_ui`, PG 접속 `required.pg`, 외부 임베딩 `dev.models.embed.embed_allow_external` — README §4-2 예시). 주소는 http://127.0.0.1:8791 이다. 자세한 내용은 README §4-6.
 - 서버에 올릴 이미지를 빌드하기 전에 `assets/`를 채운다(`PYTHONPATH=. python deploy/release/assets.py pack` — [release-and-patch §5-6](docs/operations/release-and-patch.md#5-6-반입-자산assets-준비--이미지-빌드-전)).
-- 이미지: `ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh` → `bash deploy/release/selftest_gate.sh docker run --rm data-pipeline:<태그> selftest`(판정은 종료 코드가 아니라 `[판정]` 줄로 한다). PC 시험 빌드는 태그를 작업마다 새로 붙인다(TAG를 빼면 `data-pipeline:<VERSION>` — 배포용 버전 태그이고, 이미 있으면 `build_ship.sh`가 멈춘다). push와 서버 배포는 사람이 한다.
+- 이미지: `ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh` → `bash deploy/release/selftest_gate.sh docker run --rm data-pipeline:<태그> selftest`(판정은 종료 코드가 아니라 `[판정]` 줄로 한다). 판정 시험의 DB 사례는 PG에 붙는다 — `build_ship.sh`가 설정 파일·`--network host`·`RUN_ENV`를 넣고 PC 빌드는 `--set PG_HOST=host.docker.internal`을 붙인다(손으로 돌릴 때도 같게 — release-and-patch §3). PC 시험 빌드는 태그를 작업마다 새로 붙인다(TAG를 빼면 `data-pipeline:<VERSION>` — 배포용 버전 태그이고, 이미 있으면 `build_ship.sh`가 멈춘다). push와 서버 배포는 사람이 한다.
 - **배포 단계마다 이미지와 코드의 구성이 다르다**(README §5-0). ① PC(local) → 개발 서버(dev): 코드가 없는 실행 이미지(`IMAGE_TARGET=pipeline-runtime|mcp-runtime`) + PC 커밋의 코드 묶음을 개발 서버 루트에 푼 코드 폴더를 `/app/deploy`에 읽기 전용으로 마운트한다(`host_ctl.sh`가 자기 코드 폴더를 `CODE_DIR`로 잡음). ② 개발 서버 → 운영 서버(prd): 개발 서버에서 `deploy/release/bake_prod_image.sh`로 같은 실행 이미지 + 시험한 코드 폴더를 묶어 코드가 든 이미지를 만든다(코드 폴더 없이 실행). Dockerfile의 코드 포함 타깃(`pipeline`·`mcp`)은 PC 시험과 비상용이다.
 
 ---

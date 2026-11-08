@@ -25,7 +25,7 @@ HEAD = """# settings.sample.yaml — 설정 파일 구조와 설명. 생성: pyt
 #   [필수 · 언제(어느 앱)] — 언제 = 모두·local(PC)·dev·prd(서버), 앱 = pipeline·mcp·호스트 스크립트. [선택] = 비워도 됨. [비밀] = settings.yaml에만(출력·로그에 안 나옴).
 #   각 앱은 자기 칸만 읽는다(pipeline: required·common·extract·transform·load·ops·dev · mcp: required·common·search·ops·dev — tuning은 둘 다).
 #   같은 칸 두 번·모르는 칸·옛 이름(자리가 다른 칸)은 시작 거부(칸 이름만 알림 — 옛 자리면 새 자리를 알려 줌).
-#   한 번만 몇 칸 바꿀 때: --set 이름=값·덮기 파일(python -m common.config.overrides). 옛 env 이름 → 자리: python -m common.config.sample --where <이름>.
+#   한 번만 몇 칸 바꿀 때: --set 이름=값. 옛 env 이름 → 자리: python -m common.config.sample --where <이름>.
 """
 # 역할 절 안 세부 카테고리 — (제목, 파일 자리 접두어들). 앞에서부터 처음 맞는 것. 안 드는 칸이 있으면 build가 멈춘다(새 칸이면 여기도).
 CATEGORIES = {
@@ -37,9 +37,8 @@ CATEGORIES = {
     "extract": (
         (
             "원천 받기·처리 상한",
-            ("extract.source", "extract.max_new_docs_per_run", "extract.max_source_file_mb", "extract.skipped_docs_log"),
+            ("extract.source", "extract.max_new_docs_per_run", "extract.max_source_file_mb"),
         ),
-        ("보안 문서", ("extract.secure_doc",)),
         ("회전 준비(prepare)", ("extract.prepare",)),
         ("쪽 렌더·OCR", ("extract.page_render_dpi", "extract.ocr")),
     ),
@@ -66,7 +65,6 @@ CATEGORIES = {
     "dev": (
         ("local(PC) 전용 — 가짜 EDW·게시 폴더·원본 폴더·새 문서 상한(서버 전용 칸 대신)", ("dev.local",)),
         ("외부 모델 — 허용·지출 상한·단가", ("dev.models",)),
-        ("로컬 대체 PG(sqlite)", ("dev.pg_standin",)),
         ("가짜 LLM", ("dev.fake_llm",)),
         ("검증 페이지", ("dev.search_ui",)),
         ("PC 시험 Docker", ("dev.docker",)),
@@ -130,7 +128,6 @@ NOTES = {
     "common.connections.object_storage.region": "S3 리전 이름",
     "common.connections.object_storage.verify_tls": "TLS 검증 · 1 검증·0 끔·사내 CA 파일 경로(예 /etc/pki/ca-trust/source/anchors/corp-ca.pem)",
     "common.connections.rdb.connect_kwargs": 'EDW pymssql 추가 인자 JSON · 예 {"login_timeout": 10} (null = 추가 인자 없음)',
-    "common.models.embed.query_cache": "질의 임베딩 캐시 sqlite · 0이면 끔 (null = PC output/query_cache.sqlite · mcp 이미지 /tmp)",
     "common.models.embed.query_prefix": "질의 앞에 붙이는 지시문 · 예 'Query: ' (null = 질의 그대로)",
     "common.models.llm.cache_dir": "LLM 응답 캐시 폴더 (null = output/eval/llm_cache)",
     "common.models.llm.extra_body": 'LLM 요청 본문에 합칠 JSON · 예 {"reasoning": {"enabled": false}} (null = 더하지 않음)',
@@ -149,8 +146,6 @@ NOTES = {
     "pipeline.extract.source.staging": "미리 받기 폴더 (null = 미리 받기 끔 — rdb:csv 원본을 못 받음)",
     "pipeline.extract.max_new": "이번 실행에서 새로 파싱할 문서 수 상한 · 0 = 제한 없음 (null = 제한 없음 · local은 local_max_new_docs_per_run)",
     "pipeline.extract.max_file_mb": "이 크기(MB)를 넘는 문서는 건너뜀 · 0 = 제한 없음",
-    "pipeline.extract.skipped_log": "건너뛴 문서 기록 jsonl (null = 준비 기록 폴더/skipped.jsonl)",
-    "pipeline.connections.secure_doc.passwords_file": "암호 문서용 암호 목록(한 줄에 하나) (null = 암호 문서 건너뜀)",
     "pipeline.extract.prepare.rotate": "이미지·스캔 쪽 방향 바로잡기",
     "pipeline.extract.ocr.dpi": "쪽·그림 렌더 DPI(OCR·VLM 공용)",
     "pipeline.extract.ocr.max_pages": "문서당 OCR 쪽 상한 · 0 = 제한 없음",
@@ -258,7 +253,6 @@ NOTES = {
     # tuning
     "common.connections.pg.connect_timeout": "PG 연결 제한(초)",
     "common.connections.pg.pool_max": "검색 MCP의 PG 연결 풀 크기",
-    "common.models.embed.query_cache_max": "질의 캐시 행 상한 · 0 = 무제한",
     "common.models.embed.timeout": "임베딩 호출 제한(초)",
     "common.models.llm.empty_retry_max": "빈 응답 때 다시 요청할 토큰 상한",
     "common.models.llm.timeout": "LLM 호출 제한(초)",
@@ -271,7 +265,6 @@ NOTES = {
     "common.text.token_num_norm": "검색 글자 숫자·단위 정규화",
     "pipeline.connections.rdb.file_table": "파싱 대상 파일 목록 EDW 표(<스키마>.<표> — 영문·숫자·_만) · 예 AI.FileStorageMap",
     "pipeline.connections.rdb.increment_col": "원천 목록 증분 판정 열 (null = 문서 ID 열)",
-    "pipeline.connections.rdb.columns.content_version": "원천 목록 열 이름 — 판 ID · 예 content_version_id",
     "pipeline.connections.rdb.columns.doc_id": "원천 목록 열 이름 — 문서 ID · 예 id",
     "pipeline.connections.rdb.columns.filename": "원천 목록 열 이름 — 원래 파일 이름 · 예 original_filename",
     "pipeline.connections.rdb.columns.key": "원천 목록 열 이름 — Object Storage key · 예 s3_key",
@@ -329,6 +322,7 @@ NOTES = {
     "mcp.search.weights.id": "순위 합치기(RRF) 가중치 — ID",
     "mcp.search.weights.vector": "순위 합치기(RRF) 가중치 — 벡터",
     "mcp.server.max_queue": "도구 대기 상한 · 0 = 무제한 (null = 동시 상한 × 4)",
+    "mcp.server.pg_statement_timeout_sec": "검색 MCP PG 질의 하나의 제한(초) · 0 = 끔",
     "mcp.server.reload_check_sec": "적재 판 확인 간격(초)",
     "mcp.server.tool_timeout_sec": "도구 1회 제한(초) · 0 = 무제한",
     "common.log.queue_size": "DB 로그 대기열 크기",
@@ -362,8 +356,6 @@ NOTES = {
     "common.models.llm.price_out": "출력 단가($/백만 토큰) (null = 내장 가격표)",
     "common.models.guard.budget_usd": "하루 외부 모델 지출 상한($)",
     "common.models.guard.spend_file": "지출 장부 (null = output/_llm_spend/<날짜>.txt)",
-    "common.connections.pg.standin_dir": "PG 없을 때 쓰는 sqlite 폴더 (null = output/pg_standin)",
-    "common.connections.pg.standin_schema": "대역 스키마 이름(pg_schema를 비웠을 때)",
     "common.dev.llm_fake": "가짜 LLM 응답(서버면 시작 거부)",
     "mcp.dev.mcp_url": "검증 페이지가 붙을 검색 MCP 주소 · 예 http://127.0.0.1:8765/mcp",
     "mcp.dev.ui_port": "검증 페이지 포트",
@@ -377,7 +369,7 @@ NOTES = {
 
 TITLES = {
     "tuning": "tuning — 거의 바꾸지 않는 값(분류별 — 결과 파라미터·내부 상한·제한 시간·자원 세부값). 코드 기본값 그대로 두는 것이 보통.",
-    "dev": "dev — PC 전용(RUN_ENV=local): 외부 모델·지출 상한·로컬 대체 DB·PC 시험 도구. 서버(dev·prd)는 이 절을 비워 둔다(서버에서 거부).",
+    "dev": "dev — PC 전용(RUN_ENV=local): 외부 모델·지출 상한·PC 시험 도구. 서버(dev·prd)는 이 절을 비워 둔다(서버에서 거부).",
     "option": "option — 선택 기능(앱이 쓰지 않음 — 호스트 스크립트만). 비우면 끔.",
 }
 

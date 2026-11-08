@@ -7,12 +7,10 @@ from common.config.settings import COMMON
 from common.core.terms import (
     _aliases,
     _draft_count,
+    _name_hit,
     draft_terms_path,
     load_draft_glossary,
     load_glossary,
-    load_id_patterns,
-    load_id_patterns_typed,
-    match_clients,
     read_roster,
     related_concepts,
     write_draft_terms,
@@ -133,19 +131,6 @@ def selftest():
     (d / "id_patterns.csv").unlink()
     g = load_glossary(d)
 
-    # load_id_patterns_typed(id_type 보존) vs load_id_patterns(정규식만, 기존 호출자 불변)
-    (d / "id_patterns.csv").write_text(
-        'id_type,regex,example,note,updated\ncontract_no,"C-[A-Z]{2,4}-\\d{4}-\\d{2}",C-PFE-2024-02,,\nlot_no,"LOT-\\d{4}-\\d{3,}",LOT-2025-324,,\n',
-        encoding="utf-8",
-    )
-    typed = load_id_patterns_typed(d)
-    assert [t for t, _ in typed] == ["contract_no", "lot_no"]
-    assert [p.pattern for p in load_id_patterns(d)] == [p.pattern for _, p in typed]  # 기존 함수는 정규식만(순서·개수 동일)
-    assert typed[0][1].search("문서에 C-PFE-2024-02 계약").group(0) == "C-PFE-2024-02"
-    (d / "id_patterns.csv").unlink()
-    assert load_id_patterns_typed(d) == [] and load_id_patterns(d) == []  # 파일 없으면 둘 다 빈 목록
-    print("[selftest] AD28② load_id_patterns_typed(id_type 보존)·load_id_patterns 하위 호환 통과")
-
     # 개념 간 관계(related) — match_concepts·expand_query·lookup_term은 data_retrieval.tools.terms로 이동(그 쪽
     # selftest가 같은 표본으로 본다), related_concepts는 탐색·설명용으로 공용에 남아 여기서 본다.
     assert related_concepts("A", g) == [{"concept_id": "B", "canonical": "Downstream Process"}]
@@ -189,7 +174,7 @@ def selftest():
 
 
 def _selftest_si43():
-    """category 다중 태그(org_client|org_cdmo)·명부 병합·match_clients 한글 조사('셀트리온과'도 잡히는지).
+    """category 다중 태그(org_client|org_cdmo)·명부 병합·_name_hit 한글 조사('셀트리온과'도 잡히는지).
     lookup_term·expand_query는 검색 쪽 시험(tests/server/mcp/test_query_expand.py)이 본다."""
     import csv
     import tempfile
@@ -245,11 +230,10 @@ def _selftest_si43():
         al = _aliases()
         assert al.get("Celltrion") == ["셀트리온"], al  # org_client 태그 있음 — 명부에
         assert "Lonza" not in al, al  # org_cdmo 한 칸만 — 명부에 안 들어감(기존 동작 호환)
-        assert match_clients("셀트리온 계약", ["Celltrion"]) == ["Celltrion"]
 
-    # 한글 고유명사 뒤 조사 — match_clients도 _name_hit 규칙 공유('셀트리온과'도 잡혀야 함)
-    assert match_clients("셀트리온과 계약", ["Celltrion"], {"Celltrion": ["셀트리온"]}) == ["Celltrion"]
-    print("[selftest] SI43①② — category 다중 태그·명부 병합·match_clients 한글 조사(조사 뒤 오탐 금지) 통과")
+    # 한글 고유명사 뒤 조사 — _name_hit('셀트리온과'도 잡혀야 함)
+    assert _name_hit("셀트리온", "셀트리온과 계약")
+    print("[selftest] SI43①② — category 다중 태그·명부 병합·_name_hit 한글 조사 통과")
 
 
 def _selftest_si43_draft_blocker():

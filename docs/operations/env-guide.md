@@ -13,13 +13,12 @@
 | 옛 이름 | 파일 자리 | 서버 값 |
 |---|---|---|
 | `PARSE_POST` | `transform.represent.post_steps` | `all` |
-| `EMBED_QUERY_CACHE` | `common.models.embed.embed_query_cache_file` | `''`(빈 글자 — 비운 칸과 결과가 다름) |
 
 ## 0. 파일 위치 · 적용 방법
 
 | 기계 | 파일 | 적용 | 모델 엔드포인트 |
 |---|---|---|---|
-| PC(개발) | 저장소 루트 `settings.yaml`(git 밖, 권한 600) | `RUN_ENV`가 없거나 `local`이면 코드가 이 파일을 찾음. 한 번만 몇 칸 바꿀 때는 오버레이 설정 파일 `SETTINGS_FILE=$(python -m common.config.overrides PIPE_OUT_ROOT=… EMBED_ALLOW_EXTERNAL=1 …)`(**PC 전용**) | 내부망 또는 OpenRouter(기능 시험만 — CLAUDE.md §7) |
+| PC(개발) | 저장소 루트 `settings.yaml`(git 밖, 권한 600) | `RUN_ENV`가 없거나 `local`이면 코드가 이 파일을 찾음. 한 번만 몇 칸 바꿀 때는 명령 인자 `--set PIPE_OUT_ROOT=… --set EMBED_ALLOW_EXTERNAL=1` | 내부망 또는 OpenRouter(기능 시험만 — CLAUDE.md §7) |
 | 수집·개발 서버 | `<루트>/settings.yaml`(루트 = 코드 폴더 자체 — git·코드 zip에 없는 파일이라 새 판을 덮어써도 남음, README §5). **주인 UID 10001·그룹 운영 그룹·권한 640**(운영 계정 UID가 10001이면 600) | 컨테이너: compose가 `/etc/rag/settings.yaml`에 읽기 전용(`:ro,z`)으로 붙이고 env는 `SETTINGS_FILE`·`RUN_ENV`만 준다. **값을 바꿀 때는 이 파일을 직접 고친다.** 셸·systemd: `deploy/host/scripts/load_settings.sh`의 `load_settings`가 호스트 칸(이미지·자원·포트·`RAG_OUT`·`DOC_SRC`·`NIGHTLY_*` 등)을 셸 env로 내보내 compose가 치환한다 | 내부망만 |
 
 ### 0-0. 실행 기록(JSON 로그·DB 감사·성능)
@@ -49,12 +48,12 @@
 ### 0-1. 읽는 규칙
 - **비밀값**(비밀번호·키·토큰)과 **접속 정보**(주소·포트·DB 이름)는 전부 이 파일 하나에만. 각 컨테이너는 common + 자기 앱 절만 읽는다.
 - **env로 준 값은 읽지 않는다** — 셸·compose·systemd·`docker exec -e`의 `X=값`은 효과가 없고 시작 때 이름만 경고한다.
-- 서버(dev·prd)는 바꿀 값이 있으면 `settings.yaml`을 직접 고치고 상주 컨테이너를 다시 띄운다(또는 0-2 `--set`). 오버레이 설정 파일 도구는 서버에서 종료 2.
+- 서버(dev·prd)는 바꿀 값이 있으면 `settings.yaml`을 직접 고치고 상주 컨테이너를 다시 띄운다(또는 0-2 `--set`).
 - 서버에서 설정 파일을 못 읽거나(권한) 그 이미지 절이 틀리면 컨테이너가 이유(칸 경로·오류 종류만)를 찍고 **시작하지 않는다**(종료 2).
 - 호스트 칸만 꺼내 보기(비밀 없음 — 인자는 모델 경로): `bash deploy/host/scripts/load_settings.sh pipeline.host common.host`. 호스트 python에는 PyYAML만 있으면 된다(칸 목록 `deploy/host/scripts/host_settings.tsv` — 설정 모델을 고치면 `PYTHONPATH=. python deploy/release/gen_host_keys.py`로 다시 만듦).
 - `run_pipeline.py`(서버 전용)도 같은 파일을 읽는다 — 필요한 칸이 없으면 칸 경로만 찍고 종료 2.
 - **모드마다 꼭 채울 칸**(sample 주석 `[필수 · …]`와 같음):
-  - `local`(PC): `required.env.run_env`, 모델 접속 `required.models`(`embed_base_url`·`embed_model`·`llm_base_url`·`llm_model`·`vlm_base_url`·`vlm_model`). PG(`required.pg` 접속 다섯 칸)는 채우면 그 PG, 모두 비우면 sqlite 대역. EDW·Object Storage·토큰·배포 칸은 채우지 않는다 — 적혀 있어도 EDW 주소·계정, Object Storage 주소·키, 원천 버킷, 서버 게시 버킷은 비우고 `[settings] local(PC) — 서버 전용 칸을 무시함(비움): <칸 이름>` 한 줄을 찍는다(값 없음). 대신 `dev.local`(가짜 EDW `local_edw_sqlite_file` · 게시 폴더 `local_publish_dir` · 원본 폴더 `local_source_dir` · 새 문서 상한 `local_max_new_docs_per_run`)의 기본값을 쓴다.
+  - `local`(PC): `required.env.run_env`, 모델 접속 `required.models`(`embed_base_url`·`embed_model`·`llm_base_url`·`llm_model`·`vlm_base_url`·`vlm_model`). PG(`required.pg` 접속 다섯 칸)도 필수(sqlite 대역 없음). EDW·Object Storage·토큰·배포 칸은 채우지 않는다 — 적혀 있어도 EDW 주소·계정, Object Storage 주소·키, 원천 버킷, 서버 게시 버킷은 비우고 `[settings] local(PC) — 서버 전용 칸을 무시함(비움): <칸 이름>` 한 줄을 찍는다(값 없음). 대신 `dev.local`(가짜 EDW `local_edw_sqlite_file` · 게시 폴더 `local_publish_dir` · 원본 폴더 `local_source_dir` · 새 문서 상한 `local_max_new_docs_per_run`)의 기본값을 쓴다.
   - `dev`·`prd`(서버): 위에 더해 PG 접속 다섯 칸, EDW(`edw_host`·`edw_database`·`edw_read_user`·`edw_read_password`), `publish_bucket`, Object Storage 세 칸, 토큰(`mcp_token`·원문 도구를 쓰면 `fulltext_sign_key`), 배포 네 칸(`pipeline_image`·`mcp_image`·`host_docs_dir`·`pg_container_name`). `pg_schema`는 비우면 `data_parsing`. EDW는 읽기만 하므로 쓰기 계정 칸은 없다.
 - 라이브러리가 읽는 env(`TZ`·`OMP_NUM_THREADS`·`HF_HUB_OFFLINE`·`TESSDATA_PREFIX` 등 — 허용 목록 `common.config.settings.LIB_ENV_NAMES`)는 `ops.runtime.library_env` 사전에 적는다. 목록 밖 이름은 검증 오류.
 
@@ -98,7 +97,7 @@
 ### 저장소 (PostgreSQL + pgvector)
 | 이름 | 메모 |
 |---|---|
-| `PG_HOST`·`PG_PORT`·`PG_DB`·`PG_USER`·`PG_PASSWORD`·`PG_SCHEMA` | 서버는 접속 다섯 칸 필수(자동 탐지 없음 — 비면 채울 자리를 적고 멈춤) · `PG_SCHEMA`(`pg_schema`)는 비우면 `data_parsing`(여러 벌도 같은 스키마) · PC(local)는 접속 칸을 모두 비우면 sqlite 대역. compose는 `network_mode: host`라 `127.0.0.1`이 서버 자신. 계정은 우리 스키마 권한만 |
+| `PG_HOST`·`PG_PORT`·`PG_DB`·`PG_USER`·`PG_PASSWORD`·`PG_SCHEMA` | 서버는 접속 다섯 칸 필수(자동 탐지 없음 — 비면 채울 자리를 적고 멈춤) · `PG_SCHEMA`(`pg_schema`)는 비우면 `data_parsing`(여러 벌도 같은 스키마) · PC(local)도 다섯 칸 필수(sqlite 대역 없음). compose는 `network_mode: host`라 `127.0.0.1`이 서버 자신. 계정은 우리 스키마 권한만 |
 
 ### 검색 MCP
 | 이름 | 기본 | 메모 |
@@ -110,6 +109,7 @@
 | `DATA_PARSING_MAX_MB`(`ops.services.data_parsing.mcp_parse_max_file_mb`) | `100` | `parse_document` 파일 1건 크기 상한(MB) — 검색 MCP와 파싱 서비스가 같은 칸을 읽음 |
 | `MCP_METHODS` | `vector,bm25,id` | 이 셋만 있음 |
 | `MCP_ALLOWED_HOSTS` | 비움 | 루프백이 아닐 때, 리버스 프록시 등 다른 Host로도 부르면 쉼표로 추가 |
+| `MCP_PG_STATEMENT_TIMEOUT`(`tuning.search.server.mcp_pg_statement_timeout_sec`) | `25` | 검색 MCP 연결 풀의 PostgreSQL 질의 하나의 시간 제한(초) — 도구 시간 상한(`mcp_tool_timeout_sec` 30초)보다 짧게 둔다. 넘으면 DB가 그 질의를 멈추고 도구는 `timeout`. `0`이면 제한 없음. DB에 닿지 못하면(끊긴 연결은 한 번 새 연결로 바꾼 뒤에도) 도구는 `db_unavailable` |
 
 ### EDW 쿼리 도구(`query_edw`·`edw_meta`)
 `required.edw`의 **읽기 계정**만 쓴다(파이프라인 원천 조회와 같은 계정 — 운영 준비는 [server-guide §4-1](server-guide.md#4-1-edw-쿼리-도구-설정--edw_metaquery_edw)).
@@ -195,7 +195,7 @@
 ## 3. 전체 목록과 읽는 순서
 
 - **전체 목록은 `settings.sample.yaml`**(생성 `python -m common.config.sample` — 값 자리 = 코드 기본값(`null` = 비움), 줄 끝 주석 = `[필수 · 언제(어느 앱)]`·`[선택]`·설명·허용값 또는 예·`[비밀]`). 옛 env 이름·켜기 판정 꼴은 `--where <이름>`.
-- 읽는 순서: 테스트 값 > 오버레이 설정 파일·`--set` > settings.yaml > 코드 기본값.
+- 읽는 순서: 테스트 값 > `--set` > settings.yaml > 코드 기본값.
 
 ## 4. 확인
 

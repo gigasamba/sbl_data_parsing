@@ -9,6 +9,7 @@ import time
 from common.core import parse_limit
 from mcp_server import config as mc
 from mcp_server.config import CFG
+from mcp_server.services.tool_runner import PARSE_MAX_SEC
 
 _NO_TOKEN = "parse 서비스 토큰 없음 — settings.yaml required.tokens.mcp_token를 설정(두 컨테이너가 같은 칸을 읽음)"
 
@@ -87,7 +88,7 @@ def do_parse_document(path=None, content_b64=None, filename=None, time_out_thres
     if not job_id:
         return {"error": f"작업 등록 실패: {job}"}
     ahead = job.get("queue_position", 0)  # 2026-10-22 — 클대기 순번(지연 원인 추적용)
-    thr = max(2.0, float(time_out_threshold or 0))
+    thr = min(max(2.0, float(time_out_threshold or 0)), PARSE_MAX_SEC)  # 바깥 창구(_bg_long)와 같은 10분 상한
     while time.time() - t0 < thr:
         time.sleep(1.0)
         try:

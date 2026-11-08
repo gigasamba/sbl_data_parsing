@@ -1,7 +1,9 @@
-"""mc-17 — 원문 도구 list_doc_fulltext → get_doc_fulltext(운영 계약 05 §6). gold doc은 SQLite 대역, Object Storage는 가짜 클라이언트(외부 접속 없음)."""
+"""mc-17 — 원문 도구 list_doc_fulltext → get_doc_fulltext(운영 계약 05 §6). gold doc은 실 pgvector 임시 스키마(pgfix), Object Storage는 가짜 클라이언트."""
 
 import hashlib
 import json
+import threading
+from contextlib import contextmanager
 from unittest.mock import patch
 
 from mcp_server import config as mc
@@ -18,17 +20,29 @@ class _NotFound(Exception):
 
 
 class FakeS3:
-    """list_objects_v2(페이지)·head_object·get_object만 — {키: 바이트}."""
+    """list_objects_v2(페이지)·head_object·get_object만 — {키: 바이트}. 여러 스레드가 동시에 불러도 됨(목록 기록은 잠금 안에서).
+    fail = 이 폴더를 목록 보면 예외(저장소 장애 흉내) · listed = 본 (폴더, Delimiter)."""
 
-    def __init__(self, objs):
-        self.objs = objs
+    def __init__(self, objs, fail=None):
+        self.objs, self.fail, self.listed, self.lock = objs, fail, [], threading.Lock()
 
     def get_paginator(self, _name):
-        objs = self.objs
+        fake = self
 
         class P:
-            def paginate(self, Bucket, Prefix):
-                yield {"Contents": [{"Key": k, "Size": len(v), "ETag": f'"e{len(v)}"'} for k, v in objs.items() if k.startswith(Prefix)]}
+            def paginate(self, Bucket, Prefix, Delimiter=None):
+                with fake.lock:
+                    fake.listed.append((Prefix, Delimiter))
+                if Prefix == fake.fail:
+                    raise RuntimeError("storage down")
+                items = list(fake.objs.items())
+                yield {
+                    "Contents": [
+                        {"Key": k, "Size": len(v), "ETag": f'"e{len(v)}"'}
+                        for k, v in items
+                        if k.startswith(Prefix) and not (Delimiter and Delimiter in k[len(Prefix) :])
+                    ]
+                }
 
         return P()
 
@@ -203,3 +217,85 @@ def _cases(s3):
     with patch.object(FT, "BATCH_MAX_BYTES", len("# A 본문".encode())):
         r = M.do_get(files=[md, md])
         assert [f.get("skip_reason") for f in r["files"]] == [None, "batch_full"] and r["batch"]["truncated"] is True, r
+
+
+@contextmanager
+def _ctx(s3):
+    """gold 대역 + 가짜 저장소 + 서명 키 k1."""
+    chunk = {"doc": 0, "seq": 0, "page": 1, "line_start": 1, "line_end": 1, "chunk_text": "x", "n_terms": 1}
+    d = pgfix.mk_bundle(_docs(), [chunk])
+    _STATE.clear()
+    try:
+        with pgfix.use(d), patch.object(M, "_storage", return_value=s3), mc.senv(FULLTEXT_SIGN_SECRET="k1"):
+            yield
+    finally:
+        _STATE.clear()
+
+
+def test_list_parallel():
+    """list_doc_fulltext — 폴더 목록을 동시에 봐도 행 순서 그대로 · 바로 아래만(Delimiter "/") · 목록 하나가 실패하면 source_storage_unavailable."""
+    five = ["A.pdf", "B.docx", "C.pdf", "E.pdf", "F.pdf"]
+    folders = {("PR/SFDC/A/", "/"), ("PR/SFDC/B/", "/"), ("PR/LAS/C/", "/")}
+    cases = [  # (저장소 장애 폴더, 기대 (file_name, status) 목록 또는 오류)
+        (None, [("A.pdf", "ok"), ("B.docx", "ok"), ("C.pdf", "no_files"), ("E.pdf", "no_files"), ("F.pdf", "no_files")]),
+        ("PR/SFDC/B/", {"error": "source_storage_unavailable"}),
+        ("PR/LAS/C/", {"error": "source_storage_unavailable"}),
+    ]
+    for fail, want in cases:
+        s3 = FakeS3(dict(OBJS), fail=fail)
+        with _ctx(s3):
+            r = M.do_list(docs=five)
+        got = r if "error" in r else [(x["file_name"], x["status"]) for x in r["documents"]]
+        assert got == want, (fail, r)
+        assert set(s3.listed) == folders, s3.listed  # 폴더가 있는 결과 위치만, 늘 Delimiter "/"
+    print("[시험] list_doc_fulltext 동시 목록 — 순서·Delimiter·장애 시 source_storage_unavailable 통과")
+
+
+def test_get_batch():
+    """get_doc_fulltext — head·받기를 동시에 해도 결과(순서·건너뜀 사유·batch)는 한 줄씩 받던 때와 같음 ·
+    등록 시각 가드는 원천 스키마마다 질의 한 번."""
+    md_key, js_key = "PR/SFDC/A/A_2025-04-02_090000.md", "PR/SFDC/A/A_2025-04-02_090000.json"
+    md_len = len(OBJS[md_key])
+    s3 = FakeS3(dict(OBJS))
+    with _ctx(s3):
+        a = M.do_list(docs=["a" * 64])["documents"][0]["files"]
+        md, js = a["md"]["sfid"], a["json"]["sfid"]
+        big = M.do_list(docs=["B.docx"])["documents"][0]["files"]["md"]["sfid"]
+        cases = [  # (files, 바꿀 저장소 {키: 바이트|None=지움}, BATCH_MAX_BYTES, 기대 skip_reason 목록, truncated)
+            ([md, js, big, "sf1.bad.sig"], {}, None, [None, None, "too_large", "bad_sfid"], False),
+            ([md, md, md], {}, md_len * 2, [None, None, "batch_full"], True),
+            ([js, md], {js_key: b"{broken"}, md_len, ["download_failed", None], False),  # 앞이 깨져 남은 자리 — 그 자리에서 받음
+            ([js, md], {js_key: None}, md_len, ["missing", None], False),
+            ([big, md, js], {}, md_len, ["too_large", None, "batch_full"], True),
+        ]
+        for files, change, cap, want, trunc in cases:
+            s3.objs = dict(OBJS)
+            for k, v in change.items():
+                if v is None:
+                    del s3.objs[k]
+                else:
+                    s3.objs[k] = v
+            with patch.object(FT, "BATCH_MAX_BYTES", cap or FT.BATCH_MAX_BYTES):
+                r = M.do_get(files=files)
+            assert [f.get("skip_reason") for f in r["files"]] == want and r["batch"]["truncated"] is trunc, (files, change, r)
+            assert r["batch"]["ok"] == want.count(None) and r["batch"]["total_bytes"] == sum(f.get("size", 0) for f in r["files"]), r
+        s3.objs = dict(OBJS)
+        with patch.object(M, "_pg", wraps=M._pg) as pg:
+            r = M.do_get(files=[md, js, md], created_since="2025-02-01")
+            assert [f["status"] for f in r["files"]] == ["ok"] * 3, r
+            assert pg.call_count == len(M._sources()), pg.call_count  # 파일 수와 무관하게 원천마다 한 번
+    print("[시험] get_doc_fulltext 동시 받기 — 순서·건너뜀 사유·batch 같음 · 등록 시각 가드 원천마다 질의 한 번 통과")
+
+
+def test_storage_client():
+    """원문 도구의 저장소 클라이언트 — 호출 하나 25초(도구 30초 안)·실패면 한 번만 더 ·
+    연결 풀 = (공용 자리 — list_doc_fulltext + get 자리 2) × 동시 8."""
+    for shared, pool in [(None, 80), ("4", 48)]:  # (MCP_MAX_CONCURRENCY — None은 기본 8, 기대 풀)
+        M._client.cache_clear()
+        try:
+            with patch("common.store.objectstore.client") as made, mc.senv(MCP_MAX_CONCURRENCY=shared):
+                M._client()
+            want = {"timeout": 25, "retries": 1, "max_pool": pool}
+            assert made.call_args.kwargs == want and FT.FILE_TIMEOUT_SEC < 30, made.call_args
+        finally:
+            M._client.cache_clear()

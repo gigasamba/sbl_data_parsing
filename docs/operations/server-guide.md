@@ -29,9 +29,8 @@ bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>   # 코드 폴
 
 ### 1-1. 값 바꾸기
 - 앱 설정은 `settings.yaml`을 직접 고치고 `host_ctl.sh up -d --force-recreate <서비스>`.
-- **한 번만 다른 값은 `--set 이름=값`** — 받는 진입점: `pipeline.cli`·`pipeline.extract.candidate_ready`·`gold_bundle`·`pgvector_load`·`publish_parse_result`. 예: `$DOCKER exec $PIPELINE_CNAME python -m pipeline.cli --set PIPE_PROCS=2 parse …`. 이름은 옛 env 이름(`python -m common.config.sample --where`). 모르는 이름·호스트 칸·비밀 칸은 종료 2.
+- **한 번만 다른 값은 `--set 이름=값`** — 받는 진입점: `pipeline.cli`·`pipeline.extract.candidate_ready`·`gold_bundle`·`pgvector_load`·`publish_parse_result`·`mcp_server.main`·`mcp_server.cli.search_ask`. 예: `$DOCKER exec $PIPELINE_CNAME python -m pipeline.cli --set PIPE_PROCS=2 parse …`. 이름은 옛 env 이름(`python -m common.config.sample --where`). 모르는 이름·호스트 칸·비밀 칸은 종료 2.
 - 셸·compose·`docker exec -e`로 준 옛 env 이름은 효과가 없다(시작 때 이름만 경고). 셸 env로 덮을 수 있는 것은 compose 치환 값(이미지 태그·자원·포트·호스트 경로)뿐이다.
-- 오버레이 설정 파일 도구 `python -m common.config.overrides`는 PC 전용이다(서버는 종료 2).
 
 ### 1-2. 기동 확인
 README [§5-3](../../README.md#5-3-서버--처음-설치-자세히) ④ 연결 점검과 ⑤ 이미지 점검, 또는 한 번에 `bash deploy/host/scripts/host_ctl.sh check`(기대 마지막 줄 `[host_ctl check] 통과 — 6개`).
@@ -210,7 +209,7 @@ id,contract_no,"C-[A-Z]{2,4}-\d{4}-\d{2}",regex,합성 데이터 형식,,
 | `definition_en`·`source`·`owner`·`updated` | 빼도 됨 |
 | `status` | 없으면 반영 · 빼려면 `draft`·`rejected` |
 
-**ID 꼴(`id`)** — `canonical` = 종류(`contract_no`·`product_code` 등). `regex` 줄 하나 = 정규식 하나(대소문자 무시, `description`에 메모), 바로 뒤 `example`·`updated`는 그 꼴의 참고용. `regex` 줄 순서가 검색 동점 처리 순서다.
+**ID 꼴(`id`)** — `canonical` = 종류(`contract_no`·`product_code` 등). `regex` 줄 하나 = 정규식 하나(대소문자 무시, `description`에 메모), 바로 뒤 `example`·`updated`는 그 꼴의 참고용.
 
 - 오류(조용히 넘기지 않음): 명시한 `concept_id` 중복 · 없는 ID를 가리키는 `broader`/`related` · 깨진 정규식.
 - 초안 도구 `python -m pipeline.transform.structure.glossary_suggest`·`gen_roster --kind product`·`python -m pipeline.transform.structure.draft_terms --bundle <묶음>`은 `output/` 아래 초안(용어 사전 옛 칸 꼴 — 한 줄 = 개념 하나)만 만든다 — 사람이 확인해 `glossary.csv`의 `term` 줄로 옮긴다.
@@ -341,7 +340,7 @@ SELECT except_type, reason, source_system, count(*) AS docs, sum(count) AS times
 FROM applog.except_doc_info
 GROUP BY except_type, reason, source_system ORDER BY docs DESC;
 ```
-`skip` 풀어 주는 법(행 지우기 — DB 담당 승인)은 [env-guide 실행 기록](env-guide.md#0-0-실행-기록json-로그db-감사성능).
+`part`(수준 `warn`)는 안 문서를 일부 못 꺼낸 원본이다 — 이유에 못 꺼낸 안 파일 이름과 까닭(`encrypted`·`too_big`·`too_many`·`total_cap`·`no_unwrap`·`cannot_open`·`read_failed`)이 있고 문서 자체는 적재됐다. `silver`(수준 `warn`)는 실버만 게시되고 골드가 아직 없는 원본이다 — 골드 적재가 성공하면 그 행은 지워지므로, 남아 있으면 골드 실패·중단·실버까지만 실행이다. `skip` 풀어 주는 법(행 지우기 — DB 담당 승인)은 [env-guide 실행 기록](env-guide.md#0-0-실행-기록json-로그db-감사성능).
 
 ## 9. 건드리면 안 되는 것
 

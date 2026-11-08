@@ -5,13 +5,15 @@
 """
 
 import json
+import os
 import re
+import tempfile
 import time
 from pathlib import Path
 
 from common.core.paths import APP_ROOT  # output/ 경계(attach_dir)
 from pipeline import config as pc
-from pipeline.extract.unpack import PARTS
+from pipeline.extract.unpack import PARTS, manifest
 from pipeline.shared.ext_groups import MAIL_EXTS
 from pipeline.shared.raw_cache import raw_engine_path, raw_root
 from pipeline.shared.vlmcall import sha
@@ -34,17 +36,15 @@ def attach_dir():
 
 
 def parts_of(doc_path):
-    """받기 단계가 꺼내 둔 안 파일 목록(parts.json)과 그 폴더 — 없으면 빈 목록(상자가 아님·받기 단계를 안 거침)."""
-    d = Path(doc_path).parent / PARTS / Path(doc_path).name
-    try:
-        return d, json.loads((d / "parts.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return d, []
+    """받기 단계가 꺼내 둔 안 파일 목록(parts.json의 parts)과 그 폴더 — 없으면 빈 목록(상자가 아님·받기 단계를 안 거침)."""
+    root = Path(doc_path).parent / PARTS
+    return root / Path(doc_path).name, (manifest(doc_path, root) or {}).get("parts") or []
 
 
 def place_marks(text, items):
     """오피스 개체가 있던 자리에 `[개체 <이름>]` 한 줄 — 파워포인트는 그 슬라이드 끝(쪽 나눔 \f 수가 슬라이드 수와 맞을 때만),
-    엑셀은 그 시트 끝(다음 시트 이름표 앞), 워드는 개체 앞 문단 글이 든 줄 뒤. 자리를 못 찾으면 그대로(끝 절만)."""
+    엑셀은 그 시트 끝(다음 시트 이름표 앞), 워드는 개체 앞 문단 글이 든 줄 뒤 — 같은 글이 앞에도 있으면 nth번째(0부터, 모자라면
+    마지막) 자리. 자리를 못 찾으면 그대로(끝 절만)."""
     for it in items:
         w, mark = it["where"], f"[개체 {it['name']}]"
         if "slide" in w:
@@ -63,6 +63,11 @@ def place_marks(text, items):
                 text = "\n".join(lines)
         elif "after" in w:
             j = text.find(w["after"])
+            for _ in range(w.get("nth", 0)):
+                nxt = text.find(w["after"], j + len(w["after"]))
+                if nxt < 0:
+                    break
+                j = nxt
             if j >= 0:
                 k = text.find("\n", j + len(w["after"]))
                 k = len(text) if k < 0 else k
@@ -94,9 +99,12 @@ def parse_attachment(entry, store=None):
                 return json.loads(dst.read_text(encoding="utf-8")).get("text") or "", True, eng
             except (OSError, ValueError):
                 pass
-        adir = attach_dir()  # 강제 종료돼도 남은 파일은 다음 실행이 같은 이름으로 덮음
+        adir = attach_dir()
         adir.mkdir(parents=True, exist_ok=True)
-        tmp = adir / f"attach-{content_sha[:12]}{ext}"
+        # 부를 때마다 새 이름(pl-65) — 같은 첨부를 가진 문서 둘이 동시에 돌아도 서로의 임시 파일을 덮거나 지우지 않게
+        fd, name = tempfile.mkstemp(prefix=f"attach-{content_sha[:12]}-", suffix=ext, dir=adir)
+        os.close(fd)
+        tmp = Path(name)
         out_json = tmp.with_suffix(tmp.suffix + ".json")
         try:
             tmp.write_bytes(entry["bytes"])
@@ -191,7 +199,9 @@ def mail_blocks(doc_path, base_text):
         stats["parsed"] += 1
         stats["cached"] += int(cached)
         stats["sources"].append(f"{Path(doc_path).name}#{it['name']}")  # 원본 위치 = 원본#안 경로
-        blocks.append(f"[{it['kind']} {it['name']}]\n{text}")
+        # 제목 줄로 시작(pl-65) — 조각·절이 첨부마다 나뉘고, 첨부 글의 쪽 나눔(\f)은 줄바꿈으로(원본 쪽 번호를 밀지 않게)
+        body = text.replace("\f", "\n")
+        blocks.append(f"## [{it['kind']} {it['name']}]\n{body}")
         if it["depth"] == 1 and it.get("where"):  # 이 문서에 바로 든 개체만(더 깊은 것의 위치는 그 안 문서 기준)
             marks.append(it)
     return place_marks(base_text, marks), blocks, stats

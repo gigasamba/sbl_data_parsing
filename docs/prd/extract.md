@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md) 카테고리. 원천에서 문서를 받아(pl-01·pl-48) 준비(중복·회전·DRM — pl-02)하기까지와 FAQ 원천(pl-39). 다음 단계는 [transform.md](transform.md).
 
-순서: pl-01 · pl-02 · pl-58 · pl-59 · pl-48 · pl-39.
+순서: pl-01 · pl-02 · pl-58 · pl-59 · pl-48 · pl-39 · pl-65 · pl-66.
 
 <a id="pl-01"></a>
 ## pl-01 · 원천과 가져오기
@@ -12,7 +12,7 @@
 
 ### 규칙
 1. 파싱 입력(`--source`, 설정 `extract.source.source_input_location`)은 둘 중 하나여야 한다 — 폴더, 또는 `rdb:csv:<경로>`(문서 위치 표 CSV). 그 밖의 값이면 → 오류로 멈춘다.
-2. `rdb:csv`의 칸 이름은 설정 `tuning.extract.source_columns`가 정한다 — 기본 `source_column_doc_id`=`id`, `source_column_storage_key`=`s3_key`, `source_column_filename`=`original_filename`, `source_column_file_size`=`file_size`, `source_column_content_version`=`content_version_id`, `source_column_source_system`=`source_system`.
+2. `rdb:csv`의 칸 이름은 설정 `tuning.extract.source_columns`가 정한다 — 기본 `source_column_doc_id`=`id`, `source_column_storage_key`=`s3_key`, `source_column_filename`=`original_filename`, `source_column_file_size`=`file_size`, `source_column_source_system`=`source_system`.
 3. 대상 목록은 컨테이너 안 `python -m pipeline.extract.candidate_pick list`가 FileStorageMap에서 고른다(파일 이름 키워드 `--filter`, 작은 파일부터 — 규칙은 [ops.md#pl-10](ops.md#pl-10)·[pl-23](ops.md#pl-23)). 설정 `required.source.source_systems`(원천 목록)가 있으면 `source_system` 칸이 그 값인 행만 고른다(대소문자 무관 — 목록에 `FAQ`가 없으면 FAQ 먼저·교체 확인도 하지 않음, 비우면 운영 5개 원천 `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other` — `DEV-<숫자>` 행은 뺀다, [ops.md#op-17](ops.md#op-17) 규칙 8 · 판정 `candidate_pick.picked`). PC `rdb:csv` 받기(`rdb_pick`)·PC 폴더 원천(맨 위 `DEV-<숫자>/` 폴더 포함)도 같은 목록으로 거르고, 목록 밖 행은 건너뜀으로 기록하지 않는다. 원천 값은 들어오는 자리에서 대문자로 바꾼다(`FAQ`·`DEV-1`). 목록 파일·`batch.csv`(칸 `source_system` — 이름은 `tuning.extract.source_columns.source_column_source_system`)·manifest는 그 행의 `source_system` 값을 그대로 넘긴다([load-schema.md#pl-28](load-schema.md#pl-28) 규칙 3). 서버 러너 `run_pipeline.py`는 그 목록 파일을 읽어 문서마다 `batch.csv`(한 줄)를 만든다. 끝난 문서(gold `doc.file_path`)·영구 건너뜀(`except_doc_info` `skip`)을 뺄 때는 FileStorageMap `s3_key`를 그대로 비교한다 — 그 두 표의 원본 키는 `s3://버킷/` 앞머리가 없는 키라, FileStorageMap `s3_key`도 앞머리 없이 적혀 있어야 빠진다(앞머리가 붙은 행은 받기는 되지만 매번 다시 고름).
 4. 받기는 staging 하나다: `python -m pipeline.extract.candidate_ready stage --csv <batch.csv> --out <문서 폴더> --prepared <준비 폴더>`가 원본을 `extract.source.source_staging_dir` 폴더(`<sha1(버킷|키)>.bin`)에 받고(받아 둔 판의 ETag가 지금과 같을 때만 다시 받지 않음), 문서 폴더 `_source_files/`에 하드 링크로 놓은 뒤 같은 단계에서 중복·거르기([pl-02](#pl-02))까지 해 파싱할 이름을 `parse/_source/only.txt`에 적는다. 파싱은 `pipeline.cli parse --staged`로 그 목록만 읽는다. staging 칸이 비었거나 받지 못한 문서는 멈춘다(따로 받는 길 없음). PC의 `pipeline.cli parse --source`도 같은 함수(`stage_batch`)를 부른다.
 
@@ -34,7 +34,7 @@
 3. 빠진 중복은 `<결과 폴더>/dedup/keep.txt`에 없고(나머지 폴더 파일은 그대로 있음), `applog.except_doc_info`에 `skip` `duplicate_sha256`으로 남는다(다음 실행이 다시 고르지 않음 — [pl-58](#pl-58)). 서버 러너는 받기가 뺀 문서(`only.txt`가 빔 — 중복·DRM·암호)를 파싱 실패가 아니라 건너뜀으로 세고 게시와 원본 삭제를 그대로 한다(pl-24). 문서는 S3 키마다 따로 둔다(키마다 메타가 다름).
 4. 회전 바로잡기는 `extract.prepare.rotate_pages`(기본 `false`)가 켜졌을 때만 한다. 꺼져 있으면 회전용 OCR을 하지 않고 파일을 그대로 놓는다. 서버 러너는 `ops.run_pipeline.parse.batch_rotate_scans`(기본 `false`)가 꺼져 있으면 `stage --no-scan-rotate`로 이미지 PDF(스캔)는 돌리지 않는다.
 5. 켜져 있으면 이미지·스캔 PDF 쪽마다 4방향(0·90·180·270도) RapidOCR 점수를 스레드 4개로 동시에 재고 가장 높은 방향으로 돌린다 — 같으면 0도, 모두 0이면 그대로. 기록은 `output/prepared/rotation.csv`(파일·쪽·각도·네 방향 점수·회전 전 원본 sha256 `orig_sha256`).
-6. DRM·암호 파일은 감지해서 표시하고 건너뛴다(상태 `skipped_drm`, `prepared/_records/skipped.jsonl`). 복호화는 흐름 안에서 하지 않고 수동 명령 `python -m pipeline.extract.protected_docs decrypt`로만 한다.
+6. DRM·암호 파일은 감지해서 표시하고 건너뛴다(상태 `skipped_document`, `prepared/_records/skipped.jsonl`). 복호화는 하지 않는다 — 수동 명령도 없다(사용자 11-08).
 7. 압축 원본 `.zip`·`.tar`·`.tgz`·`.tar.gz`는 풀어 파싱하고(암호·깨짐·안전 상한은 `pipeline.extract.archive.check`가 거름 — [pl-57](#pl-57)), `.7z`·`.rar`·`.bz2`·`.xz`는 지원하지 않는다고 표시한다(`unsupported_archive`). 처리 엔진 없는 확장자(`registry.engines_for`가 빈 것)는 두 곳에서만 거른다 — 받기 전 `candidate_pick.rdb_pick`(`_filter_unsupported_rows` — rdb:csv 대상 고르기), 받은 뒤 `filter_and_rotate`(`unsupported_*`). 파일 크기 상한(`extract.max_source_file_mb`)은 파싱(`parse_engines`)이 본다.
 8. 중복·DRM·암호·미지원으로 건너뛴 문서는 문서마다 `applog.pipe_event`에 한 행을 남긴다(`pipeline/shared/runtrace.py` `skip_event` — 단계 `extract.skip`, `doc_id` = 파일 이름, `status=skip`, `err_kind=doc`, `err`·`metrics.reason` = 이유 `dup_batch`·`dup_done`·`dup_run`·`drm_*`·`encrypted_*`·`unsupported_*`, 중복이면 `metrics.dup_of` = 남긴 문서 — 같은 묶음은 파일 이름, 끝난 문서·이번 실행은 원본 키). 받기 전(`rdb_pick`)에 뺀 지원 안 하는 확장자도 같은 행을 남긴다. 다시 받아도 같은 결과인 문서는 [pl-58](#pl-58).
 
@@ -53,7 +53,7 @@
 2. 쓰는 곳은 세 곳이다 — 받기 전 `candidate_pick.rdb_pick`(`_record_source_skipped`), 받은 뒤 `candidate_ready.stage_batch`(`_record_filtered` — `filter_and_rotate`의 `prepared/_records/skipped.csv`), 내용 중복 `candidate_ready._dedup`.
 3. 파싱·게시·적재 실패는 `except_type` `error` 행(`record_error` — 기록만, 다음 실행이 다시 시도 — [ops.md#op-17](ops.md#op-17) 규칙 16).
 4. `candidate_pick list --skip-done`은 gold에 끝난 키와 함께 이 표의 `skip` 키를 뺀다(`skipped_keys` — `error` 키는 빼지 않음). `--skip-done`이 없으면 빼지 않는다(사람이 다시 돌려 볼 때).
-5. 표는 applog 판 `0003_applog`(Alembic — 옛 `skip_doc_info` 행을 `skip`으로 옮김)가 만든다 — 앱은 DDL을 실행하지 않는다. PG 접속 정보가 없으면(PC) 대역 sqlite `<standin_dir>/applog.sqlite`에 표 정의로 바로 만든다. 서버(dev·prd)는 대역을 쓰지 않고 멈춘다. `ops.log.log_db_enabled`와 관계없이 쓴다.
+5. 표는 applog 판 `0003_applog`(Alembic — 옛 `skip_doc_info` 행을 `skip`으로 옮김)가 만든다 — 앱은 DDL을 실행하지 않는다. PG 접속 정보가 없으면 멈춘다(대역 없음). `ops.log.log_db_enabled`와 관계없이 쓴다.
 
 ### QA
 - `tests/server/pipeline/test_skip_docs.py`(이유 사례 표 → 쓴 행·횟수 · `error` 행은 따로·빼지 않음 · rdb:csv가 모두 지원 안 함이면 0건으로 끝남 · `list --skip-done`이 `skip`만 뺌) · `tests/server/pipeline/test_stage_batch.py`(거르기가 뺀 DRM·압축과 내용 중복이 표에 들어감) · `dbtool check --target applog`(DB 판).
@@ -125,7 +125,7 @@ A: `, 절 `DS`. 5행 = `divider`만 → 건너뜀. 머리글 없는 시트 `memo
 3. 상한은 지금 값 그대로: 압축은 [pl-57](#pl-57) 안전 상한(합계 2 GB·1000개), 메일 첨부와 오피스 개체는 메일 첨부 상한(하나 20 MB 넘으면 건너뜀, 메일·오피스 파일 하나에서 10개 — 단계마다 따로 셈).
 4. 꺼내지 않는 것: 그림 파일(그림 기능이 맡음), 차트에 딸린 엑셀(차트 단계가 이미 숫자를 읽음 — 중복), 개체 아이콘 그림, 연결만 된 개체(파일 경로만 있음).
 5. 오피스 개체(`.docx`·`.docm`·`.dotx`·`.pptx`·`.pptm`·`.potx`·`.ppsx`·`.xlsx`·`.xlsm`·`.xltx`): `word/`·`ppt/`·`xl/` 아래 `embeddings/`의 파일 중 문서·슬라이드·시트의 연결 정보(`_rels`)가 개체로 가리키는 것. 붙은 곳(슬라이드 번호·시트 이름·워드는 개체가 든 문단 글 끝 40자 — 비면 앞 문단)을 위치로 적는다. `oleObject*.bin`은 olefile(extract-msg와 함께 설치됨)로 벗겨 원래 파일을 꺼내고, 못 벗기면 건너뛴다. 새 형식 오피스에 넣은 개체는 무엇이든(PDF·옛 형식 문서 포함) 꺼낸다 — 옛 형식·PDF·한글 **문서 안의** 개체는 [pl-64](#pl-64).
-6. 변환 단계의 첨부 처리(`mail_attachments`)는 `parts.json`의 파일만 읽어 형식별 엔진으로 파싱하고(P0 캐시 같음 — 안 파일 sha256 + 엔진@버전), 본문 끝에 `[파일 …]`(압축)·`[첨부 …]`(메일)·`[개체 …]`(오피스) 절로 덧붙인다. 오피스 개체는 있던 자리에 위치 표시 `[개체 <이름>]` 한 줄을 넣는다 — 파워포인트는 그 슬라이드 끝, 엑셀은 그 시트 끝, 워드는 그 문단 글이 든 줄 뒤. 자리를 못 찾으면 위치 표시 없이 끝 절만. 파싱 엔진은 고치지 않는다(엔진 지문 그대로).
+6. 변환 단계의 첨부 처리(`mail_attachments`)는 `parts.json`의 파일만 읽어 형식별 엔진으로 파싱하고(P0 캐시 같음 — 안 파일 sha256 + 엔진@버전), 본문 끝에 `## [파일 …]`(압축)·`## [첨부 …]`(메일)·`## [개체 …]`(오피스) 제목 줄로 시작하는 절로 덧붙인다([pl-65](#pl-65)). 오피스 개체는 있던 자리에 위치 표시 `[개체 <이름>]` 한 줄을 넣는다 — 파워포인트는 그 슬라이드 끝, 엑셀은 그 시트 끝, 워드는 그 문단 글이 든 줄 뒤. 자리를 못 찾으면 위치 표시 없이 끝 절만. 파싱 엔진은 고치지 않는다(엔진 지문 그대로).
 7. `_parts/`는 준비 원본과 같이 지운다(서버는 문서 폴더를 지울 때 함께). 파싱 단계는 준비 폴더 맨 위 파일만 문서로 보므로 `_parts/` 안 파일이 따로 문서가 되지 않는다.
 8. 메일 인용 스레드 접기는 본문 글이 있어야 하므로 변환 단계에 남는다. 검색 MCP `parse_document`도 받기 단계를 거쳐 `_parts/`를 만들지만, 후보정 기본값(`supsub`)에 `attachments`가 없어 첨부·개체를 붙이지 않는다(지금과 같음).
 
@@ -161,3 +161,31 @@ A: `, 절 `DS`. 5행 = `divider`만 → 건너뜀. 머리글 없는 시트 `memo
 - `tests/server/pipeline/test_stage_batch.py` `test_same_night_dup`(문서마다 stage 사례 표: 같은 밤 같은 내용 → `dup_run`·`except_doc_info` `skip` `duplicate_sha256`, 같은 원본 다시 받기·다른 내용 → 남음, 1건 중복 제외는 `keep.txt`만) · `test_rdb_stage_once`(크기 같고 ETag 다름 → 다시 받음, 같은 ETag → 다시 씀, manifest 한 번·sha256 담음) · `test_skip_docs.py`(`list`가 표지 폴더를 비움) · `test_candidate.py` `test_rerun_keeps_source`(같은 결과 폴더 다시 실행 사례 표: 이번 목록은 이번 문서만, 묶음의 앞 문서는 원천·원본 키 그대로 — other로 안 감, 실행 사이 같은 파일 이름·같은 키 다시).
 - 정할 것: `check_modules`에 extract → transform import 거부 규칙.
 - Status: todo
+
+<a id="pl-65"></a>
+## pl-65 · 안 문서를 못 꺼낸 경우의 기록과 꺼내기 바로잡기
+- 요건: pl-63 꺼내기에서 빠지는 것이 보이고, 이름·크기·목록이 안전하게(사용자 11-08). 꺼내는 깊이는 pl-63 규칙 2(2단계) 그대로, 속도(안 파일마다 한 프로세스)는 이번에 다루지 않는다.
+- 반영: 아래 규칙대로(사용자 11-08).
+
+### 규칙
+1. 못 꺼낸 안 파일(안 열리는 안 상자 `cannot_open`·압축 안 암호 항목 `encrypted`·크기 상한 `too_big`·개수 상한 `too_many`·원본 하나의 꺼낸 합계 상한 `total_cap`·못 벗긴 `.bin` `no_unwrap`·읽는 도중 깨진 압축 `read_failed`)은 `parts.json`의 `failed`에 `{name, why}`로 남고, 성한 안 파일은 그대로 붙는다. 맨 바깥 원본이 안 열리는 것은 엔진이 판정한다(기록 안 함). 압축 안 파일이 합계·개수 상한에 닿으면 거기서 멈추고 첫 이름 하나에 `외 N개`를 붙여 한 줄로 적는다. 그림·차트 엑셀·깊이 상한 밑·tar 아닌 `.gz`(보통 파일로 둠)·같은 내용 두 번째는 일부러 꺼내지 않는 것이라 적지 않는다.
+2. 거르기(`filter_and_rotate`)가 이번 실행 문서마다 `failed`를 `_records/parts_failed.csv`(`file`·`reason`)에 적고, 받기(`candidate_ready._record_filtered`)가 skip 행과 같은 길로 `applog.except_doc_info`에 원본 키당 한 행을 upsert한다 — `except_type = part`·`level = warn`·이유 = 앞 10개 `이름(까닭)`을 `; `로 잇고 나머지는 `외 N개`(예 `in.zip/a.txt(encrypted); oleObject1.bin(no_unwrap)`). 다시 풀지 않은 재실행도 적어 마지막 시각·횟수가 오른다. 대상 목록에서 빼는 키가 아니다. 표 구조는 그대로(새 값 `part` — refactor.md C-111).
+3. 이름: zip은 utf-8 표시(플래그 11번 비트)가 있으면 그대로, 없으면 원래 바이트를 utf-8 → cp949 → cp437 차례로 읽는다. tar도 원래 바이트에서 같은 차례(cp949 이름에서 받기가 멈추지 않음). 줄바꿈·제어 문자는 빈칸, 글자로 못 쓰는 조각은 `?`.
+4. 원본 하나에서 꺼낸 합계 크기 상한 = 압축 안전 상한 `tuning.extract.archive.max_total_mb`(2 GB — 새 설정 없음). 오피스 개체·안 압축으로 된 크기 폭탄도 여기서 멈춘다. 목록에서 안 파일로 대신하는 상자(열린 안 압축·안 메일)는 합계에 넣지 않는다(같은 바이트를 두 번 세지 않게).
+5. `parts.json` = `{"sha256": 원본 sha256, "parts": [...], "failed": [...]}`. 다 쓴 임시 파일을 `os.replace`로 바꿔 놓고, 신선도는 고친 시각이 아니라 원본 sha256으로 본다(옛 목록 형식은 다시 품).
+6. 같은 내용(sha256)의 안 파일은 처음 것만 꺼낸다(같은 개체가 두 자리에 있으면 위치 표시도 첫 자리만).
+7. 붙인 절은 제목 줄 `## [첨부 <이름>]`·`## [파일 <이름>]`·`## [개체 <이름>]`로 시작하고(조각·절이 첨부마다 나뉨), 첨부 글의 쪽 나눔(`\f`)은 줄바꿈으로 바꾼다(원본 쪽 번호를 밀지 않게). 원본 위치(`sources`)는 그대로.
+8. 워드 개체 위치: 개체 앞 문단 글이 문서에 여러 번 나오면 몇 번째인지(`nth`)도 적어 그 차례 자리에 표시한다(모자라면 마지막 자리).
+9. 첨부 파싱 임시 파일은 부를 때마다 새 이름(문서 둘이 같은 첨부를 동시에 파싱해도 겹치지 않음).
+
+### QA
+- `tests/server/pipeline/test_unpack.py`: 사례 표 `CASES`(같은 글 문단 둘 → `nth`, 같은 내용 첨부 한 번) · `FAILED` 표(못 벗기는 `.bin`·안 열리는 안 docx · 첨부 압축 안 암호 항목 · 합계 상한 · 개수 상한 · 안 압축은 합계에 안 파일만 · 같은 내용은 상한보다 먼저 · tar 아닌 안 .gz · 압축 개수 상한 한 줄) · `MARKS`(같은 글 둘째 자리) · 제목 줄·쪽 나눔 · 임시 이름 · `parts.json` 원자 쓰기 · sha256 신선도. `test_archive.py` 사례 표: cp949 tar · cp949 zip · 이름 속 줄바꿈. `test_skip_docs.py::test_part_row`: 거르기 → part 행(warn) · 재실행 횟수 2.
+- Status: done
+
+<a id="pl-66"></a>
+## pl-66 · 옛 형식 오피스 검사기 하나로
+- 요건: 같은 검사를 두 벌로 두지 않는다. 남길 쪽은 olefile — 견본 `.doc`·`.xls`·`.ppt`(암호 있음·없음)로 두 코드 결과가 같은지 먼저 시험.
+- 규칙: `filter_and_rotate._ole_encrypted_reason`이 olefile로만 읽는다 — `.doc` `WordDocument` FIB fEncrypted · `.xls` `Workbook`/`Book` BIFF FILEPASS · `.ppt` `EncryptedSummary` 스트림. 규격(MS-CFB)대로 4096바이트 미만 스트림은 미니 스트림에서 읽는다. 깨지거나 잘린 복합 파일·DRM 머리는 신호 없음(엔진이 각자 판정 — 옛 형식은 DRM 머리를 보지 않는다).
+- 시험: `tests/server/pipeline/test_prepare.py::test_ole_encrypted_cases` 사례 표(규격대로 만든 `_build_cfb` — 암호 있음·없음, 미니 스트림, DRM 흉내, 깨진·잘린 파일 + PC에서는 `valid_env` 견본 4건과 반으로 자른 사본). 견본 `encrypted_ole.doc`는 규격대로 다시 만들었다(크기 2560, sha256 `622c1824…` — `valid_env/edw/ai.sql`·`edw.sqlite` 함께).
+- 반영: 사용자 11-08.
+- Status: done

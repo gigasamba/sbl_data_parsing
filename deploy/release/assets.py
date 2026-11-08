@@ -65,11 +65,8 @@ def sources():
 
 
 def sha(p):
-    h = hashlib.sha256()
     with open(p, "rb") as f:
-        for b in iter(lambda: f.read(1 << 20), b""):
-            h.update(b)
-    return h.hexdigest()
+        return hashlib.file_digest(f, "sha256").hexdigest()
 
 
 def pack():

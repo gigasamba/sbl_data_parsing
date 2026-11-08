@@ -26,9 +26,6 @@ from common.config.settings import (
 
 
 class PipelineConnectionsRdbColumns(Section):
-    content_version: str | None = F(
-        "content_version_id", "RDB_COL_CONTENT_VERSION", "RDB 문서 위치 표에서 문서 판(content version) ID 열의 이름", blank="keep"
-    )
     doc_id: str | None = F("id", "RDB_COL_DOC_ID", "RDB 문서 위치 표에서 문서 ID 열의 이름", blank="keep")
     filename: str | None = F("original_filename", "RDB_COL_FILENAME", "RDB 문서 위치 표에서 원본 파일 이름 열의 이름", blank="keep")
     key: str | None = F("s3_key", "RDB_COL_KEY", "RDB 문서 위치 표에서 Object Storage 키(s3_key) 열의 이름", blank="keep")
@@ -48,12 +45,6 @@ class PipelineConnectionsRdb(Section):
     )
     increment_col: str | None = F(None, "RDB_INCREMENT_COL", "증분(since) 판정에 쓸 열 이름 — 비우면 문서 ID 열(columns.doc_id)")
     columns: PipelineConnectionsRdbColumns = Field(default_factory=PipelineConnectionsRdbColumns)
-
-
-class PipelineConnectionsSecureDoc(Section):
-    passwords_file: str | None = F(
-        None, "SECURE_DOC_PASSWORDS_FILE", "암호 걸린 문서용 암호 목록 파일 경로(한 줄에 암호 하나) — 비우면 암호 문서는 못 열고 건너뜀"
-    )
 
 
 class PipelineExtractAttach(Section):
@@ -274,7 +265,6 @@ class PipelineExtract(Section):
     )
     rapidocr_page_workers: int | None = F(1, "RAPIDOCR_PAGE_WORKERS", "rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개)")
     rotated_max: int | None = F(20, "PARSE_ROTATED_MAX", "쪽 VLM 후보로 올릴 '회전된 쪽' 상한(쪽 수) — 0이면 rotation.csv를 안 읽음")
-    skipped_log: str | None = F(None, "PARSE_SKIPPED_LOG", "건너뛴 문서(암호 PDF 등) 기록 jsonl 경로")
     text_page_sec: float | None = F(
         10.0, "PARSE_TEXT_PAGE_SEC", "글자 엔진(VLM 아님) 문서×엔진 1건의 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
     )
@@ -393,7 +383,6 @@ class PipelinePaths(Section):
 
 class PipelineConnections(Section):
     rdb: PipelineConnectionsRdb = Field(default_factory=PipelineConnectionsRdb)
-    secure_doc: PipelineConnectionsSecureDoc = Field(default_factory=PipelineConnectionsSecureDoc)
 
 
 class PipelineService(Section):

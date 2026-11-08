@@ -9,8 +9,11 @@ from pathlib import Path
 
 from common.config.settings import COMMON
 from pipeline import config as pc
-from pipeline.load.publish_parse_result import SILVER_FILE, rep_md_key, run
-from tests.server.pipeline.goldseed import seed
+from pipeline.load.publish_parse_result import SILVER_FILE, rep_md_key, run, status_of
+from pipeline.shared import except_docs as SD
+from pipeline.shared.except_docs import SILVER_REASON, reason_of
+from tests.server.common import pgcase
+from tests.server.pipeline.goldseed import gold, seed
 
 
 class A:
@@ -81,7 +84,8 @@ def make_fixture():
         + "\n",
         encoding="utf-8",
     )
-    (out / "prepared" / "skipped.jsonl").write_text(
+    (out / "prepared" / "_records").mkdir(parents=True, exist_ok=True)
+    (out / "prepared" / "_records" / "skipped.jsonl").write_text(
         json.dumps({"file": "d.pdf", "reason": "drm_fasoo", "sha256": "x"}) + "\n", encoding="utf-8"
     )
 
@@ -97,26 +101,25 @@ def selftest():
     d, out, a = make_fixture()
     r = run(a)
     assert r["rows_planned"] == 4 and r["missing_file"] == 0, r
-    assert r["by_status"] == {"ok": 1, "failed": 1, "not_parsed": 1, "skipped_drm": 1}, r["by_status"]
+    assert r["by_status"] == {"ok": 1, "failed": 1, "not_parsed": 1, "skipped_document": 1}, r["by_status"]
     assert r["upload_statuses"] == ["ok", "partial"] and r["upload_plan"] == {"eligible": 1, "excluded": 3}, r
     no_up = {s["status"]: s["upload"] for s in r["sample_rows"]}
-    assert no_up == {"ok": True, "failed": False, "not_parsed": False, "skipped_drm": False}, no_up
+    assert no_up == {"ok": True, "failed": False, "not_parsed": False, "skipped_document": False}, no_up
     reasons = {s["status"]: s["no_upload_reason"] for s in r["sample_rows"] if not s["upload"]}
-    assert all(reasons.values()) and "보고서로만" in reasons["failed"] and "보고서로만" in reasons["skipped_drm"], reasons
+    assert all(reasons.values()) and "보고서로만" in reasons["failed"] and "보고서로만" in reasons["skipped_document"], reasons
     assert r["sample_rows"][0]["rep_key"] == "FileStorageMap/docs/", r["sample_rows"][
         0
     ]  # S9 정리(Q7 a) — 서버가 rep_key 꼴을 바꿈(파일 이름 단 없음 — 기대값만 맞춤)
 
-    import sqlite3
-
     os_dir = d / "os"
     with (
+        gold(),
         pc.PIPE.env(PM_BUCKET=f"file://{os_dir}"),
-        COMMON.env(PG_STANDIN_DIR=str(d / "pg"), RUN_ENV="local"),
-    ):  # S7c — 시험하는 코드가 객체만 읽음(os.environ 안 건드림) · gold·applog는 PC 대역(임시 폴더) — 이미지에서도 시험 안에서만 local
+        COMMON.env(RUN_ENV="local"),
+    ):  # S7c — 시험하는 코드가 객체만 읽음(os.environ 안 건드림) · gold·applog는 실 pgvector 임시 스키마(goldseed.gold)
         a.apply = True
         r1 = run(a)
-        # SI39 — ok(a)만 .md 업로드 · failed·skipped_drm은 보고서로만
+        # SI39 — ok(a)만 .md 업로드 · failed·skipped_document은 보고서로만
         assert r1["result"] == {
             "uploaded": 1,
             "upload_excluded": 3,
@@ -143,7 +146,7 @@ def selftest():
         assert json.loads((folder / "a_2026-10-08.json").read_text(encoding="utf-8"))["text"] == "본문 A"
         assert not list((Path(a.out) / "publish" / "_md_tmp").glob("*")), "임시 파일이 남음"
         excluded_md = Path(r1["excluded_report"]).read_text(encoding="utf-8")
-        assert "failed" in excluded_md and "skipped_drm" in excluded_md and "docs/b.pdf" in excluded_md, excluded_md
+        assert "failed" in excluded_md and "skipped_document" in excluded_md and "docs/b.pdf" in excluded_md, excluded_md
         # op-17 — 처리 기록 파일: 올린 문서 한 줄(적재가 gold doc 칸으로)
         silver_f = Path(a.out) / "publish" / SILVER_FILE
         silver = [json.loads(x) for x in silver_f.read_text(encoding="utf-8").splitlines()]
@@ -152,10 +155,15 @@ def selftest():
         assert (rec["doc_name"], rec["source_key"], rec["parse_status"], rec["silver_version"]) == ("a.pdf", "docs/a.pdf", "ok", "v1"), rec
         assert rec["silver_bucket"] == f"file://{os_dir}" and rec["silver_key"].endswith("/a_2026-10-08.md"), rec
         assert len(rec["sha256"]) == 64 and rec["parsed_at"].endswith("+09:00") and isinstance(rec["engines"], list), rec
-        cn = sqlite3.connect(d / "pg" / "applog.sqlite")
-        errs = cn.execute("select source_key, except_type, reason from except_doc_info").fetchall()
-        cn.close()
-        assert errs == [("docs/b.pdf", "error", "parse_failed")], errs  # 파싱 실패 — 기록만(다음 실행이 다시 고름)
+        db = pgcase.connect(SD._schema())
+        errs = [
+            (r["k"], r["t"], r["r"])
+            for r in db.q(f"SELECT source_key AS k, except_type AS t, reason AS r FROM {db.schema}.except_doc_info")
+        ]
+        db.cn.close()
+        assert sorted(errs) == [("docs/a.pdf", "silver", SILVER_REASON), ("docs/b.pdf", "error", "parse_failed")], (
+            errs
+        )  # 파싱 실패 — 기록만(다음 실행이 다시 고름) · 올린 a는 silver(pl-68)
 
         seed([{"file_path": "docs/a.pdf", "source_system": "FileStorageMap"}])  # a가 gold에 적재됨
         r2 = run(a)  # 같은 걸 재실행 — a는 이미 gold에 있음 → 올리지 않음(pl-61)
@@ -242,8 +250,24 @@ def test_stage_dropped_docs():
         a = A()
         a.out, a.manifest, a.source_dir, a.rep, a.summary, a.skipped, a.keep = str(out), None, None, None, None, None, None
         a.source_system, a.version, a.parse_date, a.reparse, a.apply = "FileStorageMap", "v1", "2026-11-05", None, True
-        with pc.PIPE.env(PM_BUCKET=f"file://{d / 'os'}"), COMMON.env(PG_STANDIN_DIR=str(d / "pg"), RUN_ENV="local"):
+        with gold(), pc.PIPE.env(PM_BUCKET=f"file://{d / 'os'}"), COMMON.env(RUN_ENV="local"):
             r = run(a)
         silver = (out / "publish" / SILVER_FILE).read_text(encoding="utf-8")
         assert r["result"]["uploaded"] == 0 and r["result"]["excluded_drm_failed"] == want and silver == "", (name, r, silver)
         shutil.rmtree(d, ignore_errors=True)
+
+
+SKIP_REASON_CASES = [  # (받기 거르기 이유, 게시 상태, except_doc_info skip 이유) — 두 곳이 PERMANENT 하나로 같게 가름
+    ("drm_fasoo", "skipped_document", "drm_fasoo"),
+    ("encrypted_archive", "skipped_document", "encrypted_archive"),
+    ("broken_archive", "skipped_document", "broken_archive"),
+    ("archive_too_big", "skipped_document", "archive_too_big"),
+    ("unsupported_archive", "skipped_document", "unsupported_archive"),
+    ("parse_timeout", "not_parsed", None),  # 영구 이유 아님 — 다음 실행이 다시 고름
+]
+
+
+def test_skip_reason_same_in_publish_and_except_docs():
+    for reason, status, skip in SKIP_REASON_CASES:
+        assert status_of("a.zip", {}, {}, {"a.zip": reason})[0] == status, reason
+        assert reason_of("a.zip", reason) == skip, reason

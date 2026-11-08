@@ -16,8 +16,8 @@ services:
     environment:
       SETTINGS_FILE: /etc/rag/settings.yaml      # 붙인 설정 파일(x-settings)
       RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|prd 필요 — settings.yaml required.env.run_env(load_settings가 export — refactor.md C-34, D-028)}"   # 실행 환경 필수(없으면 compose가 멈춤)
-      # 바인드·포트·질의 캐시는 settings.yaml search.server.mcp_bind_host·mcp_port · common.models.embed.embed_query_cache_file
-      #   (질의 캐시는 이미지 안 기본 /tmp/mcp_query_cache.sqlite). 저장소는 PG 하나.
+      # 바인드·포트는 settings.yaml search.server.mcp_bind_host·mcp_port(질의 임베딩 캐시는 프로세스 메모리 — 파일 없음).
+      #   저장소는 PG 하나.
     volumes:
       - *settings
       # EDW 조인 사슬 서버 사본(data-pipeline과 같은 파일): search attrs 거르기·근거 attrs 키. 앱은 ops.paths.edw_chain_file(적재와 같은 칸)에 이 경로를 적었을 때만 씀.

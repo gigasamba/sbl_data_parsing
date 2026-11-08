@@ -16,6 +16,7 @@ False를 반환하고 dropped를 올린다. shutdown은 exitclean에 등록되�
 있을 수 있다(at-least-once); 상관 ID로 대조한다. sink는 DDL을 실행하지 않는다.
 """
 
+import functools
 import json
 import logging
 import os
@@ -57,6 +58,15 @@ def _warn_dropped(count):
     print(f"[applog] 종료 flush 기한 초과 — 미완료 {count}행 dropped 집계(한 번 알림)", file=sys.stderr)
 
 
+@functools.cache
+def _engine():
+    """프로세스에 엔진 하나(연결 풀) — 배치마다 새로 만들고 닫지 않게. 제한 시간은 처음 만들 때의 log.db_timeout_sec."""
+    from common.store.db import dbtool
+
+    limit = cfg().log.db_timeout_sec
+    return dbtool.engine(connect_timeout=limit, options=f"-c statement_timeout={limit * 1000} -c lock_timeout={limit * 1000}")
+
+
 def _write_db(batch, schema="applog"):
     from psycopg.types.json import Jsonb
 
@@ -64,31 +74,27 @@ def _write_db(batch, schema="applog"):
     from common.store.db.models.log_tables import JSON_COLUMNS, log_metadata
 
     schema = dbtool.schema_of("applog", schema)
-    limit = cfg().log.db_timeout_sec
-    eng = dbtool.engine(connect_timeout=limit, options=f"-c statement_timeout={limit * 1000} -c lock_timeout={limit * 1000}")
-    try:
-        groups = defaultdict(list)
-        for table, row in batch:
-            groups[(table, tuple(sorted(row)))].append(row)
-        md = log_metadata()
-        with eng.begin() as conn:
-            for (table, keys), rows in groups.items():
-                cols = md.tables[f"applog.{table}"].columns
-                if not keys or set(keys) - set(cols.keys()):
-                    raise ValueError("unknown applog column")
-                values = [{k: Jsonb(v) if k in JSON_COLUMNS and v is not None else v for k, v in row.items()} for row in rows]
-                conflict = ""
-                if table == "pipe_run":
-                    update = [k for k in keys if k != "run_id"]
-                    conflict = " ON CONFLICT (run_id) " + (
-                        "DO UPDATE SET " + ", ".join(f"{k} = EXCLUDED.{k}" for k in update) if update else "DO NOTHING"
-                    )
-                conn.exec_driver_sql(
-                    f"INSERT INTO {schema}.{table} ({', '.join(keys)}) VALUES ({', '.join('%(' + k + ')s' for k in keys)})" + conflict,
-                    values,
+    eng = _engine()
+    groups = defaultdict(list)
+    for table, row in batch:
+        groups[(table, tuple(sorted(row)))].append(row)
+    md = log_metadata()
+    with eng.begin() as conn:
+        for (table, keys), rows in groups.items():
+            cols = md.tables[f"applog.{table}"].columns
+            if not keys or set(keys) - set(cols.keys()):
+                raise ValueError("unknown applog column")
+            values = [{k: Jsonb(v) if k in JSON_COLUMNS and v is not None else v for k, v in row.items()} for row in rows]
+            conflict = ""
+            if table == "pipe_run":
+                update = [k for k in keys if k != "run_id"]
+                conflict = " ON CONFLICT (run_id) " + (
+                    "DO UPDATE SET " + ", ".join(f"{k} = EXCLUDED.{k}" for k in update) if update else "DO NOTHING"
                 )
-    finally:
-        eng.dispose()
+            conn.exec_driver_sql(
+                f"INSERT INTO {schema}.{table} ({', '.join(keys)}) VALUES ({', '.join('%(' + k + ')s' for k in keys)})" + conflict,
+                values,
+            )
 
 
 class Sink:

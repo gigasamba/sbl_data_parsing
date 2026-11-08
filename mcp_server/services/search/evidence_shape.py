@@ -93,19 +93,9 @@ def _text_str(e):
     return t if isinstance(t, str) else str(t)
 
 
-def _evidence_groups(obj):
-    """cap()이 랭크 인지 절삭을 적용할 근거 목록 — 최상위 evidence 하나(비었으면 없음)."""
-    groups = []
-    ev = obj.get("evidence")
-    if isinstance(ev, list) and ev:
-        groups.append(ev)
-    return groups
-
-
-def _shrink_group(g, question, trimmed_ids):
-    """그룹 하나에서 가장 낮은 순위(비보호) 항목 하나를 반으로 줄이거나(가능하면) 통째로 뺌."""
-    protected = {i for i, e in enumerate(g) if i == 0 or (isinstance(e, dict) and e.get("via") == "aggregate")}
-    candidates = [i for i in range(len(g)) if i not in protected] or list(range(len(g)))  # 보호 대상만 남으면 그것도 줄임
+def _shrink(g, question, trimmed_ids):
+    """근거 목록에서 가장 낮은 순위(1위 말고) 항목 하나를 반으로 줄이거나(가능하면) 통째로 뺌."""
+    candidates = list(range(1, len(g))) or [0]  # 1위만 남으면 그것도 줄임
     shrink_i = next((i for i in sorted(candidates, reverse=True) if len(_text_str(g[i])) > _CAP_FLOOR), None)
     if shrink_i is not None:
         t_str = _text_str(g[shrink_i])
@@ -119,7 +109,7 @@ def _shrink_group(g, question, trimmed_ids):
 def cap(obj, limit=None):
     """결과 크기 상한 — JSON 전체가 limit바이트(UTF-8 인코딩 기준) 이하가 되게(잘렸으면 truncated 표시).
     MCP_MAX_CHARS(기본 20000)는 이름과 달리 UTF-8 바이트 단위. 순위(index, 0이 1위) 기준
-    **가장 낮은 순위부터** 줄인다 — index 0과 via=aggregate 항목은 그것들만 남을 때까지 보호. 한 항목씩: (1) 글자수가
+    **가장 낮은 순위부터** 줄인다 — index 0은 그것만 남을 때까지 보호. 한 항목씩: (1) 글자수가
     _CAP_FLOOR(300) 넘는 가장 낮은 순위 항목을 반으로(질문 토큰 주변 창 유지, 비싸지 않으면, text가 str 아니면 str()로) ·
     (2) 더 줄일 게 없으면 가장 낮은 순위 항목을 통째로 뺌. 잘렸으면 truncated=True + truncation:{trimmed, dropped}(몇
     건 줄였는지/뺐는지).
@@ -128,15 +118,10 @@ def cap(obj, limit=None):
     question = obj.get("question")
     obj["truncation"] = {"trimmed": 0, "dropped": 0}  # limit 비교에 이 칸 바이트도 매번 들어가게 먼저 넣음
     trimmed_ids = set()
-    groups = _evidence_groups(obj)  # [최상위 evidence] 또는 []
-    rr = 0  # 그룹 크기가 같을 때 순서를 고정(한 그룹만 계속 비지 않게)
-    while len(json.dumps(obj, ensure_ascii=False).encode("utf-8")) > limit and any(groups):
-        sizes = [len(g) for g in groups]
-        mx = max(sizes)
-        tied = [i for i, s in enumerate(sizes) if s == mx]
-        g = groups[tied[rr % len(tied)]]
-        rr += 1
-        if not _shrink_group(g, question, trimmed_ids):
+    ev = obj.get("evidence")
+    g = ev if isinstance(ev, list) else []
+    while g and len(json.dumps(obj, ensure_ascii=False).encode("utf-8")) > limit:
+        if not _shrink(g, question, trimmed_ids):
             obj["truncation"]["dropped"] += 1
         obj["truncation"]["trimmed"] = len(trimmed_ids)
         obj["truncated"] = True

@@ -47,7 +47,6 @@ from decimal import Decimal
 
 from common.config import settings as C  # common 칸(connections.rdb — 접속·sqlite 대역)
 from mcp_server import config as mc  # 호출마다 cfg()
-from mcp_server.schemas.edw_result import ColumnMeta, QueryResult  # noqa: F401 — 출력 모양은 schemas/
 
 DEFAULT_TABLES = "AI.FileStorageMap,CRMS.RM_MAS_CLIENT,CRMS.RM_MAS_CLIENT_GENERAL,LAS.DIVISION_MAS,LAS.PROD_MAS,LAS.SERVICE_MAS,SFDC.Account,SFDC.Opportunity"  # PC stand-in tables (valid_env/edw — ops.md#op-03)
 _CELL_MAX = 2000
@@ -118,7 +117,7 @@ _TOP_AFTER_SELECT_RE = re.compile(r"\s*TOP\s*\(?\s*(\d+)\s*\)?", re.IGNORECASE)
 # ── env / backend selection ─────────────────────────────────────────────────
 
 
-def allowed_tables(kind=None):
+def allowed_tables(kind):
     """제한 없음(전 스키마 허용) — None을 돌려주면 validate가 허용 목록 검사를 건너뛴다.
     시스템 테이블 차단(sys·INFORMATION_SCHEMA 등)·읽기 전용 키워드 검사는 그대로 유지된다. sqlite 스탠드인은 실 EDW가
     아니므로 동봉 샘플 범위(DEFAULT_TABLES)로 둔다."""
@@ -638,8 +637,6 @@ def query(sql, max_rows=1000):
         return _finish("tsql", "none", "not_configured", "EDW query backend not configured", t0)
     dialect = dialect_of(kind)
     allowed = allowed_tables(kind)
-    if allowed is not None and not allowed:
-        return _finish(dialect, kind, "not_configured_tables", "no tables are allowlisted for this backend", t0)
     cap_rows = _row_budget(max_rows)
     clean, err = validate(sql, allowed)
     if err:
@@ -721,105 +718,3 @@ def _finish(dialect, source, error_code, message, t0):
         "source": source,
         "error": f"{error_code}: {message}",
     }
-
-
-# ── describe_edw ─────────────────────────────────────────────────────────
-
-
-def _describe_table_sqlite(conn, table):
-    bare = table.rpartition(".")[-1]
-    info = conn.execute(f"PRAGMA AI.table_info('{bare}')").fetchall()  # bare is allowlist-checked by the caller
-    cols = [{"name": r[1], "type": r[2] or "unknown", "nullable": not r[3]} for r in info]
-    try:
-        row_count = conn.execute(f"SELECT COUNT(*) FROM AI.{bare}").fetchone()[0]
-    except Exception:
-        row_count = None
-    sample = conn.execute(f"SELECT * FROM AI.{bare} LIMIT 3").fetchall()
-    sample_cols = [d[0] for d in conn.execute(f"SELECT * FROM AI.{bare} LIMIT 0").description]
-    return cols, row_count, [dict(zip(sample_cols, (_json_safe_cell(v) for v in r))) for r in sample]
-
-
-def _describe_table_mssql(conn, schema, bare):
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS "
-        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s ORDER BY ORDINAL_POSITION",
-        (schema, bare),
-    )
-    cols = [{"name": r[0], "type": r[1], "nullable": r[2] == "YES"} for r in cur.fetchall()]
-    try:
-        cur.execute(
-            "SELECT SUM(p.rows) FROM sys.partitions p JOIN sys.tables t ON t.object_id=p.object_id "
-            "JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE s.name=%s AND t.name=%s AND p.index_id IN (0,1)",
-            (schema, bare),
-        )
-        row = cur.fetchone()
-        row_count = int(row[0]) if row and row[0] is not None else None
-    except Exception:
-        row_count = None
-    cur.execute(f"SELECT TOP 3 * FROM [{schema}].[{bare}]")
-    sample_cols = [d[0] for d in cur.description]
-    sample = [dict(zip(sample_cols, (_json_safe_cell(v) for v in r))) for r in cur.fetchall()]
-    return cols, row_count, sample
-
-
-def describe(table=None):
-    """No table: every allowed table with its columns + row_count (best-effort/cheap — sys.partitions
-    metadata on SQL Server, a plain COUNT(*) on the tiny SQLite sample). With a table: that table's
-    columns + 3 sample rows. Always carries `dialect` so the caller knows TOP vs LIMIT."""
-    kind, conf = backend()
-    if kind is None:
-        return {"ok": False, "dialect": "tsql", "error": "not_configured: EDW query backend not configured"}
-    dialect = dialect_of(kind)
-    allowed = allowed_tables(kind)  # 기본 None = 전 스키마 허용
-    if allowed is None:
-        return {
-            "ok": False,
-            "dialect": dialect,
-            "error": "전 스키마 허용 모드(describe_edw 미지원) — 필요한 테이블·열은 직접 SELECT 로 확인",
-        }
-    allowed = sorted(allowed)
-    if not allowed:
-        return {"ok": False, "dialect": dialect, "error": "not_configured_tables: no tables are allowlisted for this backend"}
-    if table is not None and table.lower() not in allowed:
-        return {"ok": False, "dialect": dialect, "error": f"rejected:table:{table}: not on the allowlist"}
-    timeout = float(mc.cfg().edw_query.timeout_sec)
-    try:
-        conn = _connect(kind, conf, timeout)
-    except Exception as e:
-        print(f"[mcp] edw_query describe connect failed ({kind}): {type(e).__name__}: {e}", flush=True)
-        return {"ok": False, "dialect": dialect, "error": "connect_failed: could not connect to EDW"}
-    try:
-        targets = [table.lower()] if table is not None else allowed
-        tables = []
-        for t in targets:
-            schema, _, bare = t.rpartition(".")
-            try:
-                if kind == "sqlite":
-                    cols, row_count, sample = _describe_table_sqlite(conn, t)
-                else:
-                    cols, row_count, sample = _describe_table_mssql(conn, schema, bare)
-            except Exception as e:
-                print(f"[mcp] edw_query describe failed for {t}: {type(e).__name__}: {e}", flush=True)
-                continue
-            tables.append({"name": t, "columns": cols, "row_count": row_count, "sample_rows": sample if table is not None else None})
-        if table is not None:
-            if not tables:
-                return {"ok": False, "dialect": dialect, "error": f"query_failed:{table}: could not read that table"}
-            t = tables[0]
-            return {
-                "ok": True,
-                "dialect": dialect,
-                "table": {"name": t["name"], "columns": t["columns"], "row_count": t["row_count"]},
-                "sample_rows": t["sample_rows"],
-            }
-        return {
-            "ok": True,
-            "dialect": dialect,
-            "tables": [{"name": t["name"], "columns": t["columns"], "row_count": t["row_count"]} for t in tables],
-        }
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass

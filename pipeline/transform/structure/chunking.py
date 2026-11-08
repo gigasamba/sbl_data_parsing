@@ -1,26 +1,21 @@
-"""청킹(구조화 모듈) — 대표 결과 본문 → 청크(구조·고정·문장·쪽 단위) + 위치(쪽·줄·문자 범위·절)."""
+"""청킹(구조화 모듈) — 대표 결과 본문 → 청크(구조 청커) + 위치(쪽·줄·문자 범위·절)."""
 
-import json
 import re
 from pathlib import Path
 
 from common.core.meaning import strip_page_numbers
-from common.core.repfmt import _SECTION, locate  # noqa: F401 — 쪽·줄 위치 규칙(파싱 결과 형식)
+from common.core.repfmt import locate  # 쪽·줄 위치 규칙(파싱 결과 형식)
 from pipeline import config as pc  # pipeline 칸 CHUNK_*
 
 
-def load_parse_doc(parse_dir, engine, doc):
-    """output/parse/<engine>/<doc>.json → (text, facts). 파일 없음(실패) → ("", [])."""
-    f = Path(parse_dir) / engine / f"{doc}.json"
-    if not f.exists():
-        return "", []
-    d = json.loads(f.read_text(encoding="utf-8"))
+def rep_text(d):
+    """대표 결과(_rep/<문서>.json 내용) → 청킹할 본문(본문에 없는 표 글은 뒤에 붙임)."""
     text = d.get("text") or ""
     for t in d.get("tables") or []:
         tt = t.get("text") or ""
         if tt and tt not in text:
             text = text + "\n" + tt
-    return text, d.get("facts") or []
+    return text
 
 
 _HEADING = re.compile(r"^#{1,6}\s+\S")
@@ -154,16 +149,12 @@ def chunk_structure(doc, text):
     return out
 
 
-CHUNKERS = {"structure": chunk_structure}
-
-
-def chunk_all(corpus, method, used=None):
+def chunk_all(corpus, used=None):
     """청크마다 meta = {file, engine, page, line, line_end, span, section} — 청크·그래프·검색 단위가 원본 위치를 들고 다닌다.
     used = load_corpus가 채운 {문서: 파싱 엔진}(없으면 engine None)."""
-    fn = CHUNKERS[method]
     out = []
     for doc, text in sorted(corpus.items()):
-        for c in fn(doc, text):
+        for c in chunk_structure(doc, text):
             pos = c.get("pos") or 0
             i = text.find(c["text"][:40], max(0, pos - 5)) if c["text"] else -1  # 공백 정리로 pos가 조금 어긋나는 청커 보정
             s = i if i >= 0 else pos

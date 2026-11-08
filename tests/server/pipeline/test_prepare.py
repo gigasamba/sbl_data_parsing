@@ -5,6 +5,7 @@ import struct
 from pathlib import Path
 
 import pipeline.extract.filter_and_rotate as M
+from common.core.paths import PROJ_ROOT
 from pipeline.extract.filter_and_rotate import (
     _ENCRYPTED_PACKAGE,
     CFB_SIG,
@@ -17,48 +18,118 @@ from pipeline.extract.filter_and_rotate import (
 )
 
 
-def _build_cfb(streams):
-    """시험용 최소 CFB 파일 — Root Entry + 주어진 스트림들(512바이트 섹터 1개씩, FAT 1개, DIFAT 없음) — olefile 없이도
-    _cfb_sectors·_ole_encrypted_reason을 선위험 시험(selftest)할 수 있게. streams = {스트림 이름: 바이트}(≤512바이트씩, ≤3개)."""
+def _build_cfb(streams, mini=()):
+    """시험용 CFB(MS-CFB 규격대로, olefile 없이 만듦) — 섹터 512바이트, FAT 1섹터, 디렉터리 1섹터(Root Entry + 최대 3개).
+    `mini`에 든 이름은 미니 스트림(64바이트 칸)에, 나머지는 일반 섹터에 4096바이트 이상으로 채워 둔다(규격: 4096 미만은 미니 스트림)."""
     names = list(streams)
-    assert len(names) <= 3, "디렉터리 1섹터(Root Entry + 최대 3개)만 지원 — selftest 전용 헬퍼"
-    header = bytearray(512)
-    header[0:8] = CFB_SIG
-    struct.pack_into("<H", header, 30, 9)  # sector shift = 9 → 섹터 512바이트
-    struct.pack_into("<H", header, 32, 6)  # mini sector shift(안 씀)
-    struct.pack_into("<I", header, 44, 1)  # FAT 섹터 1개
-    struct.pack_into("<I", header, 48, 1)  # 디렉터리 시작 섹터 = 1
-    struct.pack_into("<I", header, 56, 4096)  # 미니스트림 상한(이 헬퍼는 안 씀)
-    struct.pack_into("<I", header, 60, 0xFFFFFFFE)
-    struct.pack_into("<I", header, 68, 0xFFFFFFFE)
-    for i in range(109):
-        struct.pack_into("<I", header, 76 + i * 4, 0 if i == 0 else 0xFFFFFFFF)
-    data_secs = {name: 2 + i for i, name in enumerate(names)}
-    fat = [0xFFFFFFFF] * 128
-    fat[0], fat[1] = 0xFFFFFFFD, 0xFFFFFFFE
-    for secid in data_secs.values():
-        fat[secid] = 0xFFFFFFFE
-    fat_sec = b"".join(struct.pack("<I", v) for v in fat)
-    dirent = bytearray(512)
+    assert len(names) <= 3, "디렉터리 1섹터만 — 시험 전용"
+    end, free = 0xFFFFFFFE, 0xFFFFFFFF
+    sectors, fat = [b""], {0: 0xFFFFFFFD}  # 섹터 0 = FAT(끝에 채움)
 
-    def put_entry(i, name, etype, start, size):
+    def alloc(blob):
+        start, n = len(sectors), max(1, -(-len(blob) // 512))
+        for i in range(n):
+            sectors.append(blob[i * 512 : (i + 1) * 512].ljust(512, b"\x00"))
+            fat[start + i] = start + i + 1 if i < n - 1 else end
+        return start
+
+    dir_sec = alloc(b"")
+    ents, mini_blob, minifat = [], b"", []
+    for name in names:
+        data = streams[name]
+        if name in mini:
+            k = max(1, -(-len(data) // 64))
+            ents.append((name, len(mini_blob) // 64, len(data)))
+            minifat += [len(mini_blob) // 64 + i + 1 for i in range(k - 1)] + [end]
+            mini_blob += data.ljust(k * 64, b"\x00")
+        else:
+            data = data.ljust(4096, b"\x00")
+            ents.append((name, alloc(data), len(data)))
+    root, minifat_sec = (end, 0), end
+    if mini_blob:
+        root = (alloc(mini_blob), len(mini_blob))
+        minifat_sec = alloc(struct.pack(f"<{len(minifat)}I", *minifat).ljust(512, b"\xff"))
+    sectors[0] = struct.pack("<128I", *(fat.get(i, free) for i in range(128)))
+    dirent = bytearray(512)
+    for i in range(len(names) + 1, 4):
+        struct.pack_into("<III", dirent, i * 128 + 68, free, free, free)  # 빈 항목
+
+    def put(i, name, etype, start, size, right, child):
         nm = name.encode("utf-16-le") + b"\x00\x00"
         dirent[i * 128 : i * 128 + len(nm)] = nm
-        struct.pack_into("<H", dirent, i * 128 + 64, len(nm))
-        dirent[i * 128 + 66] = etype
-        struct.pack_into("<I", dirent, i * 128 + 116, start)
-        struct.pack_into("<Q", dirent, i * 128 + 120, size)
+        struct.pack_into("<HBB", dirent, i * 128 + 64, len(nm), etype, 1)  # 이름 길이·종류·검정(색)
+        struct.pack_into("<III", dirent, i * 128 + 68, free, right, child)  # 왼쪽·오른쪽 형제·자식
+        struct.pack_into("<IQ", dirent, i * 128 + 116, start, size)
 
-    put_entry(0, "Root Entry", 5, 0xFFFFFFFE, 0)
-    for i, name in enumerate(names, 1):
-        put_entry(i, name, 2, data_secs[name], len(streams[name]))
-    body = b"".join(streams[name] + b"\x00" * (512 - len(streams[name])) for name in names)
-    return bytes(header) + fat_sec + bytes(dirent) + body
+    put(0, "Root Entry", 5, *root, free, 1 if names else free)
+    for i, (name, start, size) in enumerate(ents, 1):  # 형제는 오른쪽으로 한 줄
+        put(i, name, 2, start, size, i + 1 if i < len(names) else free, free)
+    sectors[dir_sec] = bytes(dirent)
+    header = bytearray(512)
+    header[0:8] = CFB_SIG
+    struct.pack_into("<HHHHH", header, 24, 0x3E, 3, 0xFFFE, 9, 6)  # 판·바이트 순서·섹터 512·미니 섹터 64
+    struct.pack_into("<II", header, 44, 1, dir_sec)  # FAT 섹터 수·디렉터리 시작
+    struct.pack_into("<IIIII", header, 56, 4096, minifat_sec, int(bool(mini_blob)), end, 0)  # 미니 상한·미니 FAT·DIFAT 없음
+    struct.pack_into("<109I", header, 76, 0, *([free] * 108))
+    return bytes(header) + b"".join(sectors)
+
+
+_FIB_ENC = struct.pack("<10sH4x", b"", 0x0100)  # .doc FIB flags1(10번째 바이트) fEncrypted만 켬
+_FIB_PLAIN = bytes(16)
+_BIFF_ENC = struct.pack("<HH4xHH4x", 0x0809, 4, 0x2F, 4)  # BOF + FILEPASS(0x2F)
+_BIFF_PLAIN = struct.pack("<HH4xHH4x", 0x0809, 4, 0x42, 4)  # BOF + 다른 레코드
+
+
+def _ole_cases():
+    """(파일 이름, 바이트, 기대 판정) — pl-66: 직접 짠 CFB 판독기와 olefile을 견줘 고른 사례(이제 olefile 하나로 같은 판정)."""
+    doc_enc = _build_cfb({"WordDocument": _FIB_ENC})
+    xls_enc = _build_cfb({"Workbook": _BIFF_ENC})
+    return [
+        ("doc_plain.doc", _build_cfb({"WordDocument": _FIB_PLAIN}), None),
+        ("doc_enc.doc", doc_enc, "encrypted_doc"),
+        ("doc_enc_mini.doc", _build_cfb({"WordDocument": _FIB_ENC}, mini={"WordDocument"}), "encrypted_doc"),
+        ("xls_plain.xls", _build_cfb({"Workbook": _BIFF_PLAIN}), None),
+        ("xls_enc.xls", xls_enc, "encrypted_xls"),
+        ("xls_book_enc.xls", _build_cfb({"Book": _BIFF_ENC}), "encrypted_xls"),  # 옛 BIFF는 "Book" 스트림 이름도 씀
+        ("xls_enc_mini.xls", _build_cfb({"Workbook": _BIFF_ENC}, mini={"Workbook"}), "encrypted_xls"),  # 직접 짠 판독기는 놓쳤음
+        ("xls_plain_mini.xls", _build_cfb({"Workbook": _BIFF_PLAIN}, mini={"Workbook"}), None),
+        ("ppt_plain.ppt", _build_cfb({"PowerPoint Document": bytes(8)}), None),
+        (
+            "ppt_enc.ppt",
+            _build_cfb({"PowerPoint Document": bytes(8), "EncryptedSummary": bytes(8)}, mini={"EncryptedSummary"}),
+            "encrypted_ppt",
+        ),
+        ("drm_fasoo.doc", b"<## FASOO DRM WRAPPED ##>" + bytes(600), None),  # 옛 형식은 DRM 머리를 보지 않음(_drm_reason은 OOXML·PDF만)
+        ("drm_in_cfb.doc", doc_enc[:600] + b"<## FASOO" + bytes(100), None),
+        ("not_cfb.doc", b"this is not a CFB file at all", None),
+        ("header_only.xls", xls_enc[:512], None),
+        ("trunc_no_data.doc", doc_enc[:1536], None),  # 머리말·FAT·디렉터리만 남고 스트림 칸이 잘림
+        ("garbage.ppt", CFB_SIG + b"\xff" * 2000, None),
+    ]
+
+
+def test_ole_encrypted_cases():
+    """pl-66 — 옛 형식 오피스 암호 판정 표(규격대로 만든 CFB·미니 스트림·DRM 흉내·깨진 파일). PC에는 valid_env 견본 4건과
+    반으로 자른 사본도 함께(이미지에는 valid_env 없음)."""
+    import tempfile
+
+    samples = PROJ_ROOT / "valid_env" / "object_storage" / "CRMS"
+    expect = {"encrypted_ole.doc": "encrypted_doc", "legacy_report.doc": None, "legacy_sheet.xls": None, "legacy_deck.ppt": None}
+    cases = _ole_cases()
+    for f in sorted(samples.glob("*/*")) if samples.is_dir() else []:
+        if f.name in expect:
+            data = f.read_bytes()
+            cases += [(f.name, data, expect[f.name]), ("trunc_" + f.name, data[: len(data) // 2], None)]
+    with tempfile.TemporaryDirectory() as td:
+        for name, data, want in cases:
+            f = Path(td) / name
+            f.write_bytes(data)
+            assert _ole_encrypted_reason(f) == want, (name, _ole_encrypted_reason(f), want)
 
 
 def selftest():
     """D4 — 가짜 Fasoo 머리·OLE EncryptedPackage·정상 docx/pdf·머리 깨진 pdf로 오프라인 자기 점검(네트워크·실제 문서 없음).
-    SI44 — 옛 OLE 암호(.doc FIB fEncrypted·.xls BIFF FILEPASS·.ppt EncryptedSummary)·압축·미지원 확장자도 함께."""
+    SI44 — 압축·미지원 확장자도 함께(옛 OLE 암호는 test_ole_encrypted_cases 표)."""
     import tempfile
 
     with tempfile.TemporaryDirectory() as td:
@@ -86,28 +157,6 @@ def selftest():
         bad_pdf = w("e.pdf", b"\x00\x01\x02not a pdf")
         assert _drm_reason(bad_pdf) == "drm_unknown", _drm_reason(bad_pdf)
 
-        # SI44① — 옛 OLE 암호: .doc FIB flags1 bit8(fEncrypted) · .xls BIFF FILEPASS(0x2F) · .ppt EncryptedSummary 스토리지
-        fib_enc = bytearray(16)
-        struct.pack_into("<H", fib_enc, 10, 0x0100)  # flags1 offset 10 — fEncrypted만 켬
-        doc_enc = w("i.doc", _build_cfb({"WordDocument": bytes(fib_enc)}))
-        assert _ole_encrypted_reason(doc_enc) == "encrypted_doc", _ole_encrypted_reason(doc_enc)
-        fib_plain = bytearray(16)  # fEncrypted 꺼짐 — 정상 .doc
-        doc_plain = w("j.doc", _build_cfb({"WordDocument": bytes(fib_plain)}))
-        assert _ole_encrypted_reason(doc_plain) is None, _ole_encrypted_reason(doc_plain)
-
-        biff_enc = struct.pack("<HH", 0x0809, 4) + b"\x00" * 4 + struct.pack("<HH", 0x2F, 4) + b"\x00" * 4  # BOF + FILEPASS
-        xls_enc = w("k.xls", _build_cfb({"Workbook": biff_enc}))
-        assert _ole_encrypted_reason(xls_enc) == "encrypted_xls", _ole_encrypted_reason(xls_enc)
-        biff_plain = struct.pack("<HH", 0x0809, 4) + b"\x00" * 4 + struct.pack("<HH", 0x42, 4) + b"\x00" * 4  # BOF + 다른 레코드(0x2F 아님)
-        xls_plain = w("l.xls", _build_cfb({"Book": biff_plain}))  # 옛 BIFF는 "Book" 스트림 이름도 씀
-        assert _ole_encrypted_reason(xls_plain) is None, _ole_encrypted_reason(xls_plain)
-
-        ppt_enc = w("m.ppt", _build_cfb({"EncryptedSummary": b"\x00" * 8}))
-        assert _ole_encrypted_reason(ppt_enc) == "encrypted_ppt", _ole_encrypted_reason(ppt_enc)
-        ppt_plain = w("n.ppt", _build_cfb({"PowerPoint Document": b"\x00" * 8}))
-        assert _ole_encrypted_reason(ppt_plain) is None, _ole_encrypted_reason(ppt_plain)
-        not_ole_doc = w("o.doc", b"this is not a CFB file at all")  # OLE 컨테이너 아님 — 엔진이 각자 판정
-        assert _ole_encrypted_reason(not_ole_doc) is None, _ole_encrypted_reason(not_ole_doc)
         assert _ole_encrypted_reason(normal_docx) is None, "OOXML(.docx)은 OLE_EXT 밖 — 손대지 않음"
 
         # SI44② — 압축·처리 엔진 없는 확장자(파싱 대상 아님, 암호·손상과 다른 사유)
@@ -120,11 +169,11 @@ def selftest():
         skipped = []
         _record_skip(fasoo, "drm_fasoo", skipped, log)
         recs = [json.loads(ln) for ln in log.read_text(encoding="utf-8").splitlines()]
-        assert len(recs) == 1 and recs[0]["reason"] == "drm_fasoo" and recs[0]["file"] == "a.docx" and recs[0]["sha256"], recs
+        assert len(recs) == 1 and recs[0]["reason"] == "drm_fasoo" and recs[0]["file"] == "a.docx", recs
         assert skipped == [{"file": "a.docx", "reason": "drm_fasoo"}], skipped
     print(
         "selftest OK — DRM·암호 머리 바이트 판별(Fasoo·MarkAny·SoftCamp·OLE EncryptedPackage·PDF 머리 깨짐 → drm_unknown, "
-        "정상 docx·pdf는 통과) + skipped.jsonl 누적 기록 + SI44 옛 OLE 암호(.doc·.xls·.ppt)·압축·미지원 확장자"
+        "정상 docx·pdf는 통과) + skipped.jsonl 누적 기록 + SI44 압축·미지원 확장자"
     )
     _selftest_rotate()
 
@@ -199,7 +248,7 @@ def test_main():  # 옛 `if a.selftest:` 갈래(main() 안)
 
 def test_records_outside_scanned_folder():
     """운영 고침 10(11-02) — 건너뛴 문서 기록(skipped.csv·skipped.jsonl)은 prepared/_records/에. 파싱(run_all)이 훑는 맨 위에는
-    문서와 rotation.csv만 남아, 기록 파일이 "건너뜀(처리 엔진 없음) .csv"로 세지지 않는다. 옛 자리의 누적 기록은 옮겨 이어 쓴다."""
+    문서와 rotation.csv만 남아, 기록 파일이 "건너뜀(처리 엔진 없음) .csv"로 세지지 않는다."""
     import sys
     import tempfile
     from unittest import mock
@@ -210,12 +259,11 @@ def test_records_outside_scanned_folder():
         out.mkdir()
         (src / "a.txt").write_text("hello", encoding="utf-8")
         (src / "b.zip").write_bytes(b"PK\x03\x04" + b"\x00" * 20)  # 깨진 압축 — 건너뜀(broken_archive — pl-57)
-        (out / "skipped.jsonl").write_text(json.dumps({"file": "old.pdf", "reason": "drm_fasoo"}) + "\n", encoding="utf-8")
-        (out / "skipped.csv").write_text("file,reason\n", encoding="utf-8")
+        (out / "skipped.csv").write_text("file,reason\n", encoding="utf-8")  # 맨 위 옛 기록 — 문서가 아니라 지워짐
         with mock.patch.object(sys, "argv", ["prepare", "--src", str(src), "--out", str(out)]):
             M.main()
         top = sorted(p.name for p in out.iterdir() if p.is_file())
         assert top == ["a.txt", "rotation.csv"], top
         recs = [json.loads(ln) for ln in (out / "_records" / "skipped.jsonl").read_text(encoding="utf-8").splitlines()]
-        assert [r["file"] for r in recs] == ["old.pdf", "b.zip"], recs
+        assert [r["file"] for r in recs] == ["b.zip"], recs
         assert "b.zip" in (out / "_records" / "skipped.csv").read_text(encoding="utf-8-sig")

@@ -6,7 +6,7 @@
 2. 방향 보정(설정 `extract.prepare.rotate_pages` — 기본 꺼짐): 켜면 이미지·이미지 PDF의 쪽마다 0·90·180·270도로 돌려
    RapidOCR 점수(가로 글상자의 신뢰도 × 글자 수)를 **동시에**(스레드 4개, 스레드마다 RapidOCR 하나) 재고 가장 높은 방향으로 돌린다
    (같으면 0도, 모두 0이면 그대로). 끄면 회전을 위한 OCR을 전혀 하지 않고 그대로 놓는다.
-   - 점수는 긴 변 --probe-px(기본 1280)로 줄인 이미지로 계산(속도). 저장은 원래 해상도(PDF는 --dpi, 기본 extract.page_render_dpi = 150).
+   - 점수는 긴 변 PROBE_PX(1280)로 줄인 이미지로 계산(속도). 저장은 원래 해상도(PDF는 extract.page_render_dpi = 150).
    - 회전이 있었던 파일만 새로 쓰고, 나머지는 그대로 복사. 텍스트 레이어가 있는 PDF·오피스·txt는 복사만.
    - 이미지 PDF를 돌리면 쪽 이미지로 다시 만든 PDF가 된다(원래 텍스트 레이어 없음 전제).
 3. 기록: output/prepared/rotation.csv (파일·쪽·선택 각도·네 방향 점수·`orig_sha256` = 회전 전 원본 파일 sha256 —
@@ -19,14 +19,16 @@
 
 import argparse
 import csv
+import functools
 import io
 import json
 import os
 import shutil
 import struct
 import threading
-import time
 from pathlib import Path
+
+import olefile  # extract-msg와 함께 설치됨(pipeline.extract.unpack과 같음)
 
 from common.core.console import utf8_stdout
 from common.core.paths import (  # 폴더 재편 뒤 이 상수만 바뀌면 됨
@@ -39,8 +41,6 @@ from pipeline.extract import archive, unpack
 from pipeline.shared.ext_groups import IMG_EXTS, OOXML_EXTS
 from pipeline.shared.srcsha import sha_of
 from pipeline.transform.parse.engines import registry  # '처리 엔진 없는 확장자' 판정(engines_for)
-
-_OCR: list = []
 
 # DRM·암호 래핑 머리 바이트 판별. 내용은 열지 않음(이름·종류·머리만), 네트워크 없음, 제조사 서명은 공개 포맷 기준만.
 ZIP_SIG = b"PK\x03\x04"  # 정상 OOXML(ZIP 컨테이너)
@@ -58,71 +58,6 @@ DRM_MARKERS = (  # 머리 바이트에 섞여 있으면 그 제품 래핑으로 
 OLE_EXT = {".doc", ".xls", ".ppt"}
 # 풀지 않는 압축은 DRM·손상이 아니라 "파싱 대상이 아님"(사람이 다시 올리거나 풀어야 함). .zip·.tar·.tgz·.tar.gz는 푼다(pl-57 — pipeline.extract.archive).
 ARCHIVE_EXT = {".7z", ".rar", ".bz2", ".xz"}
-
-
-def _cfb_sectors(data):
-    """CFB(복합 파일 바이너리) 최소 머리글 읽기 — FAT·디렉터리만 stdlib로(olefile 없을 때 대체).
-    ponytail: 109개 직접 FAT 섹터(DIFAT 없이 다루는 범위 — 사양상 보통 문서 7MB까지)만, 미니스트림(작은 스트림)도 다루지
-    않음 — 그 밖은 신호 없음(None)으로 포기(엔진이 각자 판정). olefile이 설치되면 이 함수 대신 그걸 쓴다."""
-    if len(data) < 512 or data[:8] != CFB_SIG:
-        return None
-    try:
-        sector_shift = struct.unpack_from("<H", data, 30)[0]
-        mini_cutoff = struct.unpack_from("<I", data, 56)[0]
-        first_dir_sec = struct.unpack_from("<I", data, 48)[0]
-        num_fat = struct.unpack_from("<I", data, 44)[0]
-        fat_ids = struct.unpack_from("<109I", data, 76)
-    except struct.error:
-        return None
-    if not (0 <= num_fat <= 109):  # DIFAT 필요(섹터 많음) — 다루지 않음
-        return None
-    sector_size = 1 << sector_shift
-
-    def off(secid):
-        return 512 + secid * sector_size
-
-    fat = []
-    for secid in fat_ids[:num_fat]:
-        o = off(secid)
-        if o < 0 or o + sector_size > len(data):
-            return None
-        n = sector_size // 4
-        fat.extend(struct.unpack_from(f"<{n}I", data, o))
-
-    def chain(start, limit_bytes=None):
-        secid, seen, buf = start, set(), b""
-        while 0 <= secid < len(fat) and secid not in seen:
-            seen.add(secid)
-            o = off(secid)
-            if o + sector_size > len(data):
-                break
-            buf += data[o : o + sector_size]
-            if limit_bytes and len(buf) >= limit_bytes:
-                break
-            secid = fat[secid]
-        return buf
-
-    dir_bytes = chain(first_dir_sec)
-    entries = []
-    for i in range(0, len(dir_bytes) - 127, 128):
-        ent = dir_bytes[i : i + 128]
-        namelen = struct.unpack_from("<H", ent, 64)[0]
-        if not (2 <= namelen <= 64):
-            continue
-        try:
-            name = ent[: namelen - 2].decode("utf-16-le")
-        except UnicodeDecodeError:
-            continue
-        entries.append({"name": name, "type": ent[66], "start": struct.unpack_from("<I", ent, 116)[0]})
-    return {"entries": entries, "mini_cutoff": mini_cutoff, "chain": chain}
-
-
-def _ole_stream_head(cfb, name, n=2048):
-    """CFB 스트림 하나의 앞 n바이트(미니스트림 제외 — 위 _cfb_sectors ponytail)."""
-    for e in cfb["entries"]:
-        if e["type"] == 2 and e["name"] == name:
-            return cfb["chain"](e["start"], n)[:n]
-    return None
 
 
 def _ole_head_reason(ext, head):
@@ -146,8 +81,8 @@ def _ole_head_reason(ext, head):
 
 def _ole_encrypted_reason(p):
     """.doc·.xls·.ppt 암호 — OOXML과 다른 신호: FIB fEncrypted 플래그(.doc)·BIFF FILEPASS 레코드(.xls)·
-    EncryptedSummary 스토리지(.ppt — CryptoAPI RC4 암호화 때 추가되는 저장소, CryptSession10Container를 담음).
-    olefile이 설치돼 있으면 그걸로(정확), 없으면 _cfb_sectors 최소 리더로. None = 의심 없음(엔진이 각자 판정)."""
+    EncryptedSummary 스트림(.ppt — CryptoAPI RC4 암호화 때 추가됨, CryptSession10Container를 담음).
+    olefile 하나로 읽는다(pl-66 — 미니 스트림의 작은 스트림까지 규격대로). None = 의심 없음(엔진이 각자 판정)."""
     ext = p.suffix.lower()
     if ext not in OLE_EXT:
         return None
@@ -158,32 +93,14 @@ def _ole_encrypted_reason(p):
     if not data.startswith(CFB_SIG):
         return None  # OLE 컨테이너가 아니면(다른 손상 등) 엔진이 각자 판정
     try:
-        import olefile
-    except ImportError:
-        olefile = None
-    if olefile is not None:
-        try:
-            ole = olefile.OleFileIO(io.BytesIO(data))
-            names = {s[-1] for s in ole.listdir()}
-            if ext == ".ppt" and "EncryptedSummary" in names:
-                return "encrypted_ppt"
-            if ext != ".ppt":  # .ppt는 위 저장소 이름만 보고, 없으면 아래 내장 판독기로 다시
-                stream = "WordDocument" if ext == ".doc" else next((n for n in ("Workbook", "Book") if n in names), None)
-                head = ole.openstream(stream).read(2048) if stream else None
-                reason = _ole_head_reason(ext, head)
-                if reason:
-                    return reason
-            # olefile이 '없음'이라도 아래 내장 판독기로 한 번 더(규격을 덜 지킨 CFB는 olefile이 짧은 스트림을 미니 스트림에서
-            # 읽어 엉뚱한 바이트를 줌 — 이미지(olefile 있음)에서만 .xls 암호를 놓치던 것, OLE 파일만 추가 비용)
-        except Exception:
-            pass  # olefile이 못 읽는 CFB(작은·비표준 구성)는 아래 내장 판독기로 다시 — 그냥 None이면 이미지에서만 암호 .doc을 놓침
-    cfb = _cfb_sectors(data)
-    if not cfb:
+        ole = olefile.OleFileIO(io.BytesIO(data))
+        names = {s[-1] for s in ole.listdir()}
+        if ext == ".ppt":
+            return "encrypted_ppt" if "EncryptedSummary" in names else None
+        stream = "WordDocument" if ext == ".doc" else next((n for n in ("Workbook", "Book") if n in names), None)
+        return _ole_head_reason(ext, ole.openstream(stream).read(2048) if stream else None)
+    except Exception:  # 깨진·잘린 CFB(olefile이 못 읽음)는 신호 없음 — 엔진이 각자 판정
         return None
-    if ext == ".ppt":
-        return "encrypted_ppt" if any(e["name"] == "EncryptedSummary" for e in cfb["entries"]) else None
-    name = "WordDocument" if ext == ".doc" else next((n for n in ("Workbook", "Book") if any(e["name"] == n for e in cfb["entries"])), None)
-    return _ole_head_reason(ext, _ole_stream_head(cfb, name) if name else None)
 
 
 def _unsupported_reason(p):
@@ -222,8 +139,8 @@ def _drm_reason(p):
 
 
 _TLS = threading.local()  # 스레드마다 RapidOCR 하나(회전 판정 4방향 동시 계산 — 한 객체를 여러 스레드가 같이 쓰지 않게)
-_POOL: list = []
 ANGLES = (0, 90, 180, 270)
+PROBE_PX = 1280  # 회전 점수를 잴 때 줄이는 긴 변(px)
 
 
 def _ocr_lines(arr):
@@ -245,13 +162,12 @@ def _ocr_lines(arr):
     return list(zip(r.boxes.tolist(), r.txts, r.scores)) if r.boxes is not None else []
 
 
+@functools.cache
 def _pool():
     """4방향 동시 계산 스레드 풀(한 번 만들어 쪽마다 다시 씀 — 스레드의 RapidOCR도 그대로 남아 다시 씀)."""
-    if not _POOL:
-        from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import ThreadPoolExecutor
 
-        _POOL.append(ThreadPoolExecutor(max_workers=len(ANGLES), thread_name_prefix="rotate"))
-    return _POOL[0]
+    return ThreadPoolExecutor(max_workers=len(ANGLES), thread_name_prefix="rotate")
 
 
 def score(im, probe):
@@ -278,22 +194,15 @@ def best_angle(im, probe):
     return (a if s[a] > 0 else 0), s
 
 
-_sha256 = sha_of  # 받기가 manifest에 남긴 값(같은 파일일 때) — 없으면 다시 구함
-
-
 def _record_skip(p, reason, skipped, skipped_log):
-    """건너뛴 문서 기록 — skipped.csv(이번 실행 전체, 호환)용 리스트에 더하고, skipped.jsonl(누적, 이어쓰기)에
-    파일 sha256·시각과 함께 바로 씀 + extract.skip span 1행(runtrace.skip_event)."""
+    """건너뛴 문서 기록 — skipped.csv(이번 실행 전체, 호환)용 리스트에 더하고, skipped.jsonl(누적, 이어쓰기 — 게시가 이유를 읽음)에
+    바로 씀 + extract.skip span 1행(runtrace.skip_event)."""
     from pipeline.shared.runtrace import skip_event
 
     skipped.append({"file": p.name, "reason": reason})
     skip_event(p.name, reason)
     print(f"{p.name}: {reason} — 기록하고 건너뜀", flush=True)
-    try:
-        sha = _sha256(p)
-    except OSError:
-        sha = None
-    rec = {"file": p.name, "reason": reason, "sha256": sha, "time": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    rec = {"file": p.name, "reason": reason}
     skipped_log.parent.mkdir(parents=True, exist_ok=True)
     with skipped_log.open("a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
@@ -338,10 +247,6 @@ def main():
     )
     ap.add_argument("--out", default=str(APP_ROOT / "output" / "prepared"))
     ap.add_argument("--only", default="", help="이 목록(파일명 한 줄씩)에 있는 파일만 — 보통 stage_batch의 only.txt")
-    ap.add_argument(
-        "--dpi", type=int, default=pc.cfg().extract.ocr.dpi, help="PDF 쪽 렌더 해상도 — 기본 extract.page_render_dpi(쪽·그림 VLM과 같은 값)"
-    )
-    ap.add_argument("--probe-px", type=int, default=1280)
     ap.add_argument("--no-scan-rotate", action="store_true", help="이미지 PDF(스캔)는 방향 보정 안 함 — run_pipeline 스캔 문서 정책")
     a = ap.parse_args()
     from PIL import Image
@@ -354,9 +259,7 @@ def main():
     records = out / "_records"
     records.mkdir(exist_ok=True)
     parts = out / unpack.PARTS  # 꺼낸 안 문서(pl-63) — 하위 폴더라 파싱 대상(맨 위 파일)이 아님
-    if (out / "skipped.jsonl").exists() and not (records / "skipped.jsonl").exists():  # 예전 자리의 누적 기록은 옮겨 이어 씀
-        (out / "skipped.jsonl").replace(records / "skipped.jsonl")
-    skipped_log = Path(pc.cfg().extract.skipped_log or (records / "skipped.jsonl"))  # S7c — 설정 객체
+    skipped_log = records / "skipped.jsonl"  # publish_parse_result가 읽는 자리(prepared/_records/skipped.jsonl)
     only = {x.strip() for x in Path(a.only).read_text(encoding="utf-8").splitlines() if x.strip()} if a.only else None
     files = sorted(p for p in src.iterdir() if p.is_file() and p.name != ".gitkeep" and (only is None or p.name in only))
     old = {}
@@ -366,6 +269,7 @@ def main():
                 old.setdefault(r["file"], []).append(r)
     log, n_rot, n_skip, skipped = [], 0, 0, []
     rotate_on = bool(pc.cfg().extract.prepare.rotate)  # 사용자 11-02 — 회전 켬/끔 하나(기본 꺼짐)
+    dpi = pc.cfg().extract.ocr.dpi  # PDF 쪽 렌더 해상도(쪽·그림 VLM과 같은 값)
     for p in files:
         ext = p.suffix.lower()
         dst = out / p.name
@@ -385,16 +289,15 @@ def main():
         if unsup:
             _record_skip(p, unsup, skipped, skipped_log)
             continue
-        bad = (
-            None if unpack.is_fresh(p, parts) else archive.check(p)
-        )  # 압축 원본 — 암호·깨짐·안전 상한(pl-57 — 이미 풀어 둔 원본은 다시 안 봄)
+        fresh = unpack.is_fresh(p, parts)  # 이미 풀어 둔 원본(pl-57·pl-63)은 다시 거르거나 풀지 않음
+        bad = None if fresh else archive.check(p)  # 압축 원본 — 암호·깨짐·안전 상한
         if bad:
             _record_skip(p, bad, skipped, skipped_log)
             continue
         if ext in IMG_EXTS and rotate_on:
-            osha = _sha256(p)  # 원본(회전 전) sha256 — post.vlm_page P0 열쇠가 렌더 바이트 대신 이걸 씀
+            osha = sha_of(p)  # 원본(회전 전) sha256 — post.vlm_page P0 열쇠가 렌더 바이트 대신 이걸 씀
             im = Image.open(p)
-            ang, s = best_angle(im, a.probe_px)
+            ang, s = best_angle(im, PROBE_PX)
             log.append({"file": p.name, "page": 1, "angle": ang, "orig_sha256": osha, **{f"s{k}": round(v) for k, v in s.items()}})
             if ang:
                 tmp = tmp_path_for(
@@ -412,24 +315,24 @@ def main():
         ):  # 회전은 extract.prepare.rotate_pages(기본 꺼짐)일 때만 · 꺼지면 회전용 OCR 없이 그대로 놓음
             import pypdfium2 as pdfium
 
-            osha = _sha256(p)
+            osha = sha_of(p)
             pages, changed = [], False
             for i, pg in enumerate(pdfium.PdfDocument(str(p))):
-                im = pg.render(scale=a.dpi / 72).to_pil().convert("RGB")
-                ang, s = best_angle(im, a.probe_px)
+                im = pg.render(scale=dpi / 72).to_pil().convert("RGB")
+                ang, s = best_angle(im, PROBE_PX)
                 log.append({"file": p.name, "page": i + 1, "angle": ang, "orig_sha256": osha, **{f"s{k}": round(v) for k, v in s.items()}})
                 pages.append(im.rotate(ang, expand=True) if ang else im)
                 changed |= bool(ang)
             if changed:
                 tmp = tmp_path_for(dst)  # 위와 같은 이유(이미지 PDF도 place()로 하드링크됐을 수 있음)
-                pages[0].save(tmp, "PDF", resolution=a.dpi, save_all=True, append_images=pages[1:])
+                pages[0].save(tmp, "PDF", resolution=dpi, save_all=True, append_images=pages[1:])
                 os.replace(tmp, dst)
                 n_rot += 1
             else:
                 place(p, dst)
         else:
             place(p, dst)
-        if not unpack.is_fresh(p, parts):  # 문서 안 문서(압축·메일 첨부·오피스 개체)를 _parts/<이름>/에(pl-63)
+        if not fresh:  # 문서 안 문서(압축·메일 첨부·오피스 개체)를 _parts/<이름>/에(pl-63)
             unpack.unpack(dst, parts)
         angles = ", ".join(f"{r['page']}쪽 {r['angle']}°" for r in log if r["file"] == p.name)
         print(f"{p.name}: {angles or '복사'}", flush=True)
@@ -441,8 +344,17 @@ def main():
         w = csv.DictWriter(f, fieldnames=["file", "reason"])
         w.writeheader()
         w.writerows(skipped)
+    dropped = {s["file"] for s in skipped}
+    # 안 문서를 못 꺼낸 문서(pl-65 — 받기가 part 행으로)
+    with (records / "parts_failed.csv").open("w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["file", "reason"])
+        w.writeheader()
+        for p in files:  # 이번 실행 문서 모두(다시 풀지 않은 것도 — 재실행마다 마지막 시각·횟수가 오름)
+            failed = [] if p.name in dropped else unpack.failed_of(p, parts)
+            if failed:
+                w.writerow({"file": p.name, "reason": unpack.miss_reason(failed)})
     gone = 0
-    names = {p.name for p in files} - {s["file"] for s in skipped} | {
+    names = {p.name for p in files} - dropped | {
         "rotation.csv",
         ".gitkeep",
     }  # 원본에서 지워졌거나 중복으로 빠진 파일 → out에서도 뺌(기록은 _records/ 폴더라 대상 아님)

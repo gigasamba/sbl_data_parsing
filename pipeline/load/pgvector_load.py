@@ -25,13 +25,13 @@ from common.core import span as SP  # 성능 span
 from common.core.console import utf8_stdout
 from common.core.contract import jl  # 묶음 읽기
 from common.core.text import index_text, tokens  # 색인·토큰 규칙(모듈 계약)
-from common.store.pg import HNSW_MAX, PG, _standin_schema, _warn_standin, conf, has_conn, vec  # noqa: F401
+from common.store.pg import PG, conf, vec
 from pipeline import config as pc
 from pipeline.shared import runtrace  # pipe_run 문서 수·직접 실행 run_id
 
 # DROP/TRUNCATE/DELETE 대상 식별자 화이트리스트(XS3) — 우리 스키마의 우리 표만. 스키마명 자체는 common/pg.conf()가 이미 정규식으로 검증.
 _OUR_TABLES = {"doc", "chunk", "chunk_term", "term_stat", "corpus_stat"}  # 원천 스키마마다 같은 표
-_KST = timezone(timedelta(hours=9))  # loaded_at 표기(created_at과 같은 시간대 — 대역 글자 비교도 맞음)
+_KST = timezone(timedelta(hours=9))  # loaded_at 표기(created_at과 같은 시간대)
 # 게시 처리 기록(silver.jsonl)에서 doc 칸으로 옮기는 키(op-17 — 이름 = 칸 이름) · JSONB 칸
 SILVER_COLS = ("sha256", "silver_bucket", "silver_key", "engines", "parse_status", "silver_version", "parsed_at")
 JSON_COLS = ("attrs", "engines")
@@ -65,30 +65,20 @@ class _Src:
         self.cn, self.q = db.cn, db.q
 
 
-def src_dbs(db, need=(), dim=None):
-    """원천 이름 → 그 원천 스키마를 가리키는 연결 — 5벌 + 있는 DEV 원천 스키마(op-17). SQLite 대역은 스키마마다 파일 하나라 원천마다 대역을 따로 연다.
-    need = 이번 묶음의 DEV 원천: 실 PG에 그 스키마가 없으면 멈춤(적재는 DDL을 하지 않음 — dbtool up이 만듦), 대역은 표 정의에서 만듦(dim 차원)."""
+def src_dbs(db, need=()):
+    """원천 이름 → 그 원천 스키마를 가리키는 연결 — 5벌 + 있는 DEV 원천 스키마(op-17).
+    need = 이번 묶음의 DEV 원천: 그 스키마가 없으면 멈춤(적재는 DDL을 하지 않음 — dbtool up이 만듦)."""
     from common.store.db.models import search_tables as ST
 
-    standin = getattr(db, "is_standin", False)
-    srcs = ST.all_sources(db.schema, None if standin else db.q)
+    srcs = ST.all_sources(db.schema, db.q)
     missing = sorted(set(need) - set(srcs))
-    if missing and not standin:
+    if missing:
         names = ", ".join(ST.src_schema(db.schema, s) for s in missing)
         raise SystemExit(
             f"[load] DEV 원천 스키마 없음: {names} — 적재는 표를 만들지 않음. settings.yaml required.source.source_systems에 그 원천을 넣고 "
             "`migrate up --target search`(PC: python -m common.store.db.dbtool up --target search) 뒤 다시"
         )
-    if not standin:
-        return {src: _Src(db, ST.src_schema(db.schema, src)) for src in srcs}
-    from common.store.db import dbtool
-    from common.store.pg_standin import StandinPG
-
-    out = {src: StandinPG(ST.src_schema(db.schema, src)) for src in [*srcs, *missing]}
-    for src in missing:  # 대역은 판 관리 밖 — 새 DEV 원천 파일은 표 정의에서 바로
-        with out[src].cn.cursor() as cur:
-            cur.execute(dbtool.standin_script(out[src].schema, int(dim or 0)))
-    return out
+    return {src: _Src(db, ST.src_schema(db.schema, src)) for src in srcs}
 
 
 def _upgrade(schema, dim):
@@ -100,20 +90,13 @@ def _upgrade(schema, dim):
 
 def deploy(db, dim):
     """표·색인·뷰는 migrate(Alembic 기준판)가 만든다.
-    확인(vector 확장·남의 스키마 거부·차원)은 이 함수가. SQLite 대역(pg_standin)은 판 관리 밖 —
-    표 정의에서 만든 DDL로(HNSW·GIN 색인은 대역이 흉내 내지 않음). 실측(30k×4096, 개발 PC): 정확 180~220 ms · 이진 양자화 HNSW+재정렬
+    확인(vector 확장·남의 스키마 거부·차원)은 이 함수가. 실측(30k×4096, 개발 PC): 정확 180~220 ms · 이진 양자화 HNSW+재정렬
     5~7 ms(색인 24 MB, 생성 6.6 s)."""
     from common.store.db import dbtool
 
     dbtool.precheck_search(db.q, db.schema, dim)  # 확장 직접 생성은 dbtool up --create-extension(PC·단독 시험)만
-    standin = getattr(db, "is_standin", False)
     kind = dbtool.index_kind(dim)
-    if standin:  # 원천 스키마마다 대역 파일 하나
-        for sdb in src_dbs(db).values():
-            with sdb.cn.cursor() as cur:
-                cur.execute(dbtool.standin_script(sdb.schema, int(dim)))
-            dbtool.check_dim(sdb.q, sdb.schema, dim)  # 대역 파일이 이전 차원으로 남아 있을 때(PG는 판 올리기 전 precheck가 봄)
-    elif dbtool.status(db.q, "search", db.schema)[0] == "없음" and dbtool.has_tables(db.q, db.schema):
+    if dbtool.status(db.q, "search", db.schema)[0] == "없음" and dbtool.has_tables(db.q, db.schema):
         # 판 기록 없는 기존 스키마: DDL 없이 경고 뒤 계속(migrate up은 이런 스키마를 거부 — 새 스키마로 다시 적재). 빠진 표·색인은 채우지 않음
         dbtool.require_current(db.q, "search", db.schema)
         kind += "(확인 안 함 — 판 기록 없는 기존 스키마)"  # 색인을 만들지도 보지도 않음
@@ -215,11 +198,12 @@ def require_same_model(dbs, meta, bundle):
 
 def load(db, bundle, replace=False, rep_dir=None, silver=None):
     """묶음 → 원천 스키마별로(문서의 source_system으로 고름: SFDC·CRMS·LAS·FAQ·DEV-<n>(`<기준>_dev_<n>` — 없으면 멈춤), 그 밖은 other) 적재. 실 PG는 기준 연결 한 트랜잭션
-    (실패하면 5벌 모두 되돌림), 대역은 원천마다 따로. 저장된 문서(file_path 같음)는 건너뜀(replace면 지우고 다시 넣음 — 고치기). 묶음에 없는
+    (실패하면 5벌 모두 되돌림). 저장된 문서(file_path 같음)는 건너뜀(replace면 지우고 다시 넣음 — 고치기). 묶음에 없는
     저장 문서는 그대로 둠. 실행 정보(묶음 meta·건수·시간)는 실행 기록에 남긴다.
     silver = 게시 처리 기록 파일(silver.jsonl — 원본 키 source_key = 묶음 문서 file_path로 이음). 그 문서 줄이 있으면 새로 넣는 행에 쓰고
     이미 있는 행(건너뜀 — 재게시)은 그 칸만 UPDATE. 줄이 없으면 --replace는 옛 행의 처리 기록을 그대로 옮기고, 새 문서는 NULL."""
     from common.store.db.models import search_tables as ST
+    from pipeline.shared import except_docs
 
     if replace:
         _require_marked_schema(db)  # XS3 — 남의 기존 스키마에 --replace 금지
@@ -230,7 +214,7 @@ def load(db, bundle, replace=False, rep_dir=None, silver=None):
     require_vectors(meta)
     docs, chunks = _nonul(jl(B / "docs.jsonl")), _nonul(jl(B / "chunks.jsonl"))
     need = {s for s in (ST.source_of(d.get("source_system")) for d in docs) if ST.is_dev(s)}  # DEV 원천 스키마 — 없으면 멈춤(op-17)
-    dbs = src_dbs(db, need, meta.get("dim"))
+    dbs = src_dbs(db, need)
     require_same_model(dbs, meta, B)  # EDW 조인·분류·쓰기 전에
     rec = {r["source_key"]: r for r in jl(Path(silver))} if silver and Path(silver).is_file() else {}
     for d in docs:  # 게시 처리 기록 → doc 칸(op-17) — 이 묶음에서 줄이 있었는지는 _silver
@@ -248,8 +232,6 @@ def load(db, bundle, replace=False, rep_dir=None, silver=None):
         d["attrs"] = dict(m.get("attrs") or {})
     failed = _classify(db, B, docs, rep_dir, replace)  # SFDC·LAS 라벨(gold 넣기 전 · 이미 있는 라벨은 덮지 않음)
     if failed:  # 분류 실패 = 적재 실패 — 기록만(다음 실행이 다시 고름)
-        from pipeline.shared import except_docs
-
         except_docs.note_error(  # 기록만 — 실패해도 적재는 계속
             [
                 {
@@ -272,24 +254,14 @@ def load(db, bundle, replace=False, rep_dir=None, silver=None):
         by_src = {src: [i for i in idx if docs[i]["file_path"] not in elsewhere] for src, idx in by_src.items()}
     counts = {"docs": 0, "chunks": 0, "terms": 0, "by_source": {}, "meta_missing": meta_missing}
     meta = {**meta, "gold_version": gold_version(meta), "loaded_at": datetime.now(_KST).isoformat(timespec="seconds")}  # 이번 적재의 doc 칸
-    if getattr(db, "is_standin", False):
-        # 대역은 스키마마다 파일이라 공용 시퀀스가 없음 — 5벌의 가장 큰 doc_id 다음부터 번호를 줘 겹치지 않게(chunk_key·원문 도구 cursor)
-        nxt = [1 + max(_max_doc_id(sdb) for sdb in dbs.values())]
+    with db.cn.transaction(), db.cn.cursor() as cur:  # 한 트랜잭션 — 실패하면 5벌 모두 되돌림
         for src, ids in _drop_plan(elsewhere, replace).items():
-            sdb = dbs[src]
-            with sdb.cn.transaction(), sdb.cn.cursor() as cur:
-                _drop_docs(cur, sdb.schema, ids)
+            _drop_docs(cur, dbs[src].schema, ids)
         for src, idx in by_src.items():
-            sdb = dbs[src]
-            with sdb.cn.transaction(), sdb.cn.cursor() as cur:
-                c = _load_src(cur, sdb.schema, src, docs, idx, chunks, vecs, meta, replace, nxt)
-            _add(counts, src, c)
-    else:
-        with db.cn.transaction(), db.cn.cursor() as cur:  # 한 트랜잭션 — 실패하면 5벌 모두 되돌림
-            for src, ids in _drop_plan(elsewhere, replace).items():
-                _drop_docs(cur, dbs[src].schema, ids)
-            for src, idx in by_src.items():
-                _add(counts, src, _load_src(cur, dbs[src].schema, src, docs, idx, chunks, vecs, meta, replace))
+            _add(counts, src, _load_src(cur, dbs[src].schema, src, docs, idx, chunks, vecs, meta, replace))
+    except_docs.clear_silver(
+        d["file_path"] for d in docs if d["file_path"] not in failed
+    )  # pl-68 — 이제 gold에 있음(분류 실패는 silver 행 남김)
     counts["sec"] = round(time.time() - t0, 1)
     return counts
 
@@ -365,21 +337,12 @@ def faq_sync(db, reset):
     if not reset:
         return 0, sorted(r["file_path"] for r in sdb.q(f"SELECT file_path FROM {sdb.schema}.doc"))
     _require_marked_schema(db, "faq-sync --reset")
-    cn = (sdb if getattr(db, "is_standin", False) else db).cn  # 대역은 원천마다 파일
-    with cn.transaction(), cn.cursor() as cur:
+    with db.cn.transaction(), db.cn.cursor() as cur:
         cur.execute(f"SELECT doc_id FROM {sdb.schema}.doc")  # 트랜잭션 안에서 — 그사이 들어온 FAQ도 지움
         ids = [r[0] for r in cur.fetchall()]
         if ids:
             _drop_docs(cur, sdb.schema, ids)
     return len(ids), []
-
-
-def _max_doc_id(sdb):
-    """대역 원천 파일의 가장 큰 doc_id(표가 아직 없으면 0)."""
-    try:
-        return int(sdb.q(f"SELECT COALESCE(MAX(doc_id), 0) AS m FROM {sdb.schema}.doc")[0]["m"])
-    except Exception:
-        return 0
 
 
 def _add(counts, src, c):
@@ -397,19 +360,17 @@ def _attrs(d, src):
 
 
 def _db_val(col, v):
-    """처리 기록 칸 값 → DB에 넣을 값(JSONB 칸은 JSON 글자 — 옛 행에서 읽은 값은 PG면 목록, 대역이면 이미 글자)."""
+    """처리 기록 칸 값 → DB에 넣을 값(JSONB 칸은 JSON 글자 — 옛 행에서 읽은 값은 목록)."""
     if col not in JSON_COLS or v is None or isinstance(v, str):
         return v
     return json.dumps(v, ensure_ascii=False)
 
 
-def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
+def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace):
     """원천 스키마 s 하나에 문서 idx(docs.jsonl 줄 번호)를 적재 — 반환 건수. 이미 있는 문서는 건너뜀(replace면 지우고 다시)."""
     from common.store.db.models import search_tables as ST
 
-    cols = ST.doc_columns(src)[1:]  # doc_id 빼고(실 PG는 공용 시퀀스 기본값)
-    if nxt is not None:  # 대역 — 번호를 직접 줌
-        cols = ["doc_id", *cols]
+    cols = ST.doc_columns(src)[1:]  # doc_id 빼고(공용 시퀀스 기본값)
     chunk_extra = [n for n, _ in ST.CHUNK_EXTRA.get(src, ())]
     cur.execute(f"SELECT file_path, doc_id, {', '.join(SILVER_COLS)} FROM {s}.doc")
     have = {r[0]: (r[1], dict(zip(SILVER_COLS, r[2:]))) for r in cur.fetchall()}  # 원본 경로 → (doc_id, 옛 처리 기록)
@@ -432,7 +393,6 @@ def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
                 cur.execute(f"DELETE FROM {_tbl(s, 'doc')} WHERE doc_id=%s", (old,))  # chunk는 ON DELETE CASCADE
             row = {
                 **{c: d.get(c) for c in cols},
-                "doc_id": nxt[0] if nxt is not None else None,
                 "created_at": _kst(d.get("created_at")),
                 "clients_doc": json.dumps(d["clients"], ensure_ascii=False) if d.get("clients") else None,
                 "content_date": d.get("doc_date"),  # 묶음 doc_date(문서에 적힌 날짜) → gold content_date
@@ -447,8 +407,6 @@ def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
                 tuple(row[c] for c in cols),
             )
             doc_id[i] = cur.fetchone()[0]
-            if nxt is not None:
-                nxt[0] += 1
         sp.rows(len(doc_id))
     sel = [ci for ci, c in enumerate(chunks) if c["doc"] in doc_id]
     ci_db = {}
@@ -516,7 +474,7 @@ def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
 def gold_version(meta):
     """gold_version = `<VERSION>+m<마스터 해시 앞 8자>` — 구조화가 읽은 마스터 표 해시(묶음 meta.json master_hash).
     master_hash가 없는 묶음은 `<VERSION>`만. 캐시 열쇠·code_fp에는 넣지 않는다(마스터가 바뀌어도 자동 재처리 없음)."""
-    from pipeline.load.publish_parse_result import pipeline_version  # 게시(silver_version)와 같은 자리
+    from common.core.fingerprint import pipeline_version  # 게시(silver_version)와 같은 자리
 
     h = (meta or {}).get("master_hash")
     return f"{pipeline_version()}+m{h[:8]}" if h else pipeline_version()
@@ -532,9 +490,9 @@ def main(argv=None):
     ap.add_argument("--rep-dir", default=None, help="대표 결과 폴더(_rep) — 분류 본문을 게시 .md와 같게(pl-33). 비우면 묶음 full_text")
     ap.add_argument("--silver", default=None, help="게시 처리 기록(publish/silver.jsonl) — doc의 sha256·silver 위치·엔진·상태 칸(op-17)")
     a = ap.parse_args(argv)
-    db = pg_connect()
+    db = PG(conf())  # required.pg 접속 정보 — 비면 conf()가 채울 자리를 적고 멈춘다(로컬 대체 DB 없음)
     print(
-        f"[pgstore] 모드: {'실 PG(연결 정보 있음)' if has_conn() else '스탠드인(sqlite, 연결 정보 없음 — AD41)'} · 스키마 {db.schema}",
+        f"[pgstore] PG · 스키마 {db.schema}",
         file=sys.stderr,
         flush=True,
     )
@@ -551,7 +509,7 @@ def main(argv=None):
         return
     if a.cmd == "faq-sync" and not a.out:
         ap.error("faq-sync는 --out이 필요함")
-    if a.cmd in ("load", "faq-sync") and not getattr(db, "is_standin", False):
+    if a.cmd in ("load", "faq-sync"):
         # 판 기록 없음은 경고 뒤 계속, 끝보다 낮거나 모르는 판은 거부(종료 2) · faq-sync도 모르는 판에서는 지우지 않음
         from common.store.db import dbtool
 
@@ -572,23 +530,6 @@ def main(argv=None):
             sp.add(**{k: v for k, v in counts.items() if k in ("docs", "chunks", "terms", "sec")})
             runtrace.docs(total=counts["docs"])  # pipe_run 문서 수(이번에 새로 넣은 문서)
         print(json.dumps(counts, ensure_ascii=False))
-
-
-# ---- PG 단일 연결 전환점
-def pg_connect(c=None, pg_schema=None):
-    """단일 전환점 — required.pg 접속 정보가 있으면 진짜 PG(PG 클래스), 없으면 스탠드인(StandinPG, sqlite ·
-    PG_STANDIN_DIR, 기본 output/pg_standin). main()이 씀 — 서버는 settings.yaml에 연결 정보만 채우면
-    코드 변경 없이 진짜 PG로 바뀐다. 한 줄 알림(모드)은 호출부(common.check.checker·main())가 찍는다 — 스탠드인을
-    고를 때는 여기서도 WARNING 한 줄(_warn_standin, 서버에서 비밀번호를 빠뜨려도 조용히 안 넘어가게)."""
-    if has_conn():
-        c = c or conf()
-        if pg_schema:
-            c = {**c, "PG_SCHEMA": pg_schema}
-        return PG(c)
-    _warn_standin()
-    from common.store.pg_standin import StandinPG
-
-    return StandinPG(_standin_schema(pg_schema or (c or {}).get("PG_SCHEMA")))
 
 
 if __name__ == "__main__":

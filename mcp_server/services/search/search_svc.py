@@ -12,7 +12,7 @@ from mcp_server.config import CFG
 from mcp_server.schemas.evidence import EVIDENCE_KEYS, K_MAX, SEARCH_FILTERS
 from mcp_server.services.search.evidence_shape import _evidence, cap, evidence_status
 from mcp_server.services.search.internal_docs import _manifest_by_name
-from mcp_server.services.search.server_state import _retriever, dev_hint, dev_served
+from mcp_server.services.search.server_state import _STATE, _retriever, dev_hint, dev_served
 
 KST = timezone(timedelta(hours=9))  # 시간대 없는 등록 시각은 KST(운영 계약)
 _SYSTEMS = tuple(s.upper() for s in ST.SOURCES)
@@ -112,6 +112,9 @@ def _scope_sql(hard, src, fmap):
         for x in vs:
             vals.extend(per(x))
 
+    def attr_has(key, vs):  # 담김(@>) — GIN(jsonb_ops) 색인을 탐(->> 비교는 못 탐). 값은 글자(attrs는 늘 글자 — P1-1)
+        any_of("attrs @> %s::jsonb", vs, lambda x: [json.dumps({key: str(x)})])
+
     for name, v in hard.items():
         vs = _vals(v)
         if name in ("source_system", "client_like"):
@@ -126,13 +129,13 @@ def _scope_sql(hard, src, fmap):
         elif name in ("created_since", "created_until"):
             op, t = kst_bound(v, name == "created_until")
             conds.append(f"created_at {op} %s")  # created_at이 없는 문서는 빠짐
-            # KST 글자로 — 적재 값(pgvector_load._kst)과 같은 시간대 표기라 SQLite 대역의 글자 비교도 맞음(PG는 시각으로 비교)
+            # KST 글자로 — 적재 값(pgvector_load._kst)과 같은 시간대 표기(PG는 시각으로 비교)
             vals.append(t.isoformat())
-        elif name == "attrs":  # 담김(@>) — GIN(jsonb_ops) 색인을 탐(->> 비교는 못 탐). 값은 글자(attrs는 늘 글자 — P1-1)
+        elif name == "attrs":
             for key, xs in v.items():
-                any_of("attrs @> %s::jsonb", _vals(xs), lambda x, key=key: [json.dumps({key: str(x)})])
+                attr_has(key, _vals(xs))
         elif fmap.get(name):  # 거르기 이름 → 사슬의 attrs 키
-            any_of("attrs @> %s::jsonb", vs, lambda x, key=fmap[name]: [json.dumps({key: str(x)})])
+            attr_has(fmap[name], vs)
         else:  # 이 원천에 이어진 키가 없음
             conds.append("1 = 0")
     return (" WHERE " + " AND ".join(conds)) if conds else "", vals
@@ -147,7 +150,7 @@ def _hard_filter_scope(hard, src, fmap):
 
 
 def _doc_attrs(src, paths):
-    """근거 문서 file_path → doc.attrs dict(PG는 dict, SQLite 대역은 JSON 글자)."""
+    """근거 문서 file_path → doc.attrs dict(jsonb — 글자로 오면 풀어 씀)."""
     paths = sorted(p for p in paths if p)
     if not paths:
         return {}
@@ -157,8 +160,12 @@ def _doc_attrs(src, paths):
 
 
 def _source_docs(src):
-    """원천 스키마의 문서 수(source_system만 줬을 때의 scope_docs)."""
-    R = _retriever(src)
+    """원천 스키마의 문서 수(source_system만 줬을 때의 scope_docs) — 재적재 확인이 들고 있는 개수(server_state 적재 버전
+    (원천, MAX(doc_id), COUNT(*)))를 그대로 씀. 그 원천 값이 없거나 None일 때만 COUNT(*)를 직접 셈."""
+    R = _retriever(src)  # 재적재 확인이 먼저 — 버전(개수)이 새로 고쳐진 뒤 읽음
+    n = next((v[2] for v in _STATE.get("version") or () if v[0] == src), None)
+    if n is not None:
+        return int(n)
     r = R.pg.q(f"SELECT COUNT(*) AS n FROM {R.pg.schema}.doc")
     return int(r[0]["n"]) if r else 0
 
@@ -227,7 +234,7 @@ def do_search(question=None, k=8, **filters):
     core = [m.lower() for m in CFG.DEFAULT_METHODS if m.lower() in CFG.CORE]  # 검색 길은 서버 설정만(호출 인자로 못 바꿈)
     hits = []
     if core:
-        hits, _, _ = R.search_ex(question, k, core, scope=scope)
+        hits, _ = R.search(question, k, core, scope=scope)
     man = _manifest_by_name()  # AD44 — 있으면 근거 version을 RDB 값으로
     evidence = [_evidence(h, man) for h in hits]
     if evidence:  # R2-c 요건① — 같은 사건의 사본(형식·재명명)이 슬롯을 독점하는 문제

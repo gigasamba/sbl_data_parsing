@@ -109,6 +109,13 @@ bash deploy/host/scripts/load_settings.sh common.host >/dev/null && echo 설정-
 $DOCKER run --rm --entrypoint python -v "$PWD:/app/deploy:ro,z" <새 실행 이미지> -m common.config.sample --where <옛 이름>   # 칸의 새 자리(운영 이미지는 -v 없이)
 ```
 - **칸 이름이 바뀌었다** — 옛 → 새 전체 표는 [refactor.md 부록 — 칸 이름 대응표](../refactoring/refactor.md#부록--설정-칸-이름-대응표)(1차 표의 새 이름이 2차 표의 옛 이름 — 둘 다 옮김).
+- **서버 settings.yaml에서 지울 줄** — 코드가 읽지 않아 지운 칸이다(남으면 모르는 칸으로 시작 거부, [op-18](../prd/ops-settings.md#op-18)):
+  - `extract.skipped_docs_log` — 건너뛴 문서 기록은 늘 `<준비 폴더>/_records/skipped.jsonl`(게시 단계가 읽는 자리)
+  - `extract.secure_doc.secure_doc_passwords_file`(절 `extract.secure_doc` 통째) — 읽는 곳이 없음(암호 문서는 건너뜀)
+  - `tuning.extract.source_columns.source_column_content_version` — 판 ID 열은 읽지 않음(증분 판정 열은 `source_column_increment`)
+  - `common.models.embed.embed_query_cache_file`·`tuning.common.models.embed.embed_query_cache_max_rows` — 검색 질의 임베딩 캐시는 프로세스 안 메모리(2048개)라 파일·행 상한 칸이 없음
+  - `dev.pg_standin`(절 통째) — sqlite 대역을 지웠다(PG 접속 필수 — [e2-22](../prd/test.md#e2-22))
+  - 서버에서 덮어 쓰는 엔진 구성 파일 `pipeline_stack.json`이 있으면 그 파일에서도 `retrieve`·`k` 칸을 지운다 — 엔진 구성 파일은 모르는 칸이 있으면 읽기를 거부한다
 - **`ops.host.instance_name` 줄을 지운다** — 벌 번호는 코드 폴더 이름 끝 `-<숫자>`라 이 칸은 모르는 칸이다(남으면 시작 거부). PG 스키마·게시 경로에 붙던 `_<벌>`도 없어져 모든 벌이 `required.pg.pg_schema` 그대로를 쓴다(옛 벌 스키마는 더 쓰지 않음 — 남은 스키마는 DB 담당과 정한다).
 - **새 선택 절 `option.devbox`**(파일 맨 아래) — 개발 서버의 SSH 작업 공간. 비우면 끔. 쓰는 법은 [README §5-0 "개발 작업 공간"](../../README.md#5-0-배포-단계와-개발-서버-설치).
 - **경로 칸은 컨테이너 안 절대 경로로** 적고, 쓰는 자리는 `/app/output/…` 아래여야 한다 — [env-guide §5](env-guide.md#5-서버-경로-칸--컨테이너-안-절대-경로).

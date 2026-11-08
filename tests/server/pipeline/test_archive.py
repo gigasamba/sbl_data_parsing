@@ -42,6 +42,22 @@ def _encrypted(data):
     return bytes(b)
 
 
+def _cp949_tar():
+    """한국어 윈도 tar — 이름 바이트가 cp949(옛 GNU 형식, utf-8 아님)."""
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w", format=tarfile.GNU_FORMAT, encoding="cp949") as t:
+        ti = tarfile.TarInfo("보고서.txt")
+        ti.size = 1
+        t.addfile(ti, io.BytesIO(b"r"))
+    return buf.getvalue()
+
+
+def _cp949_zip():
+    """한국어 윈도 zip — 이름이 cp949이고 utf-8 표시(플래그 11번 비트)가 없음. 같은 길이 ASCII 이름으로 만든 뒤 바이트만 바꿈."""
+    raw = "보고서.txt".encode("cp949")
+    return _zip_bytes({"A" * (len(raw) - 4) + ".txt": b"r"}).replace(b"A" * (len(raw) - 4) + b".txt", raw)
+
+
 A = {"a.txt": b"alpha", "sub/b.txt": b"beta"}
 CASES = [  # (이름, 파일 이름, 내용, 거르기 이유, 안 파일 이름들)
     ("zip", "x.zip", _zip_bytes(A), None, ["a.txt", "sub/b.txt"]),
@@ -73,6 +89,9 @@ CASES = [  # (이름, 파일 이름, 내용, 거르기 이유, 안 파일 이름
     ("깨짐", "x.zip", b"PK\x03\x04" + b"\x00" * 30, "broken_archive", None),
     ("tar 아닌 gz", "x.gz", _tgz_bytes(A)[:10] + b"\x00" * 20, "unsupported_archive", None),
     ("파일 수 넘음", "x.zip", _zip_bytes({f"f{i}.txt": b"x" for i in range(4)}), "archive_too_big", None),
+    ("cp949 tar 이름 — 받기가 멈추지 않음(pl-65 ①)", "k.tar", _cp949_tar(), None, ["보고서.txt"]),
+    ("cp949 zip 이름(pl-65 ⑪)", "k.zip", _cp949_zip(), None, ["보고서.txt"]),
+    ("이름 속 줄바꿈은 빈칸(pl-65 ⑩)", "n.zip", _zip_bytes({"x\n## y.txt": b"y"}), None, ["x ## y.txt"]),
 ]
 
 
@@ -121,5 +140,8 @@ def test_engine_and_blocks():
         with patch.object(mail_attachments, "parse_attachment", fake):
             text, blocks, stats = mail_attachments.mail_blocks(p, out["text"])
         assert text == out["text"]  # 압축은 위치 표시 없음
-        assert blocks == ["[파일 a.txt]\n본문 alpha 입니다 열다섯 글자 넘게", "[파일 sub/b.txt]\n본문 beta 입니다 열다섯 글자 넘게"], blocks
+        assert blocks == [
+            "## [파일 a.txt]\n본문 alpha 입니다 열다섯 글자 넘게",
+            "## [파일 sub/b.txt]\n본문 beta 입니다 열다섯 글자 넘게",
+        ], blocks
         assert stats["parsed"] == 2 and stats["sources"] == ["pack.tar.gz#a.txt", "pack.tar.gz#sub/b.txt"], stats

@@ -27,8 +27,12 @@ def run_id(env):
 
 
 def run_step(args, env, timeout=None, launch=subprocess.Popen, track=False, log=None):
-    """단계 하나(`python -m <모듈> 인자…`)를 프로세스 묶음으로 돌린다 — proc.run span 하나(자식이 이어받는 부모 span).
-    log(열린 글자 파일)를 주면 명령·출력을 거기에 남기고, 아니면 명령 줄만 화면에. 반환: CompletedProcess."""
+    """단계 하나(`python -m <모듈> 인자…`)를 새 프로세스 묶음으로 돌려 끝날 때까지 기다린다 — proc.run span 하나(자식이 이어받는 부모 span).
+    timeout(초)을 넘으면 묶음째 끝내고(run_all이 띄운 엔진 손자까지) subprocess.TimeoutExpired를 올린다.
+    cwd = APP_ROOT(런타임 루트 — 코드 루트로 하면 --src 상대경로가 거기 기준으로 풀려 못 찾음, FS v4 회귀).
+    launch = 띄우는 함수(일괄 파싱은 메모리·CPU 문을 거치는 RS.gated_popen) · track = 이 프로세스가 끝날 때 아직 돌면 묶음째 끝냄
+    (상주 작업 서비스 — exitclean, pl-27). log(열린 글자 파일)를 주면 명령·출력을 거기에 남기고, 아니면 명령 줄만 화면에.
+    반환: CompletedProcess."""
     from common.core.span import safe, span
 
     cmd = [sys.executable, "-m", *map(str, args)]
@@ -36,7 +40,15 @@ def run_step(args, env, timeout=None, launch=subprocess.Popen, track=False, log=
     if log is None:
         print("$ " + " ".join(cmd), flush=True)
     with span("proc.run", "run", module=str(args[0])) as sp:
-        p = run_group(cmd, env, timeout, launch=launch, track=track, **kw)
+        proc = launch(cmd, cwd=APP_ROOT, env=env, **kw, **RS.group_kw())
+        if track:
+            exitclean.track(proc, group=True)
+        try:
+            out, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            RS.kill_group(proc)
+            raise
+        p = subprocess.CompletedProcess(proc.args, proc.returncode, out, err)
         sp.add(rc=p.returncode)
         if p.returncode:
             sp.result("fail", None, safe(f"종료 코드 {p.returncode}"))
@@ -44,22 +56,6 @@ def run_step(args, env, timeout=None, launch=subprocess.Popen, track=False, log=
         log.write(f"== {' '.join(map(str, args))}\n{p.stdout}\n{p.stderr}\n")
         log.flush()
     return p
-
-
-def run_group(cmd, env, timeout=None, launch=subprocess.Popen, track=False, **kw):
-    """명령 cmd를 새 프로세스 묶음으로 띄워 끝날 때까지 기다린다. timeout(초)을 넘으면 묶음째 끝내고(run_all이 띄운 엔진 손자까지)
-    subprocess.TimeoutExpired를 올린다. cwd = APP_ROOT(런타임 루트 — 코드 루트로 하면 --src 상대경로가 거기 기준으로 풀려 못 찾음, FS v4 회귀).
-    launch = 띄우는 함수(일괄 파싱은 메모리·CPU 문을 거치는 RS.gated_popen) · track = 이 프로세스가 끝날 때 아직 돌면 묶음째 끝냄
-    (상주 작업 서비스 — exitclean, pl-27) · kw = Popen 인자(stdout=PIPE 등). 반환: CompletedProcess."""
-    p = launch(cmd, cwd=APP_ROOT, env=env, **kw, **RS.group_kw())
-    if track:
-        exitclean.track(p, group=True)
-    try:
-        out, err = p.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        RS.kill_group(p)
-        raise
-    return subprocess.CompletedProcess(p.args, p.returncode, out, err)
 
 
 def parse_chain(run, prep, parse_dir, truth, engine_args=()):

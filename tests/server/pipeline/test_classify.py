@@ -9,7 +9,6 @@ from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
-from common.config.settings import COMMON
 from pipeline.load import doc_classify as CL
 
 ANSWERS = [  # (원천, 응답 글자, 기대 라벨)
@@ -168,14 +167,14 @@ def test_apply_table():
 
 def test_load_labels_and_skips_failed():
     """적재(pgvector_load.load)가 SFDC 문서를 분류해 gold doc.attrs의 doc_class 키에 넣는다(pl-52). 분류에 실패한 문서는 그 문서의 적재 실패로 gold에 넣지
-    않는다(다음 정상 실행이 다시 고름 — 사용자 11-02). 다시 적재(--replace)해도 이미 있는 라벨은 덮지 않는다. 검색 스키마는 SQLite 대역."""
+    않는다(다음 정상 실행이 다시 고름 — 사용자 11-02). 다시 적재(--replace)해도 이미 있는 라벨은 덮지 않는다. 검색 스키마는 실 pgvector 임시 스키마(goldseed.gold)."""
     import numpy as np
 
-    from common.store import pg_standin as PS
-    from common.store.db.dbtool import standin_script
     from pipeline.load import pgvector_load as M
+    from tests.server.common import pgcase
+    from tests.server.pipeline.goldseed import gold
 
-    S, dim = "orca_pl33_t", 4
+    dim = 4
     tmp = Path(tempfile.mkdtemp())
 
     def bundle(paths):
@@ -196,11 +195,8 @@ def test_load_labels_and_skips_failed():
         return '{"class": "Others"}' if "bad.pdf" in messages[-1]["content"] else '{"class": "RFP"}'
 
     try:
-        with COMMON.env(PG_STANDIN_DIR=str(tmp / "pg")):
-            db = PS.StandinPG(S)
-            sf = PS.StandinPG(f"{S}_sfdc")
-            with sf.cn.cursor() as cur:
-                cur.execute(standin_script(f"{S}_sfdc", dim))
+        with gold(dim) as S:
+            db = sf = pgcase.connect(S)
             edw = {"SFDC/u/rfp.pdf": {"created_at": None, "client_edw": "Acme", "attrs": {"sf_op_id": "006A", "title": "RFP reply"}}}
             seen = []  # 분류 글 — 힌트는 EDW attrs에서(pl-52)
             with (
@@ -210,7 +206,7 @@ def test_load_labels_and_skips_failed():
             ):
                 counts = M.load(db, bundle(["SFDC/u/rfp.pdf", "SFDC/u/bad.pdf"]))
                 r0 = sf.q(f"SELECT client_edw, attrs FROM {S}_sfdc.doc")[0]
-                first = (r0["client_edw"], json.loads(r0["attrs"]))
+                first = (r0["client_edw"], r0["attrs"])
                 with patch("common.ai.llm.chat", lambda *a, **k: '{"class": "Proposal"}'):
                     M.load(db, bundle(["SFDC/u/rfp.pdf"]), replace=True)
                 calls = []
@@ -218,6 +214,7 @@ def test_load_labels_and_skips_failed():
                     M.load(db, bundle(["SFDC/u/rfp.pdf"]))  # --replace 없이 이미 저장된 문서 — 적재가 건너뛰므로 부르지 않음
                 assert calls == [], calls
             rows = {r["file_path"]: r["doc_class"] for r in sf.q(f"SELECT file_path, attrs->>'doc_class' AS doc_class FROM {S}_sfdc.doc")}
+            db.cn.close()
         assert rows == {"SFDC/u/rfp.pdf": "RFP"}, rows  # 실패한 bad.pdf는 안 들어감 · 두 번째 답(Proposal)으로 덮지 않음
         assert counts["by_source"]["sfdc"]["docs"] == 1, counts
         assert first == ("Acme", {"sf_op_id": "006A", "title": "RFP reply", "doc_class": "RFP"}), first  # attrs = EDW 키 + 분류(pl-52)

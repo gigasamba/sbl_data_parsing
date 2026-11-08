@@ -19,21 +19,21 @@
     수행(구조화·임베딩·EDW/OS 적재 없음). path는 허용 루트(/app/output/_mcp_parse/inbox) 하위만(jail) · 파일 상한 100MB(path·content_b64 같음 — ops.services.data_parsing.mcp_parse_max_file_mb, 11-03) ·
     time_out_threshold(기본 300초) 안에 끝나야 결과를 돌려주고 못 끝내면 {"error": "시간 안에 수행 못했습니다", "job_id": …}만 반환 —
     노출 도구는 parse_document 하나뿐(사용자 결정: 결과 수령 도구 parse_result는 등록하지 않는다), 이 도구만 MCP_TOOL_TIMEOUT_SEC(기본 30초)
-    대신 자체 예산으로 기다린다(_bg_long) · 응답 text는 max_chars(기본 20만자) 상한(초과 시 잘리고 text_truncated, 전체는 rep_path 파일에).
+    대신 자체 예산(10분에서 자름)으로 기다린다(_bg_long) · 응답 text는 max_chars(기본 20만자) 상한(초과 시 잘리고 text_truncated, 전체는 rep_path 파일에).
   (EM1, English docstrings per 10-15 user rule)
   edw_meta(schema, table=None, column_filter=None) — EDW 테이블·컬럼 한글 메타데이터 3단 계층 조회(정적 데이터셋, 2026-10-22 사용자 결정):
     인자 없음 → 스키마 5개 요약 · schema만 → 그 스키마 전체 테이블 메타(컬럼 제외) · schema+table → 그 테이블 전체 컬럼 한글 설명.
     벡터·임베딩·LLM·pgvector 불개입(rule-based — 비-RAG 원칙) · 데이터는 EDW_META_DIR(기본 /app/config/edw_meta)의
     catalog.json+columns.jsonl, mtime 재확인(기본 30초)으로 재빌드 반영 · sample_values는 어떤 응답에도 실리지 않음 ·
-    도구 파일·데이터셋 부재 시 {"error": …} fail-soft(모듈 import는 do_edw_meta 안 lazy — 서버 부팅·기존 도구 계속).
-저장소: common/store/pg.py connect(설정의 PostgreSQL — 없으면 거부, --local이면 로컬 묶음), 임베딩·LLM은 .env 내부망 주소만.
+    데이터셋 부재·조회 실패 시 {"error": …} fail-soft(서버·다른 도구 계속).
+저장소: common/store/pg.py PGPool(설정의 PostgreSQL — 없으면 거부), 임베딩·LLM은 settings.yaml의 내부망 주소만.
 
 보안(G5): MCP_HOST(기본 127.0.0.1 · auto = 컨테이너 자기 사설 IP)는 내부망 주소만 · 루프백이 아니면 MCP_TOKEN 필수(Authorization: Bearer) ·
   루프백이 아니면 DNS 리바인딩 보호도 기본 켬(L8 — SDK TransportSecuritySettings, MCP_HOST[+포트]만 자동 허용 · 어긋난
   Host는 421·Origin은 403 · MCP_ALLOWED_HOSTS(쉼표 목록)로 추가 호스트) ·
   호출자(X-MCP-Client 머리글)는 감사 기록의 agent로 · 결과 크기 상한 MCP_MAX_CHARS(기본 20000자).
 질의 기록: 파일 없음 — 호출마다 DB applog.mcp_log 한 행(입력 args에 질문·SQL, 결과 키 — op-01 · op-13).
-동시 접속(S12): 도구는 스레드로 돌림(MCP_MAX_CONCURRENCY 기본 8) · PG는 연결 풀(PG_POOL_MAX 기본 8) · GET /health(토큰 없이, 프로세스·준비 여부·적재 버전 ·
+동시 접속(S12): 도구는 스레드로 돌림(공용 자리 MCP_MAX_CONCURRENCY 기본 8 · parse_document·get_doc_fulltext는 도구마다 자기 2자리 — tool_runner) · PG는 연결 풀(PG_POOL_MAX 기본 8) · GET /health(토큰 없이, 프로세스·준비 여부·적재 버전 ·
   MC1 — 기동 때 예열이 백그라운드로 도는 동안은 503 {"warming": true}, 끝나면 200 {"ready": true}, 예열 실패는 200 + {"warning": "warmup_failed"}(서버는 안 죽음)) ·
   load 재실행 뒤 데이터는 최소 MCP_RELOAD_CHECK_SEC(기본 30초) 간격으로 확인해 바뀌었으면 다시 읽음.
 과부하 보호(MC2, RV2, 기본 켬): 요청 시간 상한 MCP_TOOL_TIMEOUT_SEC(기본 30초, 넘으면 {"error": "timeout"}) ·
@@ -69,11 +69,6 @@ _DEFAULT_MCP_INSTRUCTIONS = (
     "edw_meta로 EDW 테이블·컬럼 한글 메타데이터를 3단 계층으로 조회한다(스키마 → 테이블 목록 → 전체 컬럼, "
     "정적 데이터셋 — SQL 작성 전 qualified_name 확보)."
 )
-
-
-def _mcp_instructions():
-    """FastMCP instructions 글자(DT1 c1) — 코드 기본값(CDMO)."""
-    return _DEFAULT_MCP_INSTRUCTIONS
 
 
 def _transport_security(host):
@@ -116,7 +111,7 @@ def build(host, port):
     loop = host in ("127.0.0.1", "localhost", "::1")
     m = FastMCP(
         "rag-search",
-        instructions=_mcp_instructions(),
+        instructions=_DEFAULT_MCP_INSTRUCTIONS,
         host=host,
         port=port,
         stateless_http=True,
@@ -241,6 +236,9 @@ def serve_http(host, port, token):
 
 
 if __name__ == "__main__":
+    from common.config import setarg
+
+    setarg.apply()  # --set 이름=값(한 번 실행 덮기)
     utf8_stdout()
     if "--stdio" in sys.argv:
         call_log.configure_stdio()

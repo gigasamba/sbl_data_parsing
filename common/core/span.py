@@ -18,7 +18,7 @@ Windows(resource 없음)·측정 실패도 NULL — 0으로 채우지 않는다.
 문서 본문은 넣지 않는다: err는 예외 타입 이름(+errno 이름)과 safe()로 표시한 우리 코드의 고정 문구만 저장한다(allowlist).
 외부 라이브러리·파서 예외 문자열 원문은 저장하지 않는다.
 계측은 fail-soft: 측정·기록의 어떤 예외도 업무 코드에 전파되지 않고(업무 예외는 원래 그대로 다시 던짐) soft_fail이 프로세스당 1회
-stderr 경고 + failure_count()로만 남긴다.
+stderr 경고로만 남긴다.
 """
 
 import contextlib
@@ -70,7 +70,7 @@ _CPU_OPEN: dict[str, "Span"] = {}  # cpu=True로 열린 span — 서로 겹치�
 _LOCK = threading.Lock()
 _STATE: dict = {"log": None, "version": None, "cpus": None, "retry_at": 0.0}
 _RETRY_SEC = 30  # 로그 설정(디렉터리 권한·디스크)이 실패하면 이 시간 동안은 다시 열어 보지 않음
-_FAIL: dict = {"count": 0, "warned": False}
+_FAIL: dict = {"warned": False}
 _FAIL_LOCK = threading.Lock()
 _LEAD = re.compile(r"^([A-Za-z_][A-Za-z0-9_.]{0,80}(?:Error|Exception|Timeout|Expired|Exit|Interrupt|Unavailable|Exceeded|Exists))\b")
 
@@ -85,20 +85,14 @@ def safe(text):
 
 
 def soft_fail(where, ex):
-    """계측 안의 예외 처리 — 삼키고 카운트, 프로세스당 1회만 stderr 경고. 예외 글자는 쓰지 않는다(타입·errno만)."""
+    """계측 안의 예외 처리 — 삼키고, 프로세스당 1회만 stderr 경고. 예외 글자는 쓰지 않는다(타입·errno만)."""
     try:
         with _FAIL_LOCK:
-            _FAIL["count"] += 1
             first, _FAIL["warned"] = not _FAIL["warned"], True
         if first:
             sys.stderr.write(f"[applog] 계측 실패(무시하고 계속 · 이 경고는 1회): {where}: {exc_label(ex)}\n")
     except Exception:  # stderr까지 막혀도 업무 코드를 건드리지 않음
         pass
-
-
-def failure_count():
-    """이 프로세스에서 삼킨 계측 실패 수."""
-    return _FAIL["count"]
 
 
 def _soft_method(fn):

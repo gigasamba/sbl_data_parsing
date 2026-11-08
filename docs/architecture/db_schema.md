@@ -129,7 +129,7 @@
 | n_chunks | INT | `48210` | 청크 수 N | pgvector_load | pgsearch BM25 | 유지 |
 | avg_len | DOUBLE | `171.4` | 평균 n_terms(avgdl) | pgvector_load | pgsearch BM25 | 유지 |
 
-뷰 `v_chunk_source`는 `chunk`↔`doc`을 이은 읽기 전용 뷰다(원천 스키마마다 — 칸 = 청크 칸 + `file_name`(= `file_path` 끝 조각) + 그 원천의 doc 칸 + (faq) `faq_group`). 모델 `views_expected(원천)`이 비교 기준이다.
+뷰 `v_chunk_source`는 `chunk`↔`doc`을 이은 읽기 전용 뷰다(원천 스키마마다 — 칸 = 청크 칸 + `file_name`(= `file_path` 끝 조각) + 그 원천의 doc 칸 + (faq) `faq_group`). 모델 `view_columns(원천)`(칸 순서)·`view_sql(원천)`(정의 글자)이 비교 기준이다.
 
 ## 3. EDW (MSSQL)
 
@@ -139,7 +139,7 @@ EDW 표(`AI.FileStorageMap`, 원천 표 SFDC·CRMS·LAS 등)는 서버에서 운
 
 ## 4. master — 마스터 표 (검색 PG, 스키마 `<PG_SCHEMA>_master`)
 
-원본은 git CSV `resources/vocab/glossary/glossary.csv`(샘플 데이터). 실행 중에는 이 표만 읽는다 — `dbtool up --target master`로 표를 만들고 `dbtool master load`가 CSV로 내용을 한 트랜잭션에 통째로 바꾼다(초기화 순서: `dbtool up`(search·applog·master) → `dbtool master load`). 칸은 CSV 머리글 그대로(모두 `TEXT`) + 파일 순서 `row_no`(`INTEGER`, 기본 키). 머리글을 바꾸면 새 Alembic 판(갈래 `master`). 판: `common/store/db/migrations/versions/0001_master_base.py`(옛 표 여섯 개 + `master_meta`) → `0002_master_glossary.py`(`glossary`를 만들고 옛 표 일곱 개를 지움 — 내용의 원본은 git CSV라 잃는 것 없음) · 모델: `common/store/db/models/master_tables.py` · 읽기·채우기: `common/store/master.py`(프로세스마다 한 번 — 서버(dev·prd)는 못 읽으면 멈춤, PC는 같은 CSV로 채운 SQLite 대역). `tests/server/common/test_db_schema.py`가 이 절의 칸을 모델과 대조한다.
+원본은 git CSV `resources/vocab/glossary/glossary.csv`(샘플 데이터). 실행 중에는 이 표만 읽는다 — `dbtool up --target master`로 표를 만들고 `dbtool master load`가 CSV로 내용을 한 트랜잭션에 통째로 바꾼다(초기화 순서: `dbtool up`(search·applog·master) → `dbtool master load`). 칸은 CSV 머리글 그대로(모두 `TEXT`) + 파일 순서 `row_no`(`INTEGER`, 기본 키). 머리글을 바꾸면 새 Alembic 판(갈래 `master`). 판: `common/store/db/migrations/versions/0001_master_base.py`(옛 표 여섯 개 + `master_meta`) → `0002_master_glossary.py`(`glossary`를 만들고 옛 표 일곱 개를 지움 — 내용의 원본은 git CSV라 잃는 것 없음) · 모델: `common/store/db/models/master_tables.py` · 읽기·채우기: `common/store/master.py`(프로세스마다 한 번 — 못 읽으면 멈춤, PC도 같음). `tests/server/common/test_db_schema.py`가 이 절의 칸을 모델과 대조한다.
 
 - **해시·판:** 마스터 해시 = 머리글·`row_no` 순서 `glossary` 행의 sha256(16진 64자) — 읽을 때 계산한다(해시를 적어 두는 표 없음). 구조화가 읽은 마스터 해시를 묶음 `meta.json` `master_hash`에 남기고 적재가 gold `doc.gold_version` = `<VERSION>+m<해시 앞 8자>`로 쓴다(`master_hash`가 없는 묶음은 `<VERSION>`만). `silver_version`에는 붙이지 않는다. 마스터 해시는 캐시 열쇠·code_fp에 없다 — 마스터가 바뀌어도 자동 전체 재처리는 없고 `gold_version`으로 추적한다.
 - **읽는 모양:** `common.store.master`가 `glossary` 줄을 파일 순서로 묶어(고객·용어·ID 꼴 하나는 머리 줄(`client_id`·`concept_id`·`regex`)에서 시작하고, 바로 뒤따르는 같은 `kind`·`canonical` 줄이 거기에 붙는다(이름이 같은 고객 둘·이름이 빈 고객도 따로, ID 꼴은 `regex` 줄마다 하나 — `example`·`updated`는 그 앞 `regex` 줄 것)) `common.core.terms`가 읽는 행 모양(고객 명부·용어 사전·ID 꼴 — 칸 이름 `common.store.master.SHAPES`)으로 되돌려 넘긴다. 모르는 `kind`·`variant_kind`, 머리 줄 없이 나온 줄, 값이 하나인 종류가 한 묶음에 두 줄이면 `master load`가 표를 바꾸지 않고 거부한다(읽을 때도 같은 검사).
@@ -147,7 +147,7 @@ EDW 표(`AI.FileStorageMap`, 원천 표 SFDC·CRMS·LAS 등)는 서버에서 운
 
 ### master.glossary
 
-고객 명부·용어 사전·ID 꼴을 합친 표 — melt 꼴(유사값마다 한 줄). 읽는 곳: `common.core.terms` `_aliases`(구조화 고객 판별 `infer_clients` · 검색 질문 고객·별칭) · `load_glossary`(검색 질문 넓히기·근거 상태·고객 별칭의 `org_client`) · `load_id_patterns_typed`(검색 동점 처리·엔티티 힌트 — 줄 순서 그대로).
+고객 명부·용어 사전·ID 꼴을 합친 표 — melt 꼴(유사값마다 한 줄). 읽는 곳: `common.core.terms` `_aliases`(구조화 고객 판별 `infer_clients` · 검색 질문 고객·별칭) · `load_glossary`(검색 질문 넓히기·근거 상태·고객 별칭의 `org_client`) · `validate_glossary`(ID 꼴 정규식 검사 — 매칭에 쓰는 앱 코드는 없음).
 
 | 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|---|
@@ -155,7 +155,7 @@ EDW 표(`AI.FileStorageMap`, 원천 표 SFDC·CRMS·LAS 등)는 서버에서 운
 | kind | TEXT | `term` | 구분 — `client`(고객)·`term`(용어)·`id`(ID 꼴) | `dbtool master load` | `common.store.master.to_tables` | 새로 |
 | canonical | TEXT | `Contract Manufacturing Organization` | 원본 값 — 고객은 정식 이름(빈칸이면 `name_ko` 줄이 이름), 용어는 표준 이름, ID는 종류(`contract_no`·`product_code` 등). 묶는 법은 위 "읽는 모양" | 〃 | 〃 | 새로 |
 | variant | TEXT | `위탁생산` | 유사값 — `variant_kind`가 정하는 값(별칭·동의어·정규식·참조 ID·속성 값) | 〃 | 〃 | 새로 |
-| variant_kind | TEXT | `synonym` | 유사 종류. client: `client_id`·`name_ko`·`alias`(여러 줄)·`client_type`·`segment`·`country`·`parent`·`status`(`inactive`·`deleted`면 건너뜀)·`source`·`updated` · term: `concept_id`·`synonym`·`abbr`·`weak`(약한 동의어)·`broader`·`related`(개념 ID)·`category`(여러 줄 — `org_client`면 고객 명부에도)·`definition_en`·`source`·`owner`·`status`(approved만 씀)·`updated` · id: `regex`(머리 줄 — 줄마다 한 꼴, 이 순서가 동점 처리 순서)·`example`·`updated`. 여러 줄이 되는 것은 `alias`·`synonym`·`abbr`·`weak`·`broader`·`related`·`category`·`regex`, 나머지는 한 줄 | 〃 | 〃 | 새로 |
+| variant_kind | TEXT | `synonym` | 유사 종류. client: `client_id`·`name_ko`·`alias`(여러 줄)·`client_type`·`segment`·`country`·`parent`·`status`(`inactive`·`deleted`면 건너뜀)·`source`·`updated` · term: `concept_id`·`synonym`·`abbr`·`weak`(약한 동의어)·`broader`·`related`(개념 ID)·`category`(여러 줄 — `org_client`면 고객 명부에도)·`definition_en`·`source`·`owner`·`status`(approved만 씀)·`updated` · id: `regex`(머리 줄 — 줄마다 한 꼴)·`example`·`updated`. 여러 줄이 되는 것은 `alias`·`synonym`·`abbr`·`weak`·`broader`·`related`·`category`·`regex`, 나머지는 한 줄 | 〃 | 〃 | 새로 |
 | description | TEXT | `고객이 확립한 공정으로 생산만 위탁 수행` | 설명 — `client_id` 줄은 고객 설명, `concept_id` 줄은 한글 정의, `regex` 줄은 메모. 다른 줄은 비움 | 〃 | 〃 | 새로 |
 | context_required | TEXT | `생산\|제조\|계약` | 용어의 문맥 필요 — 동음이의 줄임말이면 질문에 함께 나와야 하는 말(`\|` 구분). term만(변환본은 `concept_id` 줄) | 〃 | `mcp_server.services.search.query_expand`(질문 넓히기) | 새로 |
 | case_sensitive | TEXT | `N` | 용어의 대소문자 구분 — `Y`면 구분. term만(변환본은 `concept_id` 줄) | 〃 | 〃 | 새로 |
@@ -293,12 +293,12 @@ MCP 요청 1건당 1행. 인증 실패와 `initialize`도 행으로 남는다. �
 
 ### applog.except_doc_info
 
-gold에 적재되지 않은 원본 1개·종류 1개당 1행(op-17). 기본 키 (`source_key`, `except_type`). 일반 표(파티션·보존 DELETE 없음 — `skip` 행을 지우면 그 문서를 다시 고름). 판: `common/store/db/migrations/versions/0003_applog_except.py`·`0004_applog_docs.py`(`file_ext`·`file_size`). 쓰는 곳: `pipeline/shared/except_docs.py` — `record()`(`skip`: 받기 전 `candidate_pick._record_source_skipped`·받은 뒤 `candidate_ready._record_filtered`·내용 중복 `candidate_ready._dedup`)·`record_error()`(`error`: 게시의 파싱 실패·적재의 분류 실패·run_pipeline의 파싱·게시·적재 실패 — `except_docs error` 명령). 같은 키·종류면 `last_seen`·`count`만 갱신. 읽는 곳: `candidate_pick.list_targets`(`--skip-done`이면 `skip` 키를 뺌 — `error` 행은 빼지 않아 다음 실행이 다시 고름). PC(PG 접속 없음)는 대역 sqlite `<standin_dir>/applog.sqlite`.
+gold에 적재되지 않은 원본 1개·종류 1개당 1행(op-17). 기본 키 (`source_key`, `except_type`). 일반 표(파티션·보존 DELETE 없음 — `skip` 행을 지우면 그 문서를 다시 고름). 판: `common/store/db/migrations/versions/0003_applog_except.py`·`0004_applog_docs.py`(`file_ext`·`file_size`). 쓰는 곳: `pipeline/shared/except_docs.py` — `record()`(`skip`: 받기 전 `candidate_pick._record_source_skipped`·받은 뒤 `candidate_ready._record_filtered`·내용 중복 `candidate_ready._dedup`)·`record_error()`(`error`: 게시의 파싱 실패·적재의 분류 실패·run_pipeline의 파싱·게시·적재 실패 — `except_docs error` 명령). 같은 키·종류면 `last_seen`·`count`만 갱신. 읽는 곳: `candidate_pick.list_targets`(`--skip-done`이면 `skip` 키를 뺌 — `error` 행은 빼지 않아 다음 실행이 다시 고름).
 
 | 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|---|
 | source_key | TEXT PK | `SFDC/2a9c…/kvx_drm_copy.pdf` | 원본 키(Object Storage `s3_key`, 폴더 원천은 상대 경로·이름) | except_docs | candidate_pick | 새로 |
-| except_type | TEXT PK | `skip` | 종류 — `skip`(영구 뺌: 지원 안 하는 확장자·확장자 없음·DRM·암호·내용 중복) · `error`(파싱·적재 실패 — 기록만) | 〃 | candidate_pick(`skip`만) | 새로 |
+| except_type | TEXT PK | `skip` | 종류 — `skip`(영구 뺌: 지원 안 하는 확장자·확장자 없음·DRM·암호·내용 중복) · `error`(파싱·적재 실패 — 기록만) · `part`(수준 `warn` — 안 문서를 일부 못 꺼냄, 성한 안 파일은 적재됨 — 기록만, pl-65) · `silver`(수준 `warn` — 실버만 게시, 골드 적재가 성공하면 지움, pl-68) | 〃 | candidate_pick(`skip`만) | 새로 |
 | source_system | TEXT | `SFDC` | 원천(FileStorageMap `source_system`) | 〃 | 없음 | 새로 |
 | file_name | TEXT | `kvx_drm_copy.pdf` | 파일 이름 | 〃 | 없음 | 새로 |
 | reason | TEXT NOT NULL | `drm_fasoo` | 이유 — `skip`: `unsupported_archive`·`encrypted_archive`·`broken_archive`·`archive_too_big`·`unsupported_format`·`no_extension`·`drm_*`·`encrypted_*`·`duplicate_sha256` · `error`: `parse_failed`·`publish_failed`·`load_failed`·`classify_failed` | 〃 | 없음 | 새로 |

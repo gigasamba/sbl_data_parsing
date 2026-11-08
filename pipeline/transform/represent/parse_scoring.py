@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""파싱 채점 — 엔진 결과를 재고 합격선으로 판정 → <parse>/qa.json · route.json · parse_summary.json.
+"""파싱 채점 — 엔진 결과를 재고 합격선으로 판정 → <parse>/qa.json · parse_summary.json.
 
 정답 우선순위(문서별): truth(PC 가상 문서) → answer_key(사람 정답지, 값만) → native(그 형식의 원본 구조 파서 —
 그 문서 비교에서는 제외) → consensus(인식 계열 여럿이 합의한 수치, 참고) → none. 정답 종류마다 지표가 다르다:
@@ -20,6 +20,9 @@ import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from rapidfuzz import fuzz, process
+from rapidfuzz.distance import Levenshtein
+
 from common.core.console import utf8_stdout
 from common.core.paths import APP_ROOT, CRITERIA_FILE, doc_dir
 from common.core.text import supsub_mark  # 첨자 정규화는 한 곳(각자 맵 금지)
@@ -32,26 +35,11 @@ from pipeline.transform.parse.engines import registry
 # 인식 계열 — 같은 모델·같은 텍스트 레이어 추출기를 쓰는 엔진은 같이 틀리므로 한 표로 센다. 목록에 없으면 스택 이름이 계열.
 FAMILY = {
     # 이미지 인식 모델
-    "paddleocr": "paddle",
-    "rapidocr": "paddle",
-    "rapidocr_ko": "paddle",
-    "paddleocr_vl": "paddle-vl",
-    "ppstructure": "paddle",
-    "mineru": "paddle",  # RapidOCR = Paddle 모델 ONNX
-    "tesseract": "tesseract",
-    "unstructured_ocr": "tesseract",
-    "kreuzberg_ocr": "tesseract",
-    "tika": "tesseract",
+    "rapidocr_ko": "paddle",  # RapidOCR = Paddle 모델 ONNX
     "qwen_vlm": "qwen",
-    "docling_vlm": "qwen",
     # 텍스트 레이어 추출기
-    "pdfplumber": "pdfminer",
     "markitdown": "pdfminer",
-    "unstructured": "pdfminer",
-    "camelot": "pdfminer",
-    "dual_local": "pdfminer",
     "pymupdf": "mupdf",
-    "pymupdf4llm": "mupdf",
 }
 
 _NUM = re.compile(r"(?<![\w.])-?\d[\d,]*(?:\.\d+)?")
@@ -89,43 +77,12 @@ def doc_accuracy(m, ref=None):
     return base
 
 
-try:
-    from rapidfuzz.distance import Levenshtein as _RFLev
-
-    _lev = _RFLev.distance
-except ImportError:
-    import difflib
-
-    # ponytail: rapidfuzz 없을 때 폴백 — difflib 정렬의 편집 비용(최소 거리의 상한, 근사).
-    # 진짜 O(n·m) DP는 CER_CAP(20만 자)에서 4*10^10회라 불가능 — difflib는 실측 수십만 자도 수 초.
-    def _lev(a, b):  # type: ignore[misc]  # rapidfuzz 없을 때 같은 이름의 대체 함수(서명만 다름)
-        return sum(
-            max(i2 - i1, j2 - j1)
-            for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes()
-            if tag != "equal"
-        )
+_lev = Levenshtein.distance
 
 
-try:
-    from rapidfuzz import fuzz as _fuzz
-    from rapidfuzz import process as _process
-
-    HAS_RAPIDFUZZ = True
-
-    def _best(rl, out_lines):  # 기준 줄과 가장 비슷한 출력 줄 (텍스트, 점수, 위치)
-        m = _process.extractOne(rl, out_lines, scorer=_fuzz.ratio) if out_lines else None
-        return m if m else (None, 0.0, None)
-except ImportError:
-    import difflib
-
-    HAS_RAPIDFUZZ = False  # 줄 전수 비교(difflib)는 큰 문서에서 멈춘 것처럼 보여 score_engine에서 생략
-
-    def _best(rl, out_lines):
-        best = (None, -1.0, None)
-        for i, ol in enumerate(out_lines):
-            s = difflib.SequenceMatcher(None, rl, ol).ratio() * 100
-            best = (ol, s, i) if s > best[1] else best
-        return best
+def _best(rl, out_lines):  # 기준 줄과 가장 비슷한 출력 줄 (텍스트, 점수, 위치)
+    m = process.extractOne(rl, out_lines, scorer=fuzz.ratio) if out_lines else None
+    return m if m else (None, 0.0, None)
 
 
 CER_CAP = 200_000
@@ -135,8 +92,8 @@ _WS = re.compile(r"\s+")
 _KO = re.compile(r"[가-힣]")
 # 형식 → 그 형식의 "원본 구조 파서" 후보(우선순위 순). 목록에 없는 native 형식(.eml 등)은 registry에 등록된 엔진으로.
 NATIVE = {
-    ".docx": ["office_stdlib", "office"],
-    ".doc": ["office_stdlib", "office"],
+    ".docx": ["office"],
+    ".doc": ["office"],
     ".xlsx": ["office"],
     ".xlsm": ["office"],
     ".xls": [],  # 지정 파서 없음 → 계열 합의
@@ -441,10 +398,9 @@ def score_engine(eng, r, d, ref, ctx):
         m["cer"] = round(c, 4)
         if capped:
             ctx["capped"].append(f"{ctx['doc']}:{eng}")
-        if HAS_RAPIDFUZZ:  # 없으면 줄마다 difflib 전수 비교 — 큰 문서에서 멈춘 것처럼 보여 생략
-            order, diff = order_diff(ref_text, text)
-            if order is not None:
-                m["order"], m["diff"] = round(order, 4), diff
+        order, diff = order_diff(ref_text, text)
+        if order is not None:
+            m["order"], m["diff"] = round(order, 4), diff
     if ref_values:
         m["value_recall"] = round(value_recall(ref_values, clean_commas(norm_nows(stext))), 4)
     if ref_pool is not None:
@@ -494,35 +450,6 @@ def aggregate(qa_docs, crit):
         row["pass"] = check_pass(row, g, crit["parse"]) if g else {}
         out[eng][b] = row
     return out
-
-
-def build_route(agg, qa_docs, exts):
-    route = {}
-    for ext in sorted(exts):
-        ran = {eng for dd in qa_docs.values() if dd["format"] == ext for eng, m in dd["engines"].items() if m.get("error") is None}
-        cand = [(eng, agg[eng][ext]) for eng in ran if ext in agg.get(eng, {})]
-        if not cand:
-            continue
-
-        def acc(eng):  # doc_accuracy 평균(실패 = 0) — 요약·선정과 같은 정확도
-            vs = [
-                doc_accuracy(dd["engines"][eng], dd.get("ref")) or 0.0
-                for dd in qa_docs.values()
-                if dd["format"] == ext and eng in dd["engines"]  # noqa: B023 — acc는 같은 반복 안에서만 부름
-            ]
-            return sum(vs) / len(vs) if vs else -1
-
-        cand.sort(
-            key=lambda x: (
-                -round(acc(x[0]), 4),
-                x[1].get("cer") if x[1].get("cer") is not None else 9e9,
-                -x[1].get("ok_rate", 0),
-                x[1].get("sec") if x[1].get("sec") is not None else 9e9,
-                x[0],
-            )
-        )
-        route[ext] = [e for e, _ in cand]
-    return route
 
 
 def run(parse_dir, src_dir, truth_path, akey_dir, prev_docs=None):
@@ -636,7 +563,6 @@ def run(parse_dir, src_dir, truth_path, akey_dir, prev_docs=None):
         }  # 다음 배치가 이전 점수를 들고 올지 가르는 값(원본 sha·엔진 코드 지문)
 
     agg = aggregate(qa_docs, crit)
-    route = build_route(agg, qa_docs, {dd["format"] for dd in qa_docs.values()})
     meta = {
         "parse": str(parse_dir),
         "src": str(src_dir),
@@ -650,7 +576,7 @@ def run(parse_dir, src_dir, truth_path, akey_dir, prev_docs=None):
     }
     if tok_conflicts:  # 갈린 숫자 표기가 있을 때만
         meta["token_conflicts"] = tok_conflicts
-    return {"meta": meta, "docs": qa_docs, "engines": dict(agg)}, route
+    return {"meta": meta, "docs": qa_docs, "engines": dict(agg)}
 
 
 FULL = json.loads(CRITERIA_FILE.read_text(encoding="utf-8"))["run"]["cross_acc_full"]  # 문서 "성공" 판정(criteria.json run)
@@ -778,12 +704,6 @@ def main():
     a = ap.parse_args()
     if a.src is None:
         a.src = str(doc_dir())
-    if not HAS_RAPIDFUZZ:
-        print(
-            "[parse_qa] 경고: rapidfuzz 미설치 — 읽기 순서(order) 채점 생략(없으면 줄마다 difflib 전수 비교로 큰 문서에서 멈춘 것처럼 보임). "
-            "pip install rapidfuzz 권장",
-            flush=True,
-        )
     out_dir = Path(a.out) if a.out else Path(a.parse)
     prev_docs = None
     prev_qa = out_dir / "qa.json"  # 지워진 문서 결과를 이전 qa.json에서 들고옴
@@ -792,12 +712,11 @@ def main():
             prev_docs = json.loads(prev_qa.read_text(encoding="utf-8")).get("docs")
         except (OSError, ValueError):
             prev_docs = None
-    qa, route = run(Path(a.parse), Path(a.src), Path(a.truth), Path(a.answer_key) if a.answer_key else None, prev_docs=prev_docs)
+    qa = run(Path(a.parse), Path(a.src), Path(a.truth), Path(a.answer_key) if a.answer_key else None, prev_docs=prev_docs)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "qa.json").write_text(json.dumps(qa, ensure_ascii=False, indent=1), encoding="utf-8")
-    (out_dir / "route.json").write_text(json.dumps(route, ensure_ascii=False, indent=1), encoding="utf-8")
     write_summary(qa, Path(a.src), out_dir)
-    print(f"[parse_qa] qa.json · route.json · parse_summary.json → {out_dir}", flush=True)
+    print(f"[parse_qa] qa.json · parse_summary.json → {out_dir}", flush=True)
 
 
 if __name__ == "__main__":

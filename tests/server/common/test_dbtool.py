@@ -1,6 +1,6 @@
 """common.store.db.dbtool 자기 점검."""
 
-from common.store.db.dbtool import MIGRATIONS, TARGETS, head, index_kind, known, standin_script, status
+from common.store.db.dbtool import MIGRATIONS, TARGETS, head, index_kind, known, status
 
 
 def selftest():
@@ -65,33 +65,9 @@ def selftest():
     assert m7.DOC_INDEX == ST.DOC_INDEX
     assert ST.index_defs(768)["ix_{S}_doc_silver"] == "CREATE INDEX ix_{S}_doc_silver ON {S}.doc USING btree (silver_bucket, silver_key)"
     print("[selftest] dbtool — 판 0007 doc 색인(sha256·silver 위치·file_path) = 표 정의 통과")
-    # 원천 스키마 SQLite 대역 — 표 정의에서 만든 DDL을 pg_standin이 받음(칸 순서·차원 글자 vector(n) 그대로)
-    import tempfile
-
-    from common.config.settings import COMMON
-    from common.store import pg_standin as PS
-
-    with COMMON.env(PG_STANDIN_DIR=tempfile.mkdtemp()):
-        for src in ST.SOURCES:
-            sch = ST.src_schema("orca_s8a_t", src)
-            db = PS.StandinPG(sch)
-            with db.cn.cursor() as cur:
-                cur.execute(standin_script(sch, 4096))
-            assert PS._dim_of(db) == 4096
-            got = {
-                n: [r[1] for r in db.sqlite.execute(f"PRAGMA table_info({n})")]
-                for (n,) in db.sqlite.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
-            }
-            views = {n for (n,) in db.sqlite.execute("SELECT name FROM sqlite_master WHERE type = 'view'")}
-            md = ST.search_metadata(sch, 4096)
-            assert got == {t.name: [c.name for c in t.columns] for t in md.sorted_tables} and views == set(ST.views_expected(src)), (
-                src,
-                got,
-            )
-            db.sqlite.close()
     assert ST.source_of("SFDC-test") == "sfdc" and ST.source_of("Other") == "other" and ST.source_of(None) == "other"
     assert ST.split_schema("ai_las") == ("ai", "las") and ST.split_schema("ai") == ("ai", None)
-    print("[selftest] dbtool — 원천 스키마 SQLite 대역 5벌(표 5·뷰 1·칸 순서·vector(4096))·원천 이름 통과")
+    print("[selftest] dbtool — 원천 이름 통과")
     assert index_kind(2000) == "HNSW 코사인" and index_kind(4096).startswith("이진")
     assert set(ST.index_defs(768)) == {
         "ix_{S}_doc_attrs",
@@ -127,6 +103,36 @@ def selftest():
 
 def test_main():
     selftest()
+
+
+def test_migrated_tables_match():
+    """e2-22 — 실 pgvector 임시 스키마에 판 올리기(dbtool up --target search) 뒤 원천 스키마 5벌의 표·칸 순서·뷰·차원 = 표 정의
+    (옛 SQLite 대역 사례의 뜻 — 이제 판 파일이 만든 진짜 표로 본다)."""
+    from common.store.db import dbtool
+    from common.store.db.models import search_tables as ST
+    from tests.server.common import pgcase
+
+    with pgcase.schema() as base:
+        dbtool.upgrade_search(base, 4096)
+        db = pgcase.connect(base)
+        try:
+            for src in ST.SOURCES:
+                sch = ST.src_schema(base, src)
+                assert dbtool.check_dim(db.q, sch, None) == 4096, src
+                rows = db.q(
+                    "SELECT table_name AS t, column_name AS c FROM information_schema.columns WHERE table_schema = %s ORDER BY table_name, ordinal_position",
+                    (sch,),
+                )
+                got: dict[str, list[str]] = {}
+                for r in rows:
+                    got.setdefault(r["t"], []).append(r["c"])
+                views = {r["v"] for r in db.q("SELECT table_name AS v FROM information_schema.views WHERE table_schema = %s", (sch,))}
+                md = ST.search_metadata(sch, 4096)
+                want = {t.name: [c.name for c in t.columns] for t in md.sorted_tables}
+                assert {t: c for t, c in got.items() if t not in views} == want and views == {"v_chunk_source"}, (src, got)
+        finally:
+            db.cn.close()
+    print("[selftest] dbtool — 판 올린 원천 스키마 5벌(표·칸 순서·뷰 1·vector(4096)) = 표 정의 통과")
 
 
 def test_all_keeps_applog_schema():  # up --target all --schema demo가 applog 표를 검색 스키마에 만들지 않게
@@ -207,7 +213,7 @@ def test_up_sql():
     from common.store.db import dbtool
 
     no_db = mock.Mock(side_effect=AssertionError("DB에 붙음"))
-    with tempfile.TemporaryDirectory() as d, mock.patch.object(dbtool, "engine", no_db), mock.patch.object(pg, "has_conn", no_db):
+    with tempfile.TemporaryDirectory() as d, mock.patch.object(dbtool, "engine", no_db), mock.patch.object(pg, "conf", no_db):
         for args, has, hasnt in UP_SQL:
             out = Path(d) / "up.sql"
             with contextlib.redirect_stdout(io.StringIO()):

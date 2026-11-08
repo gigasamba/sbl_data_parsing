@@ -82,7 +82,7 @@ def test_http_body_cap():
         try:
             asyncio.run(run())
         finally:
-            tool_runner._LIMITER = None
+            tool_runner._LANES.clear()
     assert [m for m, _ in sent].count("POST") == 1, sent  # 1.1MB는 서비스로 안 감
     assert free and set(free) == {main._BIG_SLOTS - 1}, free  # 처리 중엔 자리 하나를 쥠
     assert holder[0].value == main._BIG_SLOTS  # 끝나면 돌려줌

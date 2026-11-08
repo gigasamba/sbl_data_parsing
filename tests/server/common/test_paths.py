@@ -17,9 +17,7 @@ from common.core.paths import (
     atomic_write_text,
     child_env,
     doc_dir,
-    lookup_run_dir,
     resolve_agent_dir,
-    resolve_run_dir,
 )
 
 
@@ -33,24 +31,6 @@ def _demo():
     env = child_env({"X_DEMO": "1"})
     assert env["X_DEMO"] == "1" and str(PKG_ROOT.parent) in env["PYTHONPATH"].split(os.pathsep)
     assert env is not os.environ  # env 남김 — 시험 · 원본 os.environ을 안 바꿈
-    with tempfile.TemporaryDirectory() as t:
-        root = Path(t)
-        d1 = resolve_run_dir(root, None, new=True)
-        assert d1.parent == root and d1.exists()
-        explicit = root / "explicit"
-        d2 = resolve_run_dir(root, explicit, new=True)  # run_dir은 run_root와 무관하게 그대로 쓰임(호출자가 경로를 줌)
-        assert d2 == explicit and d2.exists()
-        d3 = resolve_run_dir(root, None, new=False)
-        assert d3 in (d1, d2)  # 가장 최근(사전식 정렬) 중 하나
-        empty = Path(t) / "empty_root"
-        try:
-            resolve_run_dir(empty, None, new=False, label="x", rel_hint="output/eval/x")
-            raise AssertionError("빈 폴더에서 new=False면 SystemExit이어야 함")
-        except SystemExit as e:
-            assert "[x] output/eval/x 아래 이전 run 없음" == str(e)
-        assert lookup_run_dir(root, None) is None
-        assert lookup_run_dir(root, "explicit") == d2
-        assert lookup_run_dir(root, "no-such") is None
     fake_dir = Path("some") / "doc" / "dir"
     with COMMON.env(DOC_DIR=str(fake_dir)):
         assert doc_dir() == PROJ_ROOT / fake_dir  # 상대 경로는 저장소 루트 기준

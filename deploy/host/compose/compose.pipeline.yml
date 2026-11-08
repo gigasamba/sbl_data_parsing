@@ -16,8 +16,7 @@
 #   mcp_keepalive.sh·systemd가 부름). YAML에 없는 칸은 아래 ${X:-기본값}이 그대로 걸린다.
 #   파일 권한: 컨테이너 사용자 UID 10001이 읽어야 함 — 주인 10001·그룹 운영 계정 그룹·640(운영 계정 UID가 10001이면 600 — refactor.md C-09).
 #   값 바꾸기: 앱 설정 값은 settings.yaml을 직접 고친다(한 번만 다르게 돌릴 값도 — 고쳐 돌리고 되돌림). 셸·`-e`로 준 env 이름은 앱이
-#   읽지 않고, 덮기 파일 도구 `python -m common.config.overrides`는 PC 전용이라 서버에서는 종료 2(이 compose는 SETTINGS_FILE 한 파일만
-#   붙여 덮기 파일의 base가 컨테이너 안에 없음). 셸 env로 덮을 수 있는 것은 compose 치환 값(이미지·자원·포트·호스트 경로)뿐.
+#   읽지 않는다(한 번만 다른 값은 명령 인자 `--set 이름=값`). 셸 env로 덮을 수 있는 것은 compose 치환 값(이미지·자원·포트·호스트 경로)뿐.
 x-settings: &settings "${SETTINGS_FILE:?SETTINGS_FILE=<settings.yaml 절대 경로> 필요 — deploy/host/scripts/load_settings.sh load_settings가 export(refactor.md C-09)}:/etc/rag/settings.yaml:ro,z"
 services:
   # 일괄 상주 컨테이너(일 없이 떠 있음, entrypoint `idle`): run_pipeline.py가 docker exec로 대상 목록·문서별 미리 받기·파싱·게시·구조화·적재를 돌린다.

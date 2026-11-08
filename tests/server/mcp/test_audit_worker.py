@@ -1,6 +1,7 @@
 """감사 지연은 응답/도구 limiter와 독립, 포화 메타와 종료 deadline을 검증한다."""
 
 import asyncio
+import contextlib
 import json
 import subprocess
 import sys
@@ -18,6 +19,20 @@ from mcp_server.services import call_log as audit
 from mcp_server.services import tool_runner
 
 
+@contextlib.contextmanager
+def _full():
+    """블록 안에서 공용·parse_document 자리를 대기열까지 가득 찬 꼴로(다음 요청은 busy — 현재 설정 기준), 나가면 원래 수로."""
+    lanes = [tool_runner._lane(name) for name in ("shared", "do_parse_document")]
+    extra = [lane.total + tool_runner._queue_cap(lane.total) for lane in lanes]
+    for lane, n in zip(lanes, extra):
+        lane.accepted += n
+    try:
+        yield
+    finally:
+        for lane, n in zip(lanes, extra):
+            lane.accepted -= n
+
+
 def test_response_deadlines():
     rows, threads = [], []
     original = audit.Call._prepare
@@ -31,14 +46,15 @@ def test_response_deadlines():
         original(call)
 
     async def run():
-        tool_runner._LIMITER, tool_runner._INFLIGHT = None, 0
+        tool_runner._LANES.clear()
         # 공용 anyio limiter가 포화돼도 전용 감사 워커는 진행한다.
         default = anyio.to_thread.current_default_thread_limiter()
         previous_tokens = default.total_tokens
         default.total_tokens = 1
         await default.acquire()
         try:
-            with mc.senv(MCP_MAX_CONCURRENCY="1", MCP_MAX_QUEUE="1", MCP_TOOL_TIMEOUT_SEC="0.05"):
+            # 공용 2자리 — 시간 초과된 첫 스레드는 release까지 한 자리를 계속 쥔다(남은 한 자리로 다음 요청이 돎).
+            with mc.senv(MCP_MAX_CONCURRENCY="2", MCP_MAX_QUEUE="1", MCP_TOOL_TIMEOUT_SEC="0.05"):
 
                 async def wait_until_entered():
                     while not entered.is_set():
@@ -48,11 +64,10 @@ def test_response_deadlines():
                 assert await tool_runner._bg(lambda: release.wait(30)) == {"error": "timeout"}
                 await asyncio.wait_for(wait_until_entered(), 30)
                 assert not release.is_set() and not rows
-                tool_runner._INFLIGHT = 2
-                for invoke in (lambda: tool_runner._bg(lambda: None), lambda: tool_runner._bg_long(lambda: None, 1)):
-                    assert await invoke() == {"error": "busy"}
-                    assert not release.is_set() and not rows
-                tool_runner._INFLIGHT = 0
+                with _full():
+                    for invoke in (lambda: tool_runner._bg(lambda: None), lambda: tool_runner._bg_long(lambda: None, 1)):
+                        assert await invoke() == {"error": "busy"}
+                        assert not release.is_set() and not rows
                 for invoke in (lambda: tool_runner._bg(lambda: result), lambda: tool_runner._bg_long(lambda: result, 1)):
                     reply = await invoke()
                     assert reply is result and not release.is_set() and not rows
@@ -66,10 +81,13 @@ def test_response_deadlines():
             release.set()
             default.release()
             default.total_tokens = previous_tokens
-            tool_runner._LIMITER, tool_runner._INFLIGHT = None, 0
+            tool_runner._LANES.clear()
 
     assert audit.drain()
-    with patch.object(audit.Call, "_prepare", delayed), patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(row)):
+    with (
+        patch.object(audit.Call, "_prepare", delayed),
+        patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(audit.jsonlog.masked(row))),
+    ):
         asyncio.run(run())
 
 
@@ -88,7 +106,7 @@ def test_queue_metadata():
         with (
             patch.object(audit, "_WORKER", worker),
             patch.object(audit.Call, "_prepare", blocked),
-            patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(row)),
+            patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(audit.jsonlog.masked(row))),
         ):
             try:
                 first = audit.start(lambda query: None, ("zqz",))
@@ -228,7 +246,7 @@ def test_byte_budget():
     with (
         patch.object(audit, "_WORKER", worker),
         patch.object(audit.Call, "_prepare", blocked),
-        patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(row)),
+        patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(audit.jsonlog.masked(row))),
     ):
         try:
             call.finish(result)
@@ -266,7 +284,7 @@ def test_large_integer_byte_budget():
     with (
         patch.object(audit, "_WORKER", worker),
         patch.object(audit.Call, "_write") as write,
-        patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(row)),
+        patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(audit.jsonlog.masked(row))),
     ):
         try:
             # 입력·결과 각각의 큰 정수를 큐나 활성 처리에 보관하지 않고 메타로 보낸다.
@@ -324,7 +342,7 @@ def test_large_metadata():
     with (
         patch.object(audit, "_WORKER", worker),
         patch.object(audit.jsonlog, "masked", side_effect=observe),
-        patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(row)),
+        patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(audit.jsonlog.masked(row))),
         audit.request_context({"x-mcp-user": huge, "x-mcp-client": huge}),
     ):
         try:

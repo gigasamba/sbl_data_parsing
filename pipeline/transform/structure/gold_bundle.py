@@ -4,7 +4,7 @@
   청크   : structure 청커(chunking) — 본문은 정제 텍스트(쪽 번호 줄 제외), 위치 = 파일 경로·쪽·줄·문자 범위·제목,
            쪽 안 위치(bbox, pt) = OCR 엔진은 글자 상자 합집합, 텍스트 PDF는 원본 PDF에서 청크 첫·끝 줄을 찾아 합집합
   요약   : 앞부분 발췌
-  메타   : 고객사·계약 번호 — 파싱 모듈 교차 확인 값(_rep rep.meta)(서로 다른 계열 파서 2개+)만
+  메타   : 날짜·개정·구판·문서군(docmeta) — 고객·원천 칸은 적재가 EDW 조인으로 채운다(edw_doc_meta)
   임베딩 : --embed api(EMBED_BASE_URL·EMBED_MODEL — 서버 임베딩 전용 모델) · none(임베딩 없음 — 시험) (L2 정규화 저장, 차원은 첫 응답에서)
 산출: docs.jsonl · chunks.jsonl · vectors.npy(float32, chunks 순서) · meta.json
 사용: python -m pipeline.transform.structure.gold_bundle [--parse-dir output/parse] [--src output/prepared] [--embed api|none] [--out output/edw/bundle]
@@ -210,7 +210,7 @@ def infer_clients(docs, head=400, roster=None):
 
     전체 본문(머리 400자만이 아니라)에서 알려진 고객 이름·별칭이 — ⓐ 2회 이상 나오거나 ⓑ 제목/첫 head자 안에
     한 번이라도 나오면(잡음 가드 — 본문 뒤쪽 1회 등장만으로는 "같이 언급된 제3자"와 구분 안 됨) '증거 있음'으로 본다.
-    등장 횟수는 단어 경계·한글 조사 인식 매칭(ST.name_hits·_name_pat, match_clients·expand_query와 같은 규칙)으로 센다 —
+    등장 횟수는 단어 경계·한글 조사 인식 매칭(ST.name_hits·_name_pat, expand_query와 같은 규칙)으로 센다 —
     경계 없는 substring count는 짧은 별칭(예 "MSD")이 "MSDS" 안에서도 걸린다.
     증거 있는 고객은 전부 clients에, 증거 강한 순(제목/머리 등장 먼저 · 그다음 등장 횟수 · 동점은 이름순, 결정적)으로 담는다.
     알려진 고객 = 고객 명부(roster, 기본 T._aliases() — stack.json client_aliases·CLIENT_ROSTER·GLOSSARY_DIR org_client)
@@ -426,7 +426,7 @@ def main(argv=None):
         if not (src / doc).exists() and not (raw.get("rep") or {}).get("source"):
             continue  # 원본도 원본 정보(rep.source)도 없음
         eng = raw["rep"]["engine"]
-        text, _ = S.load_parse_doc(pd, "_rep", doc)
+        text = S.rep_text(raw)
         if not text.strip():
             continue
         ab = lead_summary(text)
@@ -494,7 +494,7 @@ def main(argv=None):
                     }
                 )
                 seq += 1
-            for c in [] if rows is not None else S.chunk_all({doc: text}, a.chunk, {doc: eng}):
+            for c in [] if rows is not None else S.chunk_all({doc: text}, {doc: eng}):
                 m = c["meta"]
                 page = m["page"] or (1 if raw["rep"].get("pages") == 1 else None)  # 한 쪽짜리 문서는 1
                 bbox = None

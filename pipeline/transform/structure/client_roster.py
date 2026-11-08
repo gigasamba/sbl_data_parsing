@@ -20,7 +20,7 @@ def _hit_pat(name):
     비단어 문자일 때 경계 자체가 안 생겨 매칭이 실패한다(실측: `\\b미르하제약\\(주\\)\\b`가 '…미르하제약(주) /
     mrh…'에서 0건). 같은 경계 방식이 "MSD"가 "MSDS" 안에서 걸리는 것도 막는다(경계 없는 substring count의 오탐 방지). ② 한글 조사는 이름이 한글로 끝날 때만이 아니라 **항상** 허용 — 'Celltrion과'처럼
     외래어·영문 로마자 뒤에도 조사가 공백 없이 바로 붙는 한국어 표기가 흔하다. 이름 안 공백은 `\\s*`로(OCR 공백 차이
-    허용 — 'Contoso Pharma'·'ContosoPharma' 둘 다). `_name_pat`(match_clients·expand_query가 씀, 전부
+    허용 — 'Contoso Pharma'·'ContosoPharma' 둘 다). `_name_pat`(expand_query가 씀, 전부
     영숫자로 끝나는 이름이라 이 차이가 안 드러남)은 그대로 둔다."""
     esc = re.escape(name).replace(r"\ ", r"\s*")
     alt = "|".join(sorted(PARTICLES, key=len, reverse=True))

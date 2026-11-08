@@ -106,38 +106,6 @@ def resolve_agent_dir(agent_id):
     raise FileNotFoundError(f"agent 패키지를 못 찾음: {agent_id!r} (resources/prompts/{{common,pipeline}}·valid_env/answer_test 다 없음)")
 
 
-def resolve_run_dir(run_root, run_dir=None, *, new=True, label=None, rel_hint=None):
-    """실행(run) 폴더 — 쓰기용(만들거나 재사용). run_dir이 있으면 그 경로 그대로 · 없고 new=True(기본)면 run_root 아래
-    오늘 시각(`%Y%m%d-%H%M%S`) 새 폴더 · 없고 new=False면 run_root 아래 가장 최근(이름 정렬 — 시각 폴더라 사전식
-    정렬 = 시간 순) 폴더, 하나도 없으면 SystemExit(label·rel_hint는 안내 문구에 씀). 둘 다 mkdir(parents=True,
-    exist_ok=True) — 이름으로 기존 폴더만 찾는 읽기 전용 조회는 lookup_run_dir()."""
-    run_root = Path(run_root)
-    if run_dir:
-        d = Path(run_dir)
-    elif new:
-        d = run_root / time.strftime("%Y%m%d-%H%M%S")
-    else:
-        existing = sorted(p for p in run_root.glob("*") if p.is_dir())
-        if not existing:
-            raise SystemExit(f"[{label or run_root.name}] {rel_hint or run_root} 아래 이전 run 없음")
-        d = existing[-1]
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
-def lookup_run_dir(run_root, name):
-    """이름으로 기존 run 폴더 찾기(읽기 전용, mkdir 안 함).
-    절대경로로 있으면 그대로 · run_root 아래 그 이름이 있으면 그것 · 그 밖엔 (상대경로로) 있으면 그대로 ·
-    없으면 None."""
-    if not name:
-        return None
-    p = Path(name)
-    if p.is_absolute() and p.exists():
-        return p
-    cand = Path(run_root) / name
-    return cand if cand.exists() else (p if p.exists() else None)
-
-
 def tmp_path_for(dst):
     """dst 쓰기에 쓸 임시 파일 경로(같은 폴더에 여러 프로세스(--procs)가 동시에 써도 안 겹침) — 재시도가
     전부 실패했을 때 호출자가 남은 임시 파일을 지우려면 이 경로로 찾는다."""

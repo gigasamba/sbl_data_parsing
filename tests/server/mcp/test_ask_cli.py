@@ -1,4 +1,4 @@
-"""ask CLI(0.2.0) — 원천 하나 필수(--source, search의 source_system과 같은 이름), 오류 답은 KeyError 대신 오류 글로 끝남. SQLite 대역(실 PG 안 닿음)."""
+"""ask CLI(0.2.0) — 원천 하나 필수(--source, search의 source_system과 같은 이름), 오류 답은 KeyError 대신 오류 글로 끝남. 실 pgvector 임시 스키마(`test_*` — pgfix)."""
 
 import contextlib
 import io

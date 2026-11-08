@@ -1,5 +1,5 @@
 """op-17 — 처리 기록은 gold `doc` 칸(판 0006): 적재(`load --silver`)가 게시 기록 파일(silver.jsonl)의 sha256·silver 위치·엔진·상태·silver 판·
-게시 시각과 적재 판(gold_version)·적재 시각을 쓰고, 고르기(gold_docs)가 그 행으로 끝난 문서·내용 중복을 판정한다. PC 대역(임시 폴더)만 — 외부 접속 없음."""
+게시 시각과 적재 판(gold_version)·적재 시각을 쓰고, 고르기(gold_docs)가 그 행으로 끝난 문서·내용 중복을 판정한다. 실 pgvector 임시 스키마(goldseed.gold — test_*, 시험 뒤 지움)."""
 
 import json
 import shutil
@@ -8,16 +8,14 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from common.config.settings import COMMON
-from common.store import pg_standin as PS
-from common.store.db.dbtool import standin_script
 from pipeline.extract import candidate_pick as CP
 from pipeline.load import pgvector_load as M
 from pipeline.shared import except_docs as ED
 from pipeline.shared import gold_docs as GD
-from tests.server.pipeline.test_pl13_no_prune import DIM, _bundle
+from tests.server.common import pgcase
+from tests.server.pipeline.goldseed import gold
+from tests.server.pipeline.test_pl13_no_prune import DIM, _bundle, kst
 
-S = "test_op17"
 ENG = [{"engine": "pymupdf", "role": "rep", "status": "ok", "version_or_model": "1.28.2", "calls": 1}]
 # (원본 키, 처리 기록 줄(None = silver.jsonl에 없음), 기대 doc 칸)
 CASES = [
@@ -72,10 +70,8 @@ def _silver(tmp, lines):
 def test_doc_record():
     tmp = Path(tempfile.mkdtemp())
     try:
-        with COMMON.env(RUN_ENV="local", PG_STANDIN_DIR=str(tmp / "pg"), PG_SCHEMA=S):
-            db, sf = PS.StandinPG(S), PS.StandinPG(f"{S}_sfdc")
-            with sf.cn.cursor() as cur:
-                cur.execute(standin_script(f"{S}_sfdc", DIM))
+        with gold(DIM) as S:
+            db = sf = pgcase.connect(S)
             paths = [k for k, _, _ in CASES]
             M.load(db, _bundle(paths, tmp), silver=_silver(tmp, {k: r for k, r, _ in CASES if r}))
             rows = {r["file_path"]: r for r in sf.q(f"SELECT * FROM {S}_sfdc.doc")}
@@ -84,7 +80,7 @@ def test_doc_record():
                 assert {k: r[k] for k in want} == want, (key, r)
                 assert r["gold_version"] and r["loaded_at"], (key, r)  # 적재 판·시각은 모든 문서
             a = rows["SFDC/u/a.pdf"]
-            assert json.loads(a["engines"]) == ENG and a["silver_bucket"] == "rag-publish" and a["parsed_at"].startswith("2026-11-06"), a
+            assert a["engines"] == ENG and a["silver_bucket"] == "rag-publish" and kst(a["parsed_at"]).startswith("2026-11-06"), a
             assert CP.done_keys() == set(paths)  # 끝난 문서 = doc 행이 있는 원본 키
             for shas, want in SHA_CASES:
                 assert CP.done_by_sha(shas) == want, shas
@@ -93,7 +89,8 @@ def test_doc_record():
                 rows = {r["file_path"]: r for r in sf.q(f"SELECT * FROM {S}_sfdc.doc")}
                 for key, w in want.items():
                     assert {k: rows[key][k] for k in w} == w, (replace, key, rows[key])
-            assert json.loads(rows["SFDC/u/a.pdf"]["engines"] or "null") is None  # 재게시 줄에 없던 칸은 그 줄 값(NULL)으로
+            assert rows["SFDC/u/a.pdf"]["engines"] is None  # 재게시 줄에 없던 칸은 그 줄 값(NULL)으로
+            db.cn.close()
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -105,8 +102,6 @@ class _PgErr(Exception):
 
 # gold_docs._rows가 받은 오류 → 0건으로 넘김(True) / 그대로 올림(False — 서버 종료 4, pl-12)
 ERR_CASES = [
-    (sqlite3.OperationalError("no such table: x.doc"), True),
-    (sqlite3.OperationalError("no such column: sha256"), True),
     (_PgErr("42P01"), True),
     (_PgErr("42703"), True),
     (_PgErr("28P01"), False),  # 로그인 실패

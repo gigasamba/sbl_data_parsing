@@ -13,16 +13,15 @@
    연결 확인은 업무 프롬프트가 없어 예외)
 ⑨ cli·evaluation은 여러 이미지에 들어가므로 top-level(모듈 스코프) import에 etl과 search가 같이 있으면 안 됨(어느 이미지에서
    돌려도 한쪽이 깨짐). 함수 안 늦은(lazy) import는 허용.
-⑩ "os.environ 0" — os.environ·os.getenv·os.environb를 직접 쓰는 줄(토큰 기준 — 주석·문자열 빼고, os 별칭·`from os import environ`
-   이름 포함)은 그 문장(또는 바로 위 주석 줄)에 분류 주석 `env 남김 — <분류>`(ENV_KINDS)가 있어야 한다. 설정 값은
-   settings.yaml(설정 객체 cfg()·덮기 파일 put·child_env)로만 읽고 넘긴다. --env-report: 남은 줄을 분류별로 찍음.
-⑪ "자식 env의 설정 이름 0" — 자식 env(os.environ·그 사본·child_env 결과·subprocess 류 env= 값)에 설정 칸 이름(호스트 칸 빼고)을
-   넣거나 빼는 자리(AST — dict 리터럴·dict(…, X=)·env[X] =·del·pop·setdefault·update, for 상수 이름 포함)는 위반이다(자식은 env의
-   설정 이름을 안 읽음 — settings.child_env(base, X=…)·put). 같은 이름의 env를 읽는 라이브러리·시험·호스트 도구는 분류 주석
-   (ENV_NAME_OK_KINDS)으로 둔다.
+⑩ "os.environ 0" — 앱 코드(common·pipeline·mcp_server)에서 os.environ·os.getenv 등을 쓰는 줄(토큰 검색 — 주석·문자열 빼고,
+   `os.`·`_os.` 뒤만)은 그 문장(또는 바로 위 주석 줄)에 분류 주석 `env 남김 — <분류>`(ENV_KINDS)가 있어야 한다. 설정 값은
+   settings.yaml(설정 객체 cfg()·덮기 파일 put·child_env)로만 읽고 넘긴다.
+⑪ "자식 env의 설정 이름 0" — 같은 앱 코드에서 env가 든 줄에 설정 칸 이름(호스트 칸 빼고)을 글자로 env 사전 키·env[…]·pop·setdefault·
+   putenv에 쓰면 위반이다(글자 검색 — 자식은 env의 설정 이름을 안 읽음, settings.child_env(base, X=…)·put). 같은 이름의 env를 읽는
+   라이브러리·시험·호스트 도구는 분류 주석(ENV_NAME_OK_KINDS)으로 둔다.
 ⑫ pipeline 안 단계 방향 extract → transform → load — 거꾸로 import 금지(함수 안 늦은 import도 셈).
 앱·PC 도구는 tests/를 import하지 않는다.
-사용: python -m common.check.check_modules [--env-report]
+사용: python -m common.check.check_modules
 """
 
 import ast
@@ -95,8 +94,6 @@ CONTRACT_FUNCS = {
     "bundle_chunk_keys",
     "norm",
     "_aliases",
-    "match_clients",
-    "pairs_of",
     "table_rows",
     "locate",
 }
@@ -309,11 +306,10 @@ def check():
             if (m == "google.adk" or m.startswith("google.adk.")) and not is_agent_py:
                 bad.append(f"{rel}: {m} import — google.adk는 지시서 패키지 agent.py에서만(GA ④ — 0.2.0 ADK 장치 지움)")
     bad.extend(env_violations())
-    bad.extend(child_env_violations())
     return bad
 
 
-# ⑩ "os.environ 0" — 줄마다 다는 분류 주석(예외 자리 없음)
+# ⑩·⑪ 글자 검색(e2-23) — 앱 코드(common·pipeline·mcp_server)만, 줄마다 다는 분류 주석 `env 남김 — <분류>`(예외 자리 없음)
 ENV_KINDS = (
     "라이브러리",
     "하위 프로세스",
@@ -325,93 +321,28 @@ ENV_KINDS = (
     "OS 값",
     "호스트 도구",
 )
+ENV_NAME_OK_KINDS = ("라이브러리", "시험", "호스트 도구")  # ⑪ — 같은 이름의 env를 읽는 라이브러리·시험·호스트 도구
 _ENV_MARK = re.compile(r"env 남김 — (" + "|".join(ENV_KINDS) + ")")
-_ENV_SKIP = ("output/", ".venv/", "valid_env/", ".claude/", "docs/", "reference/")  # reference/ — git 밖 참고 자료(PC 전용)
+_ENV_ATTRS = ("environ", "getenv", "environb", "putenv", "unsetenv")
+_APP_DIRS = ("common", "pipeline", "mcp_server")
+_NON_CODE = (tokenize.NL, tokenize.NEWLINE, tokenize.COMMENT, tokenize.INDENT, tokenize.DEDENT)
+# ⑪ env 사전 키("X": …)·env…[ "X" ]·env….pop/setdefault("X")·putenv("X") — env가 든 줄의 글자 이름만
+# ponytail: 줄 단위라 여러 줄에 걸친 env 사전은 env가 든 줄의 키만 봄 — 놓치는 키가 나오면 문장 단위로
+_NAME_SET = re.compile(r"""(?:env\w*\[|env\w*\.(?:pop|setdefault)\(|putenv\()\s*["']([A-Z][A-Z0-9_]*)["']|["']([A-Z][A-Z0-9_]*)["']\s*:""")
+_OS_ALIAS = re.compile(r"^\s*import\s+os\s+as\s+(\w+)", re.M)  # ⑩ import os as X → X.environ
+_FROM_OS = re.compile(r"^\s*from\s+os\s+import\s+\(?([\w\s,]+)", re.M)  # ⑩ from os import environ[ as E] → E
 
 
-_ENV_ATTRS = ("environ", "getenv", "environb", "putenv", "unsetenv")  # ⑩·⑪ 둘 다
-
-
-def _os_aliases(text):
-    """(os 모듈 이름들, os에서 바로 가져온 environ·getenv·environb 이름들) — `import os as _os`·`from os import environ as E`도 잡는다."""
-    try:
-        tree = ast.parse(text)
-    except SyntaxError:
-        return {"os"}, set()
-    return _file_info(tree)["aliases"][:2]
-
-
-def _file_info(tree):
-    """파일 한 번 걷기 — aliases(os 이름들·os에서 가져온 environ 등·subprocess 이름들·subprocess에서 가져온 run·call) ·
-    imports(`from m import a as b`의 (a, b)) · funcs(함수 정의들)."""
-    os_mods, os_direct, sub_mods, sub_direct, imports, funcs = {"os"}, set(), {"subprocess"}, set(), [], []
-    for n in ast.walk(tree):
-        if isinstance(n, ast.Import):
-            os_mods |= {a.asname for a in n.names if a.name == "os" and a.asname}
-            sub_mods |= {a.asname for a in n.names if a.name == "subprocess" and a.asname}
-        elif isinstance(n, ast.ImportFrom):
-            imports += [(a.name, a.asname) for a in n.names if a.asname]
-            if n.module == "os" and n.level == 0:
-                os_direct |= {a.asname or a.name for a in n.names if a.name in _ENV_ATTRS}
-            elif n.module == "subprocess" and n.level == 0:
-                sub_direct |= {a.asname or a.name for a in n.names if a.name in ("run", "call")}
-        elif isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):  # 람다 몸통도 scope(람다 안 spawn의 env=)
-            funcs.append(n)
-    return {"aliases": (os_mods, os_direct, sub_mods, sub_direct), "imports": imports, "funcs": funcs}
-
-
-def _comment_kinds(text, toks=None):
-    """줄 → 분류 함수 — 그 줄이 속한 문장(논리 줄) 안이나 바로 위 주석 줄 묶음의 분류 주석(`env 남김 — <분류>`), 없으면 None."""
-    toks = toks if toks is not None else list(tokenize.generate_tokens(io.StringIO(text).readline))
-    comments = {t.start[0]: t.string for t in toks if t.type == tokenize.COMMENT}
-    spans, cur = {}, None
-    for t in toks:  # 줄 → 그 줄이 속한 논리 줄의 (첫 줄, 끝 줄)
-        if cur is None and t.type not in (tokenize.NL, tokenize.NEWLINE, tokenize.COMMENT, tokenize.INDENT, tokenize.DEDENT):
-            cur = t.start[0]
-        if t.type == tokenize.NEWLINE and cur is not None:
-            for ln in range(cur, t.end[0] + 1):
-                spans[ln] = (cur, t.end[0])
-            cur = None
-    lines = text.splitlines()
-
-    def kind(line):
-        first, last = spans.get(line, (line, line))
-        texts = [comments.get(ln, "") for ln in range(first, last + 1)]
-        ln = first - 1
-        while ln >= 1 and lines[ln - 1].strip().startswith("#"):  # 바로 위 주석 줄 묶음
-            texts.append(lines[ln - 1])
-            ln -= 1
-        m = next((m for m in map(_ENV_MARK.search, texts) if m), None)
-        return m.group(1) if m else None
-
-    return kind
-
-
-def _env_lines(text):
-    """[(줄, 분류 또는 None)] — os.environ·os.getenv·os.environb 토큰이 있는 줄마다(os 별칭·`from os import environ` 이름 포함),
-    그 문장(논리 줄) 안이나 바로 위 주석 줄의 분류 주석."""
-    toks = list(tokenize.generate_tokens(io.StringIO(text).readline))
-    kind = _comment_kinds(text, toks)
-    mods, direct = _os_aliases(text)
-    out, seen = [], set()
-    for i, a in enumerate(toks):
-        if a.type != tokenize.NAME:
-            continue
-        hit = (a.string in mods and i + 2 < len(toks) and toks[i + 1].string == "." and toks[i + 2].string in _ENV_ATTRS) or (
-            a.string in direct and not (i and toks[i - 1].string == ".")
-        )
-        if not hit or a.start[0] in seen:
-            continue
-        seen.add(a.start[0])
-        out.append((a.start[0], kind(a.start[0])))
-    return out
-
-
-# ⑪ 자식 env의 설정 이름: 자식은 env의 설정 이름을 읽지 않는다(settings.yaml·덮기 파일만).
-# 자식 env를 만드는 dict(os.environ 사본·paths.child_env·settings.child_env 결과, subprocess 류의 env= 값)에 설정 칸 이름(호스트 칸 이름
-# 빼고)을 넣거나(dict 리터럴·dict(…, X=)·env[X] = ·update·setdefault) 빼면(pop·del) 효과가 없다 — settings.child_env(base, X=…)
-# (비우기 X=None)·put(X=…)로. os.environ에 쓰는 것도 같다. 라이브러리가 같은 이름의 env를 읽는 자리·시험·호스트 도구(셸 자식)는 분류 주석으로 둔다.
-ENV_NAME_OK_KINDS = ("라이브러리", "시험", "호스트 도구")
+def _os_names(text):
+    """(os 별칭들, from os로 들여온 env 이름들) — 글자 훑기(흐름 분석 아님, e2-23)."""
+    aliases = {"os", "_os", *_OS_ALIAS.findall(text)}
+    direct = set()
+    for items in _FROM_OS.findall(text):
+        for item in items.split(","):
+            parts = item.split()
+            if parts and parts[0] in _ENV_ATTRS:
+                direct.add(parts[-1])  # "environ" 또는 "environ as E"의 E
+    return aliases, direct
 
 
 def _setting_names():
@@ -421,357 +352,70 @@ def _setting_names():
     return S._all_names() - {"RUN_ENV", "SETTINGS_FILE"}
 
 
-_SPAWN = (
-    "Popen",
-    "check_call",
-    "check_output",
-    "gated_popen",
-    "create_subprocess_exec",
-    "create_subprocess_shell",
-    "execve",
-    "execvpe",
-    "spawnve",
-)
-_ENV_FUNCS = (
-    "child_env",
-)  # 자식 env를 돌려주는 함수(paths.child_env·settings.child_env) — 저장소에서 이것을 돌려주는 함수도 더함(_env_funcs)
-
-
-def _scope_nodes(scope):
-    """scope 안 노드 — 안쪽 함수·람다 몸통은 빼고(그 함수는 따로 봄)."""
-    out, todo = [], list(ast.iter_child_nodes(scope))
-    while todo:
-        n = todo.pop()
-        out.append(n)
-        if not isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
-            todo.extend(ast.iter_child_nodes(n))
+def env_lines(text, names=frozenset()):
+    """[(줄, 분류 또는 None, ⑩ env 직접 사용?, ⑪ 설정 이름들)] — ⑩ 코드(주석·문자열 빼고)의 os.environ·os.getenv 등(`os.`·`_os.`·`import os as X`의 `X.` 뒤, `from os import environ[ as E]`의 E),
+    ⑪ env가 든 줄의 설정 이름 글자(_NAME_SET). 분류 주석은 그 문장(논리 줄) 안이나 바로 위 주석 줄에서 찾는다."""
+    lines, out = text.splitlines(), []
+    toks = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    aliases, direct = _os_names(text)
+    start, hits = None, set()
+    for i, t in enumerate(toks):
+        if start is None and t.type not in _NON_CODE:
+            start = t.start[0]
+        after_dot = i > 0 and toks[i - 1].string == "."
+        if t.type == tokenize.NAME and (
+            (t.string in _ENV_ATTRS and after_dot and i > 1 and toks[i - 2].string in aliases)
+            or (t.string in direct and not after_dot)  # from os import environ[ as E] — 들여온 줄과 쓰는 줄
+        ):
+            hits.add(t.start[0])
+        if t.type != tokenize.NEWLINE or start is None:
+            continue
+        found = {}
+        for ln in range(start, t.end[0] + 1):
+            code = lines[ln - 1].split("#")[0]
+            ns = {n for m in _NAME_SET.findall(code) for n in m if n in names} if "env" in code else set()
+            if ns:
+                found[ln] = ns
+        if hits or found:
+            top = start
+            while top > 1 and lines[top - 2].strip().startswith("#"):  # 바로 위 주석 줄 묶음
+                top -= 1
+            m = _ENV_MARK.search("\n".join(lines[top - 1 : t.end[0]]))
+            out += [(ln, m.group(1) if m else None, ln in hits, found.get(ln, set())) for ln in sorted(hits | set(found))]
+        start, hits = None, set()
     return out
 
 
-def _call_name(n):
-    f = n.func
-    return f.attr if isinstance(f, ast.Attribute) else f.id if isinstance(f, ast.Name) else None
-
-
-def _flat_targets(targets):
-    """대입 대상 — `a["X"], a["Y"] = …`·`[a, b] = …`의 안쪽까지."""
-    for t in targets:
-        if isinstance(t, (ast.Tuple, ast.List)):
-            yield from _flat_targets(t.elts)
-        else:
-            yield t
-
-
-def _assign_parts(n):
-    """(대상들, 값) — Assign·AnnAssign(값 있음)만, 그 밖은 None."""
-    if isinstance(n, ast.Assign):
-        return list(_flat_targets(n.targets)), n.value
-    if isinstance(n, ast.AnnAssign) and n.value is not None:
-        return [n.target], n.value
-    return None
-
-
-class _EnvScope:
-    """한 함수(또는 모듈) 안 — 어떤 값이 자식 env인가. 자식 env = os.environ(별칭 포함)·그 사본·자식 env 함수(child_env·그것을 돌려주는 저장소
-    함수 — import 별칭 포함) 결과·{**env, …}·dict(env, …)·subprocess 류 env= 값. 이름은 줄 순서로 본다 — 같은 이름에 다른 값(설정 칸 사전 등 —
-    validation/e2e Names)을 다시 대입하면 그 뒤로는 자식 env가 아님."""
-
-    def __init__(self, scope, aliases, funcs):
-        """aliases = (os 이름들, os에서 바로 가져온 이름들, subprocess 이름들, subprocess에서 바로 가져온 run·call). funcs는 같은 집합 객체를
-        계속 보므로(_env_funcs가 키움) 한 번 만든 scope를 패스마다 다시 쓴다."""
-        (self.mods, self.direct, self.sub_mods, self.sub_direct), self.funcs = aliases, funcs
-        self.nodes = _scope_nodes(scope)
-        self.assigns = {}  # 이름 → [(줄, 값 노드)]
-        self.stores = {}  # 이름 → [값 노드] — `_C[k] = 값`(캐시 감싸개: `return dict(_C[k])`)
-        self.consts = {}  # for 변수 → 글자 상수들(for k in ("A", "B"): env.pop(k))
-        args = getattr(scope, "args", None)  # 함수·람다 매개변수 — `{**base, "X": …}`의 base
-        self.params = {a.arg for a in (args.posonlyargs + args.args + args.kwonlyargs)} if args is not None else set()
-        for n in self.nodes:
-            parts = _assign_parts(n)
-            if parts:
-                for t in parts[0]:
-                    if isinstance(t, ast.Name):
-                        self.assigns.setdefault(t.id, []).append((n.lineno, parts[1]))
-                    elif isinstance(t, ast.Subscript) and isinstance(t.value, ast.Name):
-                        self.stores.setdefault(t.value.id, []).append(parts[1])
-            elif isinstance(n, ast.For) and isinstance(n.target, ast.Name) and isinstance(n.iter, (ast.Tuple, ast.List, ast.Set)):
-                self.consts.setdefault(n.target.id, []).extend(e.value for e in n.iter.elts if isinstance(e, ast.Constant))
-        for v in self.assigns.values():
-            v.sort(key=lambda lv: lv[0])  # _scope_nodes는 줄 순서가 아님
-        self.spawned = {
-            kw.value.id
-            for n in self.nodes
-            if isinstance(n, ast.Call) and self.spawns(n)
-            for kw in n.keywords
-            if kw.arg == "env" and isinstance(kw.value, ast.Name)
-        }
-
-    def spawns(self, n):
-        cn = _call_name(n)
-        f = n.func
-        return (
-            cn in _SPAWN
-            or (cn in ("run", "call") and isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) and f.value.id in self.sub_mods)
-            or (isinstance(f, ast.Name) and f.id in self.sub_direct)
-        )
-
-    def is_environ(self, n):
-        return (
-            isinstance(n, ast.Attribute) and n.attr in ("environ", "environb") and isinstance(n.value, ast.Name) and n.value.id in self.mods
-        ) or (isinstance(n, ast.Name) and n.id in self.direct)
-
-    def is_env_name(self, name, line, depth=0):
-        """그 줄에서 name이 자식 env인가 — 그 줄 전 마지막 대입 값으로(대입이 없으면 — 매개변수 — subprocess 류 env=로 넘기는지로)."""
-        prev = [v for ln, v in self.assigns.get(name, ()) if ln < line]
-        if prev:
-            return self.origin(prev[-1], line, depth + 1)
-        return name in self.spawned
-
-    def origin(self, e, line, depth=0):
-        if depth > 20:
-            return False
-        if self.is_environ(e):
-            return True
-        if isinstance(e, ast.Name):
-            return self.is_env_name(e.id, line, depth)
-        if isinstance(e, ast.Call):
-            cn = _call_name(e)
-            if cn in self.funcs:
-                return True
-            if cn == "copy" and isinstance(e.func, ast.Attribute):
-                return self.origin(e.func.value, line, depth + 1)
-            if cn == "dict" and e.args:
-                return self.origin(e.args[0], line, depth + 1)
-            if cn == "get" and isinstance(e.func, ast.Attribute):  # 캐시 감싸개 `_C.get(k)`
-                return self.stored_env(e.func.value, line, depth)
-        if isinstance(e, ast.Subscript):  # 캐시 감싸개 `_C[k]`
-            return self.stored_env(e.value, line, depth)
-        if isinstance(e, ast.Dict):
-            return any(k is None and (self.origin(v, line, depth + 1) or self.bare_param(v)) for k, v in zip(e.keys, e.values))
-        return False
-
-    def stored_env(self, c, line, depth):
-        """c가 자식 env를 담는 사전인가(`c[k] = <자식 env>`가 이 scope에 있음)."""
-        return isinstance(c, ast.Name) and any(self.origin(v, line, depth + 1) for v in self.stores.get(c.id, ()))
-
-    def bare_param(self, v):
-        """`{**base, "X": …}`의 base가 대입 없는 매개변수인가 — 이름을 넣는 사전은 자식 env로 본다(호출자가 os.environ을 넘길 수 있음)."""
-        return isinstance(v, ast.Name) and v.id in self.params and v.id not in self.assigns
-
-    def env_target(self, n, line):
-        return self.is_environ(n) or (isinstance(n, ast.Name) and self.is_env_name(n.id, line))
-
-    def key_names(self, k):
-        if isinstance(k, ast.Constant):
-            return [k.value]
-        if isinstance(k, ast.Name):
-            return self.consts.get(k.id, [])
-        return []
-
-    def hits(self):
-        """[(노드, 이름, 꼴)] — 자식 env에 넣거나 빼는 글자 이름."""
-        out = []
-
-        def keys(d, node, how):
-            for k, v in zip(d.keys, d.values):
-                if isinstance(k, ast.Constant):
-                    out.append((node, k.value, how))
-                elif k is None and isinstance(v, ast.Dict):  # {**os.environ, **{"X": …}}
-                    keys(v, node, how)
-
-        def env_value(v, node):
-            if isinstance(v, ast.Dict):
-                keys(v, node, "dict")
-            elif isinstance(v, ast.Call) and _call_name(v) == "dict":
-                out.extend((node, kw.arg, "dict(…, X=)") for kw in v.keywords)
-                for a in v.args:
-                    if isinstance(a, ast.Dict):
-                        keys(a, node, "dict")
-
-        for n in self.nodes:
-            line = getattr(n, "lineno", 0)
-            parts = _assign_parts(n)
-            if parts:
-                targets, value = parts
-                named = [t.id for t in targets if isinstance(t, ast.Name)]
-                last_spawned = any(nm in self.spawned and not [1 for ln, _ in self.assigns[nm] if ln > n.lineno] for nm in named)
-                if named and (self.origin(value, line) or last_spawned):
-                    env_value(value, n)  # 자식 env 사본 대입(또는 subprocess 류 env=로 넘기는 마지막 대입)
-                for t in targets:
-                    if isinstance(t, ast.Subscript) and self.env_target(t.value, line):
-                        out.extend((t, k, "env[X] =") for k in self.key_names(t.slice))
-            elif isinstance(n, ast.AugAssign) and isinstance(n.op, ast.BitOr) and self.env_target(n.target, line):
-                env_value(n.value, n)  # env |= {...}
-            elif isinstance(n, ast.Delete):
-                for t in n.targets:
-                    if isinstance(t, ast.Subscript) and self.env_target(t.value, line):
-                        out.extend((t, k, "del") for k in self.key_names(t.slice))
-            elif isinstance(n, ast.Call):
-                for kw in n.keywords:
-                    if kw.arg == "env" and self.spawns(n):
-                        env_value(kw.value, n)
-                cn = _call_name(n)
-                f = n.func
-                if (
-                    isinstance(f, ast.Attribute)
-                    and f.attr in ("putenv", "unsetenv")
-                    and isinstance(f.value, ast.Name)
-                    and f.value.id in self.mods
-                ) or (isinstance(f, ast.Name) and f.id in self.direct and f.id in ("putenv", "unsetenv")):  # os.putenv·unsetenv
-                    if n.args:
-                        out.extend(
-                            (n, k, "putenv" if (f.attr if isinstance(f, ast.Attribute) else f.id) == "putenv" else "del")
-                            for k in self.key_names(n.args[0])
-                        )
-                elif cn in self.funcs:  # paths.child_env(extra)·settings.child_env(base, …)의 위치 인자 dict(설정 이름은 키워드로만)
-                    for a in n.args:
-                        if isinstance(a, ast.Dict):
-                            keys(a, n, "child_env 위치 인자")
-                    for kw in n.keywords:  # paths.child_env(extra={…}) 키워드 꼴
-                        if kw.arg == "extra" and isinstance(kw.value, ast.Dict):
-                            keys(kw.value, n, "child_env extra=")
-                elif cn == "dict" and n.args and self.origin(n.args[0], line):
-                    env_value(n, n)
-                elif (
-                    isinstance(n.func, ast.Attribute)
-                    and cn in ("pop", "setdefault", "update", "__setitem__")
-                    and self.env_target(n.func.value, line)
-                ):
-                    if cn == "update":
-                        out.extend((n, kw.arg, "update") for kw in n.keywords)
-                        for a in n.args:
-                            if isinstance(a, ast.Dict):
-                                keys(a, n, "update")
-                    elif n.args:
-                        out.extend((n, k, cn) for k in self.key_names(n.args[0]))
-            elif isinstance(n, ast.Dict) and self.origin(n, line):
-                keys(n, n, "dict")
-        return out
-
-    def returns_env(self):
-        return any(isinstance(n, ast.Return) and n.value is not None and self.origin(n.value, n.lineno + 1) for n in self.nodes)
-
-
-class _EnvFile:
-    """파일 하나 — scope(모듈·함수)마다 _EnvScope를 한 번만 만들고, 자식 env 함수 이름(funcs + import 별칭)은 같은 집합 객체를 키운다."""
-
-    def __init__(self, tree):
-        info = _file_info(tree)
-        self.tree, self.fa, self.imports = tree, set(_ENV_FUNCS), info["imports"]
-        self.scopes = [(s, _EnvScope(s, info["aliases"], self.fa)) for s in [tree] + info["funcs"]]
-
-    def update(self, funcs):
-        """funcs + `from m import child_env as settings_env` 같은 import 별칭."""
-        self.fa |= funcs | {alias for name, alias in self.imports if name in funcs}
-
-
-def _env_funcs(files):
-    """저장소에서 자식 env를 돌려주는 함수 이름(child_env + 그것을 돌려주는 함수 — 몇 단 사슬까지). files: [_EnvFile]."""
-    funcs = set(_ENV_FUNCS)
-    cands = [
-        (f, s, sc)
-        for f in files
-        for s, sc in f.scopes
-        if isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and any(isinstance(n, ast.Return) and n.value is not None for n in sc.nodes)
-    ]
-    for _ in range(4):
-        for f in files:
-            f.update(funcs)
-        found = {s.name for _, s, sc in cands if s.name not in funcs and sc.returns_env()}
-        if not found:
-            break
-        funcs |= found
-    for f in files:
-        f.update(funcs)
-    return funcs
-
-
-def _child_env_names(ef, kind, names):
-    """[(줄, 이름, 꼴)] — 자식 env dict·os.environ에 설정 이름을 넣거나 빼는 자리(분류 주석 ENV_NAME_OK_KINDS 줄 빼고).
-    ef = _EnvFile(_env_funcs를 거친 것), kind = 줄 → 분류 함수를 돌려주는 함수(필요할 때만 토큰화), names = 설정 이름 묶음."""
-    hits, kinds = set(), None
-    for _, sc in ef.scopes:
-        for node, name, how in sc.hits():
-            if not isinstance(name, str) or name not in names:
-                continue
-            kinds = kinds or kind()
-            if kinds(node.lineno) not in ENV_NAME_OK_KINDS:
-                hits.add((node.lineno, name, how))
-    return sorted(hits)
-
-
-def child_env_violations(root=None, names=None):
-    """⑪ — 저장소 .py 전부(⑩과 같은 범위·예외 자리)에서 자식 env·os.environ에 설정 이름을 넣거나 빼는 자리."""
+def env_violations(root=None, names=None):
+    """⑩·⑪ — 앱 코드 .py 전부(output·__pycache__ 빼고)."""
     root = Path(root) if root else ROOT
     names = _setting_names() if names is None else names
-    files = []
-    for f in sorted(root.rglob("*.py")):
-        rel = f.relative_to(root).as_posix()
-        if rel.startswith(_ENV_SKIP) or "__pycache__" in rel or "/output/" in f"/{rel}":
-            continue
-        text = f.read_text(encoding="utf-8")
-        if "env" not in text:
-            continue
-        try:
-            tree = ast.parse(text)
-        except SyntaxError:
-            continue  # 구문 오류는 check()가 따로 알림
-        files.append((rel, text, _EnvFile(tree)))
-    _env_funcs([ef for _, _, ef in files])
     bad = []
-    for rel, text, ef in files:
-        for ln, name, how in _child_env_names(ef, lambda text=text: _comment_kinds(text), names):
-            bad.append(
-                f"{rel}:{ln}: 자식 env·os.environ에 설정 이름 {name}({how}) — 자식은 env의 설정 이름을 안 읽음, "
-                f"settings.child_env(base, {name}=…)·put({name}=…)로(None = 비움). 같은 이름의 env를 읽는 라이브러리·시험·호스트 도구면 "
-                f"분류 주석 `env 남김 — <{'·'.join(ENV_NAME_OK_KINDS)}>`(⑪ S7e3)"
-            )
+    for d in _APP_DIRS:
+        for f in sorted((root / d).rglob("*.py")):
+            rel = f.relative_to(root).as_posix()
+            if "__pycache__" in rel or "/output/" in f"/{rel}":
+                continue
+            try:
+                rows = env_lines(f.read_text(encoding="utf-8"), names)
+            except (tokenize.TokenError, SyntaxError):
+                continue  # 구문 오류는 check()가 따로 알림
+            for ln, kind, used, found in rows:
+                if used and kind is None:
+                    bad.append(
+                        f"{rel}:{ln}: os.environ 직접 사용 — 설정 값은 settings.yaml(cfg()·put·child_env)로, 남겨야 하면 분류 주석 "
+                        f"`env 남김 — <{'·'.join(ENV_KINDS)}>`(⑩)"
+                    )
+                for name in sorted(found) if kind not in ENV_NAME_OK_KINDS else ():
+                    bad.append(
+                        f"{rel}:{ln}: 자식 env에 설정 이름 {name} — 자식은 env의 설정 이름을 안 읽음, settings.child_env(base, {name}=…)·"
+                        f"put({name}=…)로. 같은 이름의 env를 읽는 라이브러리·시험·호스트 도구면 분류 주석 `env 남김 — <{'·'.join(ENV_NAME_OK_KINDS)}>`(⑪)"
+                    )
     return bad
-
-
-def env_reads(root=None):
-    """⑩ — [(경로, 줄, 분류)] 저장소의 .py 전부(_ENV_SKIP·__pycache__ 빼고)."""
-    root = Path(root) if root else ROOT
-    rows = []
-    for f in sorted(root.rglob("*.py")):
-        rel = f.relative_to(root).as_posix()
-        if rel.startswith(_ENV_SKIP) or "__pycache__" in rel or "/output/" in f"/{rel}":
-            continue
-        text = f.read_text(encoding="utf-8")
-        if "os." not in text:
-            continue
-        try:
-            found = _env_lines(text)
-        except (tokenize.TokenError, IndentationError, SyntaxError):
-            continue
-        rows += [(rel, ln, kind) for ln, kind in found]
-    return rows
-
-
-def env_violations(root=None):
-    return [
-        f"{rel}:{ln}: os.environ 직접 사용 — 설정 값은 settings.yaml(cfg()·put·child_env)로, 남겨야 하면 분류 주석 "
-        f"`env 남김 — <{'·'.join(ENV_KINDS)}>`(⑩ S7e2)"
-        for rel, ln, kind in env_reads(root)
-        if kind is None
-    ]
-
-
-def env_report(root=None):
-    from collections import Counter
-
-    rows = env_reads(root)
-    by = Counter((kind or "분류 없음") for _, _, kind in rows)
-    out = [f"os.environ 남은 줄 {len(rows)}개(⑩ — 토큰 기준):"]
-    out += [f"  {n:4d}  {k}" for k, n in sorted(by.items(), key=lambda kv: -kv[1])]
-    return out
 
 
 if __name__ == "__main__":
     utf8_stdout()
     errs = check()
-    if "--env-report" in sys.argv:
-        print("\n".join(env_report()))
     print("모듈 경계 통과" if not errs else "모듈 경계 위반:\n- " + "\n- ".join(errs))
     sys.exit(1 if errs else 0)

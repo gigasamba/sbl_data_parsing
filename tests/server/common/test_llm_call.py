@@ -6,7 +6,7 @@ import threading
 import time
 
 import common.ai.llm as M
-from common.ai.llm import ModelUnavailable, complete, schema_stats
+from common.ai.llm import ModelUnavailable, complete
 
 
 def selftest():
@@ -210,33 +210,25 @@ def selftest():
     srvA, hitsA = _schema_server(["이건 JSON이 아님", valid])
     try:
         with COMMON.env(VLM_BASE_URL=f"http://127.0.0.1:{srvA.server_address[1]}/v1", VLM_MODEL="mock"):
-            before = schema_stats()
             text, _u = complete("vlm", [{"role": "user", "content": "x"}], agent="nested_figure")
             assert text == valid and len(hitsA) == 2, (text, hitsA)
             assert _u.get("prompt_tokens") == 2 and _u.get("completion_tokens") == 2 and _u.get("calls") == 2, _u  # 두 호출 합산
-            after = schema_stats()
-            assert after["invalid"] == before["invalid"] + 1 and after["retry_ok"] == before["retry_ok"] + 1
     finally:
         srvA.shutdown()
 
     srvB, hitsB = _schema_server(["여전히 JSON 아님"])
     try:
         with COMMON.env(VLM_BASE_URL=f"http://127.0.0.1:{srvB.server_address[1]}/v1", VLM_MODEL="mock"):
-            before = schema_stats()
             text, _u = complete("vlm", [{"role": "user", "content": "x"}], agent="nested_figure")
             assert text == "여전히 JSON 아님" and len(hitsB) == 2, (text, hitsB)  # 재요청 1회(2차도 깨짐) — 그대로 반환(호출부 기본값 처리)
-            after = schema_stats()
-            assert after["invalid"] == before["invalid"] + 1 and after["retry_failed"] == before["retry_failed"] + 1
     finally:
         srvB.shutdown()
 
     srvC, hitsC = _schema_server([valid])
     try:
         with COMMON.env(VLM_BASE_URL=f"http://127.0.0.1:{srvC.server_address[1]}/v1", VLM_MODEL="mock"):
-            before = schema_stats()
             text, _u = complete("vlm", [{"role": "user", "content": "x"}], agent="nested_figure")
             assert text == valid and len(hitsC) == 1, (text, hitsC)  # 1차부터 정상 — 재요청 없음(호출 1회)
-            assert schema_stats() == before
     finally:
         srvC.shutdown()
     print(

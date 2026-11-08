@@ -1,6 +1,5 @@
 """명령 인자 `--set 이름=값`(여러 번) — 한 번 실행에만 설정 칸 몇 개를 바꿔 돌린다. 서버에서도 쓴다.
-앱은 env에서 설정을 읽지 않으므로 `X=값 python …`은 효과가 없다 — 대신 이것을 쓴다. 덮기 파일 도구
-`common.config.overrides`는 그대로 PC 전용이다.
+앱은 env에서 설정을 읽지 않으므로 `X=값 python …`은 효과가 없다 — 대신 이것을 쓴다(모든 진입점 — `mcp_server.main`·`ask` 포함).
 
   python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/_docflow/7 --set PARSE_POST=supsub,charts parse --source …
 

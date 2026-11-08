@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""파이프라인 진입점 — 두 단계를 나눠 부른다(요청 문장 → 명령 대응표는 AGENTS.md "요청 → 명령").
+"""파이프라인 진입점.
 
 단계 2 · 고정 스택(정해진 기술로 실제 파이프라인 + 기본 테스트)
   show-stack  지금 엔진 구성(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 오버레이 패치 —
                   docs/architecture/resources.md §1)
   parse           파싱 모듈 1회(run_pipeline이 문서마다 부름) — 끝 표시 _rep/_DONE.json
   (서버 입구는 run_pipeline 하나 — 구조화·적재는 run_pipeline이 모듈을 직접 부름. 검색 명령은 python -m mcp_server.cli.ask)
-산출 위치: output/parse(파싱) · output/parse/_rep(대표) · output/edw/bundle(구조화) · output/report(보고서) · output/stack_test.md
+산출 위치: output/parse(파싱) · output/parse/_rep(대표) · output/edw/bundle(구조화) · output/report(보고서)
 """
 
 import common  # noqa: F401 — 설정 파일 검사(settings.pin_env)를 첫 줄에서
@@ -50,7 +50,7 @@ def show_stack(a=None):
     print("| 형식 | 파싱 엔진(우선순위) |\n|---|---|")
     for f, es in sorted(st["parse"].items()):
         print(f"| {f} | {' → '.join(es)} |")
-    print(f"청킹 {st['chunk']} · 임베딩 {st['embed']} · 검색 {st['retrieve']} · 상위 k {st['k']}")
+    print(f"청킹 {st['chunk']} · 임베딩 {st['embed']}")
 
 
 # ── 파싱 모듈(run_pipeline이 문서마다 부름) ──────────
@@ -184,23 +184,32 @@ def case_env(mod):
         blank: dict[str, str | None] = {
             **dict.fromkeys(("LLM_BASE_URL", "VLM_BASE_URL", "EMBED_BASE_URL", "LLM_BUDGET_USD")),
             **dict.fromkeys(("LLM_ALLOW_EXTERNAL", "VLM_ALLOW_EXTERNAL", "EMBED_ALLOW_EXTERNAL"), "0"),  # 외부 전송 늘 끔
+            "APPLOG_DB_ENABLED": "0",  # 판정 시험은 서버 applog에 로그를 쓰지 않음(e2-22 — 운영 DB는 읽기만)
             # 하루 장부를 시험마다 따로 — 개발자의 output/_llm_spend 장부에 섞이지 않게
             "LLM_SPEND_FILE": str(Path(tempfile.mkdtemp(prefix="selftest_spend_")) / "spend.txt"),
         }
         base = child_env({"PYTHONUTF8": "1"})
-        if own:  # PC — 개발자 루트 settings.yaml(실 PG·모델 키) 대신 시험 전용 최소 설정 위에 덮음(시험 격리)
+        if own:  # PC — 개발자 루트 settings.yaml(모델 키 등) 대신 시험 전용 최소 설정 위에 덮음(시험 격리) · PG 접속·시험 PG 컨테이너 이름만 이어받음(DB 사례는 진짜 pgvector — e2-22)
             base["SETTINGS_FILE"] = _case_settings()
+            pg = C.cfg().connections.pg
+            got = dict(PG_HOST=pg.host, PG_PORT=pg.port, PG_DB=pg.db, PG_USER=pg.user, PG_PASSWORD=C.reveal(pg.password))
+            blank.update({k: None if v is None else str(v) for k, v in got.items()})
         _CASE_ENVS[(fake, own)] = C.child_env(base, LLM_FAKE="1" if fake else None, **blank)
     return dict(_CASE_ENVS[(fake, own)])
 
 
 def _case_settings():
-    """PC 시험 사례의 바탕 설정 파일 — run_env: local만(접속·키 없음 → 정형 저장소는 SQLite, 모델 호출 없음). 한 번 만든다."""
+    """PC 시험 사례의 바탕 설정 파일 — run_env: local + 시험 PG 컨테이너 이름(꺼져 있으면 pgcase가 띄움)만(키 없음 → 모델 호출
+    없음 · PG 접속은 case_env가 덮음). 한 번 만든다."""
     if "file" not in _CASE_ENVS:
+        import json
         import tempfile
 
         fd, path = tempfile.mkstemp(prefix="case_settings_", suffix=".yaml")
-        os.write(fd, b"required:\n  env:\n    run_env: local\n")
+        body = "required:\n  env:\n    run_env: local\n"
+        if name := C.cfg().host.pg_container:
+            body += f"  deploy:\n    pg_container_name: {json.dumps(name)}\n"
+        os.write(fd, body.encode("utf-8"))
         os.close(fd)
         _CASE_ENVS["file"] = path
     return _CASE_ENVS["file"]
@@ -267,7 +276,9 @@ def selftest(a):
         miss = re.findall(r"ModuleNotFoundError: No module named '(pipeline|mcp_server)['.]", out)
         if r.returncode != 0 and miss and all(_image_lacks(m) for m in set(miss)):
             return (mod, "SKIP", f"다른 이미지 모듈 필요({', '.join(sorted(set(miss)))})")
-        return (mod, "PASS" if r.returncode == 0 else "FAIL", "" if r.returncode == 0 else out[-1500:])
+        if r.returncode != 0:
+            return (mod, "FAIL", out[-1500:])
+        return (mod, "PASS", " · ".join(re.findall(r"^\[시험\] SKIP \S+?\.(test_\w+)", r.stdout, re.M)))  # 시험 함수 SKIP(운영 DB 쓰기 등)
 
     # 사례는 서로 다른 자식 프로세스라 함께 돌림(쓸 수 있는 CPU 수, 많아도 8개) — map은 순서를 지켜 표는 그대로
     for mod, _ in cases:  # 덮기 파일 캐시(_CASE_ENVS)를 먼저 채움 — 스레드가 같은 파일을 두 번 만들지 않게
@@ -276,13 +287,15 @@ def selftest(a):
         rows += pool.map(run_case, cases)
     fails = [name for name, status, _ in rows if status == "FAIL"]
     skips = sum(1 for _, status, _ in rows if status == "SKIP")
+    fn_skips = sum(len(detail.split(" · ")) for _, status, detail in rows if status == "PASS" and detail)
     for name, status, detail in rows:
-        print(f"{status:4} {name}" + (f"  ({detail})" if status == "SKIP" else ""))
+        print(f"{status:4} {name}" + (f"  ({'SKIP ' if status == 'PASS' else ''}{detail})" if status != "FAIL" and detail else ""))
         if status == "FAIL":
             print("     " + detail.replace("\n", "\n     "))
     print(
         f"\n{len(rows) - len(fails) - skips}/{len(rows) - skips} 통과"
         + (f" · SKIP {skips}" if skips else "")
+        + (f" · 시험 함수 SKIP {fn_skips}" if fn_skips else "")
         + (f" · FAIL {len(fails)}: {', '.join(fails)}" if fails else "")
     )
     if fails:
