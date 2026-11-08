@@ -25,7 +25,7 @@ HEAD = """# settings.sample.yaml — 설정 파일 구조와 설명. 생성: pyt
 #   [필수 · 언제(어느 앱)] — 언제 = 모두·local(PC)·dev·prd(서버), 앱 = pipeline·mcp·호스트 스크립트. [선택] = 비워도 됨. [비밀] = settings.yaml에만(출력·로그에 안 나옴).
 #   각 앱은 자기 칸만 읽는다(pipeline: required·common·extract·transform·load·ops·dev · mcp: required·common·search·ops·dev — tuning은 둘 다).
 #   같은 칸 두 번·모르는 칸·옛 이름(자리가 다른 칸)은 시작 거부(칸 이름만 알림 — 옛 자리면 새 자리를 알려 줌).
-#   한 번만 몇 칸 바꿀 때: --set 이름=값·덮기 파일(python -m common.config.overrides). 옛 env 이름 → 자리: python -m common.config.sample --where <이름>.
+#   한 번만 몇 칸 바꿀 때: --set 이름=값. 옛 env 이름 → 자리: python -m common.config.sample --where <이름>.
 """
 # 역할 절 안 세부 카테고리 — (제목, 파일 자리 접두어들). 앞에서부터 처음 맞는 것. 안 드는 칸이 있으면 build가 멈춘다(새 칸이면 여기도).
 CATEGORIES = {

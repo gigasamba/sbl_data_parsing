@@ -7,7 +7,7 @@
 - pl-25 DB 스키마 명세 — dev: 검색 DB(gold — 처리 기록 `doc` 칸 판 0006 포함)·마스터·applog는 구현됨, 서버 판 올리기·ParsingMeta 기록 옮기기는 DB 담당자 승인·실행 대기(refactor.md C-107).
 - 열린 요건(todo): run_pipeline 지휘만 [rn-05](prd/ops.md#rn-05) · 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 확장자 `.hwp` [pl-45](prd/transform.md#pl-45) · 그림 부가 기능 줄이기 [pl-05](prd/transform.md#pl-05) · 전체 e2e [pl-54](prd/ops.md#pl-54) · prd 이미지에 settings.yaml 굽기 [op-12](prd/doc.md#op-12) · 판 묶기(잠재 문제) [pl-56](prd/load.md#pl-56).
 - 서버 확인만 남음(dev): parse_document CPU 우선 [rn-03](prd/ops.md#rn-03).
-- 정리·구조(todo, 사용자 11-08): 안 문서 기록 [pl-65](prd/extract.md#pl-65) · 옛 오피스 검사기 [pl-66](prd/extract.md#pl-66) · 대표 결과 교차 병합 [pl-67](prd/transform.md#pl-67) · 실버 먼저 적재 [pl-68](prd/load.md#pl-68) · 설정 칸 [op-18](prd/ops-settings.md#op-18) · DB 시험 [e2-22](prd/test.md#e2-22) · 경계 점검 [e2-23](prd/test.md#e2-23).
+- 정리·구조(todo, 사용자 11-08): 안 문서 기록 [pl-65](prd/extract.md#pl-65) · 옛 오피스 검사기 [pl-66](prd/extract.md#pl-66) · 대표 결과 교차 병합 [pl-67](prd/transform.md#pl-67) · 실버 먼저 적재 [pl-68](prd/load.md#pl-68) · DB 시험 [e2-22](prd/test.md#e2-22) · 경계 점검 [e2-23](prd/test.md#e2-23).
 - 시험 정리(todo): [e2-13](prd/test.md#e2-13) · [e2-20](prd/test.md#e2-20).
 
 ## 수집 (extract) — 서버에서 문서 목록을 정하고 받아 오기까지
@@ -177,7 +177,7 @@
 | run_pipeline 명령은 아무도 안 읽는 env(`FIG_OCR_BUDGET`·`SERVICE_MASTER_CSV`·`DIVISION_MASTER_CSV`·`PROD_MASTER_CSV`)를 넘기지 않는다 | C-51 | done | [pl-30](prd/ops-settings.md#pl-30) |  |
 | 서버 러너의 컨테이너 명령은 한 도우미가 만든다(`docker exec` · `PYTHONPATH` · 라이브러리 env 같게) · 게시·구조화가 시간 초과면 그 문서의 컨테이너 안 프로세스도 끈다 · 벌 번호 규칙은 한 곳 · 스캔 회전 정책은 설정 칸 하나를 컨테이너가 직접 읽는다 · 레인 분류는 받기 단계 안에서(문서마다 따로 `docker exec` 없음) · 분류 캐시는 덧붙여 쓴다 | 명령마다 env가 다르면 같은 코드가 다르게 돈다. 끄지 않은 프로세스는 다음 문서와 CPU·메모리를 다툰다 | todo | [rn-09](prd/ops.md#rn-09) | 한 도우미·시간 초과 정리는 반영. 스캔 회전 값이 run_pipeline → `stage --no-scan-rotate` → `stage_batch(scan_rotate)` → `filter_and_rotate --no-scan-rotate` 네 겹으로 전달. 분류는 문서마다 `docker exec`, 캐시는 문서마다 파일 전체를 다시 씀 |
 | 문서 1건의 반복 비용을 줄인다 — 원본 sha256은 한 번만 구하고 넘겨 씀 · 적재의 스키마 확인 질의는 하나(UNION) · 설정 파일은 프로세스마다 한 번 읽음 · `--set` 처리(`setarg.apply`)는 무거운 import 전에 | 문서 수천 건에서 같은 일을 되풀이하지 않는다 | todo | [rn-10](prd/ops.md#rn-10) | sha256은 받기가 한 번 구해 manifest로 넘기고 중복 제외·거르기·파싱·구조화·게시가 씀 — 대표 결과(`contract.source_record`, 핸드오프 파일)만 다시 구함. `pgvector_load`가 원천 스키마마다 따로 묻는다. 측정 전 — 줄일 크기는 `perf_report`로 먼저 잰다 |
-| 코드가 읽지 않는 설정 칸은 없다 — 지운 칸은 판 올리기 안내(upgrade-guide)에 적고 서버 `settings.yaml`에서도 지운다. PC 덮어쓰기 설정 파일 도구는 없다 — 한 번만 다른 값은 모든 진입점(`mcp_server.main`·`ask` 포함)의 `--set` | 사용자 11-08 | todo | [op-18](prd/ops-settings.md#op-18) | 지금 남은 칸: 건너뜀 기록 위치(`skipped_log`)·받기 동시 개수 2개·내용 버전 칸 이름·구성 파일 `retrieve`·`k` · `mcp_server.main`·`ask`는 `--set` 없이 `common.config.overrides`를 씀 |
+| 코드가 읽지 않는 설정 칸은 없다 — 지운 칸은 판 올리기 안내(upgrade-guide)에 적고 서버 `settings.yaml`에서도 지운다. PC 덮어쓰기 설정 파일 도구는 없다 — 한 번만 다른 값은 모든 진입점(`mcp_server.main`·`ask` 포함)의 `--set` | 사용자 11-08 | done | [op-18](prd/ops-settings.md#op-18) |  |
 
 ## 테스트·평가 (test) — 변경을 어떻게 증명하나
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |

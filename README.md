@@ -151,13 +151,12 @@ pgvector의 표는 코드가 실행 중에 만들지 않는다. 모두 Alembic �
 | 칸별 안내 | [docs/operations/env-guide.md](docs/operations/env-guide.md) |
 | 서버용 파일 | git에 올리지 않는다. `settings.sample.yaml`을 복사해 `required`를 채운다(§5-3 ② "꼭 채울 값"). **PC 파일을 그대로 복사하지 않는다** — PC의 `run_env: local`·`allow_external: true`가 서버에서 외부 모델 호출을 연다 |
 
-**실행할 때 값을 넘기는 방법 3가지**
+**실행할 때 값을 넘기는 방법 2가지**
 
 | 방법 | 언제 | 받는 명령 |
 |---|---|---|
 | **A. settings.yaml에 적기** | 계속 쓸 값 | 모든 명령 |
-| **B. 명령 인자 `--set 이름=값`** | 이번 실행에만(이름은 옛 env 이름). 비밀·호스트 칸은 거부 | `pipeline.cli`·`gold_bundle`·`pgvector_load`·`publish_parse_result` 등 파이프라인 진입점 |
-| **C. 오버레이 설정 파일**(PC 전용) | `--set`을 받지 않는 명령 | `mcp_server.main`·`mcp_server.cli.search_ask` — `SETTINGS_FILE=$(python -m common.config.overrides 이름=값 …)` |
+| **B. 명령 인자 `--set 이름=값`** | 이번 실행에만(이름은 옛 env 이름). 비밀·호스트 칸은 거부 | `pipeline.cli`·`gold_bundle`·`pgvector_load`·`publish_parse_result` 등 파이프라인 진입점, `mcp_server.main`·`mcp_server.cli.search_ask` |
 
 ---
 
@@ -335,11 +334,9 @@ cp valid_env/edw/edw.sqlite $O/edw.sqlite
 .venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle $O/bundle --create-extension
 .venv/bin/python -m pipeline.load.pgvector_load "${SETS[@]}" load --bundle $O/bundle
 
-# ask·MCP는 --set을 받지 않으므로 오버레이 설정 파일(방법 C)로 같은 값을 넘긴다
-SF=$(.venv/bin/python -m common.config.overrides PG_SCHEMA=demo EMBED_ALLOW_EXTERNAL=1 \
-     LLM_BUDGET_USD=0.10 LLM_SPEND_FILE=$O/spend.json MCP_PORT=18769)
-SETTINGS_FILE=$SF .venv/bin/python -m mcp_server.cli.search_ask ask --source CRMS --k 3 --q "<질문>"
-SETTINGS_FILE=$SF nohup .venv/bin/python -m mcp_server.main > $O/mcp.log 2>&1 & echo $! > $O/mcp.pid
+# ask·MCP도 같은 --set을 받는다
+.venv/bin/python -m mcp_server.cli.search_ask "${SETS[@]}" ask --source CRMS --k 3 --q "<질문>"
+nohup .venv/bin/python -m mcp_server.main "${SETS[@]}" --set MCP_PORT=18769 > $O/mcp.log 2>&1 & echo $! > $O/mcp.pid
 ```
 실제 임베딩 호출을 확인하려면 `--set EMBED_CACHE=<빈 sqlite 경로>`를 더한다.
 </details>
@@ -709,7 +706,7 @@ sudo systemctl enable --now podman-restart
 | 바꿀 것 | 방법 |
 |---|---|
 | 설정 값 | settings.yaml을 직접 고치고 `host_ctl.sh up -d --force-recreate …`(서비스 이름 `mcp`, 컨테이너 이름 `mcp-server`) |
-| 이번 실행만 다른 값 | `--set 이름=값`(오버레이 설정 파일 도구는 PC 전용 — 서버에서는 종료 2) |
+| 이번 실행만 다른 값 | `--set 이름=값` |
 | 엔진 구성 | 코드 폴더의 `resources/config/pipeline_stack.json`을 고쳐 코드 폴더 바꾸기(§5-8) — 확인 `show-stack`([resources.md §1](docs/architecture/resources.md)) |
 
 ### 5-8. 새 판 올리기 — 덮어쓰기

@@ -46,7 +46,6 @@ EXCLUDED_FILES = (
     "core/parse_limit.py",  # parse_document 파일 크기 상한 — 서비스 입구만, 인계 내용과 무관
     "core/fingerprint.py",  # 이 파일 자신 — CONTRACT는 따로 버전으로 확인, pipeline_version()은 인계 내용과 무관
     "config/boot.py",  # 컨테이너 시작 설정(entrypoint의 RUN_ENV 관문·셸 칸·라이브러리 env) — 운영 도구
-    "config/overrides.py",  # 덮기 파일 만들기(PC 한 번 실행) — 운영 도구
     "config/setarg.py",  # 명령 인자 --set 이름=값(한 번 실행 덮기, 서버 포함) — 운영 설정, 인계 내용과 무관
     "config/layout.py",  # settings.yaml 칸 자리 ↔ 모델 경로 — 운영 설정, 인계 내용과 무관
     "config/keyscan.py",  # 설정 키 모으기 — 개발 점검 도구, 인계 내용과 무관

@@ -7,7 +7,7 @@ mcp_server/config.py(common + mcp 절). 이 파일은 common 절 모델과 두 �
   · env에서 읽는 것은 신호 둘(RUN_ENV·SETTINGS_FILE)뿐이다. 칸의 env 이름으로 env에 준 값은 읽지 않는다.
     엔진·인계 파일도 설정 객체로 읽는다.
   · 덮기 파일: 최상위 `base:`(다른 설정 파일 경로 — 먼저 읽음)와 `overrides:`({env 이름: 글자|null}, null = 그 칸 비움)만 든
-    작은 yaml. 프로세스 안 put()·자식용 child_env()·PC 한 번 실행용 `python -m common.config.overrides`가 만들고 SETTINGS_FILE로 가리킨다(원본 비밀을
+    작은 yaml. 프로세스 안 put()·자식용 child_env()·명령 인자 `--set`(common.config.setarg)이 만들고 SETTINGS_FILE로 가리킨다(원본 비밀을
     복사하지 않음 — 원본은 base로 가리킴). overrides 값은 env 글자 꼴로 판정한다(켜기 칸 '1'·'0' 등).
   · 모델 기본값 None은 "읽는 코드가 정함"이다: 코드가 계산하는 기본값(경로·CPU 수 등) · 자리마다 다른 기본값 · 있고 없음을 코드가 가르는
     칸 · JSON 칸(없으면 안 붙임).
@@ -985,7 +985,7 @@ def app_classes(names=("pipeline", "mcp")):
     return out
 
 
-# ── 덮기 파일 — 같은 프로세스(put)·자식(child_env)·PC 한 번 실행(common.config.overrides) ─────────────
+# ── 덮기 파일 — 같은 프로세스(put)·자식(child_env)·한 번 실행(--set — common.config.setarg) ─────────────
 _GEN = [0]  # put()이 올림 — 모든 Cache가 다음 get()에서 다시 읽음
 
 
@@ -1025,7 +1025,7 @@ def overlay_file(names, base=None, environ=None):
     """덮기 파일을 만든다 — base(설정 파일 — 없으면 지금 SETTINGS_FILE·로컬 파일)를 가리키고 names({env 이름: 값|None})를 overrides로 든
     yaml을 임시 파일(mktemp — 권한 600)로 쓴다. 원본 내용(비밀)은 복사하지 않는다(base로 가리킴). base가 덮기 파일이면
     그 base·overrides를 이어받아 한 단으로. 지우는 것은 부른 쪽 몫 — put·child_env는 이 프로세스가 끝날 때(exitclean, 자식을 먼저
-    끝낸 뒤), isolated는 블록이 끝날 때, overrides 도구(경로를 다른 프로세스에 넘김)는 안 지움. 반환: 경로."""
+    끝낸 뒤), isolated는 블록이 끝날 때. 반환: 경로."""
     import tempfile
 
     import yaml

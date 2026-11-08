@@ -51,5 +51,8 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    from common.config import setarg
+
+    setarg.apply()  # --set 이름=값(한 번 실행 덮기)
     utf8_stdout()
     main()

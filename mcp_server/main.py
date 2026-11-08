@@ -236,6 +236,9 @@ def serve_http(host, port, token):
 
 
 if __name__ == "__main__":
+    from common.config import setarg
+
+    setarg.apply()  # --set 이름=값(한 번 실행 덮기)
     utf8_stdout()
     if "--stdio" in sys.argv:
         call_log.configure_stdio()

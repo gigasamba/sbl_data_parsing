@@ -102,11 +102,11 @@
 
 <a id="op-18"></a>
 ## op-18 · 안 읽는 설정 칸 없음 · 덮어쓰기는 `--set` 하나
-- 요건: 지운 칸은 upgrade-guide에 적는다(서버 `settings.yaml`에 남으면 모르는 칸으로 시작 거부). `common.config.overrides`는 진입점마다 `--set`을 넣은 뒤 지운다.
-- 반영: 지운 칸 — `extract.skipped_docs_log`(건너뜀 기록은 늘 `<준비 폴더>/_records/skipped.jsonl`) · `extract.secure_doc.secure_doc_passwords_file` · `tuning.extract.source_columns.source_column_content_version` · 구성 파일 `retrieve`·`k`. 남긴 칸 — `extract.source.source_fetch_threads`(`candidate_ready` 받기 스레드)·`ops.run_pipeline.staging.staging_fetch_threads`(서버 러너가 넘김)·`source_column_increment`(증분 판정). 서버에서 지울 줄: [upgrade-guide §5](../operations/upgrade-guide.md#5-설정-고치기) · C-110.
-- Status: todo
+- 요건: 지운 칸은 upgrade-guide에 적는다(서버 `settings.yaml`에 남으면 모르는 칸으로 시작 거부). 한 번만 다른 값은 모든 진입점(`mcp_server.main`·`ask` 포함)의 `--set` 하나다(PC 덮기 파일 도구 없음).
+- 반영: 지운 칸 — `extract.skipped_docs_log`(건너뜀 기록은 늘 `<준비 폴더>/_records/skipped.jsonl`) · `extract.secure_doc.secure_doc_passwords_file` · `tuning.extract.source_columns.source_column_content_version` · 구성 파일 `retrieve`·`k`. 남긴 칸 — `extract.source.source_fetch_threads`(`candidate_ready` 받기 스레드)·`ops.run_pipeline.staging.staging_fetch_threads`(서버 러너가 넘김)·`source_column_increment`(증분 판정). 서버에서 지울 줄: [upgrade-guide §5](../operations/upgrade-guide.md#5-설정-고치기) · C-110. 덮기 파일 도구 `common.config.overrides`를 지웠다 — `mcp_server.main`·`mcp_server.cli.search_ask`가 `--set`을 받는다(시험 `tests/server/mcp/test_mcp_setarg.py`).
+- Status: done
 
 ## 코드와 다른 점 · 지울 코드
 
 ### 요건 없는 코드 — 남길지 지울지
-- 설정 CLI `common/config/`(`export`·`overrides`·`show`), DB 도구 `common/store/db/`, 점검 `common/check/checker.py`(env·services·ping).
+- 설정 CLI `common/config/`(`export`·`setarg`·`show`), DB 도구 `common/store/db/`, 점검 `common/check/checker.py`(env·services·ping).
