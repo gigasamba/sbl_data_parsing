@@ -20,7 +20,7 @@ settings.sample.yaml `load.publish`·`required`). PC는 버킷 `file://<폴더>`
 ④ gold에 이미 끝난 문서는 올리기 전에 걸러 아예 올리지 않는다(`apply()` — 같은 문서의 결과 폴더가 쌓이지 않게). `--reparse` 목록만 예외(새 날짜 폴더).
 ⑥ DRM·파싱 실패(`EXCLUDED_STATUSES`)는 `render_excluded_report()`로 마크다운 보고서만.
 
-상태(parse_status) = ok · partial(교차 정확도 < criteria.json run.cross_acc_full) · failed · skipped_drm(받기가 뺀 원본 — DRM·암호·미지원·깨진 압축, except_docs.PERMANENT) ·
+상태(parse_status) = ok · partial(교차 정확도 < criteria.json run.cross_acc_full) · failed · skipped_document(받기가 뺀 원본 — DRM·암호·미지원·깨진 압축, except_docs.PERMANENT) ·
 skipped_dup(dedup keep.txt에서 빠짐) · not_parsed(이번 파싱 대상 아님). 원본은 게시 뒤 지워지므로 ok·partial도 로컬 원본이 없을 수
 있다 — 그때는 manifest의 "sha256"(candidate_ready가 남김)으로 대체한다(parse_status는 그대로).
 
@@ -52,9 +52,9 @@ _KST = datetime.timezone(datetime.timedelta(hours=9))  # parsed_at 표기(적재
 _CROSS_ACC_FULL = json.loads(CRITERIA_FILE.read_text(encoding="utf-8"))["run"][
     "cross_acc_full"
 ]  # partial 사유 글자도 같은 정본(판정은 parse_scoring이 이미 함)
-STATUSES = ("ok", "partial", "failed", "skipped_drm", "skipped_dup", "not_parsed")
+STATUSES = ("ok", "partial", "failed", "skipped_document", "skipped_dup", "not_parsed")
 DEFAULT_UPLOAD_STATUSES = ("ok", "partial")  # 안전 기본값 — DRM·실패·중복·미파싱은 올리지 않음
-EXCLUDED_STATUSES = ("skipped_drm", "failed")  # ⑥ render_excluded_report()로(실패는 except_doc_info error에도)
+EXCLUDED_STATUSES = ("skipped_document", "failed")  # ⑥ render_excluded_report()로(실패는 except_doc_info error에도)
 SILVER_FILE = "silver.jsonl"  # <out>/publish/ 아래 처리 기록 — 적재가 gold doc 칸으로(pgvector_load --silver)
 
 
@@ -160,10 +160,10 @@ def _local_md_name(row):
 
 
 def status_of(name, rep_by_doc, summary, skipped=None, keep=None):
-    """문서 하나의 파싱 상태 — skipped(이름→사유, filter_and_rotate의 skipped.jsonl — except_docs.PERMANENT로 시작하면 skipped_drm)·
+    """문서 하나의 파싱 상태 — skipped(이름→사유, filter_and_rotate의 skipped.jsonl — except_docs.PERMANENT로 시작하면 skipped_document)·
     keep(dedup keep.txt에 있는 이름 집합, None = dedup 정보 없음 → 전부 포함) 순서로 먼저 걸러진 뒤 대표 결과(rep)를 본다."""
     if skipped and name in skipped and str(skipped[name]).startswith(PERMANENT):
-        return "skipped_drm", skipped[name], None
+        return "skipped_document", skipped[name], None
     if keep is not None and name not in keep:
         return "skipped_dup", "완전 중복으로 제외(dedup keep.txt에 없음)", None
     r = rep_by_doc.get(name)

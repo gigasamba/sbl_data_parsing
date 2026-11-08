@@ -23,7 +23,7 @@
 | 받기 → 중복 제외 → 거르기 순서로 한 번씩(`candidate_ready.stage_batch`). 중복 = 받은 파일 sha256이 같은 묶음 안 다른 파일, 또는 gold `doc.sha256`이 같은 다른 원본 키 — 하나만 파싱하고 나머지는 건너뜀 + `applog.except_doc_info` `skip` `duplicate_sha256`(서버 러너는 건너뜀으로 셈). 건너뛴 문서(중복·DRM·암호·미지원)는 문서마다 `pipe_event` 한 행(`extract.skip`) | 비싼 파싱을 중복하지 않는다(S3 키가 달라도 내용이 같으면 중복). 키마다 메타(고객 등)가 달라 문서는 따로. 남길 사본: 사본 표시 없는 이름 → 최신 → 큰 파일(`deduplication.py` `run_folder()`) | done | [pl-02](prd/extract.md#pl-02) |  |
 | 회전 바로잡기 — 켜면(`extract.prepare.rotate_pages`, 기본 꺼짐) 이미지·스캔 PDF 쪽마다 4방향(0·90·180·270도) OCR 점수를 스레드 4개로 동시에 재 가장 높은 방향으로 돌린다(같으면 0도). 기록 `rotation.csv` | 돌아간 스캔은 엔진이 읽지 못한다. 꺼져 있으면 회전용 OCR을 하지 않는다 | done | [pl-02](prd/extract.md#pl-02) |  |
 | 다시 받아도 파싱할 수 없는 원본(지원 안 하는 확장자·확장자 없음·DRM·암호)과 내용 중복(`duplicate_sha256` — 같은 묶음·같은 밤·끝난 문서)은 `applog.except_doc_info`에 원본 키당 `skip` 한 행(이유·`level` `error`·처음·마지막 시각·횟수)을 남기고, 대상 목록 `candidate_pick list --skip-done`이 그 키를 뺀다 — 받기 전(`rdb_pick`)·받은 뒤(`filter_and_rotate`·중복 제외) 쓴다. 파싱·적재 실패는 `error` 행(기록만 — 다음 실행이 다시 고름, op-17) | 같은 문서를 밤마다 다시 받지 않고 `--max-docs`가 새 문서를 고르게(사용자 11-05). DB 스키마 — 사람 검토 | dev | [pl-58](prd/extract.md#pl-58) | 서버 `migrate up --target applog`(판 0003)·DB 담당 승인 대기(refactor.md C-96) |
-| DRM·암호 파일 감지 — 감지해서 표시만(`skipped_drm`) | 복호화는 하지 않는다 — 수동 명령도 없음(사용자 11-08) | done | [pl-02](prd/extract.md#pl-02) |  |
+| DRM·암호 파일 감지 — 감지해서 표시만(`skipped_document`) | 복호화는 하지 않는다 — 수동 명령도 없음(사용자 11-08) | done | [pl-02](prd/extract.md#pl-02) |  |
 | 압축 원본(zip·tar·tar.gz)은 풀어서 안 파일의 글을 그 문서 본문에 `[파일 …]` 절로 넣는다 — 메일 첨부와 같게(pl-36), 암호·깨짐·안전 상한은 건너뛰고 기록 | zip 안의 문서도 검색되어야 한다(사용자 11-05·11-06) | done | [pl-57](prd/extract.md#pl-57) |  |
 | 문서 안 문서(압축 안 파일·메일 첨부·메일 안 메일·새 형식 오피스 안 개체)는 받기 단계가 준비 폴더 `_parts/`에 깊이 2까지 꺼내 두고, 첨부 단계가 파싱해 본문 끝 `[파일]`·`[첨부]`·`[개체 …]` 절로 붙인다 — 개체는 있던 자리에 위치 표시 | 안의 문서가 같은 길로 검색되게(사용자 11-06). 엔진은 고치지 않음 | done | [pl-63](prd/extract.md#pl-63) |  |
 | 옛 형식(.doc·.xls·.ppt)·PDF·한글(.hwpx) 안 개체도 같은 길로 | pl-63과 같은 이유 | todo | [pl-64](prd/extract.md#pl-64) | 반영 없음 |
@@ -85,7 +85,7 @@
 | 이름 있는 색인 비교 예시(`index_a`·`index_b`)를 두지 않는다 | 검색 색인은 원천 스키마의 표 하나뿐 | done | [pl-19](prd/load.md#pl-19) |  |
 | 게시(publish — 파싱 결과를 Object Storage에 올리고 처리 기록 파일 `publish/silver.jsonl`을 남김 — 적재가 gold `doc` 칸으로) — 대표 `.md`와 엔진별 원결과를 올리고 원본 파일은 올리지 않는다 | 다른 팀은 결과를 Object Storage에서, 위치는 원문 도구로 읽는다 | done | [pl-09](prd/load.md#pl-09) |  |
 | 게시는 gold에 이미 있는 원본 키는 올리지 않는다(`--reparse` 목록만 새 이름으로). EDW에는 쓰지 않는다 | 결과를 덮어쓰지 않는다 | done | [pl-09](prd/load.md#pl-09) |  |
-| DRM(`skipped_drm`)·실패(`failed`) 문서는 EDW에 쓰지 않고 `output/publish/excluded_<날짜>.md` 보고서에만. 업로드 대상 상태는 `tuning.load.publish.publish_upload_statuses`(기본 ok·partial) | 깨진 결과가 다른 팀에 넘어가지 않게 | done | [pl-09](prd/load.md#pl-09) |  |
+| DRM(`skipped_document`)·실패(`failed`) 문서는 EDW에 쓰지 않고 `output/publish/excluded_<날짜>.md` 보고서에만. 업로드 대상 상태는 `tuning.load.publish.publish_upload_statuses`(기본 ok·partial) | 깨진 결과가 다른 팀에 넘어가지 않게 | done | [pl-09](prd/load.md#pl-09) |  |
 | 게시 버킷과 원천 원본 버킷이 같은지는 검사하지 않는다 — `required.publish.publish_bucket`을 다르게 두는 것은 운영자 몫 | 늘 꺼져 있던 검사 | done | [pl-09](prd/load.md#pl-09) |  |
 | 게시는 늘 하고 게시·EDW 칸은 settings.yaml `required` 한곳(`publish`·`object_storage`·`edw`) — 서버는 접속 칸, PC(`local`)는 채우지 않음(`dev.local` 게시 폴더·가짜 EDW — op-14) | `run_pipeline`는 문서마다 늘 게시하고 게시 위치·Object Storage·EDW 읽기 계정 칸이 비면 시작을 거부한다(쓰기 계정은 쓰지 않음) | done | [pl-26](prd/load.md#pl-26) |  |
 | FAQ를 다시 올리면 gold faq의 문서·청크를 모두 지우고 지금 FAQ 파일 전체를 다시 적재(판을 잇지 않음) | pl-13 "지우지 않음"의 FAQ 예외(등급 A) | done | [pl-41](prd/load.md#pl-41) |  |
