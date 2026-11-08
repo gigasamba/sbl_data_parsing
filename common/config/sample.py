@@ -37,9 +37,8 @@ CATEGORIES = {
     "extract": (
         (
             "원천 받기·처리 상한",
-            ("extract.source", "extract.max_new_docs_per_run", "extract.max_source_file_mb", "extract.skipped_docs_log"),
+            ("extract.source", "extract.max_new_docs_per_run", "extract.max_source_file_mb"),
         ),
-        ("보안 문서", ("extract.secure_doc",)),
         ("회전 준비(prepare)", ("extract.prepare",)),
         ("쪽 렌더·OCR", ("extract.page_render_dpi", "extract.ocr")),
     ),
@@ -149,8 +148,6 @@ NOTES = {
     "pipeline.extract.source.staging": "미리 받기 폴더 (null = 미리 받기 끔 — rdb:csv 원본을 못 받음)",
     "pipeline.extract.max_new": "이번 실행에서 새로 파싱할 문서 수 상한 · 0 = 제한 없음 (null = 제한 없음 · local은 local_max_new_docs_per_run)",
     "pipeline.extract.max_file_mb": "이 크기(MB)를 넘는 문서는 건너뜀 · 0 = 제한 없음",
-    "pipeline.extract.skipped_log": "건너뛴 문서 기록 jsonl (null = 준비 기록 폴더/skipped.jsonl)",
-    "pipeline.connections.secure_doc.passwords_file": "암호 문서용 암호 목록(한 줄에 하나) (null = 암호 문서 건너뜀)",
     "pipeline.extract.prepare.rotate": "이미지·스캔 쪽 방향 바로잡기",
     "pipeline.extract.ocr.dpi": "쪽·그림 렌더 DPI(OCR·VLM 공용)",
     "pipeline.extract.ocr.max_pages": "문서당 OCR 쪽 상한 · 0 = 제한 없음",
@@ -272,7 +269,6 @@ NOTES = {
     "common.text.token_num_norm": "검색 글자 숫자·단위 정규화",
     "pipeline.connections.rdb.file_table": "파싱 대상 파일 목록 EDW 표(<스키마>.<표> — 영문·숫자·_만) · 예 AI.FileStorageMap",
     "pipeline.connections.rdb.increment_col": "원천 목록 증분 판정 열 (null = 문서 ID 열)",
-    "pipeline.connections.rdb.columns.content_version": "원천 목록 열 이름 — 판 ID · 예 content_version_id",
     "pipeline.connections.rdb.columns.doc_id": "원천 목록 열 이름 — 문서 ID · 예 id",
     "pipeline.connections.rdb.columns.filename": "원천 목록 열 이름 — 원래 파일 이름 · 예 original_filename",
     "pipeline.connections.rdb.columns.key": "원천 목록 열 이름 — Object Storage key · 예 s3_key",

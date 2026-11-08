@@ -340,7 +340,7 @@ def main():
     records = out / "_records"
     records.mkdir(exist_ok=True)
     parts = out / unpack.PARTS  # 꺼낸 안 문서(pl-63) — 하위 폴더라 파싱 대상(맨 위 파일)이 아님
-    skipped_log = Path(pc.cfg().extract.skipped_log or (records / "skipped.jsonl"))  # S7c — 설정 객체
+    skipped_log = records / "skipped.jsonl"  # publish_parse_result가 읽는 자리(prepared/_records/skipped.jsonl)
     only = {x.strip() for x in Path(a.only).read_text(encoding="utf-8").splitlines() if x.strip()} if a.only else None
     files = sorted(p for p in src.iterdir() if p.is_file() and p.name != ".gitkeep" and (only is None or p.name in only))
     old = {}

@@ -104,10 +104,6 @@ extract:
     source_staging_dir: null                  # 미리 받기 폴더 (null = 미리 받기 끔 — rdb:csv 원본을 못 받음)
   max_source_file_mb: 0.0                     # 이 크기(MB)를 넘는 문서는 건너뜀 · 0 = 제한 없음
   max_new_docs_per_run: null                  # 이번 실행에서 새로 파싱할 문서 수 상한 · 0 = 제한 없음 (null = 제한 없음 · local은 local_max_new_docs_per_run)
-  skipped_docs_log: null                      # 건너뛴 문서 기록 jsonl (null = 준비 기록 폴더/skipped.jsonl)
-  # ---- 보안 문서 ----
-  secure_doc:
-    secure_doc_passwords_file: null           # 암호 문서용 암호 목록(한 줄에 하나) (null = 암호 문서 건너뜀)
   # ---- 회전 준비(prepare) ----
   prepare:
     rotate_pages: false                       # 이미지·스캔 쪽 방향 바로잡기
@@ -285,7 +281,6 @@ tuning:
   extract:
     source_columns:
       source_column_increment: null           # 원천 목록 증분 판정 열 (null = 문서 ID 열)
-      source_column_content_version: content_version_id  # 원천 목록 열 이름 — 판 ID · 예 content_version_id
       source_column_doc_id: id                # 원천 목록 열 이름 — 문서 ID · 예 id
       source_column_filename: original_filename  # 원천 목록 열 이름 — 원래 파일 이름 · 예 original_filename
       source_column_storage_key: s3_key       # 원천 목록 열 이름 — Object Storage key · 예 s3_key
