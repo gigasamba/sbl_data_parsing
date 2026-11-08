@@ -25,7 +25,7 @@
     인자 없음 → 스키마 5개 요약 · schema만 → 그 스키마 전체 테이블 메타(컬럼 제외) · schema+table → 그 테이블 전체 컬럼 한글 설명.
     벡터·임베딩·LLM·pgvector 불개입(rule-based — 비-RAG 원칙) · 데이터는 EDW_META_DIR(기본 /app/config/edw_meta)의
     catalog.json+columns.jsonl, mtime 재확인(기본 30초)으로 재빌드 반영 · sample_values는 어떤 응답에도 실리지 않음 ·
-    도구 파일·데이터셋 부재 시 {"error": …} fail-soft(모듈 import는 do_edw_meta 안 lazy — 서버 부팅·기존 도구 계속).
+    데이터셋 부재·조회 실패 시 {"error": …} fail-soft(서버·다른 도구 계속).
 저장소: common/store/pg.py connect(설정의 PostgreSQL — 없으면 거부, --local이면 로컬 묶음), 임베딩·LLM은 .env 내부망 주소만.
 
 보안(G5): MCP_HOST(기본 127.0.0.1 · auto = 컨테이너 자기 사설 IP)는 내부망 주소만 · 루프백이 아니면 MCP_TOKEN 필수(Authorization: Bearer) ·
@@ -71,11 +71,6 @@ _DEFAULT_MCP_INSTRUCTIONS = (
 )
 
 
-def _mcp_instructions():
-    """FastMCP instructions 글자(DT1 c1) — 코드 기본값(CDMO)."""
-    return _DEFAULT_MCP_INSTRUCTIONS
-
-
 def _transport_security(host):
     """L8: 비루프백 바인드에서 DNS 리바인딩 보호 켬(기본 ON) — allowed_hosts/origins는 MCP_HOST(와일드카드 포트)
     + MCP_ALLOWED_HOSTS(쉼표 목록, 리버스 프록시 이름 등을 추가할 때만). 어긋난 Host/Origin은 SDK가 421/403으로 거부."""
@@ -116,7 +111,7 @@ def build(host, port):
     loop = host in ("127.0.0.1", "localhost", "::1")
     m = FastMCP(
         "rag-search",
-        instructions=_mcp_instructions(),
+        instructions=_DEFAULT_MCP_INSTRUCTIONS,
         host=host,
         port=port,
         stateless_http=True,

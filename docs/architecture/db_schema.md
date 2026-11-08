@@ -147,7 +147,7 @@ EDW 표(`AI.FileStorageMap`, 원천 표 SFDC·CRMS·LAS 등)는 서버에서 운
 
 ### master.glossary
 
-고객 명부·용어 사전·ID 꼴을 합친 표 — melt 꼴(유사값마다 한 줄). 읽는 곳: `common.core.terms` `_aliases`(구조화 고객 판별 `infer_clients` · 검색 질문 고객·별칭) · `load_glossary`(검색 질문 넓히기·근거 상태·고객 별칭의 `org_client`) · `load_id_patterns_typed`(검색 동점 처리·엔티티 힌트 — 줄 순서 그대로).
+고객 명부·용어 사전·ID 꼴을 합친 표 — melt 꼴(유사값마다 한 줄). 읽는 곳: `common.core.terms` `_aliases`(구조화 고객 판별 `infer_clients` · 검색 질문 고객·별칭) · `load_glossary`(검색 질문 넓히기·근거 상태·고객 별칭의 `org_client`) · `load_id_patterns`(ID 꼴 — 지금 앱 코드는 읽지 않음).
 
 | 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|---|
@@ -155,7 +155,7 @@ EDW 표(`AI.FileStorageMap`, 원천 표 SFDC·CRMS·LAS 등)는 서버에서 운
 | kind | TEXT | `term` | 구분 — `client`(고객)·`term`(용어)·`id`(ID 꼴) | `dbtool master load` | `common.store.master.to_tables` | 새로 |
 | canonical | TEXT | `Contract Manufacturing Organization` | 원본 값 — 고객은 정식 이름(빈칸이면 `name_ko` 줄이 이름), 용어는 표준 이름, ID는 종류(`contract_no`·`product_code` 등). 묶는 법은 위 "읽는 모양" | 〃 | 〃 | 새로 |
 | variant | TEXT | `위탁생산` | 유사값 — `variant_kind`가 정하는 값(별칭·동의어·정규식·참조 ID·속성 값) | 〃 | 〃 | 새로 |
-| variant_kind | TEXT | `synonym` | 유사 종류. client: `client_id`·`name_ko`·`alias`(여러 줄)·`client_type`·`segment`·`country`·`parent`·`status`(`inactive`·`deleted`면 건너뜀)·`source`·`updated` · term: `concept_id`·`synonym`·`abbr`·`weak`(약한 동의어)·`broader`·`related`(개념 ID)·`category`(여러 줄 — `org_client`면 고객 명부에도)·`definition_en`·`source`·`owner`·`status`(approved만 씀)·`updated` · id: `regex`(머리 줄 — 줄마다 한 꼴, 이 순서가 동점 처리 순서)·`example`·`updated`. 여러 줄이 되는 것은 `alias`·`synonym`·`abbr`·`weak`·`broader`·`related`·`category`·`regex`, 나머지는 한 줄 | 〃 | 〃 | 새로 |
+| variant_kind | TEXT | `synonym` | 유사 종류. client: `client_id`·`name_ko`·`alias`(여러 줄)·`client_type`·`segment`·`country`·`parent`·`status`(`inactive`·`deleted`면 건너뜀)·`source`·`updated` · term: `concept_id`·`synonym`·`abbr`·`weak`(약한 동의어)·`broader`·`related`(개념 ID)·`category`(여러 줄 — `org_client`면 고객 명부에도)·`definition_en`·`source`·`owner`·`status`(approved만 씀)·`updated` · id: `regex`(머리 줄 — 줄마다 한 꼴)·`example`·`updated`. 여러 줄이 되는 것은 `alias`·`synonym`·`abbr`·`weak`·`broader`·`related`·`category`·`regex`, 나머지는 한 줄 | 〃 | 〃 | 새로 |
 | description | TEXT | `고객이 확립한 공정으로 생산만 위탁 수행` | 설명 — `client_id` 줄은 고객 설명, `concept_id` 줄은 한글 정의, `regex` 줄은 메모. 다른 줄은 비움 | 〃 | 〃 | 새로 |
 | context_required | TEXT | `생산\|제조\|계약` | 용어의 문맥 필요 — 동음이의 줄임말이면 질문에 함께 나와야 하는 말(`\|` 구분). term만(변환본은 `concept_id` 줄) | 〃 | `mcp_server.services.search.query_expand`(질문 넓히기) | 새로 |
 | case_sensitive | TEXT | `N` | 용어의 대소문자 구분 — `Y`면 구분. term만(변환본은 `concept_id` 줄) | 〃 | 〃 | 새로 |

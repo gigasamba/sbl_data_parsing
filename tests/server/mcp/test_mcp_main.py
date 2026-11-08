@@ -4,7 +4,7 @@
 import json
 
 from mcp_server import config as mc
-from mcp_server.main import _DEFAULT_MCP_INSTRUCTIONS, _mcp_instructions, build, check_bind
+from mcp_server.main import _DEFAULT_MCP_INSTRUCTIONS, build, check_bind
 from mcp_server.services.search.evidence_shape import cap
 
 
@@ -42,7 +42,7 @@ def selftest():
         pass
     print("[selftest] 결과 크기 상한·바인딩·토큰 규칙 통과")
     _selftest_transport_security()
-    assert _mcp_instructions() == _DEFAULT_MCP_INSTRUCTIONS  # DT1 c1 — 미설정이면 바이트 동일
+    assert build(host="127.0.0.1", port=8765).instructions == _DEFAULT_MCP_INSTRUCTIONS  # DT1 c1 — 코드 기본값 그대로
     print("[selftest] MCP instructions — 코드 기본값 통과(DT1 c1)")
 
 

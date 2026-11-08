@@ -112,6 +112,9 @@ def _scope_sql(hard, src, fmap):
         for x in vs:
             vals.extend(per(x))
 
+    def attr_has(key, vs):  # 담김(@>) — GIN(jsonb_ops) 색인을 탐(->> 비교는 못 탐). 값은 글자(attrs는 늘 글자 — P1-1)
+        any_of("attrs @> %s::jsonb", vs, lambda x: [json.dumps({key: str(x)})])
+
     for name, v in hard.items():
         vs = _vals(v)
         if name in ("source_system", "client_like"):
@@ -128,11 +131,11 @@ def _scope_sql(hard, src, fmap):
             conds.append(f"created_at {op} %s")  # created_at이 없는 문서는 빠짐
             # KST 글자로 — 적재 값(pgvector_load._kst)과 같은 시간대 표기라 SQLite 대역의 글자 비교도 맞음(PG는 시각으로 비교)
             vals.append(t.isoformat())
-        elif name == "attrs":  # 담김(@>) — GIN(jsonb_ops) 색인을 탐(->> 비교는 못 탐). 값은 글자(attrs는 늘 글자 — P1-1)
+        elif name == "attrs":
             for key, xs in v.items():
-                any_of("attrs @> %s::jsonb", _vals(xs), lambda x, key=key: [json.dumps({key: str(x)})])
+                attr_has(key, _vals(xs))
         elif fmap.get(name):  # 거르기 이름 → 사슬의 attrs 키
-            any_of("attrs @> %s::jsonb", vs, lambda x, key=fmap[name]: [json.dumps({key: str(x)})])
+            attr_has(fmap[name], vs)
         else:  # 이 원천에 이어진 키가 없음
             conds.append("1 = 0")
     return (" WHERE " + " AND ".join(conds)) if conds else "", vals
@@ -227,7 +230,7 @@ def do_search(question=None, k=8, **filters):
     core = [m.lower() for m in CFG.DEFAULT_METHODS if m.lower() in CFG.CORE]  # 검색 길은 서버 설정만(호출 인자로 못 바꿈)
     hits = []
     if core:
-        hits, _, _ = R.search_ex(question, k, core, scope=scope)
+        hits, _ = R.search(question, k, core, scope=scope)
     man = _manifest_by_name()  # AD44 — 있으면 근거 version을 RDB 값으로
     evidence = [_evidence(h, man) for h in hits]
     if evidence:  # R2-c 요건① — 같은 사건의 사본(형식·재명명)이 슬롯을 독점하는 문제

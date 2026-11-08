@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """검색 CLI — 질문 → 근거(ask). 검색 코드는 mcp_server에만 둔다(pipeline ↔ mcp_server import 금지).
 
   ask   질문 → 근거 청크 + 원본 경로·쪽·줄·절 — mcp_server.services.search.search_svc.do_search()에 위임 — MCP와 같은 결과.
@@ -16,22 +15,12 @@ import json
 from common.core.console import utf8_stdout
 
 
-def _stack():
-    """엔진 구성 파일(서버·PC 같음) → body + name."""
-    from common.store.db import cfgfile
-
-    cur = cfgfile.active("stack")
-    return cur.named()
-
-
 def ask(a):
     """질문 → 근거(파일·쪽·줄·절). MCP search의 do_search()에 그대로 위임.
     질의 파일 기록은 없다(MCP 호출은 DB applog.mcp_log, 이 명령은 MCP를 거치지 않음)."""
-    st = _stack()
     from mcp_server.services.search import search_svc as MCP
 
-    k = a.k or st.get("k", 8)
-    res = MCP.do_search(a.q, k, methods=None, source_system=a.source)
+    res = MCP.do_search(a.q, a.k, source_system=a.source)
     if a.json:
         print(json.dumps(res, ensure_ascii=False, indent=1))
     if res.get("error"):
@@ -51,8 +40,6 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("ask")
-    p.add_argument("--bundle", help=argparse.SUPPRESS)  # 호출 호환 — 받기만(검색은 PG만)
-    p.add_argument("--pg", action="store_true", help=argparse.SUPPRESS)  # 호출 호환 — 받기만(검색은 늘 PG)
     p.add_argument("--k", type=int, default=8, help="근거 수 — MCP search 기본과 같게 8(AR5 측정: k=8이 k=10과 같거나 나음, 잘림 적음)")
     p.add_argument("--q", required=True)
     p.add_argument(

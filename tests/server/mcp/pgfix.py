@@ -123,7 +123,7 @@ def mk_bundle(docs, chunks, meta=None, vectors=None, load_pg=True):
 
 def use(bundle, **names):
     """Settings for the stand-in of `bundle` + extra senv names. Always the stand-in: PG connection values emptied,
-    connect_pool's has_conn() forced False, pg.connect (PG connection pick, would put PG_HOST) and
+    connect_sources' has_conn() forced False, pg.connect (PG connection pick, would put PG_HOST) and
     server_state.check_store (server guard: empty PG → refuse — tested on its own in test_server_state) no-ops.
     Returns an ExitStack (with … or .close()); closing it also closes every stand-in connection opened meanwhile
     (Windows keeps open sqlite files locked) and removes the bundle's temp dir."""
@@ -143,18 +143,18 @@ def use(bundle, **names):
     st.callback(lambda: [db.sqlite.close() for db in opened])
     st.enter_context(mc.senv(PG_STANDIN_DIR=str(standin_of(bundle)), PG_SCHEMA=SCHEMA, PG_PASSWORD=None, PG_HOST=None, **names))
     st.enter_context(patch.object(PGM, "has_conn", return_value=False))
-    st.enter_context(patch.object(PS, "StandinPG", _Tracked))  # connect_pool imports it at call time
+    st.enter_context(patch.object(PS, "StandinPG", _Tracked))  # connect_sources imports it at call time
     st.enter_context(patch.object(PGC, "connect", lambda a: None))
     st.enter_context(patch.object(server_state, "check_store", lambda: None))  # stand-in injected here — the image runs as a server
     return st
 
 
 @contextlib.contextmanager
-def retriever(bundle, *args, **names):
+def retriever(bundle, **names):
     """Retriever on the stand-in of `bundle` under use() (connections closed and temp dir removed after)."""
     from mcp_server.services.search import server_state as PGM
     from mcp_server.services.search.retriever import Retriever
 
     src = names.pop("src", "other")
     with use(bundle, **names):
-        yield Retriever(*args, pg=PGM.connect_sources()[src])
+        yield Retriever(pg=PGM.connect_sources()[src])

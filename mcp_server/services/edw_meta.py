@@ -9,9 +9,8 @@ Rules:
    tables (Account 182 cols). No single-column view and no keyword search (decided — do not add).
  - sample_values are NEVER sent in any response — the dataset keeps the
    sanitized values for future reuse, this tool just doesn't read them.
- - fail-soft: a missing module or dataset must never break the other three tools —
-   mcp_server imports this module lazily inside do_edw_meta and turns NotConfigured into a
-   {"error": ...} dict, the query_edw `not_configured` pattern.
+ - fail-soft: a missing dataset must never break the other tools — do_edw_meta turns
+   NotConfigured (and any lookup error) into a {"error": ...} dict, the query_edw `not_configured` pattern.
 
 Operational notes:
  - EDW_META_DIR (default <runtime root>/config/edw_meta, i.e. /app/config/edw_meta in the image — glossary-mount convention) holds catalog.json +

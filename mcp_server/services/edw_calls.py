@@ -3,29 +3,23 @@
 from common.store import edw_chain as EC
 from common.store.db.models import search_tables as ST
 from mcp_server.schemas.evidence import SEARCH_FILTERS
+from mcp_server.services import edw_meta as EM
+from mcp_server.services import edw_query as EQ
 
 
 def do_query_edw(sql, max_rows=1000):
     """Thin controller wrapper over mcp_server.services.edw_query.query() (all SQL-guard/backend/
     size-cap logic lives there, not here)."""
-    from mcp_server.services import edw_query as EQ
-
     return EQ.query(sql, max_rows)
 
 
 def do_edw_meta(schema=None, table=None, column_filter=None):
     """EM1 — thin controller wrapper over mcp_server.services.edw_meta.lookup() (dataset load/reload/
-    3-level hierarchy logic lives there, not here). import는 의도적으로 lazy(§8 R9 fail-soft) — 도구
-    파일·데이터셋이 없어도 서버 부팅과 나머지 세 도구는 그대로, 이 도구만 {"error": …}로 응답한다."""
-    try:
-        from mcp_server.services import edw_meta as EM
-    except Exception as e:  # 모듈 없음 = 기능 꺼짐(부팅 계속)
-        print(f"[mcp] edw_meta 모듈 없음(기능 꺼짐): {type(e).__name__}: {e}", flush=True)
-        return {"error": "edw_meta 도구 파일 미적용(EM1) — 패치·마운트 적용 후 재시도"}
+    3-level hierarchy logic lives there, not here). 데이터셋이 없으면 이 도구만 {"error": …}로 응답한다."""
     if schema is None and table is None and column_filter is None:  # 인자 없음 — 스키마 요약 + search attrs 키
-        out = _lookup(EM, schema, table, column_filter)
+        out = _lookup(schema, table, column_filter)
         return out if "error" in out else {**out, "search_attrs": search_attrs()}  # 오류 응답에는 붙이지 않음
-    return _lookup(EM, schema, table, column_filter)
+    return _lookup(schema, table, column_filter)
 
 
 def search_attrs():
@@ -55,7 +49,7 @@ def search_attrs():
     return out
 
 
-def _lookup(EM, schema, table, column_filter):
+def _lookup(schema, table, column_filter):
     try:
         return EM.lookup(schema, table, column_filter)
     except EM.NotConfigured as e:

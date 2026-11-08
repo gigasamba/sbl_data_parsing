@@ -52,8 +52,6 @@ def check_store():
 
     if paths.LOCAL_RUN:
         return
-    from common.store.pg import conf
-
     conf()
 
 
@@ -72,21 +70,17 @@ def _build_retriever():
         raise RuntimeError(str(e)) from None
     a = types.SimpleNamespace(pg=False, local=False, edw=False, edw_client=False)
     PGC.connect(a)  # PC — Docker pgvector 주소 찾기(못 찾으면 SQLite 대역 — 검색은 PG 하나)
-    from common.store.db import cfgfile
-
-    cur = cfgfile.active("stack")  # 엔진 구성 파일(서버·PC 같음 — 프로세스 시작 때 읽은 것)
-    st = cur.named()
     dbs = connect_sources()  # 원천 스키마 5벌 + 있는 DEV 원천 — 실 PG는 풀 하나를 함께 씀
     Rs, bad = {}, set()
     for src, db in list(dbs.items()):  # 색인 정보는 원천마다 PG에서
-        R = _dev_retriever(src, db, st) if ST.is_dev(src) else RT.Retriever(st.get("retrieve", "hybrid"), pg=db)
+        R = _dev_retriever(src, db) if ST.is_dev(src) else RT.Retriever(pg=db)
         if R is None:  # 깨진 DEV 스키마는 싣지 않음 — 5벌은 그대로
             dbs.pop(src)
             bad.add(src)
         else:
             Rs[src] = R
     _STATE["bad_dev"] = bad
-    _STATE["Rs"], _STATE["dbs"], _STATE["stack"] = Rs, dbs, st
+    _STATE["Rs"], _STATE["dbs"] = Rs, dbs
     _STATE["version"], _STATE["checked_at"] = _version_of(dbs), time.time()
     old_pool, _STATE["pool"] = _STATE.get("pool"), getattr(next(iter(dbs.values())), "pool_obj", None)
     if old is not None and old_pool is not None and old_pool is not _STATE["pool"]:
@@ -114,12 +108,12 @@ def _retriever(src):
     return _STATE["Rs"][src]
 
 
-def _dev_retriever(src, db, st):
+def _dev_retriever(src, db):
     """DEV 원천 하나의 Retriever — 표가 없는 등 깨진 스키마면 경고 한 줄 + None(그 원천만 안 실음, op-17)."""
     from mcp_server.services.search import retriever as RT
 
     try:
-        return RT.Retriever(st.get("retrieve", "hybrid"), pg=db)
+        return RT.Retriever(pg=db)
     except Exception as e:
         print(f"[mcp] DEV 원천 스키마 {db.schema} 못 실음(그 원천만 뺌): {type(e).__name__}: {str(e)[:120]}", file=sys.stderr, flush=True)
         return None
@@ -146,7 +140,7 @@ def dev_served():
                 db = StandinPG(schema)
             else:
                 db = SchemaView(other.pool_obj, schema)
-            new[src] = (db, _dev_retriever(src, db, _STATE["stack"]))
+            new[src] = (db, _dev_retriever(src, db))
     if gone or new:
         ver = dict((v[0], v) for v in _version_of({s: db for s, (db, R) in new.items() if R}))
         with _RELOAD_LOCK:  # 바꿔 끼우기만(질의는 위에서) — 다른 요청이 도는 dict는 고치지 않고 새 dict로
@@ -216,21 +210,6 @@ def health_body():
     elif _STATE.get("warmup_ok") is False:
         out["warning"] = "warmup_failed"
     return out
-
-
-# ---- PG 상주 풀 연결
-def connect_pool(c=None, pg_schema=None, max_size=None):
-    """connect()와 같은 전환점 — 검색 MCP 상주 Retriever(PGPool 자리). 스탠드인은 연결 1개뿐이라 풀이 필요 없어
-    StandinPG를 그대로(스레드 여러 개가 같은 스탠드인을 동시에 쓰는 경우는 PC 시험 범위 밖 — ponytail)."""
-    if has_conn():
-        c = c or conf()
-        if pg_schema:
-            c = {**c, "PG_SCHEMA": pg_schema}
-        return PGPool(c, max_size=max_size)
-    _warn_standin()
-    from common.store.pg_standin import StandinPG
-
-    return StandinPG(_standin_schema(pg_schema or (c or {}).get("PG_SCHEMA")))
 
 
 class SchemaView:

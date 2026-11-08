@@ -329,7 +329,7 @@
 16. 적재되지 않은 문서 기록은 `applog.except_doc_info` 하나(`skip_doc_info`를 바꿈) — `except_type` `skip`(영구 뺌 — 미지원·DRM·암호·내용 중복) · `error`(기록만, 다음 실행이 다시 고름 — 파싱·적재 실패). 처음·마지막 시각·횟수 유지.
 17. 원천은 FileStorageMap `source_system` 값 하나로 고르기·구조화·적재·게시가 모두 정한다(목록 파일·manifest로 넘김). Object Storage 경로 = `<원천>/…`, PC = `valid_env/object_storage/<원천>/`. 원본 경로 첫 마디 규칙(pl-28 규칙 3)은 없앤다.
 18. EDW는 읽기만(FileStorageMap·메타 사슬) — 쓰기 계정 칸은 없앤다.
-19. 마스터 표는 `glossary` 하나(melt — 유사값마다 한 줄): 칸 = 구분(`client`·`term`·`id`) · 원본 값 · 유사값 · 유사 종류(동의어·약어·약한 동의어 — 용어 사전이 구분해 씀) · 설명 + 용어의 문맥 필요·대소문자 구분 표시. 고객 명부(`client_roster`)·용어 사전(`domain_terms`)·ID 꼴(`id_patterns`)을 합친다. `id` 줄은 원본 값 = 종류(`contract_no`·`product_code`), 유사값 = 정규식 — ID 우선 찾기·동점 순서는 그대로.
+19. 마스터 표는 `glossary` 하나(melt — 유사값마다 한 줄): 칸 = 구분(`client`·`term`·`id`) · 원본 값 · 유사값 · 유사 종류(동의어·약어·약한 동의어 — 용어 사전이 구분해 씀) · 설명 + 용어의 문맥 필요·대소문자 구분 표시. 고객 명부(`client_roster`)·용어 사전(`domain_terms`)·ID 꼴(`id_patterns`)을 합친다. `id` 줄은 원본 값 = 종류(`contract_no`·`product_code`), 유사값 = 정규식 — ID 우선 찾기는 그대로.
 20. 안 쓰는 마스터 표 `client_master`·`contract_master`·`units`는 없앤다. `master_meta`(해시 1행)도 없애고 해시는 glossary를 읽을 때 계산한다(`gold_version` 꼴 그대로).
 21. 핸드오프 파일 `common/core/terms.py`는 고치지 않는다 — `common/store/master.py`가 glossary를 읽어 지금과 같은 행 모양으로 넘긴다.
 22. `doc`에 찾기용 색인 3개 — `sha256` · (`silver_bucket`, `silver_key`) · `file_path`(일반 btree — `file_path`에 UNIQUE는 없다). 0.3.0의 새 판으로 넣는다(이미 올린 판은 고치지 않음).

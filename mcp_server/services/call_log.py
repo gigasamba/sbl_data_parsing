@@ -490,10 +490,6 @@ def drain(*, deadline=None):
     return _WORKER.drain(deadline=deadline) if _WORKER else True
 
 
-def stats():
-    return _WORKER.stats() if _WORKER else {"pending": 0, "pending_bytes": 0, "queued": 0, "body_omitted": 0, "dropped": 0}
-
-
 class _NoLog:
     def run(self, fn, *args, **kwargs):
         return fn(*args, **kwargs)

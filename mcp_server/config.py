@@ -5,7 +5,7 @@ mcp_server 코드가 읽는 객체는 설정 파일 기반 캐시 MCP다(S7e2 �
   env로 읽는 칸만 env에 씀). common 칸은 `common.config.settings.cfg()`로(COMMON).
 요청마다 읽던 값(MCP_TOOL_TIMEOUT_SEC·SEARCH_* 등)은 쓰는 자리에서 요청마다 cfg()로 읽고, 시작 때 한 번 읽던 상수는 CFG(아래)에
 모은다(S5 — 이름·기본값은 옛 mcp_server.py 모듈 상수 그대로, 읽는 시점도 같음 — 이 모듈 import 때).
-SETTINGS(common + mcp 절)는 확인 명령(python -m mcp_server.config)·시험용.
+SETTINGS(common + mcp 절)는 시험용(확인 명령 python -m mcp_server.config는 McpAppSettings를 직접 씀).
 사용: python -m mcp_server.config [--file 경로] · export --section mcp.host …
 """
 
@@ -23,7 +23,6 @@ from common.config.settings import (  # noqa: F401 — token_text: 토큰 규칙
     F,
     Port,
     Section,
-    image_default,
     token_text,
 )
 from common.config.settings import cfg as common_cfg
@@ -169,9 +168,7 @@ class MCPConfig:
         c = cfg()
         self.MAX_CHARS = c.output.max_chars  # GH1-13: cap()이 이 값을 바이트(UTF-8)로 씀 — 이름·기본값은 그대로(실측 재조정은 서버에서)
         self.CORE = ("vector", "bm25", "id")
-        self.DEFAULT_METHODS = list(c.search.methods)  # 10-12 구조 검토: graph 기본에서 뺌 —
-        # 그래프 단독 효과를 처음 따로 잼(9세트): 근거 지표 이득 0, 잡음 비율↑(4clients .366→.459), distractors-v2 정답 값 적중 .80→.72 ·
-        # G10(10-02)의 비교형 6→12/12 개선은 분해(decompose) 몫 · 다시 켜기: MCP_METHODS=vector,bm25,id,graph
+        self.DEFAULT_METHODS = list(c.search.methods)  # CORE 밖 이름은 search_svc가 버림
         # parse_document 프록시가 부르는 작업 서비스 주소(services/parse_proxy.py) — 포트는 작업 서비스와 같은 칸 하나
         self.PARSE_URL = f"http://127.0.0.1:{common_cfg().runtime.data_parsing_port}"
 

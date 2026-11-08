@@ -210,7 +210,7 @@ id,contract_no,"C-[A-Z]{2,4}-\d{4}-\d{2}",regex,합성 데이터 형식,,
 | `definition_en`·`source`·`owner`·`updated` | 빼도 됨 |
 | `status` | 없으면 반영 · 빼려면 `draft`·`rejected` |
 
-**ID 꼴(`id`)** — `canonical` = 종류(`contract_no`·`product_code` 등). `regex` 줄 하나 = 정규식 하나(대소문자 무시, `description`에 메모), 바로 뒤 `example`·`updated`는 그 꼴의 참고용. `regex` 줄 순서가 검색 동점 처리 순서다.
+**ID 꼴(`id`)** — `canonical` = 종류(`contract_no`·`product_code` 등). `regex` 줄 하나 = 정규식 하나(대소문자 무시, `description`에 메모), 바로 뒤 `example`·`updated`는 그 꼴의 참고용.
 
 - 오류(조용히 넘기지 않음): 명시한 `concept_id` 중복 · 없는 ID를 가리키는 `broader`/`related` · 깨진 정규식.
 - 초안 도구 `python -m pipeline.transform.structure.glossary_suggest`·`gen_roster --kind product`·`python -m pipeline.transform.structure.draft_terms --bundle <묶음>`은 `output/` 아래 초안(용어 사전 옛 칸 꼴 — 한 줄 = 개념 하나)만 만든다 — 사람이 확인해 `glossary.csv`의 `term` 줄로 옮긴다.
