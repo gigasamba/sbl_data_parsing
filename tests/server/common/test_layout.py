@@ -49,7 +49,7 @@ REFUSED = (
         "pipeline",
         "common.models.embed.allow_external → dev.models.embed.embed_allow_external",
     ),
-    ("dev:\n  pg_standin: {host: h}\n", "pipeline", "dev.pg_standin.host"),  # dev 절은 PC 전용 칸만
+    ("dev:\n  pg_standin: {pg_standin_dir: d}\n", "pipeline", "dev.pg_standin: Extra"),  # 지운 절(sqlite 대역 — e2-22)은 통째로 거부
     ("search:\n  weights: {bm25: 3}\n", "mcp", "search.weights.bm25 → tuning.search.weights.bm25_weight"),
     ("required:\n  source: {publish_bucket: b}\n", "pipeline", "required.source.publish_bucket"),
     ("required:\n  deploy: {mcp_store: pg}\n", "pipeline", "required.deploy.mcp_store"),

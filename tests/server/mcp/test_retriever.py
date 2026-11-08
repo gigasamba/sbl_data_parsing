@@ -1,5 +1,5 @@
 """mcp_server.services.search.retriever — BM25 확장 경로·L3-1 최신성·AD38 고객 범위. mc-01(11-01) 로컬 묶음 검색을 지워
-PG 검색(pgsearch)을 SQLite 대역(tests/server/mcp/pgfix.py — 임시 폴더, 실 PG 안 닿음)으로 돌린다."""
+PG 검색(pgsearch)을 실 pgvector 임시 스키마(tests/server/mcp/pgfix.py — test_*)로 돌린다."""
 
 from tests.server.mcp import pgfix
 

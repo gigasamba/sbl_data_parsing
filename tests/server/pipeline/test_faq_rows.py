@@ -9,6 +9,7 @@ from openpyxl import Workbook
 from common.core.paths import STACK_FILE
 from pipeline.transform.structure.chunking import faq_rows
 from pipeline.transform.structure.gold_bundle import main
+from tests.server.common import pgcase
 
 
 def _book(path, sheets):
@@ -62,7 +63,12 @@ def _rows(d):
     assert faq_rows(d / "bad.xlsx") is None  # 못 여는 파일 → 일반 청킹(묶음 전체를 멈추지 않음)
 
 
-def test_bundle_faq():
+def test_bundle_faq():  # 용어집·고객 명부는 실 pgvector 임시 스키마의 마스터 표(e2-22)
+    with pgcase.with_master():
+        _bundle_faq()
+
+
+def _bundle_faq():
     with tempfile.TemporaryDirectory() as t:
         _bundle(Path(t))
 
@@ -93,13 +99,11 @@ def test_faq_sync():
     """pl-41(사용자 11-03) — faq_sync(reset)이 faq 스키마를 통째로 비움(reset 아니면 gold 목록만). 적재는 faq_group을 넣음."""
     import numpy as np
 
-    from common.config.settings import COMMON
-    from common.store import pg_standin as PS
-    from common.store.db.dbtool import standin_script
     from pipeline.load import pgvector_load as M
+    from tests.server.pipeline.goldseed import gold
 
-    S, dim = "orca_pl41_t", 4
-    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as t:  # Windows — 열린 sqlite 대역 파일
+    dim = 4
+    with tempfile.TemporaryDirectory() as t:
         tmp = Path(t)
         b = tmp / "b"
         b.mkdir()
@@ -124,10 +128,8 @@ def test_faq_sync():
         (b / "docs.jsonl").write_text("".join(json.dumps(x) + "\n" for x in docs), encoding="utf-8")
         (b / "chunks.jsonl").write_text("".join(json.dumps(x) + "\n" for x in chunks), encoding="utf-8")
         np.save(b / "vectors.npy", np.ones((2, dim), dtype="float32"))
-        with COMMON.env(PG_STANDIN_DIR=str(tmp / "pg")):
-            db, fq = PS.StandinPG(S), PS.StandinPG(f"{S}_faq")
-            with fq.cn.cursor() as cur:
-                cur.execute(standin_script(f"{S}_faq", dim))
+        with gold(dim) as S:
+            db = fq = pgcase.connect(S)
             M.load(db, b)
             assert {r["faq_group"] for r in fq.q(f"SELECT faq_group FROM {S}_faq.chunk")} == {"DS"}
             assert M.faq_sync(db, False) == (0, keys)  # 지우지 않고 gold 목록만
@@ -135,3 +137,4 @@ def test_faq_sync():
             assert fq.q(f"SELECT COUNT(*) AS n FROM {S}_faq.doc")[0]["n"] == 0
             assert fq.q(f"SELECT COUNT(*) AS n FROM {S}_faq.chunk")[0]["n"] == 0
             assert M.faq_sync(db, True) == (0, [])  # 빈 스키마 — 그대로
+            db.cn.close()

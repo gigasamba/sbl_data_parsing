@@ -1,6 +1,6 @@
 """rn-05 — 대상 목록 `python -m pipeline.extract.candidate_pick list`(run_pipeline이 컨테이너 안에서 한 번 부름): EDW FileStorageMap에서
 이름 키워드로 고르고(--filter — 없으면 모든 문서, 파일 크기 오름차순, 크기 없는 행 뺌) → 시작 자리·시험 개수·골라 돌리기 → 끝난 문서(gold doc)·영구 뺌(except_doc_info skip)
-빼기 → FAQ 먼저(새 FAQ면 교체 + 전체, 아니면 gold에 없는 것만, 결과 없으면 전체) → 앞 max-docs개. 임시 SQLite EDW·gold 대역만 — 외부 접속 없음.
+빼기 → FAQ 먼저(새 FAQ면 교체 + 전체, 아니면 gold에 없는 것만, 결과 없으면 전체) → 앞 max-docs개. 임시 SQLite EDW · gold는 실 pgvector 임시 스키마(goldseed.gold).
 op-17 — 원천 목록(required.source.source_systems)이 있으면 그 원천 행만(대소문자 무관 — FAQ가 없으면 FAQ 교체도 안 함), 비우면 운영 5개 원천
 (DEV-<n> 행 뺌), 목록 파일 docs는
 FileStorageMap.source_system 값을 그대로 든다(키 첫 마디와 달라도)."""
@@ -14,7 +14,7 @@ from unittest import mock
 from common.config.settings import COMMON
 from pipeline import config as pc
 from pipeline.extract import candidate_pick as CP
-from tests.server.pipeline.goldseed import seed
+from tests.server.pipeline.goldseed import gold, seed
 
 # FileStorageMap 행 (id, s3_key, original_filename, file_size, source_system)
 FSM = [
@@ -95,9 +95,9 @@ CASES = [
 
 
 def _edw(tmp):
-    """EDW 대역 sqlite 하나(FileStorageMap — 스키마 AI로 붙여 읽음) + gold 대역 doc 행(GOLD)."""
+    """EDW 대역 sqlite 하나(FileStorageMap — 스키마 AI로 붙여 읽음) + gold doc 행(GOLD — gold() 안에서)."""
     path = Path(tmp) / "edw.sqlite"
-    with COMMON.env(RUN_ENV="local", PG_STANDIN_DIR=str(Path(tmp) / "pg")):
+    with COMMON.env(RUN_ENV="local"):
         seed([{"file_path": k, "source_system": k.split("/")[0]} for k in GOLD])
     cn = sqlite3.connect(path)
     cn.execute("CREATE TABLE FileStorageMap (id INTEGER, s3_key TEXT, original_filename TEXT, file_size INTEGER, source_system TEXT)")
@@ -110,7 +110,7 @@ def _edw(tmp):
 
 
 def test_target_list():
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory() as tmp, gold():
         edw = _edw(tmp)
         out, seen_f = Path(tmp) / "targets.json", Path(tmp) / "faq_seen.txt"
         for args, seen, sync_out, want, seen_after, reset, *systems in CASES:
@@ -120,7 +120,7 @@ def test_target_list():
                 seen_f.write_text("".join(f"{k}\n" for k in seen), encoding="utf-8")
                 argv += ["--faq-seen", str(seen_f)]
             with (
-                COMMON.env(RUN_ENV="local", RDB_SQLITE=str(edw), PG_STANDIN_DIR=str(Path(tmp) / "pg")),
+                COMMON.env(RUN_ENV="local", RDB_SQLITE=str(edw)),
                 pc.PIPE.env(SOURCE_SYSTEMS=(systems or [None])[0]),
                 mock.patch.object(CP, "faq_sync", lambda r, _p, so=sync_out, rs=resets: rs.append(r) or so),
                 mock.patch("pipeline.shared.except_docs.skipped_keys", lambda: set(NEVER)),  # 기록 자체는 test_skip_docs
@@ -153,7 +153,7 @@ TABLES = [
 def test_file_table():
     from common.config.settings import require_run_env
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory() as tmp, gold():
         edw, out, f = _edw(tmp), Path(tmp) / "targets.json", Path(tmp) / "settings.yaml"
         for table, want in TABLES:
             if want is None:  # 설정 파일에 적으면 시작 거부(시험 덮기 env.(…)는 틀린 꼴을 무시하므로 파일로)
@@ -173,7 +173,7 @@ def test_file_table():
                 assert raised, table
                 continue
             with (
-                COMMON.env(RUN_ENV="local", RDB_SQLITE=str(edw), PG_STANDIN_DIR=str(Path(tmp) / "pg")),
+                COMMON.env(RUN_ENV="local", RDB_SQLITE=str(edw)),
                 pc.PIPE.env(RDB_FILE_TABLE=table),
             ):
                 assert CP._list_cmd(["--out", str(out)]) == 0, table

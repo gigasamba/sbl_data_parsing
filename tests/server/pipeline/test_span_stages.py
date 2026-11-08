@@ -158,7 +158,6 @@ class _Tx:
 
 class _DB:
     schema = "t"
-    is_standin = False
 
     def __init__(self):
         self.log = []

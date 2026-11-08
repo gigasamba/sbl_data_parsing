@@ -168,6 +168,7 @@ def test_check():
             env = {
                 "SETTINGS_FILE": _posix(sf),
                 "SETTINGS_LOADED": _posix(sf),  # 이미 읽은 것으로 — settings_to_env.py를 부르지 않음
+                "RUN_ENV": "dev",  # load_settings가 내던 값(위 파일과 같음) — 판정 명령이 -e RUN_ENV로 넘김(e2-22)
                 "DOCKER": "echo",
                 "DC_FAKE": f"bash {_posix(fake)}",
                 "FAIL": fail,

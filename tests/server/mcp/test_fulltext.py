@@ -1,4 +1,4 @@
-"""mc-17 — 원문 도구 list_doc_fulltext → get_doc_fulltext(운영 계약 05 §6). gold doc은 SQLite 대역, Object Storage는 가짜 클라이언트(외부 접속 없음)."""
+"""mc-17 — 원문 도구 list_doc_fulltext → get_doc_fulltext(운영 계약 05 §6). gold doc은 실 pgvector 임시 스키마(pgfix), Object Storage는 가짜 클라이언트."""
 
 import hashlib
 import json

@@ -3,6 +3,7 @@
 from common.core.terms import load_glossary
 from common.core.text import tokens
 from mcp_server.services.search.query_expand import _exp_tokens, expand_query, match_concepts, vector_alias_text
+from tests.server.common import pgcase
 
 
 def _selftest_glossary_rows():
@@ -244,5 +245,6 @@ def _selftest_vector_alias_text():
     print("[selftest] SI43⑤ G17 — vector_alias_text 교차 문자 체계 별칭 덧붙이기 통과")
 
 
-def test_main():  # 옛 `if __name__ == "__main__":` 몸통
-    selftest()
+def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 용어집은 실 pgvector 임시 스키마의 마스터 표(e2-22)
+    with pgcase.with_master():
+        selftest()

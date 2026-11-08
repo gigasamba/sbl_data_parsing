@@ -59,13 +59,13 @@ def _selftest_warmup_bg_failure_keeps_server_up():
 
 def _selftest_reload():
     """load 뒤 재적재(S12) — 적재 버전(원천 스키마마다 MAX(doc_id)·COUNT — 11-02, load_run 대신)이 바뀌면 Retriever를 다시 만들고,
-    안 바뀌면 그대로. --replace처럼 개수는 같고 doc_id만 커진 경우도 잡는다. SQLite 대역(pgfix, 임시 폴더) — 원천 other."""
+    안 바뀌면 그대로. --replace처럼 개수는 같고 doc_id만 커진 경우도 잡는다. 실 pgvector 임시 스키마(pgfix) — 원천 other."""
     c = {"doc": 0, "seq": 0, "page": 1, "line_start": 1, "line_end": 1, "chunk_text": "x", "n_terms": 1, "bbox": None, "section": None}
     d = pgfix.mk_bundle([{"file_path": "a.txt"}], [c])
-    _env = pgfix.use(d, MCP_RELOAD_CHECK_SEC="0")  # 설정 객체 덮기(S7d) · 늘 대역
+    _env = pgfix.use(d, MCP_RELOAD_CHECK_SEC="0")  # 설정 객체 덮기(S7d)
     try:
         r1 = _retriever("other")
-        assert r1.pg.is_standin and health_body()["store"] == "pgvector"
+        assert health_body()["db"] == "pg" and health_body()["store"] == "pgvector"
         r1.pg.q(f"INSERT INTO {r1.pg.schema}.doc(file_path) VALUES (%s)", ("b.txt",))  # 새 적재 — 개수 바뀜
         r2 = _retriever("other")
         assert r2 is not r1, "적재 버전 바뀌었는데 다시 안 만듦"
@@ -137,10 +137,9 @@ def test_reload_keeps_pool():
 
         _STATE.clear()
         with (
-            mock.patch.object(M, "has_conn", return_value=True),
             mock.patch.object(M, "conf", return_value={}),
             mock.patch.object(M, "PGPool", Pool),
-            mock.patch.object(M.ST, "all_sources", lambda base, q=None: ["other"]),
+            mock.patch.object(M.ST, "all_sources", lambda base, q: ["other"]),
         ):
             first, second = M.connect_sources(), M.connect_sources()
         # 풀 하나 · 질의 시간 제한은 MCP 칸(기본 25초 — 도구 30초 안), 파이프라인 칸(120초)이 아님
@@ -151,18 +150,17 @@ def test_reload_keeps_pool():
 
 
 def test_check_store_server_guard():
-    """op-09 — 서버(dev·prd)는 PG 접속 칸이 비면 시작 거부(대역으로 빠지지 않음), PC는 통과(대역)."""
+    """op-09·e2-22 — PG 접속 칸이 비면 시작 거부(PC도 — 로컬 대체 DB 없음)."""
     from unittest import mock
 
     from common.core import paths
     from mcp_server.services.search.server_state import check_store
 
     with mc.senv(PG_HOST=None, PG_PASSWORD=None):
-        with mock.patch.object(paths, "LOCAL_RUN", False):
-            try:
-                check_store()
-                raise AssertionError("서버에서 빈 PG 접속인데 거부 안 함")
-            except SystemExit as e:
-                assert "PG 접속 정보 없음" in str(e), e
-        with mock.patch.object(paths, "LOCAL_RUN", True):
-            check_store()  # PC — 대역으로 돎
+        for local in (False, True):
+            with mock.patch.object(paths, "LOCAL_RUN", local):
+                try:
+                    check_store()
+                    raise AssertionError(f"빈 PG 접속인데 거부 안 함(LOCAL_RUN={local})")
+                except SystemExit as e:
+                    assert "PG 접속 정보 없음" in str(e), e

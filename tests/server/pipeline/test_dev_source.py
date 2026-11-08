@@ -12,15 +12,15 @@ from unittest import mock
 
 from common.config.settings import COMMON, isolated
 from common.store import pg
-from common.store import pg_standin as PS
 from common.store.db import dbtool
 from common.store.db.dbtool import MIGRATIONS
 from common.store.db.models import search_tables as ST
 from pipeline import config as pc
 from pipeline.extract import candidate_pick as CP
 from pipeline.load import pgvector_load as M
-from tests.server.pipeline.goldseed import seed
-from tests.server.pipeline.test_pl13_no_prune import _bundle
+from tests.server.common import pgcase
+from tests.server.pipeline.goldseed import gold, seed
+from tests.server.pipeline.test_pl13_no_prune import DIM, _bundle, kst
 
 # (원천 표기, 원천 이름) — DEV-<1~99>는 대소문자 무관·`-test` 별칭 그대로, 그 밖은 other(DEV-100은 설정이 거부 — test_target_list)
 MAPPING = [
@@ -77,7 +77,6 @@ def test_up_dev_schemas():
 
         q = lambda sql, params=None, in_db=in_db: [{"s": s} for s in in_db] if "schemata" in sql else []  # 가짜 질의
         with (
-            mock.patch.object(pg, "has_conn", lambda: True),
             mock.patch.object(dbtool, "engine", lambda: mock.Mock(begin=begin)),
             mock.patch.object(dbtool, "_q", lambda c, q=q: q),
             mock.patch.object(dbtool, "precheck_search", lambda *a: None),
@@ -99,7 +98,6 @@ def test_check_dev_schemas():
     for dev_st, rc in CHECK:
         st = lambda t, s, dev_st=dev_st: (dev_st if s == "ai_dev_2" else "끝", [])  # 가짜 판 상태
         with (
-            mock.patch.object(pg, "has_conn", lambda: True),
             mock.patch.object(dbtool, "_dev_in_db", lambda s: ["dev_2"]),
             mock.patch.object(dbtool, "check", st),
             contextlib.redirect_stdout(io.StringIO()) as out,
@@ -158,18 +156,21 @@ def test_load_dev():
     """DEV-1 문서는 `<기준>_dev_1`에(EDW 메타 없음 — EDW를 열지 않음) · 끝난 문서가 그 행을 봄 · 실 PG에 스키마가 없으면 멈춤(DDL 없음)."""
     tmp = Path(tempfile.mkdtemp())
     try:
-        with COMMON.env(RUN_ENV="local", PG_STANDIN_DIR=str(tmp / "pg"), PG_SCHEMA="test_dev"):
-            db = PS.StandinPG("test_dev")
+        with gold(DIM) as base:
+            for src in ("dev_1", "dev_2"):  # DEV 원천 스키마는 판 올리기가 만든다(dbtool up — 적재는 DDL 없음)
+                dbtool.upgrade("search", base, DIM, src=src)
+            db = pgcase.connect(base)
             no_edw = mock.Mock(side_effect=AssertionError("EDW를 엶"))
             with mock.patch("pipeline.load.edw_doc_meta._Edw", no_edw):
                 counts = M.load(db, _bundle(["DEV-1/u1/a.pdf"], tmp, "DEV-1"))
             assert counts["by_source"]["dev_1"]["docs"] == 1, counts
-            rows = PS.StandinPG("test_dev_dev_1").q("SELECT file_path, created_at FROM test_dev_dev_1.doc")
-            assert rows == [{"file_path": "DEV-1/u1/a.pdf", "created_at": "2025-03-01T10:00:00+09:00"}], rows
+            rows = [(r["file_path"], kst(r["created_at"])) for r in db.q(f"SELECT file_path, created_at FROM {base}_dev_1.doc")]
+            assert rows == [("DEV-1/u1/a.pdf", "2025-03-01T10:00:00+09:00")], rows
             seed([{"file_path": "DEV-2/u/b.pdf", "source_system": "dev-2"}])
             assert CP.done_keys() == {"DEV-1/u1/a.pdf", "DEV-2/u/b.pdf"}
-            assert ST.all_sources("test_dev")[5:] == ["dev_1", "dev_2"]
-        real = mock.Mock(is_standin=False, schema="ai", q=lambda sql, params=None: [])  # 실 PG 꼴 — DEV 스키마 없음
+            assert ST.all_sources(base, db.q)[5:] == ["dev_1", "dev_2"]
+            db.cn.close()
+        real = mock.Mock(schema="ai", q=lambda sql, params=None: [])  # DEV 스키마 없는 PG
         err = None
         try:
             M.src_dbs(real, {"dev_1"})

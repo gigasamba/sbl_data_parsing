@@ -10,8 +10,10 @@ from pathlib import Path
 from common.config.settings import COMMON
 from pipeline import config as pc
 from pipeline.load.publish_parse_result import SILVER_FILE, rep_md_key, run, status_of
+from pipeline.shared import except_docs as SD
 from pipeline.shared.except_docs import SILVER_REASON, reason_of
-from tests.server.pipeline.goldseed import seed
+from tests.server.common import pgcase
+from tests.server.pipeline.goldseed import gold, seed
 
 
 class A:
@@ -109,13 +111,12 @@ def selftest():
         0
     ]  # S9 정리(Q7 a) — 서버가 rep_key 꼴을 바꿈(파일 이름 단 없음 — 기대값만 맞춤)
 
-    import sqlite3
-
     os_dir = d / "os"
     with (
+        gold(),
         pc.PIPE.env(PM_BUCKET=f"file://{os_dir}"),
-        COMMON.env(PG_STANDIN_DIR=str(d / "pg"), RUN_ENV="local"),
-    ):  # S7c — 시험하는 코드가 객체만 읽음(os.environ 안 건드림) · gold·applog는 PC 대역(임시 폴더) — 이미지에서도 시험 안에서만 local
+        COMMON.env(RUN_ENV="local"),
+    ):  # S7c — 시험하는 코드가 객체만 읽음(os.environ 안 건드림) · gold·applog는 실 pgvector 임시 스키마(goldseed.gold)
         a.apply = True
         r1 = run(a)
         # SI39 — ok(a)만 .md 업로드 · failed·skipped_document은 보고서로만
@@ -154,9 +155,12 @@ def selftest():
         assert (rec["doc_name"], rec["source_key"], rec["parse_status"], rec["silver_version"]) == ("a.pdf", "docs/a.pdf", "ok", "v1"), rec
         assert rec["silver_bucket"] == f"file://{os_dir}" and rec["silver_key"].endswith("/a_2026-10-08.md"), rec
         assert len(rec["sha256"]) == 64 and rec["parsed_at"].endswith("+09:00") and isinstance(rec["engines"], list), rec
-        cn = sqlite3.connect(d / "pg" / "applog.sqlite")
-        errs = cn.execute("select source_key, except_type, reason from except_doc_info").fetchall()
-        cn.close()
+        db = pgcase.connect(SD._schema())
+        errs = [
+            (r["k"], r["t"], r["r"])
+            for r in db.q(f"SELECT source_key AS k, except_type AS t, reason AS r FROM {db.schema}.except_doc_info")
+        ]
+        db.cn.close()
         assert sorted(errs) == [("docs/a.pdf", "silver", SILVER_REASON), ("docs/b.pdf", "error", "parse_failed")], (
             errs
         )  # 파싱 실패 — 기록만(다음 실행이 다시 고름) · 올린 a는 silver(pl-68)
@@ -246,7 +250,7 @@ def test_stage_dropped_docs():
         a = A()
         a.out, a.manifest, a.source_dir, a.rep, a.summary, a.skipped, a.keep = str(out), None, None, None, None, None, None
         a.source_system, a.version, a.parse_date, a.reparse, a.apply = "FileStorageMap", "v1", "2026-11-05", None, True
-        with pc.PIPE.env(PM_BUCKET=f"file://{d / 'os'}"), COMMON.env(PG_STANDIN_DIR=str(d / "pg"), RUN_ENV="local"):
+        with gold(), pc.PIPE.env(PM_BUCKET=f"file://{d / 'os'}"), COMMON.env(RUN_ENV="local"):
             r = run(a)
         silver = (out / "publish" / SILVER_FILE).read_text(encoding="utf-8")
         assert r["result"]["uploaded"] == 0 and r["result"]["excluded_drm_failed"] == want and silver == "", (name, r, silver)

@@ -1,13 +1,10 @@
 """op-17 — 검색 MCP의 DEV 원천(`DEV-<n>` — 개발 서버·PC만): 원천 목록 = 5벌 + 있는 `<기준>_dev_<n>`, search·list_doc_fulltext가
 `DEV-<n>`을 받고(그 스키마가 있을 때) prd는 모르는 값처럼 거부. 뒤에 생긴 DEV 스키마는 그 값을 처음 부를 때 다시 찾아 잡는다.
-SQLite 대역(pgfix, 임시 폴더) — 실 PG·외부 모델 없음(묶음 차원 0 — bm25만)."""
+실 pgvector의 임시 스키마(pgfix — test_*, 시험 뒤 지움) · 외부 모델 없음(묶음 차원 0 — bm25만)."""
 
 import contextlib
 import io
 import shutil
-import sqlite3
-import tempfile
-from pathlib import Path
 from unittest.mock import patch
 
 from common.store.db.models import search_tables as ST
@@ -16,6 +13,7 @@ from mcp_server.services import edw_calls
 from mcp_server.services import fulltext_svc as FS
 from mcp_server.services.search import search_svc as M
 from mcp_server.services.search import server_state as SS
+from tests.server.common import pgcase
 from tests.server.mcp import pgfix
 from tests.server.mcp.test_fulltext import FakeS3
 
@@ -78,7 +76,9 @@ FULLTEXT = [
 
 def test_dev_search():
     d = pgfix.mk_bundle(DOCS, CHUNKS)
-    sqlite3.connect(pgfix.standin_of(d) / f"{pgfix.SCHEMA}_dev_3.sqlite").close()  # 표 없는 DEV 스키마(깨진 스키마)
+    db = pgcase.connect()
+    db.q(f"CREATE SCHEMA {pgfix.schema_of(d)}_dev_3")  # 표 없는 DEV 스키마(깨진 스키마)
+    db.cn.close()
     SS._STATE.clear()
     try:
         with pgfix.use(d), mc.senv(FULLTEXT_SIGN_SECRET="k1"), patch.object(FS, "_storage", return_value=FakeS3({})):
@@ -142,22 +142,21 @@ LATER = [("search", 2), ("list_doc_fulltext", 4), ("edw_meta", 5)]
 
 
 def _later(d):
-    tmp = Path(tempfile.mkdtemp(prefix="devlater_"))
-    try:
-        docs = [{"file_path": f"DEV-{n}/n{n}.pdf", "source_system": f"DEV-{n}"} for _, n in LATER]
-        b = pgfix.mk_bundle(docs, [_chunk(i, "새 개발 문서 단가") for i in range(len(LATER))], load_pg=False)
-        pgfix.load(b, standin=tmp)
-        shutil.rmtree(b, ignore_errors=True)
-        for tool, n in LATER:
-            before = SS._STATE["Rs"]
-            assert f"dev_{n}" not in before, tool
-            shutil.copy(tmp / f"{pgfix.SCHEMA}_dev_{n}.sqlite", pgfix.standin_of(d))
-            if tool == "search":
-                assert _ev(M.do_search("단가", k=5, source_system=f"DEV-{n}")) == [f"n{n}.pdf"], tool
-            elif tool == "list_doc_fulltext":
-                assert _files(FS.do_list(source_system=f"DEV-{n}")) == [f"n{n}.pdf"], tool
-            else:
-                assert f"DEV-{n}" in edw_calls.search_attrs(), tool
-            assert SS._STATE["Rs"]["sfdc"] is before["sfdc"], tool  # 전체를 다시 만들지 않음
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+    base = pgfix.schema_of(d)
+    for tool, n in LATER:
+        before = SS._STATE["Rs"]
+        assert f"dev_{n}" not in before, tool
+        b = pgfix.mk_bundle(
+            [{"file_path": f"DEV-{n}/n{n}.pdf", "source_system": f"DEV-{n}"}], [_chunk(0, "새 개발 문서 단가")], load_pg=False
+        )
+        try:
+            pgfix.load(b, base, fixed=False)  # 이 DEV 원천 스키마만 지금 생김(dbtool up)
+        finally:
+            shutil.rmtree(b, ignore_errors=True)
+        if tool == "search":
+            assert _ev(M.do_search("단가", k=5, source_system=f"DEV-{n}")) == [f"n{n}.pdf"], tool
+        elif tool == "list_doc_fulltext":
+            assert _files(FS.do_list(source_system=f"DEV-{n}")) == [f"n{n}.pdf"], tool
+        else:
+            assert f"DEV-{n}" in edw_calls.search_attrs(), tool
+        assert SS._STATE["Rs"]["sfdc"] is before["sfdc"], tool  # 전체를 다시 만들지 않음

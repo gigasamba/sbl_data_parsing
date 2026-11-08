@@ -184,18 +184,22 @@ def case_env(mod):
         blank: dict[str, str | None] = {
             **dict.fromkeys(("LLM_BASE_URL", "VLM_BASE_URL", "EMBED_BASE_URL", "LLM_BUDGET_USD")),
             **dict.fromkeys(("LLM_ALLOW_EXTERNAL", "VLM_ALLOW_EXTERNAL", "EMBED_ALLOW_EXTERNAL"), "0"),  # 외부 전송 늘 끔
+            "APPLOG_DB_ENABLED": "0",  # 판정 시험은 서버 applog에 로그를 쓰지 않음(e2-22 — 운영 DB는 읽기만)
             # 하루 장부를 시험마다 따로 — 개발자의 output/_llm_spend 장부에 섞이지 않게
             "LLM_SPEND_FILE": str(Path(tempfile.mkdtemp(prefix="selftest_spend_")) / "spend.txt"),
         }
         base = child_env({"PYTHONUTF8": "1"})
-        if own:  # PC — 개발자 루트 settings.yaml(실 PG·모델 키) 대신 시험 전용 최소 설정 위에 덮음(시험 격리)
+        if own:  # PC — 개발자 루트 settings.yaml(모델 키 등) 대신 시험 전용 최소 설정 위에 덮음(시험 격리) · PG 접속만 이어받음(DB 사례는 진짜 pgvector — e2-22)
             base["SETTINGS_FILE"] = _case_settings()
+            pg = C.cfg().connections.pg
+            got = dict(PG_HOST=pg.host, PG_PORT=pg.port, PG_DB=pg.db, PG_USER=pg.user, PG_PASSWORD=C.reveal(pg.password))
+            blank.update({k: None if v is None else str(v) for k, v in got.items()})
         _CASE_ENVS[(fake, own)] = C.child_env(base, LLM_FAKE="1" if fake else None, **blank)
     return dict(_CASE_ENVS[(fake, own)])
 
 
 def _case_settings():
-    """PC 시험 사례의 바탕 설정 파일 — run_env: local만(접속·키 없음 → 정형 저장소는 SQLite, 모델 호출 없음). 한 번 만든다."""
+    """PC 시험 사례의 바탕 설정 파일 — run_env: local만(키 없음 → 모델 호출 없음 · PG 접속은 case_env가 덮음). 한 번 만든다."""
     if "file" not in _CASE_ENVS:
         import tempfile
 
@@ -267,7 +271,9 @@ def selftest(a):
         miss = re.findall(r"ModuleNotFoundError: No module named '(pipeline|mcp_server)['.]", out)
         if r.returncode != 0 and miss and all(_image_lacks(m) for m in set(miss)):
             return (mod, "SKIP", f"다른 이미지 모듈 필요({', '.join(sorted(set(miss)))})")
-        return (mod, "PASS" if r.returncode == 0 else "FAIL", "" if r.returncode == 0 else out[-1500:])
+        if r.returncode != 0:
+            return (mod, "FAIL", out[-1500:])
+        return (mod, "PASS", " · ".join(re.findall(r"^\[시험\] SKIP \S+?\.(test_\w+)", r.stdout, re.M)))  # 시험 함수 SKIP(운영 DB 쓰기 등)
 
     # 사례는 서로 다른 자식 프로세스라 함께 돌림(쓸 수 있는 CPU 수, 많아도 8개) — map은 순서를 지켜 표는 그대로
     for mod, _ in cases:  # 덮기 파일 캐시(_CASE_ENVS)를 먼저 채움 — 스레드가 같은 파일을 두 번 만들지 않게
@@ -276,13 +282,15 @@ def selftest(a):
         rows += pool.map(run_case, cases)
     fails = [name for name, status, _ in rows if status == "FAIL"]
     skips = sum(1 for _, status, _ in rows if status == "SKIP")
+    fn_skips = sum(len(detail.split(" · ")) for _, status, detail in rows if status == "PASS" and detail)
     for name, status, detail in rows:
-        print(f"{status:4} {name}" + (f"  ({detail})" if status == "SKIP" else ""))
+        print(f"{status:4} {name}" + (f"  ({'SKIP ' if status == 'PASS' else ''}{detail})" if status != "FAIL" and detail else ""))
         if status == "FAIL":
             print("     " + detail.replace("\n", "\n     "))
     print(
         f"\n{len(rows) - len(fails) - skips}/{len(rows) - skips} 통과"
         + (f" · SKIP {skips}" if skips else "")
+        + (f" · 시험 함수 SKIP {fn_skips}" if fn_skips else "")
         + (f" · FAIL {len(fails)}: {', '.join(fails)}" if fails else "")
     )
     if fails:

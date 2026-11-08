@@ -9,7 +9,7 @@ from mcp_server.schemas.evidence import EVIDENCE_KEYS, SEARCH_TOP_KEYS
 from mcp_server.services.search import search_svc as M
 from mcp_server.services.search.evidence_shape import evidence_status
 from mcp_server.services.search.server_state import _STATE
-from tests.server.mcp import pgfix  # mc-01(11-01) — 검색은 PG 하나: 묶음을 SQLite 대역에 적재(임시 폴더, 실 PG 안 닿음)
+from tests.server.mcp import pgfix  # mc-01(11-01) — 검색은 PG 하나: 묶음을 실 pgvector 임시 스키마(`test_*`)에 적재
 
 
 def do_search(question=None, k=8, **filters):

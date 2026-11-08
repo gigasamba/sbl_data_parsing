@@ -1,26 +1,23 @@
 """pl-68 — 실버 먼저 적재의 상태 기록: 게시(publish_parse_result.apply)가 올린 원본마다 `applog.except_doc_info` silver 행(수준 warn)을 쓰고,
 골드 적재(pgvector_load.load)가 그 문서를 gold에 넣으면 지운다. 골드 실패(분류 실패 — gold에 안 넣음)·실버까지만 실행은 silver 행이 남는다.
-PC 대역 sqlite(임시 폴더)만 — 외부 접속 없음."""
+실 pgvector 임시 스키마(goldseed.gold — applog도 `<기준>_applog`, 시험 뒤 지움)."""
 
 import json
 import shutil
-import sqlite3
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
 
-from common.config.settings import COMMON
-from common.store import pg as PGC
-from common.store import pg_standin as PS
-from common.store.db.dbtool import standin_script
 from pipeline.load import doc_classify as CL
 from pipeline.load import pgvector_load as M
 from pipeline.load import publish_parse_result as P
 from pipeline.shared import except_docs as SD
+from tests.server.common import pgcase
+from tests.server.pipeline.goldseed import gold as gold_schema
 
-KEY, S, DIM = "SFDC/u/a.pdf", "orca_pl68_t", 4
+KEY, DIM = "SFDC/u/a.pdf", 4
 CASES = [  # (경우, 골드 적재를 돌림, 분류 답(실패면 gold에 안 넣음), silver 행이 남음)
     ("gold ok", True, '{"class": "RFP"}', False),
     ("gold fails", True, '{"class": "Others"}', True),
@@ -46,27 +43,24 @@ def _bundle(d):
     return d
 
 
-def _silver_rows(pg):
-    cn = sqlite3.connect(pg / "applog.sqlite")
+def _silver_rows():
+    db = pgcase.connect(SD._schema())
     try:
-        return cn.execute("SELECT source_key, reason, level FROM except_doc_info WHERE except_type = 'silver'").fetchall()
+        rows = db.q(f"SELECT source_key, reason, level FROM {db.schema}.{SD.TABLE} WHERE except_type = 'silver'")
+        return [(r["source_key"], r["reason"], r["level"]) for r in rows]
     finally:
-        cn.close()
+        db.cn.close()
 
 
 def test_silver_row_table():
     for name, gold, answer, stays in CASES:
         tmp = Path(tempfile.mkdtemp())
         try:
-            pg = tmp / "pg"
-            with COMMON.env(PG_STANDIN_DIR=str(pg), RUN_ENV="local"), patch.object(PGC, "has_conn", return_value=False):
+            with gold_schema(DIM) as S:
                 P.apply([_entry()], P.LocalFolderStore(tmp / "os"), tmp / "md")
-                assert _silver_rows(pg) == [(KEY, SD.SILVER_REASON, "warn")], (name, _silver_rows(pg))
+                assert _silver_rows() == [(KEY, SD.SILVER_REASON, "warn")], (name, _silver_rows())
                 if gold:
-                    db = PS.StandinPG(S)
-                    sf = PS.StandinPG(f"{S}_sfdc")
-                    with sf.cn.cursor() as cur:
-                        cur.execute(standin_script(f"{S}_sfdc", DIM))
+                    db = sf = pgcase.connect(S)
                     with (
                         patch.object(CL, "_system", lambda src: "system"),
                         patch("common.ai.llm.chat", return_value=answer),
@@ -75,7 +69,8 @@ def test_silver_row_table():
                         M.load(db, _bundle(tmp / "bundle"))
                     in_gold = [r["file_path"] for r in sf.q(f"SELECT file_path FROM {S}_sfdc.doc")]
                     assert in_gold == ([] if stays else [KEY]), (name, in_gold)
-                assert bool(_silver_rows(pg)) == stays, (name, _silver_rows(pg))
+                    db.cn.close()
+                assert bool(_silver_rows()) == stays, (name, _silver_rows())
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
     print("[selftest] pl-68 — 게시가 silver 행을 쓰고 골드 성공이 지움 · 골드 실패·실버까지만은 남음 통과")

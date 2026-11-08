@@ -1,5 +1,5 @@
 """마스터 표 `<PG_SCHEMA>_master.glossary`(op-17 규칙 19~21): 판 0002_master ↔ 모델 칸 · 스키마 이름 · `master load`(한 트랜잭션·해시) ·
-glossary(melt)에서 되돌린 옛 행 모양으로 terms.py가 옛 CSV와 같은 값을 냄 · 서버는 못 읽으면 멈춤 · gold_version 꼴. 임시 SQLite 대역만 — 외부 접속 없음."""
+glossary(melt)에서 되돌린 옛 행 모양으로 terms.py가 옛 CSV와 같은 값을 냄 · 못 읽으면 멈춤 · gold_version 꼴. DB 사례는 실 pgvector의 임시 스키마(tests/server/common/pgcase — test_*, 시험 뒤 지움)."""
 
 import csv
 import importlib.util
@@ -13,24 +13,9 @@ from common.config.settings import COMMON
 from common.core import terms as T
 from common.core.paths import GLOSSARY_ROOT
 from common.store import master as M
-from common.store import pg as PGC
 from common.store.db import dbtool as D
 from common.store.db.models.master_tables import COLS, master_metadata
-
-
-def _standin(d):
-    """임시 대역 폴더 + 접속 정보 없음(PC) — 끝나면 되돌림."""
-    M.reset()
-    stack = [COMMON.env(PG_STANDIN_DIR=str(d), RUN_ENV="local"), mock.patch.object(PGC, "has_conn", return_value=False)]
-    for c in stack:
-        c.__enter__()
-    return stack
-
-
-def _close(stack):
-    for c in reversed(stack):
-        c.__exit__(None, None, None)
-    M.reset()
+from tests.server.common import pgcase
 
 
 def _mig(name):
@@ -232,14 +217,13 @@ def test_real_glossary_snapshot():
 
 def test_load_hash_and_transaction():
     d = Path(tempfile.mkdtemp())
-    st = _standin(d)
-    try:
+    with pgcase.with_master() as base:
         m1 = M.get()
         rows = M.read_csv()
         assert len(m1.glossary) == len(rows) and m1.hash == M.content_hash(rows) and m1.rows("domain_terms") and m1.rows("client_roster")
         M.reset()
         assert M.get().hash == m1.hash  # 같은 CSV — 같은 해시(다시 읽어도)
-        db = M._standin("ai")
+        db = pgcase.connect(D.schema_of("master", base))
         g = d / "g"
         shutil.copytree(GLOSSARY_ROOT, g)
         p = g / M.CSV_NAME
@@ -249,14 +233,17 @@ def test_load_hash_and_transaction():
         # 한 트랜잭션 — 중간에 실패하면 이전 내용 그대로
         real = db.cn.cursor
 
-        def flaky():  # DELETE 뒤 넣기에서 실패
-            cur = real()
+        class Flaky:  # DELETE 뒤 넣기에서 실패(psycopg 커서는 속성을 못 바꿈 — 감싸서)
+            def __init__(self):
+                self.cur = real()
 
-            def executemany(sql, rows):
+            def execute(self, *a):
+                return self.cur.execute(*a)
+
+            def executemany(self, sql, rows):
                 raise RuntimeError("boom")
 
-            cur.executemany = executemany
-            return cur
+        flaky = Flaky
 
         with mock.patch.object(db.cn, "cursor", flaky):
             try:
@@ -271,30 +258,28 @@ def test_load_hash_and_transaction():
         except SystemExit:
             pass
         assert M.read(db).hash == h2
-    finally:
-        _close(st)
+        db.cn.close()
 
 
 def test_server_refuses_and_empty_table():
-    d = Path(tempfile.mkdtemp())
     M.reset()
-    with COMMON.env(PG_STANDIN_DIR=str(d), RUN_ENV="dev"), mock.patch.object(PGC, "has_conn", return_value=False):
+    with COMMON.env(RUN_ENV="dev", PG_HOST=None):  # 접속 정보 없음 — 로컬 대체 DB 없이 멈춤
         try:
             M.get()
-            raise AssertionError("서버가 대역으로 시작함")
+            raise AssertionError("PG 접속 정보 없이 시작함")
         except SystemExit:
             pass
-    st = _standin(d)
-    try:
-        db = M._standin("ai")
-        db.q(f"DELETE FROM {db.schema}.glossary")
+    with pgcase.with_master() as base:
+        db = pgcase.connect(D.schema_of("master", base))
         try:
-            M.read(db)
-            raise AssertionError("빈 glossary를 읽음")
-        except SystemExit as e:
-            assert "master load" in str(e)
-    finally:
-        _close(st)
+            db.q(f"DELETE FROM {db.schema}.glossary")
+            try:
+                M.read(db)
+                raise AssertionError("빈 glossary를 읽음")
+            except SystemExit as e:
+                assert "master load" in str(e)
+        finally:
+            db.cn.close()
 
 
 def test_gold_version():
@@ -308,21 +293,8 @@ def test_gold_version():
     assert len(f"{v}+m12345678") <= 64  # 판 표기 길이 상한 64자
 
 
-def test_standin_follows_csv_and_mcp_preload():
-    """PC 대역은 git CSV가 바뀌면 다시 채움(낡은 명부로 남지 않게) · 검색 MCP는 검색기를 만들 때 마스터를 미리 읽어, 못 읽으면 RuntimeError."""
-    d = Path(tempfile.mkdtemp())
-    st = _standin(d)
-    try:
-        h1 = M.get().hash
-        changed = [*M.read_csv(), dict(zip(COLS, ("client", "Zeta Bio", "Z1", "client_id", "", "", "")))]
-        with mock.patch.object(M, "read_csv", lambda folder=None: changed):
-            M.reset()
-            h2 = M.get().hash
-        assert h2 != h1 and h2 == M.content_hash(changed), (h1, h2)
-        M.reset()
-        assert M.get().hash == h1  # 원래 CSV로 돌아오면 다시 맞춤
-    finally:
-        _close(st)
+def test_mcp_preload():
+    """검색 MCP는 검색기를 만들 때 마스터를 미리 읽어, 못 읽으면 RuntimeError."""
     from mcp_server.services.search import server_state as SS
 
     with mock.patch.object(SS, "check_store", lambda: None), mock.patch.object(M, "get", side_effect=SystemExit("[master] 비어 있음")):

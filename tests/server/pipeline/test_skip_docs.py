@@ -1,6 +1,6 @@
 """op-17 — 적재되지 않은 문서 `applog.except_doc_info`: 영구 뺌(skip — 받기 전 rdb:csv 지원 안 하는 확장자·받은 뒤 거르기 DRM·암호·
 지원 안 함·확장자 없음·내용 중복)과 실패(error — 파싱·적재)를 원본 키 + 종류당 한 행씩 upsert(처음·마지막 시각·횟수) → 대상 목록
-`list --skip-done`이 skip 키만 뺀다(error는 다음 실행이 다시 고름). PC 대역 sqlite(임시 폴더)만 — 외부 접속 없음."""
+`list --skip-done`이 skip 키만 뺀다(error는 다음 실행이 다시 고름). applog 표는 실 pgvector 임시 스키마(`test_*_applog` — 시험 뒤 지움)."""
 
 import contextlib
 import json
@@ -11,12 +11,13 @@ from pathlib import Path
 from unittest import mock
 
 from common.config.settings import COMMON
-from common.store import pg as PGC
 from pipeline import config as pc
 from pipeline.extract import candidate_pick as CP
 from pipeline.extract import candidate_ready as CR
 from pipeline.extract import filter_and_rotate as FR
 from pipeline.shared import except_docs as SD
+from tests.server.common import pgcase
+from tests.server.pipeline.goldseed import applog
 
 # (원본 키, 파일 이름, 거르기 이유, skip 행 이유(None = 쓰지 않음))
 REASONS = [
@@ -43,38 +44,35 @@ RDB_SYSTEMS = [(None, False), ("DEV-1", True), ("dev-1,SFDC", True), ("SFDC", Fa
 
 
 @contextlib.contextmanager
-def standin(d):
-    """PG 접속 없음(대역 sqlite를 임시 폴더에)."""
-    with COMMON.env(PG_STANDIN_DIR=str(d), RUN_ENV="local"), mock.patch.object(PGC, "has_conn", return_value=False):
-        yield
+def applog_pg(_d=None):
+    """applog 표만 있는 임시 스키마(`<test_*>_applog`) — 예외 기록이 거기로(서버 applog에 안 씀)."""
+    with pgcase.schema() as base:
+        log = applog(base)
+        with mock.patch.object(SD, "_schema", lambda: log):
+            yield
 
 
-def _rows(d, kind="skip"):
-    cn = sqlite3.connect(Path(d) / "applog.sqlite")
+def _q(sql, params=()):
+    db = pgcase.connect(SD._schema())
     try:
-        return {
-            r[0]: r[1:]
-            for r in cn.execute(
-                "SELECT source_key, source_system, reason, level, count, first_seen, last_seen FROM except_doc_info WHERE except_type = ?",
-                (kind,),
-            )
-        }
+        return db.q(sql.replace("{T}", f"{db.schema}.{SD.TABLE}"), params)
     finally:
-        cn.close()
+        db.cn.close()
 
 
-def _ext_size(d, kind="skip"):
-    cn = sqlite3.connect(Path(d) / "applog.sqlite")
-    try:
-        return {
-            r[0]: r[1:] for r in cn.execute("SELECT source_key, file_ext, file_size FROM except_doc_info WHERE except_type = ?", (kind,))
-        }
-    finally:
-        cn.close()
+def _rows(_d=None, kind="skip"):
+    cols = ("source_system", "reason", "level", "count", "first_seen", "last_seen")
+    rows = _q(f"SELECT source_key, {', '.join(cols)} FROM {{T}} WHERE except_type = %s", (kind,))
+    return {r["source_key"]: tuple(r[c] for c in cols) for r in rows}
+
+
+def _ext_size(_d=None, kind="skip"):
+    rows = _q("SELECT source_key, file_ext, file_size FROM {T} WHERE except_type = %s", (kind,))
+    return {r["source_key"]: (r["file_ext"], r["file_size"]) for r in rows}
 
 
 def test_record_upsert():
-    with tempfile.TemporaryDirectory() as d, standin(d):
+    with tempfile.TemporaryDirectory() as d, applog_pg(d):
         size = {k: s for k, s, _ in EXT_SIZE}
         rows = [
             {"source_key": k, "source_system": k.split("/", 1)[0], "file_name": n, "file_size": size.get(k), "reason": r}
@@ -107,7 +105,7 @@ def test_rdb_all_unsupported():
 
 
 def _rdb_unsupported(systems, picked):
-    with tempfile.TemporaryDirectory() as d, standin(Path(d) / "pg"):
+    with tempfile.TemporaryDirectory() as d, applog_pg(Path(d) / "pg"):
         root = Path(d)
         csv_f = root / "batch.csv"
         csv_f.write_text(
@@ -142,7 +140,7 @@ def test_list_excludes_skipped():
         (2, "SFDC/b/rfp_new.pdf", "rfp_new.pdf", 20, "SFDC"),
         (3, "SFDC/c/rfp_z.pdf", "rfp_z.pdf", 30, "SFDC"),
     ]
-    with tempfile.TemporaryDirectory() as d, standin(Path(d) / "pg"):
+    with tempfile.TemporaryDirectory() as d, applog_pg(Path(d) / "pg"):
         edw = Path(d) / "edw.sqlite"
         cn = sqlite3.connect(edw)
         cn.execute("CREATE TABLE FileStorageMap (id INTEGER, s3_key TEXT, original_filename TEXT, file_size INTEGER, source_system TEXT)")
@@ -160,20 +158,6 @@ def test_list_excludes_skipped():
                 assert CP._list_cmd([*args, "--filter", "rfp", "--out", str(out)]) == 0
             assert [r["s3_key"] for r in json.loads(out.read_text(encoding="utf-8"))["docs"]] == want, args
             assert not (Path(d) / CP.RUN_SEEN).exists()
-
-
-def test_old_standin_gets_new_columns():
-    """판 0004 전에 만든 대역 파일(file_ext·file_size 칸 없음)도 그대로 씀 — 없는 칸을 더한다."""
-    with tempfile.TemporaryDirectory() as d, standin(d):
-        cn = sqlite3.connect(Path(d) / "applog.sqlite")
-        cn.execute(
-            "CREATE TABLE except_doc_info (source_key TEXT, except_type TEXT, source_system TEXT, file_name TEXT, reason TEXT, "
-            "level TEXT, first_seen TEXT, last_seen TEXT, count INTEGER, PRIMARY KEY (source_key, except_type))"
-        )
-        cn.commit()
-        cn.close()
-        assert SD.record_error([{"source_key": "SFDC/a/a.PDF", "file_name": "a.PDF", "file_size": "4", "reason": "parse_failed"}]) == 1
-        assert _ext_size(d, "error") == {"SFDC/a/a.PDF": ("pdf", 4)}
 
 
 def _mail_with_locked_zip():
@@ -199,7 +183,7 @@ def _mail_with_locked_zip():
 def test_part_row():
     """pl-65 — 안 문서를 못 꺼낸 원본: 성한 안 파일은 꺼내고(문서는 그대로 남음), 받기가 part 행(수준 warn, 이유 = 못 꺼낸 이름과 까닭)을
     원본 키당 한 행 남긴다. 다시 돌리면(다시 풀지 않아도) 횟수가 오른다. 대상 목록에서 빼는 키가 아니다."""
-    with tempfile.TemporaryDirectory() as d, standin(Path(d) / "pg"):
+    with tempfile.TemporaryDirectory() as d, applog_pg(Path(d) / "pg"):
         src, prepared, state = Path(d) / "src", Path(d) / "prepared", Path(d) / "state"
         src.mkdir()
         state.mkdir()

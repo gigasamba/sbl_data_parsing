@@ -1,5 +1,5 @@
 """op-05·op-14 — settings.sample.yaml을 그대로 settings.yaml로 복사하고 빈 칸(사람이 꼭 적을 [필수] 칸)만 채우면 바로 시작된다.
-local은 run_env·모델 접속만 채우면 시작하고(PG는 비우면 sqlite 대역), 서버 전용 칸을 적어 두면 비우고 경고(칸 이름만)한다.
+local은 run_env·모델 접속만 채우면 시작하고(PG 칸이 비면 PG를 쓰는 자리에서 멈춤), 서버 전용 칸을 적어 두면 비우고 경고(칸 이름만)한다.
 표 한 줄 = (사례, 채울 칸, 기대 RUN_ENV, 기대 값). 앱 설정·시작 관문·호스트 읽기(있을 때)·PG 스키마·EDW 계정·local 값을 본다.
 외부 접속 없음, 임시 폴더만 — 설정 파일은 load(file=…)·environ 사전으로 가리킨다(os.environ 안 건드림)."""
 
@@ -55,12 +55,12 @@ _CLS = S.section_class(("common", "pipeline"))[0]
 _ENV = {p: e for e, p in S.env_map(_CLS).items()}
 ALL_SERVER = {_ENV[p]: f"srv-value-{i}-{_HEX}" for i, p in enumerate(S.LOCAL_IGNORED)}
 _LOCAL_BUCKET = f"file://{PROJ_ROOT.as_posix()}/valid_env/object_storage/Parsing_Result"
-# (사례, 채울 칸, 기대 RUN_ENV, 기대 값) — 기대 값: schema = PG 스키마(None = PG 접속 없음 — sqlite 대역), read = login()의 빠진 칸,
+# (사례, 채울 칸, 기대 RUN_ENV, 기대 값) — 기대 값: schema = PG 스키마(None = PG 접속 없음 — conf()가 멈춤), read = login()의 빠진 칸,
 # bucket = 게시 버킷, source = 파싱 원본, max_new = 새 문서 상한, ignored = 경고에 나와야 하는 칸 이름(local이 비운 서버 칸),
 # overlay = 덮기 파일 overrides로 줄 값(env 이름), blank = sample이 기본값을 적어 낸 칸 중 비울 칸, warn = 나와야 하는 경고 글자(없으면 그 경고가 없어야 함 — pg_schema 기본값 알림)
 CASES = (
     (
-        "(a) PC — run_env·모델만 채움(PG 없음 → sqlite 대역)",
+        "(a) PC — run_env·모델만 채움(PG 없음 → PG 쓰는 명령은 멈춤)",
         LOCAL_MIN,
         "local",
         {
@@ -99,6 +99,14 @@ CASES = (
     ),
 )
 _HOST = PROJ_ROOT / "deploy" / "host" / "scripts" / "settings_to_env.py"  # 호스트 스크립트 — 이미지에는 없음(PC에서만 봄)
+
+
+def _schema(pg):
+    """PG 스키마 — 접속 칸이 비면 None(conf가 멈춤)."""
+    try:
+        return pg.conf()["PG_SCHEMA"]
+    except SystemExit:
+        return None
 
 
 def _fill(text, fills):
@@ -155,7 +163,7 @@ def test_copied_sample_runs_after_filling_blanks():
                 assert (p.extract.input_source, p.extract.max_new) == (exp["source"], exp["max_new"]), what
             err = io.StringIO()
             with S.COMMON.override(file=f, environ={}), contextlib.redirect_stderr(err):
-                assert (pg.conf()["PG_SCHEMA"] if pg.has_conn() else None) == exp["schema"], what
+                assert _schema(pg) == exp["schema"], what
                 if "read" in exp:
                     assert mssql.login()[1] == exp["read"], what
             warn = [line for line in err.getvalue().splitlines() if "required.pg.pg_schema" in line]
