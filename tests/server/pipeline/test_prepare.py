@@ -111,7 +111,7 @@ def selftest():
         assert _ole_encrypted_reason(normal_docx) is None, "OOXML(.docx)은 OLE_EXT 밖 — 손대지 않음"
 
         # SI44② — 압축·처리 엔진 없는 확장자(파싱 대상 아님, 암호·손상과 다른 사유)
-        assert _unsupported_reason(w("p.zip", b"PK\x03\x04" + b"\x00" * 20)) == "unsupported_archive"
+        assert _unsupported_reason(w("p.zip", b"PK\x03\x04" + b"\x00" * 20)) is None  # zip은 압축 엔진이 풂(pl-57 — 깨짐은 archive.check)
         assert _unsupported_reason(w("q.rar", b"Rar!" + b"\x00" * 20)) == "unsupported_archive"
         assert _unsupported_reason(w("r.xyz", b"\x00" * 20)) == "unsupported_format"
         assert _unsupported_reason(good_pdf) is None and _unsupported_reason(normal_docx) is None  # 처리 엔진 있음
@@ -209,7 +209,7 @@ def test_records_outside_scanned_folder():
         src.mkdir()
         out.mkdir()
         (src / "a.txt").write_text("hello", encoding="utf-8")
-        (src / "b.zip").write_bytes(b"PK\x03\x04" + b"\x00" * 20)  # 압축 — 건너뜀(unsupported_archive)
+        (src / "b.zip").write_bytes(b"PK\x03\x04" + b"\x00" * 20)  # 깨진 압축 — 건너뜀(broken_archive — pl-57)
         (out / "skipped.jsonl").write_text(json.dumps({"file": "old.pdf", "reason": "drm_fasoo"}) + "\n", encoding="utf-8")
         (out / "skipped.csv").write_text("file,reason\n", encoding="utf-8")
         with mock.patch.object(sys, "argv", ["prepare", "--src", str(src), "--out", str(out)]):

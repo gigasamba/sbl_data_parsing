@@ -37,7 +37,7 @@ EXT_SIZE = [
     ("SFDC/e/e.doc", None, ("doc", None)),
 ]
 # rdb:csv 한 줄 묶음(run_pipeline batch.csv) — 모두 받기 전에 걸러짐(지원 안 하는 확장자) → 받을 것 0건이어도 멈추지 않음
-RDB_ROWS = [("1", "SFDC/u1/a.zip", "a.zip"), ("2", "SFDC/u2/b.7z", "b.7z")]  # 원천 칸 = dev-1(키 첫 마디와 달라도 그 값, 대문자로 — op-17)
+RDB_ROWS = [("1", "SFDC/u1/a.rar", "a.rar"), ("2", "SFDC/u2/b.7z", "b.7z")]  # 원천 칸 = dev-1(키 첫 마디와 달라도 그 값, 대문자로 — op-17)
 # 원천 목록(extract.source.systems) → 건너뜀 기록 여부 — 목록 밖 행은 고르지도 기록하지도 않음(비우면 운영 5개 원천 — DEV 행은 밖, op-17 규칙 8)
 RDB_SYSTEMS = [(None, False), ("DEV-1", True), ("dev-1,SFDC", True), ("SFDC", False)]
 
@@ -122,7 +122,7 @@ def _rdb_unsupported(systems, picked):
         ):
             _, left, _, only = CR.stage_batch(f"rdb:csv:{csv_f}", root / "out", root / "prepared", 0, _filter)
         assert left == [] and only.read_text(encoding="utf-8").split() == []
-        want = [("a.zip", "unsupported_archive", "DEV-1"), ("b.7z", "unsupported_archive", "DEV-1")] if picked else []
+        want = [("a.rar", "unsupported_archive", "DEV-1"), ("b.7z", "unsupported_archive", "DEV-1")] if picked else []
         assert sorted(events) == want, (systems, events)
         got = {k: v[:2] + _ext_size(root / "pg")[k] for k, v in _rows(root / "pg").items()} if picked else {}
         want = {k: ("DEV-1", "unsupported_archive", Path(n).suffix[1:], 3) for _, k, n in RDB_ROWS}  # 크기 = 표의 file_size

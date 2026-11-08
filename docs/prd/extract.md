@@ -35,7 +35,7 @@
 4. 회전 바로잡기는 `extract.prepare.rotate_pages`(기본 `false`)가 켜졌을 때만 한다. 꺼져 있으면 회전용 OCR을 하지 않고 파일을 그대로 놓는다. 서버 러너는 `ops.run_pipeline.parse.batch_rotate_scans`(기본 `false`)가 꺼져 있으면 `stage --no-scan-rotate`로 이미지 PDF(스캔)는 돌리지 않는다.
 5. 켜져 있으면 이미지·스캔 PDF 쪽마다 4방향(0·90·180·270도) RapidOCR 점수를 스레드 4개로 동시에 재고 가장 높은 방향으로 돌린다 — 같으면 0도, 모두 0이면 그대로. 기록은 `output/prepared/rotation.csv`(파일·쪽·각도·네 방향 점수·회전 전 원본 sha256 `orig_sha256`).
 6. DRM·암호 파일은 감지해서 표시하고 건너뛴다(상태 `skipped_drm`, `prepared/_records/skipped.jsonl`). 복호화는 흐름 안에서 하지 않고 수동 명령 `python -m pipeline.extract.protected_docs decrypt`로만 한다.
-7. 압축 파일(zip)은 지원하지 않는다고 표시한다. 처리 엔진 없는 확장자(`registry.engines_for`가 빈 것)는 두 곳에서만 거른다 — 받기 전 `candidate_pick.rdb_pick`(`_filter_unsupported_rows` — rdb:csv 대상 고르기), 받은 뒤 `filter_and_rotate`(`unsupported_*`). 파일 크기 상한(`extract.max_source_file_mb`)은 파싱(`parse_engines`)이 본다.
+7. 압축 원본 `.zip`·`.tar`·`.tgz`·`.tar.gz`는 풀어 파싱하고(암호·깨짐·안전 상한은 `pipeline.extract.archive.check`가 거름 — [pl-57](#pl-57)), `.7z`·`.rar`·`.bz2`·`.xz`는 지원하지 않는다고 표시한다(`unsupported_archive`). 처리 엔진 없는 확장자(`registry.engines_for`가 빈 것)는 두 곳에서만 거른다 — 받기 전 `candidate_pick.rdb_pick`(`_filter_unsupported_rows` — rdb:csv 대상 고르기), 받은 뒤 `filter_and_rotate`(`unsupported_*`). 파일 크기 상한(`extract.max_source_file_mb`)은 파싱(`parse_engines`)이 본다.
 8. 중복·DRM·암호·미지원으로 건너뛴 문서는 문서마다 `applog.pipe_event`에 한 행을 남긴다(`pipeline/shared/runtrace.py` `skip_event` — 단계 `extract.skip`, `doc_id` = 파일 이름, `status=skip`, `err_kind=doc`, `err`·`metrics.reason` = 이유 `dup_batch`·`dup_done`·`dup_run`·`drm_*`·`encrypted_*`·`unsupported_*`, 중복이면 `metrics.dup_of` = 남긴 문서 — 같은 묶음은 파일 이름, 끝난 문서·이번 실행은 원본 키). 받기 전(`rdb_pick`)에 뺀 지원 안 하는 확장자도 같은 행을 남긴다. 다시 받아도 같은 결과인 문서는 [pl-58](#pl-58).
 
 ### QA
@@ -97,10 +97,47 @@ A: `, 절 `DS`. 5행 = `divider`만 → 건너뜀. 머리글 없는 시트 `memo
 - Status: done
 
 <a id="pl-57"></a>
-## pl-57 · 원본 zip은 풀어서 안의 문서를 파싱
+## pl-57 · 압축 원본은 풀어서 안 파일의 글을 그 문서에
 - 이유(사용자 11-05): zip으로 올라온 원본 안의 문서도 검색되어야 한다. 메일 첨부 zip은 이미 풀어 파싱한다(pl-36).
-- 요건(되어야 할 모습): 받은 원본이 zip이면 `candidate_ready`가 풀어 안의 문서를 각각 파싱 입력으로 둔다. 안 파일의 키·처리 기록·깊이·크기·개수 상한·암호 zip 처리는 설계 때 정해 여기 적는다.
-- 비고(현재와 다른 점): 원본 zip은 "지원하지 않음"(`skipped_unsupported`)으로 표시만 한다(`filter_and_rotate.ARCHIVE_EXT` — pl-02).
+
+### 규칙(사용자 11-06 결정)
+1. 압축 원본 하나 = 검색 문서 하나(메일 첨부와 같은 방식 — [transform.md#pl-36](transform.md#pl-36)). 안 파일은 형식별 엔진으로 글을 뽑아 대표 본문에 `[파일 <안 경로>]` 절로 덧붙인다(글자만 — 표 구조·그림 설명 없음, 안의 그림 파일은 읽지 않음). 문서 키·처리 기록은 압축 원본 하나(`s3_key` 그대로).
+2. 푸는 형식: `.zip`·`.tar`·`.tgz`·`.tar.gz`(표준 라이브러리, 확장자로 고름). `.7z`·`.rar`·`.bz2`·`.xz`, tar가 아닌 `.gz`는 `unsupported_archive`.
+3. 압축 엔진 `archive`(엔진 폴더 `engines/archive` — 새 엔진이라 다른 엔진의 엔진 지문은 그대로, 사람 검토 등급 A)는 맨 바깥 파일 목록을 본문으로 낸다. 안 파일은 받기 단계가 준비 폴더에 풀어 두고([pl-63](#pl-63)), 대표 결과의 첨부 단계(`mail_attachments`, 후보정 `attachments`)가 파싱한다(P0 캐시 같음). 엔진 구성 `parse`에 `.zip`·`.tar`·`.tgz`·`.gz` → `archive`.
+4. 깊이는 [pl-63](#pl-63) 규칙 2(원본에서 2단계 — 안의 압축은 한 단계 더 풀림). 안의 압축이 풀리지 않으면(tar 아닌 `.gz`·깨짐) 보통 파일로 두고 바깥 압축은 그대로 처리한다.
+5. 안전 상한(평소엔 걸리지 않을 큰 값, 설정 칸): 풀린 크기 합계 `tuning.extract.archive.archive_max_total_mb`(2048), 파일 수 `archive_max_files`(1000). 안의 압축은 크기가 합계 상한 안일 때만 열어 본다. 안 파일 하나의 크기 상한은 없다.
+6. 받기의 거르기(`filter_and_rotate` — `archive.check`)가 목록만 읽어 판정하고, 걸리면 `applog.except_doc_info`에 `skip`으로 남겨 다음 실행도 건너뛴다: 암호 `encrypted_archive` · 깨짐 `broken_archive` · 상한 넘음 `archive_too_big`. 상한을 올렸거나 원본을 다시 올렸으면 그 행을 지워야 다시 고른다.
+7. 압축 읽기(목록·상한·암호 판정·꺼내기)는 받기 단계 `pipeline/extract/archive.py` 한 곳(사용자 11-06 — shared 아님. 엔진은 엔진 지문을 지키려고 엔진 폴더 안에서 목록만 따로 읽음). 나중에 안 파일마다 문서 하나로 바꿀 때도 풀어 둔 `_parts/`를 쓴다.
+8. 검색 MCP의 `parse_document`는 압축을 받지 않는다(`engine_check.allowed_exts`에서 뺌).
+
+### QA
+- `tests/server/pipeline/test_archive.py` 사례 표: zip·tar.gz 풀림 → `[파일 …]` 절 · 안 zip 한 단계 · 두 단계 밑은 안 풂 · 안 `.gz`·깨진 안 zip은 보통 파일 · 끝에 zip 든 tar · 안 그림 건너뜀 · 암호 → `encrypted_archive` · 깨짐 → `broken_archive` · 파일 수·합계 넘음 → `archive_too_big` · `.7z` → `unsupported_archive`.
+
+- Status: done
+
+<a id="pl-63"></a>
+## pl-63 · 문서 안 문서는 받기 단계에서 풀어 둔다(압축·메일 첨부·오피스 개체)
+- 이유(사용자 11-06): 압축 안 문서, 메일에 붙은 문서, 문서 안에 개체로 넣은 문서가 같은 길로 가야 한다. 겉 상자만 열면 찾을 수 있는 것은 받기 단계에서 미리 꺼내 두고, 변환 단계는 꺼낸 파일만 읽는다.
+
+### 규칙(사용자 11-06 결정)
+1. 받기 단계(`filter_and_rotate` — 준비 폴더에 원본을 둔 뒤)가 원본 안의 문서를 `<준비 폴더>/_parts/<원본 이름>/`에 파일로 꺼내 두고, 목록 `parts.json`(꺼낸 파일 이름·안 경로·깊이·종류 `파일`·`첨부`·`개체`·위치 — 부모는 안 경로의 앞부분)을 쓴다. 꺼내는 것: 압축 안 파일([pl-57](#pl-57)), 메일 첨부와 메일 안 메일([transform.md#pl-36](transform.md#pl-36)), 새 형식 오피스 안 개체(규칙 5). 꺼낸 파일이 또 상자면 같은 규칙으로 다시 연다. 풀린 안 압축과 `.eml` 안의 메일은 목록에서 그 안 파일로 대신한다 — 압축 엔진 글은 목록뿐이고, `.eml` 엔진은 안 메일의 글까지 이미 본문에 읽는다(같은 글이 두 번 들어가지 않게 — PC E2E 11-06). `.msg` 안의 메일은 `[첨부 <첨부 이름(없으면 제목)>.msg]` 절로 둔다.
+2. 깊이: 원본에서 2단계까지 — 종류가 섞여도 같이 센다(메일 → 첨부 docx → 그 안 엑셀 = 2, zip → 안 zip → 파일 = 2). 설정 `tuning.extract.attach.attachment_max_depth` 기본 2(압축도 이 값). 그 밑은 파일 그대로 둔다.
+3. 상한은 지금 값 그대로: 압축은 [pl-57](#pl-57) 안전 상한(합계 2 GB·1000개), 메일 첨부와 오피스 개체는 메일 첨부 상한(하나 20 MB 넘으면 건너뜀, 메일·오피스 파일 하나에서 10개 — 단계마다 따로 셈).
+4. 꺼내지 않는 것: 그림 파일(그림 기능이 맡음), 차트에 딸린 엑셀(차트 단계가 이미 숫자를 읽음 — 중복), 개체 아이콘 그림, 연결만 된 개체(파일 경로만 있음).
+5. 오피스 개체(`.docx`·`.docm`·`.dotx`·`.pptx`·`.pptm`·`.potx`·`.ppsx`·`.xlsx`·`.xlsm`·`.xltx`): `word/`·`ppt/`·`xl/` 아래 `embeddings/`의 파일 중 문서·슬라이드·시트의 연결 정보(`_rels`)가 개체로 가리키는 것. 붙은 곳(슬라이드 번호·시트 이름·워드는 개체가 든 문단 글 끝 40자 — 비면 앞 문단)을 위치로 적는다. `oleObject*.bin`은 olefile(extract-msg와 함께 설치됨)로 벗겨 원래 파일을 꺼내고, 못 벗기면 건너뛴다. 새 형식 오피스에 넣은 개체는 무엇이든(PDF·옛 형식 문서 포함) 꺼낸다 — 옛 형식·PDF·한글 **문서 안의** 개체는 [pl-64](#pl-64).
+6. 변환 단계의 첨부 처리(`mail_attachments`)는 `parts.json`의 파일만 읽어 형식별 엔진으로 파싱하고(P0 캐시 같음 — 안 파일 sha256 + 엔진@버전), 본문 끝에 `[파일 …]`(압축)·`[첨부 …]`(메일)·`[개체 …]`(오피스) 절로 덧붙인다. 오피스 개체는 있던 자리에 위치 표시 `[개체 <이름>]` 한 줄을 넣는다 — 파워포인트는 그 슬라이드 끝, 엑셀은 그 시트 끝, 워드는 그 문단 글이 든 줄 뒤. 자리를 못 찾으면 위치 표시 없이 끝 절만. 파싱 엔진은 고치지 않는다(엔진 지문 그대로).
+7. `_parts/`는 준비 원본과 같이 지운다(서버는 문서 폴더를 지울 때 함께). 파싱 단계는 준비 폴더 맨 위 파일만 문서로 보므로 `_parts/` 안 파일이 따로 문서가 되지 않는다.
+8. 메일 인용 스레드 접기는 본문 글이 있어야 하므로 변환 단계에 남는다. 검색 MCP `parse_document`도 받기 단계를 거쳐 `_parts/`를 만들지만, 후보정 기본값(`supsub`)에 `attachments`가 없어 첨부·개체를 붙이지 않는다(지금과 같음).
+
+### QA
+- `tests/server/pipeline/test_unpack.py` 사례 표: eml 첨부 · eml 안 eml(이름 없는 전달 메일 — 그 첨부만) · 메일 → 첨부 docx → 안 엑셀(깊이 2) · 깊이 3은 파일 그대로 · pptx 둘째 슬라이드 개체(발표 순서로 셈) · 차트 엑셀은 안 꺼냄 · xlsx 개체에 시트 위치 · 못 벗기는 `.bin` 건너뜀 · 그림 개체 안 꺼냄 · 그림은 개수 상한을 쓰지 않음 · 파일로 붙은 `.eml`은 첨부로 남음 · `Ole10Native` 벗김 · 위치 표시 표(슬라이드 끝·시트 끝·워드 문단 뒤·못 찾으면 끝 절만). zip 안 docx → `[파일 …]`는 `test_archive.py`.
+- PC E2E: `pipeline.cli parse`로 위 견본 문서를 돌려 본문의 `[개체 …]`·`[첨부 …]`·`[파일 …]` 절과 위치 표시를 확인.
+- Status: done
+
+<a id="pl-64"></a>
+## pl-64 · 옛 형식·PDF·한글 안 개체
+- 요건: 옛 형식(`.doc`·`.xls`·`.ppt` — `ObjectPool`, olefile), PDF 첨부 파일·첨부 주석(pymupdf), 한글 `.hwpx` `BinData` 개체도 [pl-63](#pl-63)과 같이 꺼낸다.
+- 반영: 없음(사용자 11-06 — 이번에는 새 형식 오피스만).
 - Status: todo
 
 <a id="pl-59"></a>

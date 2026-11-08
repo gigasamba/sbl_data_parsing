@@ -64,6 +64,7 @@ ENGINE_PKG = {
     "pptx": "python-pptx",
     "office": None,
     "mhtml": None,
+    "archive": None,
 }
 
 

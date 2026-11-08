@@ -39,6 +39,8 @@ LAYER_CODE = {
         "pipeline/transform/parse/engines/mhtml/parser.py",
         "pipeline/transform/parse/engines/rapidocr/parser.py",
         "pipeline/transform/parse/engines/_common/*.py",
+        "pipeline/extract/archive.py",  # 꺼내기(받기 단계)가 첨부 단계 입력을 정함(pl-63)
+        "pipeline/extract/unpack.py",
         "pipeline/shared/raw_cache.py",
         "pipeline/shared/env_error.py",
         "pipeline/shared/pdf_kind.py",

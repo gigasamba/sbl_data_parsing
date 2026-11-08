@@ -5,6 +5,7 @@ pipeline.config.stack()으로 같은 파일을 읽는다. 파일은 오버레이
 import sys
 
 from pipeline import config as pc
+from pipeline.extract.archive import EXTS as ARCHIVE_EXTS
 from pipeline.shared.ext_groups import IMG_EXTS
 
 EXIT_BAD_ENGINE = 2
@@ -49,5 +50,6 @@ def resolve(refresh=False):
 
 def allowed_exts():
     """받는 확장자(MCP parse_document 작업 서비스) = 엔진 구성의 parse 키(.pdf_text·.pdf_image → .pdf) − 이미지(IMG_EXTS — "이미지 파싱은
-    수행 안하고 꺼줘" 요구사항에 따라 원천 거부). 부를 때마다 읽는다(작업마다 다시 읽는 엔진 구성과 같게, 시작 점검보다 먼저 읽지 않게)."""
-    return {".pdf" if e.startswith(".pdf_") else e for e in pc.stack()["parse"]} - IMG_EXTS
+    수행 안하고 꺼줘" 요구사항에 따라 원천 거부) − 압축(archive.EXTS — 이 서비스는 안 파일을 붙이는 첨부 단계를 돌리지 않음, pl-57).
+    부를 때마다 읽는다(작업마다 다시 읽는 엔진 구성과 같게, 시작 점검보다 먼저 읽지 않게)."""
+    return {".pdf" if e.startswith(".pdf_") else e for e in pc.stack()["parse"]} - IMG_EXTS - set(ARCHIVE_EXTS)

@@ -300,10 +300,13 @@ tuning:
     text_engine_page_timeout_sec: 10.0        # 글자 엔진 쪽당 제한(초) · 숫자
     table_grid_max_rows: 2000                 # 표 격자 행 상한 · 정수
     first_doc_min_timeout_sec: 60.0           # 첫 문서 제한 시간 하한(초) · 숫자
+    archive:
+      archive_max_total_mb: 2048.0            # 압축 원본 풀린 크기 합계 상한(MB) · 숫자
+      archive_max_files: 1000                 # 압축 원본 안 파일 수 상한 · 정수
     attach:
-      attachment_max_depth: 1                 # 첨부 속 첨부 깊이 · 정수
-      attachment_max_mb: 20.0                 # 첨부 1개 상한(MB)
-      attachment_max_count: 10                # 문서당 첨부 수 상한 · 정수
+      attachment_max_depth: 2                 # 문서 안 문서(압축·첨부·개체) 깊이
+      attachment_max_mb: 20.0                 # 메일 첨부·개체 1개 상한(MB)
+      attachment_max_count: 10                # 메일·오피스 파일 하나의 첨부·개체 수 상한
       attachment_timeout_sec: 120.0           # 첨부 파싱 제한(초) · 숫자
     cache:
       parse_cache_max_gb: 5.0                 # 재판독 캐시 상한(GB) · 0 = 끔

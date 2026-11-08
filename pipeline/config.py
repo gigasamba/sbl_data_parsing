@@ -57,10 +57,23 @@ class PipelineConnectionsSecureDoc(Section):
 
 
 class PipelineExtractAttach(Section):
-    max_depth: int | None = F(1, "ATTACH_MAX_DEPTH", "메일 등 첨부 안의 첨부를 따라갈 최대 깊이(단계)")
-    max_mb: float | None = F(20.0, "ATTACH_MAX_MB", "첨부 1개당 크기 상한(MB, 넘으면 건너뜀)")
-    max_n: int | None = F(10, "ATTACH_MAX_N", "문서 하나에서 처리할 첨부 개수 상한(개)")
+    max_depth: int | None = F(
+        2,
+        "ATTACH_MAX_DEPTH",
+        "문서 안 문서(압축 안 파일·메일 첨부·오피스 개체)를 꺼낼 최대 깊이 — 원본에서 종류가 섞여도 같이 셈(단계, pl-63)",
+    )
+    max_mb: float | None = F(20.0, "ATTACH_MAX_MB", "메일 첨부·오피스 개체 1개당 크기 상한(MB, 넘으면 건너뜀)")
+    max_n: int | None = F(10, "ATTACH_MAX_N", "메일·오피스 문서 하나에서 꺼낼 첨부·개체 개수 상한(개)")
     timeout: float | None = F(120.0, "ATTACH_TIMEOUT", "첨부 1개를 별도 프로세스로 파싱할 때 제한 시간(초)")
+
+
+class PipelineExtractArchive(Section):
+    max_total_mb: float | None = F(
+        2048.0, "ARCHIVE_MAX_TOTAL_MB", "압축 원본 하나의 풀린 크기 합계 상한(MB, 넘으면 archive_too_big으로 건너뜀 — 안전 상한)"
+    )
+    max_files: int | None = F(
+        1000, "ARCHIVE_MAX_FILES", "압축 원본 하나의 안 파일 수 상한(개, 넘으면 archive_too_big으로 건너뜀 — 안전 상한)"
+    )
 
 
 class PipelineExtractCache(Section):
@@ -269,6 +282,7 @@ class PipelineExtract(Section):
         2000, "TABLE_GRID_MAX_ROWS", "표 grid JSON에 담는 최대 행 수(개) — 넘으면 앞부분만 자르고 truncated 표시"
     )
     warmup_sec: float | None = F(60.0, "PARSE_WARMUP_SEC", "엔진 첫 문서의 제한 시간 하한(초) — import·모델 적재 여유")
+    archive: PipelineExtractArchive = Field(default_factory=PipelineExtractArchive)
     attach: PipelineExtractAttach = Field(default_factory=PipelineExtractAttach)
     cache: PipelineExtractCache = Field(default_factory=PipelineExtractCache)
     ocr: PipelineExtractOcr = Field(default_factory=PipelineExtractOcr)

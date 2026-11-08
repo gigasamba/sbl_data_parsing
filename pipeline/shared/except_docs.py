@@ -11,7 +11,14 @@ import sys
 from pathlib import Path
 
 TABLE = "except_doc_info"
-PERMANENT = ("unsupported_", "drm_", "encrypted_", "duplicate_")  # skip 이유 앞부분 — 원본이 바뀌지 않는 한 다시 받아도 같은 결과
+PERMANENT = (
+    "unsupported_",
+    "drm_",
+    "encrypted_",
+    "duplicate_",
+    "broken_archive",
+    "archive_too_big",
+)  # skip 이유 앞부분 — 원본이 바뀌지 않는 한 다시 받아도 같은 결과
 
 
 def _schema():

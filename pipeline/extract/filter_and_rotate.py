@@ -35,6 +35,7 @@ from common.core.paths import (  # 폴더 재편 뒤 이 상수만 바뀌면 됨
     tmp_path_for,  # tmp+os.replace · place()가 하드링크한 dst를 그 자리에서 save()하면 원본 inode까지 덮어씀
 )
 from pipeline import config as pc
+from pipeline.extract import archive, unpack
 from pipeline.shared.ext_groups import IMG_EXTS, OOXML_EXTS
 from pipeline.shared.srcsha import sha_of
 from pipeline.transform.parse.engines import registry  # '처리 엔진 없는 확장자' 판정(engines_for)
@@ -55,8 +56,8 @@ DRM_MARKERS = (  # 머리 바이트에 섞여 있으면 그 제품 래핑으로 
 
 # 구형 OLE(복합 파일) 암호: OOXML(zip 컨테이너)과 다른 신호라 _drm_reason이 못 봄(.doc·.xls·.ppt는 OOXML_EXTS 밖).
 OLE_EXT = {".doc", ".xls", ".ppt"}
-# 압축·미지원 형식은 DRM·손상이 아니라 "파싱 대상이 아님"(사람이 다시 올리거나 풀어야 함).
-ARCHIVE_EXT = {".zip", ".7z", ".rar", ".tar", ".gz", ".tgz", ".bz2", ".xz"}
+# 풀지 않는 압축은 DRM·손상이 아니라 "파싱 대상이 아님"(사람이 다시 올리거나 풀어야 함). .zip·.tar·.tgz·.tar.gz는 푼다(pl-57 — pipeline.extract.archive).
+ARCHIVE_EXT = {".7z", ".rar", ".bz2", ".xz"}
 
 
 def _cfb_sectors(data):
@@ -352,6 +353,7 @@ def main():
     # 기록 파일은 하위 폴더 _records/에(parse_engines는 이 폴더의 맨 위 파일만 문서로 훑는다 — 기록이 "건너뜀 .csv"로 세지지 않게)
     records = out / "_records"
     records.mkdir(exist_ok=True)
+    parts = out / unpack.PARTS  # 꺼낸 안 문서(pl-63) — 하위 폴더라 파싱 대상(맨 위 파일)이 아님
     if (out / "skipped.jsonl").exists() and not (records / "skipped.jsonl").exists():  # 예전 자리의 누적 기록은 옮겨 이어 씀
         (out / "skipped.jsonl").replace(records / "skipped.jsonl")
     skipped_log = Path(pc.cfg().extract.skipped_log or (records / "skipped.jsonl"))  # S7c — 설정 객체
@@ -382,6 +384,12 @@ def main():
         unsup = _unsupported_reason(p)  # 압축(zip 등)·처리 엔진 없는 확장자는 파싱 대상이 아님
         if unsup:
             _record_skip(p, unsup, skipped, skipped_log)
+            continue
+        bad = (
+            None if unpack.is_fresh(p, parts) else archive.check(p)
+        )  # 압축 원본 — 암호·깨짐·안전 상한(pl-57 — 이미 풀어 둔 원본은 다시 안 봄)
+        if bad:
+            _record_skip(p, bad, skipped, skipped_log)
             continue
         if ext in IMG_EXTS and rotate_on:
             osha = _sha256(p)  # 원본(회전 전) sha256 — post.vlm_page P0 열쇠가 렌더 바이트 대신 이걸 씀
@@ -421,6 +429,8 @@ def main():
                 place(p, dst)
         else:
             place(p, dst)
+        if not unpack.is_fresh(p, parts):  # 문서 안 문서(압축·메일 첨부·오피스 개체)를 _parts/<이름>/에(pl-63)
+            unpack.unpack(dst, parts)
         angles = ", ".join(f"{r['page']}쪽 {r['angle']}°" for r in log if r["file"] == p.name)
         print(f"{p.name}: {angles or '복사'}", flush=True)
     with (out / "rotation.csv").open("w", encoding="utf-8-sig", newline="") as f:
@@ -440,6 +450,9 @@ def main():
         if (q.is_file() or q.is_symlink()) and q.name not in names:
             q.unlink()
             gone += 1
+    for q in parts.iterdir() if parts.exists() else ():  # 준비 원본이 빠지면 꺼낸 안 문서도 함께
+        if q.name not in names:
+            shutil.rmtree(q)
     print(
         f"파일 {len(files)}개 → {out} · 회전 보정 {n_rot}개 · 그대로 둠(안 바뀜) {n_skip}개 · 선택에 없어 뺌 {gone}개 · 쪽별 기록 rotation.csv"
         + (f" · 암호 등으로 건너뜀 {len(skipped)}개(_records/skipped.csv)" if skipped else "")

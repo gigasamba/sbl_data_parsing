@@ -15,7 +15,7 @@
 2. 문서마다 그 형식 키의 `parse` 목록에 있는 엔진을 **모두** 돌린다(하나씩 차례로 시도하지 않음).
 3. 형식 키 = 확장자(소문자). 단 `.pdf`는 글자층이 쪽당 평균 20자 미만이면 `.pdf_image`(스캔), 아니면 `.pdf_text` — 판정은 `<out>/_types.json`에 크기·수정 시각과 함께 캐시한다. 판정 함수는 `pipeline.shared.pdf_kind.pdf_kind()` 하나 — 쪽 VLM의 문서 전체 스캔 판정(`scan_page_vlm.is_scan`)과 `parse_document`도 같은 함수를 쓴다(레인 분류 `doc_lane_group`의 앞 3쪽 규칙은 목적이 달라 따로).
 4. 만약 형식 키가 구성에 없으면 → 그 확장자를 읽는 등록 엔진 모두(OCR 엔진 제외)로 돌리고 형식마다 한 번 로그를 남긴다.
-5. 지원 형식 = 구성의 `parse` 키 43개: `.pptx` `.doc` `.docx` `.hwpx` `.png` `.jpg` `.jpeg` `.tif` `.tiff` `.bmp` `.eml` `.mht` `.mhtml` `.txt` `.html` `.htm` `.pdf_image` `.pdf_text` `.xls` `.xlsm` `.xlsx` `.ppt` `.msg` `.docm` `.pptm` `.rtf` `.csv` `.tsv` `.md` `.odt` `.ods` `.odp` `.xlsb` `.dotx` `.xltx` `.potx` `.ppsx` `.dot` `.xlt` `.pot` `.json` `.xml` `.log`. `.hwp`는 아직 아니다([pl-45](#pl-45)), 압축 파일은 지원하지 않는다.
+5. 지원 형식 = 구성의 `parse` 키 47개: `.pptx` `.doc` `.docx` `.hwpx` `.png` `.jpg` `.jpeg` `.tif` `.tiff` `.bmp` `.eml` `.mht` `.mhtml` `.txt` `.html` `.htm` `.pdf_image` `.pdf_text` `.xls` `.xlsm` `.xlsx` `.ppt` `.msg` `.docm` `.pptm` `.rtf` `.csv` `.tsv` `.md` `.odt` `.ods` `.odp` `.xlsb` `.dotx` `.xltx` `.potx` `.ppsx` `.dot` `.xlt` `.pot` `.json` `.xml` `.log` `.zip` `.tar` `.tgz` `.gz`. `.hwp`는 아직 아니다([pl-45](#pl-45)). 압축 원본(`.zip`·`.tar`·`.tgz`·`.tar.gz`)은 압축 엔진 `archive` + 첨부 단계([extract.md#pl-57](extract.md#pl-57)).
 6. 구성의 엔진이 등록부(`pipeline/transform/parse/engines`)에 없거나 설치되지 않았으면 → 시작하지 않는다(종료 2).
 7. 파싱(`parse_engines`)은 입력 폴더의 파일을 그대로 문서로 본다 — 같은 내용 사본을 한 번만 돌려 복사하는 일과 확장자 거르기를 하지 않는다(중복 제외·미지원 거르기는 [pl-02](extract.md#pl-02)). 처리 엔진 없는 확장자 파일이 들어오면 엔진 후보가 없어 그 문서는 작업 0건이다. `--shard i/k`는 내용 sha256으로 문서를 나눈다.
 8. `.pptx`(anydoc)·`.txt`(plaintext)·`.csv`(markitdown)는 엔진 하나만 돈다 — 0.3.0 엔진 비교(`valid_env` 86건, 11-06)에서 보조 엔진(kreuzberg·markitdown)이 대표 결과에 더한 것이 없었다(사용자 11-06).
@@ -129,12 +129,12 @@
 메일의 핵심 내용이 첨부에 있는 경우가 많다.
 
 ### 규칙
-1. `.eml`·`.msg`의 첨부(zip 첨부는 풀어서)를 형식별 엔진으로 재귀 파싱한다 — 깊이 `tuning.extract.attach.attachment_max_depth`(1), 첨부 하나 `attachment_max_mb`(20 MB) 넘으면 건너뜀, 문서당 `attachment_max_count`(10)개까지.
+1. `.eml`·`.msg`의 첨부와 메일 안 메일(이름 없이 통째로 붙은 전달 메일 포함)은 받기 단계가 준비 폴더 `_parts/`에 꺼내 두고([extract.md#pl-63](extract.md#pl-63)), 첨부 단계가 형식별 엔진으로 파싱한다 — 깊이 `tuning.extract.attach.attachment_max_depth`(2 — 압축·오피스 개체와 같이 셈, 사용자 11-06), 첨부 하나 `attachment_max_mb`(20 MB) 넘으면 건너뜀, 메일 하나에서 `attachment_max_count`(10)개까지.
 2. 결과는 대표 본문에 `[첨부 <파일명>]` 절로 덧붙이고, 인용 스레드는 접는다.
 3. 인라인 그림(cid)은 그림 기능([pl-05](#pl-05))이 맡는다.
 
 ### QA
-- `tests/general/pipeline/test_attachments.py`.
+- `tests/general/pipeline/test_attachments.py` · `tests/server/pipeline/test_unpack.py`(pl-63).
 - Status: done
 
 <a id="pl-37"></a>
