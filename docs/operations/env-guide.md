@@ -202,8 +202,19 @@
 ```bash
 python -m common.check.checker env    # 빠진 필수 값·사내망 판정·경로 존재(값은 안 찍음) — 서버: pipe_exec.sh check_env
 python -m common.check.checker ping   # LLM·VLM·EMBED 실호출 — 실패 있으면 종료 1 — 서버: pipe_exec.sh ping_models
-ls -l ../settings.yaml                # 서버(코드 폴더에서): 주인 10001·권한 640
+ls -l settings.yaml                   # 서버(코드 폴더에서): 주인 10001·권한 640
 ```
+
+**칸 이름 확인(서버 — 컨테이너를 띄우기 전).** 새 판으로 바꾸거나 칸을 고친 뒤, 그 코드로 설정 파일을 한 번 끝까지 읽어 본다. 지운 칸·옛 이름·오타를 한 번에 모두 알린다(값은 안 찍음). `load_settings.sh`는 호스트 칸만 꺼내므로 이 확인을 대신하지 못한다.
+```bash
+cd <벌 폴더>
+$DOCKER run --rm --entrypoint python -v "$PWD:/app/deploy:ro,z" \
+  -v "$PWD/settings.yaml:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml \
+  <실행 이미지> -m pipeline.config >/dev/null && echo 설정-읽힘
+# 기대: 설정-읽힘 · 아니면 "[설정] 설정 검증 실패(…) — N건" 뒤 칸마다 "<칸 전체 이름>: Extra inputs are not permitted [extra_forbidden]"
+# prd(운영 이미지 — 코드가 이미지 안)는 첫 -v를 뺀다 · 지울 칸 표: upgrade-guide §5
+```
+PC는 `.venv/bin/python -m pipeline.config`(루트 `settings.yaml`)가 같은 확인이다.
 
 ## 5. 서버 경로 칸 — 컨테이너 안 절대 경로
 

@@ -730,7 +730,7 @@ sudo systemctl enable --now podman-restart
 
 | 바꿀 것 | 방법 |
 |---|---|
-| 설정 값 | settings.yaml을 직접 고치고 `host_ctl.sh up -d --force-recreate …`(서비스 이름 `mcp`, 컨테이너 이름 `mcp-server`) |
+| 설정 값 | settings.yaml을 직접 고치고 `host_ctl.sh up -d --force-recreate …`(서비스 이름 `mcp`, 컨테이너 이름 `mcp-server`). 띄우기 전 확인: `bash deploy/host/scripts/pipe_exec.sh check_env`(도는 컨테이너 안 — 빠진 필수 값) · 칸 이름 틀림은 §5-8 3번의 한 번 읽기 명령 |
 | 이번 실행만 다른 값 | `--set 이름=값` |
 | 엔진 구성 | 코드 폴더의 `resources/config/pipeline_stack.json`을 고쳐 코드 폴더 바꾸기(§5-8) — 확인 `show-stack`([resources.md §1](docs/architecture/resources.md)) |
 
@@ -739,7 +739,15 @@ sudo systemctl enable --now podman-restart
 벌 폴더(코드 폴더)에 새 코드를 덮어쓴다. 백업·새 이미지·DB 판·되돌리기까지 전체 순서는 [upgrade-guide.md](docs/operations/upgrade-guide.md) — 아래는 줄인 것이다.
 1. 옛 벌 폴더를 각자 벌 폴더 밖에 백업한다(서버에서 고친 코드는 gitea에도 올린다).
 2. 벌 폴더에서 옛 코드만 지우고(설정·결과·홈은 남김) 새 코드 zip을 그 위에 푼다 — `cd /home/sbl && unzip -q <코드 zip> && B=sbl_data_parsing-main-1 T=deploy/host/scripts/test_space && { [ ! -e $B.test_space ] || { echo "[멈춤] $B.test_space가 이미 있음 — upgrade-guide §4 '중간에 끊겼을 때'대로 먼저 되돌림" >&2; false; }; } && { [ ! -d $B/$T ] || mv $B/$T $B.test_space; } && find $B -mindepth 1 -maxdepth 1 ! -name .git ! -name output ! -name home ! -name edw_chain.yaml ! -name "settings*" -exec rm -rf {} + && cp -a sbl_data_parsing-<판>/. $B/ && rm -rf sbl_data_parsing-<판> && { [ ! -d $B.test_space ] || mv $B.test_space $B/$T; }`(run_pipeline 작업 폴더 `test_space/`는 `deploy/`와 함께 지워지지 않게 잠시 밖으로 옮겼다 되돌린다)(이미지가 바뀌었으면 이미지 zip도 — §5-0 2번).
-3. 벌 폴더에서 `host_ctl.sh init --group <운영 그룹>` → `host_ctl.sh up -d --force-recreate data-pipeline mcp-data-parsing mcp` → `host_ctl.sh check` → `host_ctl.sh timers`.
+3. **설정 고치기** — 새 판에서 지운 칸이 `settings.yaml`에 남으면 모든 컨테이너가 시작을 거부한다. 벌 폴더에서 백업하고 지운 칸을 찾아 지운 뒤, 새 코드로 설정을 한 번 읽어 본다(지울 칸 표와 자세한 순서는 [upgrade-guide §5](docs/operations/upgrade-guide.md#5-설정-고치기)):
+   ```bash
+   cd $B && cp -p settings.yaml settings.yaml.bak-$(date +%Y%m%d-%H%M)                 # 백업
+   grep -noE '^[[:space:]]*(skipped_docs_log|secure_doc|source_column_content_version|embed_query_cache_file|embed_query_cache_max_rows|pg_standin|instance_name|edw_write_user|edw_write_password|parsing_meta_table)[[:space:]]*:' settings.yaml   # 칸 이름·줄 번호만 — 나온 줄을 vi로 지움
+   $DOCKER run --rm --entrypoint python -v "$PWD:/app/deploy:ro,z" -v "$PWD/settings.yaml:/etc/rag/settings.yaml:ro,z" \
+     -e SETTINGS_FILE=/etc/rag/settings.yaml <새 실행 이미지> -m pipeline.config >/dev/null && echo 설정-읽힘   # 기대: 설정-읽힘
+   ```
+   `설정-읽힘` 대신 `[설정] 설정 검증 실패 … — N건`이 나오면 그 아래 줄마다 찍힌 칸(값은 안 찍음)을 지우고 다시 친다.
+4. 벌 폴더에서 `host_ctl.sh init --group <운영 그룹>` → `host_ctl.sh up -d --force-recreate data-pipeline mcp-data-parsing mcp` → `host_ctl.sh check` → `host_ctl.sh timers`.
 - 덮어써도 남는 것 — 지우거나 옮기지 않는다: `settings.yaml`·`edw_chain.yaml`·`output/`(파싱 캐시·임베딩 캐시·FAQ 교체 기록 — 잃으면 전부 다시 처리)·`home/`·`deploy/host/scripts/test_space/`(run_pipeline 진행 기록·잠금 — 위 명령이 옮겼다 되돌림).
 - 옛 코드를 먼저 지우는 까닭: 새 판에서 지운 파일(옛 시험 등)이 남으면 `host_ctl.sh check`의 selftest가 그 파일 때문에 실패한다.
 - 검색 DB는 같은 PG를 그대로 본다. 벌이 여럿이면 모두 같은 판으로 올린다(같은 기준 스키마).

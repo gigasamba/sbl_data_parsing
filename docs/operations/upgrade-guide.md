@@ -28,6 +28,15 @@
 | 벌 폴더 = 코드 폴더(`settings.yaml`·`edw_chain.yaml`·`output/`이 코드 폴더 안), 벌 번호 = 폴더 이름 끝 `-<숫자>`, 칸 `ops.host.instance_name` 지움 | 처음 한 번 옛 루트에서 옮김 · 그 칸이 남으면 시작 거부 | §4 · §5 |
 | 개발자별 벌(폴더 이름 끝 번호)·gitea | 개발 서버만, 원할 때 | §9 |
 
+**0.3.1에서 바뀐 것** — 코드 폴더만 바꾼다(실행 이미지·DB 판 그대로 — §3은 건너뛰고 §6은 `migrate check --target all`만).
+
+| 무엇 | 서버에 미치는 것 | 이 문서의 절 |
+|---|---|---|
+| 코드가 읽지 않는 설정 칸 6개를 지움 | 서버 settings.yaml에 남으면 시작 거부 — 코드 폴더를 바꾸기 전에 지움 | §5 |
+| 넘겨주기·레이어·엔진(office·kreuzberg·markitdown) 지문이 바뀜 | 모든 문서를 다시 처리(엑셀 날짜 칸이 `2026-11-29` 꼴로) | §8 |
+| `except_doc_info`에 새 종류 `part`·`silver`, 골드 적재 성공 때 `silver` 행을 지움 | 적재 계정에 그 표 DELETE 권한(DB 담당 확인 — refactor.md C-111·C-112) | §6 |
+| 배포 판정 시험이 서버 PG에 붙음(prd는 읽기만) | `host_ctl.sh check`에 PG 접속이 필요 | §10 |
+
 ## 1. 지금 판 확인
 
 ```bash
@@ -104,23 +113,56 @@ cp -p <옛 루트>/settings.yaml <옛 루트>/edw_chain.yaml "$B/" && cp -a <옛
 ## 5. 설정 고치기
 
 컨테이너를 새 코드로 띄우기(§6) 전에 한다. 벌 폴더의 `settings.yaml`을 새 판의 `settings.sample.yaml`과 대조해 고친다. 옛 이름·지운 칸·모르는 칸이 하나라도 있으면 모든 명령이 시작을 거부하고 칸 이름만 알린다(값은 안 찍음).
+
+벌 폴더에서(§4 뒤 — 새 코드가 이미 벌 폴더에 있음) 순서대로 친다. 벌이 여럿이면 벌마다 한다.
 ```bash
-bash deploy/host/scripts/load_settings.sh common.host >/dev/null && echo 설정-읽힘   # 기대: 설정-읽힘("[설정] …"이면 그 안내대로 고침)
-$DOCKER run --rm --entrypoint python -v "$PWD:/app/deploy:ro,z" <새 실행 이미지> -m common.config.sample --where <옛 이름>   # 칸의 새 자리(운영 이미지는 -v 없이)
+cd "$B"
+# ① 고치기 전 백업(같은 폴더 — 권한 그대로)
+cp -p settings.yaml settings.yaml.bak-$(date +%Y%m%d-%H%M)
+
+# ② 지운 칸이 남았는지 — 칸 이름과 줄 번호만 찍는다(-o: 값은 안 나옴)
+grep -noE '^[[:space:]]*(skipped_docs_log|secure_doc|source_column_content_version|embed_query_cache_file|embed_query_cache_max_rows|pg_standin|instance_name|edw_write_user|edw_write_password|parsing_meta_table)[[:space:]]*:' settings.yaml
+# 기대: 아무것도 안 나옴. 나오면 ③
+
+# ③ 나온 줄을 편집기로 지운다(아래 "지울 줄" 표). 절(secure_doc·pg_standin)이면 머리 줄과 그 아래 한 단 더 들여 쓴 줄을 모두 지운다
+vi settings.yaml        # :<줄 번호> 로 가서 dd · 저장 :wq
+
+# ④ 새 코드로 설정을 끝까지 읽어 본다 — 남은 칸(옛 이름·오타 포함)을 한 번에 모두 알린다
+IMG=<새 실행 이미지>    # dev: data-pipeline-runtime:<이미지 판> · prd: data-pipeline:<VERSION>
+$DOCKER run --rm --entrypoint python -v "$PWD:/app/deploy:ro,z" \
+  -v "$PWD/settings.yaml:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml \
+  "$IMG" -m pipeline.config >/dev/null && echo 설정-읽힘
+# 기대: 설정-읽힘
+# 아니면 "[설정] 설정 검증 실패(/etc/rag/settings.yaml) — N건" 뒤에 칸마다 한 줄
+#   예) extract.skipped_docs_log: Extra inputs are not permitted [extra_forbidden]   ← 그 칸을 ③처럼 지우고 ④를 다시
+#   prd(운영 이미지 — 코드가 이미지 안)는 첫 -v(코드 폴더)를 뺀다
+
+# ⑤ 옛 이름이 어디로 갔는지 모를 때 — 칸의 새 자리
+$DOCKER run --rm --entrypoint python -v "$PWD:/app/deploy:ro,z" "$IMG" -m common.config.sample --where <옛 이름>
+
+# ⑥ 주인·권한(컨테이너 사용자 10001이 읽음)
+chown 10001:<운영 그룹> settings.yaml && chmod 640 settings.yaml
 ```
+- `load_settings.sh`(호스트 셸이 쓰는 칸만 꺼냄)는 모르는 칸을 보지 않는다 — 설정 확인은 ④로 한다.
+- 빈 절(예: 칸을 다 지워 `extract:`만 남음)은 그대로 두어도 된다.
+- ④가 통과한 뒤 백업 파일 `settings.yaml.bak-*`은 §10 점검까지 끝나면 지운다(비밀값이 들어 있음).
 - **칸 이름이 바뀌었다** — 옛 → 새 전체 표는 [refactor.md 부록 — 칸 이름 대응표](../refactoring/refactor.md#부록--설정-칸-이름-대응표)(1차 표의 새 이름이 2차 표의 옛 이름 — 둘 다 옮김).
 - **서버 settings.yaml에서 지울 줄** — 코드가 읽지 않아 지운 칸이다(남으면 모르는 칸으로 시작 거부, [op-18](../prd/ops-settings.md#op-18)):
-  - `extract.skipped_docs_log` — 건너뛴 문서 기록은 늘 `<준비 폴더>/_records/skipped.jsonl`(게시 단계가 읽는 자리)
-  - `extract.secure_doc.secure_doc_passwords_file`(절 `extract.secure_doc` 통째) — 읽는 곳이 없음(암호 문서는 건너뜀)
-  - `tuning.extract.source_columns.source_column_content_version` — 판 ID 열은 읽지 않음(증분 판정 열은 `source_column_increment`)
-  - `common.models.embed.embed_query_cache_file`·`tuning.common.models.embed.embed_query_cache_max_rows` — 검색 질의 임베딩 캐시는 프로세스 안 메모리(2048개)라 파일·행 상한 칸이 없음
-  - `dev.pg_standin`(절 통째) — sqlite 대역을 지웠다(PG 접속 필수 — [e2-22](../prd/test.md#e2-22))
-  - 서버에서 덮어 쓰는 엔진 구성 파일 `pipeline_stack.json`이 있으면 그 파일에서도 `retrieve`·`k` 칸을 지운다 — 엔진 구성 파일은 모르는 칸이 있으면 읽기를 거부한다
-- **`ops.host.instance_name` 줄을 지운다** — 벌 번호는 코드 폴더 이름 끝 `-<숫자>`라 이 칸은 모르는 칸이다(남으면 시작 거부). PG 스키마·게시 경로에 붙던 `_<벌>`도 없어져 모든 벌이 `required.pg.pg_schema` 그대로를 쓴다(옛 벌 스키마는 더 쓰지 않음 — 남은 스키마는 DB 담당과 정한다).
+
+  | 지울 줄(칸 전체 이름) | 언제 지운 칸 | 까닭 |
+  |---|---|---|
+  | `extract.skipped_docs_log` | 0.3.1 | 건너뛴 문서 기록은 늘 `<준비 폴더>/_records/skipped.jsonl`(게시 단계가 읽는 자리) |
+  | `extract.secure_doc`(절 통째 — 안에 `secure_doc_passwords_file`) | 0.3.1 | 읽는 곳이 없음(암호 문서는 건너뜀) |
+  | `tuning.extract.source_columns.source_column_content_version` | 0.3.1 | 판 ID 열은 읽지 않음(증분 판정 열은 `source_column_increment`) |
+  | `common.models.embed.embed_query_cache_file` · `tuning.common.models.embed.embed_query_cache_max_rows` | 0.3.1 | 검색 질의 임베딩 캐시는 프로세스 안 메모리(2048개)라 파일·행 상한 칸이 없음 |
+  | `dev.pg_standin`(절 통째) | 0.3.1 | sqlite 대역을 지웠다(PG 접속 필수 — [e2-22](../prd/test.md#e2-22)) |
+  | `ops.host.instance_name` | 0.3.0 | 벌 번호는 코드 폴더 이름 끝 `-<숫자>`. PG 스키마·게시 경로에 붙던 `_<벌>`도 없어져 모든 벌이 `required.pg.pg_schema` 그대로를 쓴다(옛 벌 스키마는 더 쓰지 않음 — 남은 스키마는 DB 담당과 정한다) |
+  | `edw_write_user` · `edw_write_password` · `parsing_meta_table` | 0.3.0 | 파이프라인이 EDW에 쓰지 않음(§6) |
+
+- **엔진 구성 파일** `resources/config/pipeline_stack.json`은 코드 폴더 안이라 §4에서 새 판으로 바뀐다. 서버에서 고친 옛 파일을 다시 덮어 쓰면 그 파일의 `retrieve`·`k` 칸을 지운다(모르는 칸이면 읽기 거부). 확인: `$DOCKER run --rm --entrypoint python -v "$PWD:/app/deploy:ro,z" "$IMG" -m pipeline.cli show-stack` — 엔진 표가 나오면 통과.
 - **새 선택 절 `option.devbox`**(파일 맨 아래) — 개발 서버의 SSH 작업 공간. 비우면 끔. 쓰는 법은 [README §5-0 "개발 작업 공간"](../../README.md#5-0-배포-단계와-개발-서버-설치).
 - **경로 칸은 컨테이너 안 절대 경로로** 적고, 쓰는 자리는 `/app/output/…` 아래여야 한다 — [env-guide §5](env-guide.md#5-서버-경로-칸--컨테이너-안-절대-경로).
-- 남은 옛 칸은 §6에서 컨테이너가 뜰 때 칸 이름으로 알려 준다 — 고치고 다시 띄운다.
-- 고친 뒤 주인·권한: `chown 10001:<운영 그룹> "$B/settings.yaml" && chmod 640 "$B/settings.yaml"`.
+- ④를 건너뛰어도 §6에서 컨테이너가 뜰 때 같은 칸 이름을 알리고 멈춘다 — 고치고 다시 띄운다.
 
 ## 6. DB 판 올리기 — `migrate up`
 
