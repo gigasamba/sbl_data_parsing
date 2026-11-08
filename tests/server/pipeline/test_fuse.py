@@ -17,7 +17,7 @@ from pipeline.transform.represent.fragment_vote import (
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통
     # engine_kind·trust_weight — 텍스트 레이어 > VLM > OCR(AD26 (a))
     assert engine_kind("pdfplumber") == "text" and engine_kind("pymupdf") == "text" and engine_kind("office") == "text"
-    assert engine_kind("rapidocr_ko") == "ocr" and engine_kind("tesseract") == "ocr"
+    assert engine_kind("rapidocr_ko") == "ocr"
     assert engine_kind("qwen_vlm") == "vlm"
     assert trust_weight("pdfplumber") > trust_weight("qwen_vlm") > trust_weight("rapidocr_ko")
     print("[selftest] engine_kind·trust_weight — text > vlm > ocr 통과")

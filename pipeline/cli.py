@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""파이프라인 진입점 — 두 단계를 나눠 부른다(요청 문장 → 명령 대응표는 AGENTS.md "요청 → 명령").
+"""파이프라인 진입점.
 
 단계 2 · 고정 스택(정해진 기술로 실제 파이프라인 + 기본 테스트)
   show-stack  지금 엔진 구성(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 오버레이 패치 —
                   docs/architecture/resources.md §1)
   parse           파싱 모듈 1회(run_pipeline이 문서마다 부름) — 끝 표시 _rep/_DONE.json
   (서버 입구는 run_pipeline 하나 — 구조화·적재는 run_pipeline이 모듈을 직접 부름. 검색 명령은 python -m mcp_server.cli.ask)
-산출 위치: output/parse(파싱) · output/parse/_rep(대표) · output/edw/bundle(구조화) · output/report(보고서) · output/stack_test.md
+산출 위치: output/parse(파싱) · output/parse/_rep(대표) · output/edw/bundle(구조화) · output/report(보고서)
 """
 
 import common  # noqa: F401 — 설정 파일 검사(settings.pin_env)를 첫 줄에서

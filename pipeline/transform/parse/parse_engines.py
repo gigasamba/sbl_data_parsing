@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """문서 폴더 × 엔진 일괄 파싱 → output/parse/<engine>/<문서>.json + output/parse/runs.jsonl(시간·오류).
 
-사용: python -m pipeline.transform.parse.parse_engines [--src <원본 문서 폴더>] [--out output/parse] [--engines pdfplumber,pymupdf] [--limit N]
+사용: python -m pipeline.transform.parse.parse_engines [--src <원본 문서 폴더>] [--out output/parse] [--engines kreuzberg,pymupdf] [--limit N]
 엔진 버전·캐시 열쇠(engine_version·engine_code_fp·p0_key)·중간 캐시 지우기(purge_caches)·형식 키(doc_types)도 여기.
 자식(문서 1건 × 엔진 1개): python -m pipeline.transform.parse.parse_engines --one --engine <이름> [--profile tuned] [--fields baseline] <문서> <out.json>
 엔진 목록: python -m pipeline.transform.parse.parse_engines --one --list
@@ -61,7 +61,6 @@ ENGINE_PKG = {
     "pymupdf": "pymupdf",
     "kreuzberg": "kreuzberg",
     "rapidocr_ko": "rapidocr|rapidocr_onnxruntime|rapidocr-onnxruntime",
-    "pptx": "python-pptx",
     "office": None,
     "mhtml": None,
     "archive": None,
@@ -266,7 +265,7 @@ def engines_for_doc(doc, stack_parse, types, logged_missing):
 def _drop_uninstalled(want):
     """`--engines`를 명시하면
     registry.select()는 설치 여부를 안 거른다(의도적 — ImportError로 바로 알려줌, registry.py select() 설명).
-    배치 실행에서는 문서마다·--isolate 서브프로세스마다 ImportError를 반복해 겪는 대신,
+    배치 실행에서는 문서×엔진 자식 프로세스마다 ImportError를 반복해 겪는 대신,
     이번 실행 시작 시 한 번만 설치·등록 여부를 확인해 빼고 로그 1줄로 알린다(env_failed는 '처음 실패 뒤'
     문서 단위 — 이 함수는 그 전에 시도 자체를 0으로 줄인다). 등록 안 된 이름(예: 스택 후보 목록에
     남은 archive 이동 엔진)도 여기서 같이 거름 — registry.installed()는 등록된 이름만 받는다."""
@@ -302,9 +301,6 @@ class RunLog:
                 f.write(s)
         finally:
             self._lock(False)
-
-    def flush(self):
-        pass
 
 
 def vlm_doc_concurrency(a, lim):
@@ -344,7 +340,6 @@ def main():
     ap.add_argument("--profile", default="default", choices=["default", "tuned"])
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--docs-from", default="", help="이 목록(파일 이름 한 줄씩)에 있는 문서만 — 파싱 모듈의 밤당 상한(PARSE_MAX_NEW)이 씀")
-    ap.add_argument("--isolate", action="store_true", help="(옛 호환 — 이제 늘 문서×엔진마다 별도 프로세스)")
     ap.add_argument("--workers", type=int, default=1, help="동시에 처리할 문서 수(문서 안 엔진들은 늘 동시에)")
     ap.add_argument(
         "--procs",
@@ -359,9 +354,8 @@ def main():
     )
     a = ap.parse_args()
     from common.core import resources
-    from common.core import resources as presources
 
-    a.procs = 1 if a.shard else presources.resolve_procs(a.procs)  # --shard = run_procs가 띄운 하위 → 다시 나누지 않음
+    a.procs = 1 if a.shard else resources.resolve_procs(a.procs)  # --shard = run_procs가 띄운 하위 → 다시 나누지 않음
     # 실제 동시 수로 CPU를 나눔(thread_share). 조각은 이 값을 setdefault로 물려받음. rapidocr 스레드도 OMP_NUM_THREADS를 따름.
     if a.src is None:
         a.src = str(doc_dir())
@@ -412,11 +406,9 @@ def main():
         # 동시 글자 엔진 자식 = 조각 × min(문서 workers × 문서당 엔진 수, 코어 ÷ 조각) — VLM 엔진(API 대기)은 이 상한 밖.
         # 문서당 엔진 수 = 구성에서 형식당 가장 많은 엔진 수
         per_doc = max((len(v) for v in stack_parse.values()), default=1)
-        slots = min(max(1, a.workers) * per_doc, presources.text_slots(resources.cpus(), a.procs))
+        slots = min(max(1, a.workers) * per_doc, resources.text_slots(resources.cpus(), a.procs))
         thr = C.cfg().runtime.pipe_threads  # float, auto·빈 값 = None — "0"은 0이라 None일 때만 계산
-        for k, v in presources.thread_env(
-            int(thr) if thr is not None else presources.thread_share(resources.cpus(), a.procs, slots)
-        ).items():
+        for k, v in resources.thread_env(int(thr) if thr is not None else resources.thread_share(resources.cpus(), a.procs, slots)).items():
             os.environ.setdefault(k, v)  # env 남김 — 라이브러리(5-3 H) · 단일 프로세스도 수치 라이브러리 스레드를 컨테이너 CPU 한도에 맞춤
         types = doc_types(docs, out) if stack_parse else {}
         logged_missing = set()
@@ -476,7 +468,6 @@ def main():
             sp.result("skip", "env", SP.safe(rec["error"]))
             with lock:
                 log.write(json.dumps(rec, ensure_ascii=False) + "\n")
-                log.flush()
                 done[0] += 1
                 sp.set(seq=done[0])
                 tally["환경"] += 1
@@ -534,7 +525,6 @@ def main():
         )
         with lock:
             log.write(json.dumps(rec, ensure_ascii=False) + "\n")
-            log.flush()
             done[0] += 1
             sp.set(seq=done[0])
             tally["시간 초과" if err and "Timeout" in err else "환경" if err and is_env_error(err) else "실패" if err else "성공"] += 1

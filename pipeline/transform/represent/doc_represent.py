@@ -16,6 +16,7 @@ import argparse
 import hashlib
 import json
 import time
+from collections import Counter
 from pathlib import Path
 
 from common.core import span as SP
@@ -123,6 +124,14 @@ def _merge_paragraphs(rep_text, other_texts, other_docs=None):
     return "\n\n".join(rep_paras), replaced
 
 
+def _rich_by_page(d):
+    """쪽 → 표 + 그림 수(그림 쪽은 loc.page, 없으면 loc.slide)."""
+    n = Counter(t.get("page") for t in d.get("tables") or [])
+    n.update((f.get("loc") or {}).get("page") or (f.get("loc") or {}).get("slide") for f in (d.get("post") or {}).get("figures") or [])
+    n.pop(None, None)
+    return n
+
+
 def _merge_pages(rep, other_docs):
     """쪽(\\f 경계) 단위 보정 — 대표 엔진이 인식하지 못한 표/이미지가 있는 쪽을,
     그 표/이미지를 인식한 다른 엔진의 같은 쪽으로 교체.
@@ -132,17 +141,7 @@ def _merge_pages(rep, other_docs):
     if not other_docs or not rep.get("text"):
         return 0, []
     rep_pages = rep["text"].split("\f")
-    # 대표 엔진의 쪽별 표/그림 수 계산
-    rep_table_pages = {}
-    for t in rep.get("tables") or []:
-        p = t.get("page")
-        if p is not None:
-            rep_table_pages[p] = rep_table_pages.get(p, 0) + 1
-    rep_fig_pages = {}
-    for fig in (rep.get("post") or {}).get("figures") or []:
-        p = (fig.get("loc") or {}).get("page") or (fig.get("loc") or {}).get("slide")
-        if p is not None:
-            rep_fig_pages[p] = rep_fig_pages.get(p, 0) + 1
+    rep_rich_by = _rich_by_page(rep)
 
     replaced_pages = []
     for engine, other in other_docs.items():
@@ -151,29 +150,16 @@ def _merge_pages(rep, other_docs):
         other_pages = other["text"].split("\f")
         if len(other_pages) != len(rep_pages):
             continue  # 쪽 수가 다르면 매칭 불가 — 안전하게 건너뜀
-        # 다른 엔진의 쪽별 표/그림 수
-        other_table_pages = {}
-        for t in other.get("tables") or []:
-            p = t.get("page")
-            if p is not None:
-                other_table_pages[p] = other_table_pages.get(p, 0) + 1
-        other_fig_pages = {}
-        for fig in (other.get("post") or {}).get("figures") or []:
-            p = (fig.get("loc") or {}).get("page") or (fig.get("loc") or {}).get("slide")
-            if p is not None:
-                other_fig_pages[p] = other_fig_pages.get(p, 0) + 1
+        other_rich_by = _rich_by_page(other)
         # 각 쪽 비교 — 다른 엔진이 표/그림을 더 많이 인식한 쪽만 교체
         for pi in range(len(rep_pages)):
             if not rep_pages[pi].strip() or not other_pages[pi].strip():
                 continue
-            rep_rich = rep_table_pages.get(pi, 0) + rep_fig_pages.get(pi, 0)
-            other_rich = other_table_pages.get(pi, 0) + other_fig_pages.get(pi, 0)
+            rep_rich, other_rich = rep_rich_by[pi], other_rich_by[pi]
             if other_rich > rep_rich and other_rich > 0:
                 rep_pages[pi] = other_pages[pi]
                 replaced_pages.append({"page": pi, "engine": engine, "rep_rich": rep_rich, "other_rich": other_rich})
-                # 대표의 표/그림 정보도 업데이트
-                rep_table_pages[pi] = other_table_pages.get(pi, 0)
-                rep_fig_pages[pi] = other_fig_pages.get(pi, 0)
+                rep_rich_by[pi] = other_rich  # 대표의 표/그림 수도 바꾼 쪽 기준으로
     if replaced_pages:
         rep["text"] = "\f".join(rep_pages)
     return len(replaced_pages), replaced_pages
@@ -638,7 +624,6 @@ def represent(stack, parse_dir, src=None):
                             "chars": len(old.get("text") or ""),
                             "figures_capped": (old.get("post") or {}).get("figures_capped", False),
                         }
-                        return None
                 except (OSError, ValueError):
                     pass  # 못 읽으면 아래 일반 경로로(성공한 엔진 없음)
             return {
@@ -650,7 +635,6 @@ def represent(stack, parse_dir, src=None):
                 "reason": "성공한 엔진 없음",
                 "tried": tried_of(doc, last, pd),
             }
-            return None
         _t = {"load": 0.0, "merge": 0.0, "fuse": 0.0, "scanfill": 0.0, "post": 0.0, "table": 0.0, "agent": 0.0}
         _t0 = time.time()
         # PARSE_REP_SELECT: first(첫 성공 엔진·파일 읽기 0) | acc(정확도만·파일 읽기 0) | best(정확도+풍부도, 기본)
@@ -791,9 +775,7 @@ def represent(stack, parse_dir, src=None):
         _doc, _dd = _pair
         with SP.span("transform.represent", doc_id=_doc, ext=Path(_doc).suffix.lower(), cpu=_par == 1) as _sp:
             _r = _doc_one(_pair)
-            if _r is None:
-                _sp.result("skip", None, SP.safe("대표 결과 없음"))
-            elif not _r.get("engine"):
+            if not _r.get("engine"):
                 _sp.result("fail", "doc", SP.safe(_r.get("reason")))
             _sp.add(pages=_dd.get("pages"), format=_dd.get("format"))
             _done[0] += 1
@@ -806,12 +788,9 @@ def represent(stack, parse_dir, src=None):
             import concurrent.futures as _cf  # 문서간 병렬 — ex.map 회수는 제출 순서라 index·engines.csv 순서 불변
 
             with _cf.ThreadPoolExecutor(max_workers=_par) as _ex:
-                index.extend(r for r in _ex.map(SP.carry(_doc_traced), _pairs) if r is not None)
+                index.extend(_ex.map(SP.carry(_doc_traced), _pairs))
         else:
-            for _p in _pairs:
-                _r = _doc_traced(_p)
-                if _r is not None:
-                    index.append(_r)
+            index.extend(map(_doc_traced, _pairs))
     with (out_dir / "sources.jsonl").open("w", encoding="utf-8") as f:  # 문서 ID ↔ 원본 위치 표(인계용 — 검색 결과에서 원본 찾기)
         for r in index:
             if r.get("doc_key"):

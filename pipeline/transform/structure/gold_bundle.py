@@ -426,7 +426,7 @@ def main(argv=None):
         if not (src / doc).exists() and not (raw.get("rep") or {}).get("source"):
             continue  # 원본도 원본 정보(rep.source)도 없음
         eng = raw["rep"]["engine"]
-        text, _ = S.load_parse_doc(pd, "_rep", doc)
+        text = S.rep_text(raw)
         if not text.strip():
             continue
         ab = lead_summary(text)
@@ -494,7 +494,7 @@ def main(argv=None):
                     }
                 )
                 seq += 1
-            for c in [] if rows is not None else S.chunk_all({doc: text}, a.chunk, {doc: eng}):
+            for c in [] if rows is not None else S.chunk_all({doc: text}, {doc: eng}):
                 m = c["meta"]
                 page = m["page"] or (1 if raw["rep"].get("pages") == 1 else None)  # 한 쪽짜리 문서는 1
                 bbox = None

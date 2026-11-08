@@ -11,8 +11,6 @@ from pipeline import config as pc
 NS = {"a": "http://schemas.openxmlformats.org/drawingml/2006/main"}
 # "도형이 많은데 연결선이 없다"의 "많다" 문턱(최상위 도형 수, 그룹은 1개로 셈). 상한은 문서당 슬라이드 수(0=꺼짐).
 PPTX_SHAPES_MIN = 4
-PARSE_PPTX_SHAPES_MAX_DEFAULT = "20"
-PARSE_PPTX_SMARTART_MAX_DEFAULT = "20"
 
 
 def _is_smartart(sh):
@@ -51,8 +49,8 @@ def candidate_slides(p):
     이상인데 연결선(pptx_edges 기준)이 0개 — 상자·화살표가 연결선 없이 배치만 된 도식.
     상한 PARSE_PPTX_SMARTART_MAX·PARSE_PPTX_SHAPES_MAX(env, 기본 20, 0=꺼짐 — 그 이유 자체를 안 봄)."""
     sa_cap, sh_cap = (
-        int(pc.by_env("PARSE_PPTX_SMARTART_MAX", PARSE_PPTX_SMARTART_MAX_DEFAULT)),
-        int(pc.by_env("PARSE_PPTX_SHAPES_MAX", PARSE_PPTX_SHAPES_MAX_DEFAULT)),
+        int(pc.by_env("PARSE_PPTX_SMARTART_MAX")),
+        int(pc.by_env("PARSE_PPTX_SHAPES_MAX")),
     )
     out, n_sa, n_sh = {}, 0, 0
     for r in slide_signals(p):

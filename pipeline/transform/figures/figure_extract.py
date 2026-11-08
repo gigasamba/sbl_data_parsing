@@ -617,7 +617,8 @@ _TMP_DIR = (
 def _default_ocr(png_bytes):
     """크롭 PNG → 글자(공백 join) — tools/engines/rapidocr/parser.py의 운영 OCR 경로(parse_rapidocr_ko, 한국어
     PP-OCRv5 모델)를 그대로 재사용한다(모델 설정 중복 방지, 결정적 — 같은 PNG면 같은 모델·같은 글자). 그 함수가
-    파일 경로를 전제하는 공용 계약이라 크롭을 output/ 밑 임시 PNG로 한 번 썼다 바로 지운다(C4 — output/ 밖에 안 씀)."""
+    파일 경로를 전제하는 공용 계약이라 크롭을 output/ 밑 임시 PNG로 한 번 썼다 바로 지운다(C4 — output/ 밖에 안 씀).
+    비용 큼(모델 로드·추론) — 호출부(build_records)가 문서당 상한을 건다."""
     from pipeline.transform.parse.engines.rapidocr.parser import parse_rapidocr_ko
 
     _TMP_DIR.mkdir(parents=True, exist_ok=True)
@@ -631,12 +632,6 @@ def _default_ocr(png_bytes):
             tmp.unlink()
         except OSError:
             pass
-
-
-def _crop_ocr(img_bytes):
-    """그림 crop OCR(글자 그대로) — _default_ocr(rapidocr_ko, 결정적, 모델 설정 중복 방지).
-    비용 큼(모델 로드·추론) — 호출부(build_records)가 문서당 상한을 건다."""
-    return _default_ocr(img_bytes) or ""
 
 
 FIG_OCR_FALLBACK_MIN_CHARS_DEFAULT = 10  # 로고·워터마크·스크린샷 머리글("# Outlook" 등)
@@ -666,7 +661,7 @@ def _ocr_fallback(f, prov, ocr_fn, ocr_budget):
             return "", prov
         t0 = time.perf_counter()
         try:
-            ocr_text = (ocr_fn or _crop_ocr)(f["bytes"])
+            ocr_text = (ocr_fn or _default_ocr)(f["bytes"])
         except Exception:  # OCR 실패 1건이 문서를 막지 않게
             ocr_text = ""
         ms = round((time.perf_counter() - t0) * 1000)
@@ -883,12 +878,10 @@ def _pick_edges(ext, page, px_edges, rec_edges):
 
 def _pick_edges_det(ext, page, px_edges, rec_edges, pdf_doc, f):
     """_pick_edges(위) 결과에 PDF 벡터 도식 그림(loc.origin=="vector")만 vector·glyph 소스를 더해 합친다
-    (우선순위 pptx_xml > vector > glyph > vlm — pptx_xml이 이미 있으면 그대로, 벡터 그림이 아니면 손 안 댐).
+    (우선순위 vector > glyph > vlm — 벡터 그림이 아니면 손 안 댐 · pptx_xml은 .pptx만이라 여기 안 옴).
     pdf_doc=None(벡터 그림 없는 문서)이면 이 조건에서 이미 걸러져 추가 비용 없음."""
     edges, edges_source = _pick_edges(ext, page, px_edges, rec_edges)
     if pdf_doc is None or (f.get("loc") or {}).get("origin") != "vector" or not f.get("bbox") or not page:
-        return edges, edges_source
-    if edges_source == "pptx_xml":  # pptx 경로는 ext==".pdf"에서 절대 안 나오지만 방어적으로 그대로
         return edges, edges_source
     v_edges = diag_edges.vector_edges_from_page(pdf_doc[page - 1], f["bbox"])
     g_edges = diag_edges.glyph_edges(f.get("text_layer") or "")
@@ -904,7 +897,7 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, ocr_fn=Non
     skipped: "VLM_FIGURES_MAX"로 기록에 남는다.
     VLM 보낼 그림(send)마다 classify_figure_kind()로 종류를 가늠(모델 호출 없음): text_image는 기록만(VLM 그대로), photo는 max_tokens를 낮춰 한 줄 요약 유도,
     chart·flow·other(모름 포함)는 지금처럼 전체 P_FIGJ 호출 — 지시문 글자·prompt_id는 안 바꿔 기존 VLM 캐시 그대로
-    재사용한다. ocr_fn — crop OCR 재사용 지점(없으면 _crop_ocr, 테스트는 가짜 OCR 주입).
+    재사용한다. ocr_fn — crop OCR 재사용 지점(없으면 _default_ocr, 테스트는 가짜 OCR 주입).
     VLM 응답이 빈 경우(미설정·오류·빈 응답)만 같은 crop의 OCR 글자로 채운다(_ocr_fallback). VLM 응답이
     있으면(비어 있지 않으면) 그대로.
     figures_max — 그림 상한을 이번 호출만 바꿈(None이면 설정 VLM_FIGURES_MAX)."""
@@ -957,7 +950,7 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, ocr_fn=Non
         f = figs[fi]
         t_ocr = time.monotonic()
         try:
-            f["ocr_text"] = (ocr_fn or _crop_ocr)(f["bytes"])
+            f["ocr_text"] = (ocr_fn or _default_ocr)(f["bytes"])
             f["ocr_chars"] = len(re.sub(r"\s+", "", f["ocr_text"]))
             SP.observe_current("ocr_ms", (time.monotonic() - t_ocr) * 1000)  # OCR 호출 수·지연
         except Exception as e:
