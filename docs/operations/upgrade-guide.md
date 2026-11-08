@@ -32,7 +32,7 @@
 
 | 무엇 | 서버에 미치는 것 | 이 문서의 절 |
 |---|---|---|
-| 코드가 읽지 않는 설정 칸 6개를 지움 | 서버 settings.yaml에 남으면 시작 거부 — 코드 폴더를 바꾸기 전에 지움 | §5 |
+| 코드가 읽지 않는 설정 칸 6개를 지움 | 서버 settings.yaml에 남으면 시작 거부 — §4 뒤, 컨테이너를 다시 띄우기 전에 지움 | §5 |
 | 넘겨주기·레이어·엔진(office·kreuzberg·markitdown) 지문이 바뀜 | 모든 문서를 다시 처리(엑셀 날짜 칸이 `2026-11-29` 꼴로) | §8 |
 | `except_doc_info`에 새 종류 `part`·`silver`, 골드 적재 성공 때 `silver` 행을 지움 | 적재 계정에 그 표 DELETE 권한(DB 담당 확인 — refactor.md C-111·C-112) | §6 |
 | 배포 판정 시험이 서버 PG에 붙음(prd는 읽기만) | `host_ctl.sh check`에 PG 접속이 필요 | §10 |
@@ -76,18 +76,23 @@ $DOCKER exec -i "$PG_C" pg_restore -l < "$BK/pg.dump" | grep -c ' TABLE '     # 
 
 새 코드가 요구하는 의존성 지문(`deploy/docker/DEPS_HASH`)과 같은 지문의 실행 이미지를 쓴다. 다르면 컨테이너가 `의존성 지문이 다름`으로 멈춘다.
 ```bash
-cd <공용 폴더>    # 예 /home/sbl — 새 이미지 저장소 zip을 여기에 푼다(sbl_images-main/)
-DOCKER=podman bash sbl_images-main/load.sh <이미지 판>                        # 기대: 조각 sha256 확인 → load → <판>/BUILD.txt
-grep DEPS_HASH sbl_images-main/<이미지 판>/BUILD.txt                          # 이미지 지문
-cat sbl_data_parsing-<새 판>/deploy/docker/DEPS_HASH                          # 코드 지문(§4 첫 줄로 푼 뒤) — 기대: 두 값이 같음
+cd <공용 폴더>                                                                # 예 /home/sbl
+unzip -q <코드 zip>                                                           # 기대: sbl_data_parsing-<새 판>/ — §4가 이 폴더를 씀
+cat sbl_data_parsing-<새 판>/deploy/docker/DEPS_HASH                          # 코드 지문
+grep -H DEPS_HASH sbl_images-main/*/BUILD.txt                                 # 서버에 있는 이미지 판마다 지문 — 같은 값이 있으면 그 판을 쓰고 아래 두 줄은 건너뜀
+unzip -q <새 이미지 저장소 zip>                                                # 같은 지문이 없을 때만 — sbl_images-main/
+DOCKER=podman bash sbl_images-main/load.sh <이미지 판>                        # 기대: 조각 sha256 확인 → load → <판>/BUILD.txt(DEPS_HASH가 코드 지문과 같음)
 ```
-- 0.3.0은 실행 이미지에 개발 도구가 들어가고 패키지 목록이 바뀌어 **새 실행 이미지가 꼭 필요하다**(0.2.0 실행 이미지로는 시작하지 않음). 코드만 바뀐 판(지문이 같음)은 이 절을 건너뛴다.
+- 0.3.0은 실행 이미지에 개발 도구가 들어가고 패키지 목록이 바뀌어 **새 실행 이미지가 꼭 필요하다**(0.2.0 실행 이미지로는 시작하지 않음). 코드만 바뀐 판(지문이 같음)은 이미지를 불러오는 두 줄만 건너뛴다(코드 zip 풀기는 한다).
 - 운영 서버: 개발 서버에서 `bake_prod_image.sh`로 구운 조각을 옮겨 `load.sh <VERSION>`([release-and-patch §1-2](release-and-patch.md#1-2-개발--운영--시험한-그대로-굽기)).
 
 ## 4. 벌 폴더에 새 코드 덮어쓰기
 
+> ⚠️ **0.2.0 서버(설정·결과가 코드 폴더의 부모에 있음)는 아래 첫 블록을 치지 않는다** — 옛 코드를 지워 되돌릴 수 없게 된다. 이 절 끝 "0.2.0 서버에서 처음 올릴 때만"으로 간다.
+
+`B`는 §2에서 정한 벌 폴더다(새 셸이면 `B=<벌 폴더>`를 다시 적는다). §3에서 푼 `sbl_data_parsing-<새 판>/`이 공용 폴더에 있어야 한다.
 ```bash
-cd <공용 폴더> && unzip -q <코드 zip>                                        # 기대: <공용 폴더>/sbl_data_parsing-<새 판>/
+cd <공용 폴더>
 T=deploy/host/scripts/test_space
 [ ! -e "$B.test_space" ] || { echo "[멈춤] $B.test_space가 이미 있음 — 아래 '중간에 끊겼을 때'대로 먼저 되돌린다" >&2; false; } &&
   { [ ! -d "$B/$T" ] || mv "$B/$T" "$B.test_space"; } &&   # run_pipeline 작업 폴더(진행 기록·잠금)를 잠시 밖으로 — 아래 find가 deploy/를 지움
@@ -114,7 +119,7 @@ cp -p <옛 루트>/settings.yaml <옛 루트>/edw_chain.yaml "$B/" && cp -a <옛
 
 컨테이너를 새 코드로 띄우기(§6) 전에 한다. 벌 폴더의 `settings.yaml`을 새 판의 `settings.sample.yaml`과 대조해 고친다. 옛 이름·지운 칸·모르는 칸이 하나라도 있으면 모든 명령이 시작을 거부하고 칸 이름만 알린다(값은 안 찍음).
 
-벌 폴더에서(§4 뒤 — 새 코드가 이미 벌 폴더에 있음) 순서대로 친다. 벌이 여럿이면 벌마다 한다.
+벌 폴더에서(§4 뒤 — 새 코드가 이미 벌 폴더에 있음) 순서대로 친다. 벌이 여럿이면 벌마다 한다. `B`·`DOCKER`는 §1·§2에서 정한 값이다(새 셸이면 다시 적는다).
 ```bash
 cd "$B"
 # ① 고치기 전 백업(같은 폴더 — 권한 그대로)
@@ -147,7 +152,7 @@ chown 10001:<운영 그룹> settings.yaml && chmod 640 settings.yaml
 - 빈 절(예: 칸을 다 지워 `extract:`만 남음)은 그대로 두어도 된다.
 - ④가 통과한 뒤 백업 파일 `settings.yaml.bak-*`은 §10 점검까지 끝나면 지운다(비밀값이 들어 있음).
 - **칸 이름이 바뀌었다** — 옛 → 새 전체 표는 [refactor.md 부록 — 칸 이름 대응표](../refactoring/refactor.md#부록--설정-칸-이름-대응표)(1차 표의 새 이름이 2차 표의 옛 이름 — 둘 다 옮김).
-- **서버 settings.yaml에서 지울 줄** — 코드가 읽지 않아 지운 칸이다(남으면 모르는 칸으로 시작 거부, [op-18](../prd/ops-settings.md#op-18)):
+- **서버 settings.yaml에서 지울 줄** — 코드가 읽지 않아 지운 칸이다(남으면 모르는 칸으로 시작 거부):
 
   | 지울 줄(칸 전체 이름) | 언제 지운 칸 | 까닭 |
   |---|---|---|
@@ -155,7 +160,7 @@ chown 10001:<운영 그룹> settings.yaml && chmod 640 settings.yaml
   | `extract.secure_doc`(절 통째 — 안에 `secure_doc_passwords_file`) | 0.3.1 | 읽는 곳이 없음(암호 문서는 건너뜀) |
   | `tuning.extract.source_columns.source_column_content_version` | 0.3.1 | 판 ID 열은 읽지 않음(증분 판정 열은 `source_column_increment`) |
   | `common.models.embed.embed_query_cache_file` · `tuning.common.models.embed.embed_query_cache_max_rows` | 0.3.1 | 검색 질의 임베딩 캐시는 프로세스 안 메모리(2048개)라 파일·행 상한 칸이 없음 |
-  | `dev.pg_standin`(절 통째) | 0.3.1 | sqlite 대역을 지웠다(PG 접속 필수 — [e2-22](../prd/test.md#e2-22)) |
+  | `dev.pg_standin`(절 통째) | 0.3.1 | sqlite 대역을 지웠다(PG 접속 필수) |
   | `ops.host.instance_name` | 0.3.0 | 벌 번호는 코드 폴더 이름 끝 `-<숫자>`. PG 스키마·게시 경로에 붙던 `_<벌>`도 없어져 모든 벌이 `required.pg.pg_schema` 그대로를 쓴다(옛 벌 스키마는 더 쓰지 않음 — 남은 스키마는 DB 담당과 정한다) |
   | `edw_write_user` · `edw_write_password` · `parsing_meta_table` | 0.3.0 | 파이프라인이 EDW에 쓰지 않음(§6) |
 
@@ -177,7 +182,7 @@ bash deploy/host/scripts/pipe_exec.sh migrate up --target master                
 bash deploy/host/scripts/pipe_exec.sh migrate master load --dir /app/output/glossary   # 바로 채움(샘플이면 --dir 없이) — 비어 있으면 구조화·검색이 시작하지 않음
 bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 기대: 갈래마다 "판 끝 [...] · 코드의 끝 판 ...", 종료 코드 0
 ```
-- **applog는 모든 벌이 함께 쓴다 — 어느 벌이든 0.3.0 코드 폴더로 바꾸기 전에 `migrate up --target applog`(또는 `--sql` 파일을 손으로 실행)를 먼저 끝낸다.** 판 `0004_applog` 전의 applog에는 새 코드의 사건 행(`source_system` 칸)이 들어가지 못해 그 벌의 applog 기록이 모두 파일 대체 기록(`output/logs/*.jsonl`)으로 가고, 적재 안 된 문서 기록(`except_doc_info`)은 칸 없음으로 실패한다.
+- **applog는 모든 벌이 함께 쓴다 — 첫 벌에서 §6 `migrate up --target applog`를 끝낸 뒤에 다른 벌을 새 코드로 바꾼다.** 첫 벌은 §6 첫 줄로 새 코드를 띄운 다음 바로 올린다. 그 사이도 없애려면 DB 담당이 `--sql` 파일(아래)을 코드를 바꾸기 전에 손으로 실행한다. 판 `0004_applog` 전의 applog에는 새 코드의 사건 행(`source_system` 칸)이 들어가지 못해 그 벌의 applog 기록이 모두 파일 대체 기록(`output/logs/*.jsonl`)으로 가고, 적재 안 된 문서 기록(`except_doc_info`)은 칸 없음으로 실패한다.
 - DB 담당이 SQL을 먼저 보고 손으로 실행하려면: `bash deploy/host/scripts/pipe_exec.sh migrate up --target applog --from 0001_applog --sql /app/output/up_applog.sql`(DB·접속 정보 없이 — 스키마 이름만 설정에서 · `<벌 폴더>/output/`에 다 만든 뒤 한 번에 씀 · `--from` = `migrate current`가 보인 지금 판, 갈래마다 — 없는 갈래는 빈 스키마부터라 경고 줄과 `-- 주의:` 주석이 나온다 · 차원을 읽는 판(`0001_search`·`0002_search`)이 들면 `--dim`이 필요). DB를 읽어야 하는 확인(지금 판·vector 확장·남의 스키마·차원)은 파일 안 `-- 수동:` 줄이다. 손으로 실행한 뒤 `migrate check --target all`.
 - 갈래(`--target`)마다 따로 올리면 어느 갈래가 바뀌었는지 출력에서 바로 보인다. 한 번에는 `--target all`.
 - 벌이 여럿이면 아무 벌 하나에서 한 번 — 다른 벌은 §4·§5 뒤 §10만 한다.

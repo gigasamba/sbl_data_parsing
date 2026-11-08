@@ -21,8 +21,8 @@
 
 ```bash
 export DOCKER=podman                                   # 운영 계정 ~/.bashrc에 두거나 명령 앞에 붙인다
-. deploy/host/scripts/load_settings.sh && load_settings   # 벌 폴더에서 — $PIPELINE_CNAME·$MCP_CNAME·$DATA_PARSING_CNAME(컨테이너 이름 = 밑 이름 + 벌 번호) · DOCKER
 bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>   # 코드 폴더 안 output/·settings.yaml·edw_chain.yaml(없을 때만)·home/(ssh_port를 적었을 때만) — README §5-0 3번
+. deploy/host/scripts/load_settings.sh && load_settings   # init 뒤(settings.yaml이 있어야 함) · 벌 폴더에서 — $PIPELINE_CNAME·$MCP_CNAME·$DATA_PARSING_CNAME(컨테이너 이름 = 밑 이름 + 벌 번호) · DOCKER
 ```
 - 값은 `init`이 찍은 빈 필수 칸부터 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)). `nightly_batch.sh`·`pipe_exec.sh`·`mcp_keepalive.sh`·systemd unit은 `<루트>/settings.yaml`을 스스로 찾는다.
 - **엔진 구성은 코드 폴더의 파일이다**(`resources/config/pipeline_stack.json` 하나 — 설정 칸 없음). 바꾸려면 코드 폴더째 바꾼다. 원천은 폴더·`rdb:csv`만.
@@ -54,7 +54,7 @@ README [§5-3](../../README.md#5-3-서버--처음-설치-자세히) ④ 연결 �
 - 컨테이너는 모두 호스트 네트워크라 포트가 겹치면 뒤에 띄운 쪽이 시작하지 못한다.
 - 명령은 그 벌 폴더에서 `host_ctl.sh`로만 한다 — `host_ctl.sh`·`mcp_keepalive.sh`·`nightly_batch.sh`·`pipe_exec.sh`·`run_pipeline.py`가 자기 코드 폴더 이름에서 벌 번호를 구해 자기 벌의 컨테이너만 다룬다(컨테이너 명령은 셸 `DOCKER`가 `ops.host.container_cli`를 이김). compose를 직접 부르면 이름·포트 값이 채워지지 않는다.
 - 자동 실행(`host_ctl.sh timers`)도 벌마다 따로 켜진다. 개발자 벌은 새벽 배치가 필요 없으면 `systemctl disable --now data-pipeline-nightly-<번호>.timer`.
-- CPU·메모리 상한(§README 5-0 "자원")은 서버 전체 합계를 보고 벌마다 줄인다.
+- CPU·메모리 상한(README §5-0 "자원")은 서버 전체 합계를 보고 벌마다 줄인다.
 
 ## 2. 일상 실행 — run_pipeline(문서별 흐름)
 
@@ -70,7 +70,7 @@ README [§5-3](../../README.md#5-3-서버--처음-설치-자세히) ④ 연결 �
 ```bash
 bash deploy/host/scripts/pipe_exec.sh parse [--source-limit N]   # 파싱 → <결과 폴더>/parse/_rep. 임베딩·DB 없음
 bash deploy/host/scripts/pipe_exec.sh publish --dry-run          # 무엇을 올리고 쓸지 표만(쓰기 0)
-bash deploy/host/scripts/pipe_exec.sh publish                    # 대표 결과 Object Storage 업로드 + EDW 메타 — 한 번만
+bash deploy/host/scripts/pipe_exec.sh publish                    # 대표 결과 Object Storage 업로드 — 한 번만
 ```
 - 같은 결과 폴더에 두 작업이 겹치면 `/app/output/.pipeline.lock` 때문에 뒤쪽이 종료 75.
 - 도구만 따로: `bash deploy/host/scripts/pipe_exec.sh <rdb_discover|check_env|ping_models|migrate|show-stack|check> [인자]`.

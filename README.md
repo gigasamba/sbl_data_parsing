@@ -425,7 +425,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 | 띄우기 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp`(서비스 하나만도 됨) | 아래 `ps`에 세 줄 `Up` |
 | 상태 · 로그 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh ps` · `… logs --tail 100 mcp`(서비스 이름 `data-pipeline`·`mcp-data-parsing`·`mcp`) | 이 벌의 컨테이너만 · 그 컨테이너 로그 |
 | 전체 점검 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh check` | 마지막 줄 `[host_ctl check] 통과 — 6개` |
-| DB 표 만들기(처음 한 번 — 공용 DB) | `<루트>`(`data-pipeline`이 떠 있어야 함) | `bash deploy/host/scripts/pipe_exec.sh migrate up --target all --dim <임베딩 차원>` → `… migrate master load` | `[migrate] <갈래> <스키마>: 판 [...] (끝 …)` · `[pipe_exec] … 끝 (종료 코드 0)` |
+| DB 표 만들기(처음 한 번 — 공용 DB) | `<루트>`(`data-pipeline`이 떠 있어야 함) | [§5-3 ③](#5-3-서버--처음-설치-자세히) 순서 — 검토용 SQL → `migrate up --target all --dim <임베딩 차원>` → `migrate master load` → `migrate check` | `[migrate] <갈래> <스키마>: 판 [...] (끝 …)` · `[pipe_exec] … 끝 (종료 코드 0)` |
 | DB 담당 검토용 SQL(DB에 붙지 않음) | `<루트>` | 위 `migrate up` 명령 끝에 `--sql /app/output/up.sql` | `[migrate] SQL → /app/output/up.sql (DB에 붙지 않음 — …)` — 호스트에서는 `<루트>/output/up.sql` |
 | 파이프라인 한 번(시험 2건) | `<루트>` | `nohup python3 deploy/host/scripts/run_pipeline.py --limit 2 > run_first.out 2>&1 &` | `deploy/host/scripts/test_space/batch_progress/progress.log` 끝 줄 `=== 문서별 flow 끝: 2건(완료 2 · …) · … · 종료 코드 0 ===` |
 | 설정을 바꾼 뒤 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline mcp-data-parsing mcp`(그냥 `up -d`는 다시 만들지 않음) | `ps`에 세 줄 `Up`(방금 시작) |
@@ -470,8 +470,9 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 | 무엇 | 확인 명령 | 없으면 |
 |---|---|---|
 | podman과 compose 하위 명령 | `podman compose version` | `dnf install podman-compose`(사내 RHEL 저장소). 없으면 인터넷 PC에서 서버와 같은 python 판으로 `pip download podman-compose -d pc-wheels` → 서버에서 `python3 -m pip install --no-index --find-links pc-wheels podman-compose` |
-| 호스트 python의 PyYAML | `python3 -c 'import yaml'` | `dnf install python3-pyyaml` |
-| PostgreSQL 16 + pgvector, 우리 DB·계정 | DB 담당에게 확인 | DB 담당이 만든다. `vector` 확장도 관리자가 한 번(§5-3 ③ 0번) |
+| 호스트 python 3.9 이상과 PyYAML | `python3 --version` · `python3 -c 'import yaml'` | 3.9 이상은 서버 관리자에게 요청한다(호스트 스크립트가 읽는 `common/config/layout.py`가 3.9 문법을 씀 — RHEL 8의 기본 `python3`는 3.6). PyYAML은 `dnf install python3-pyyaml` |
+| unzip | `unzip -v` | `dnf install unzip` |
+| PostgreSQL 16 + pgvector, 우리 DB·계정 | DB 담당에게 확인 | DB 담당이 만든다. 확인할 것 셋: ① PG가 **이 서버에 컨테이너로** 떠 있다(백업·문서 수 세기가 그 컨테이너 안에서 `psql`을 씀 — 이름을 `required.deploy.pg_container_name`에 적음) ② 계정에 그 DB의 **스키마 만들기 권한**이 있다(`GRANT CREATE ON DATABASE <DB> TO <계정>` — `migrate up`이 `<pg_schema>`·`<pg_schema>_master`·`<pg_schema>_<원천>`·`applog`를, 개발 서버의 배포 판정 시험이 임시 `test_*`를 만듦) ③ `vector` 확장(관리자가 한 번 — §5-3 ③ 0번) |
 | 운영 그룹 | `id -gn <운영 계정>` · `getent group <그룹>` | 서버 관리자에게 받는다 |
 
 **컨테이너 도구는 root podman 하나로 쓴다.** 셸을 열면 먼저 `export DOCKER=podman`, settings.yaml에 `ops.host.container_cli: podman`. 일반 사용자 셸이면 `DOCKER="sudo podman"`. 이미지를 불러온 저장소와 띄우는 저장소가 같아야 한다(rootless와 root podman은 이미지를 따로 보관).
@@ -480,16 +481,33 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 **서버 설치 순서**(처음 한 번 — root 셸, `<루트>` = 벌 폴더 = 코드 폴더)
 
 0. `export DOCKER=podman` — 위 "미리 있어야 하는 것"을 확인한다.
-1. 공용 폴더를 만들고(`mkdir -p /home/sbl`처럼 아무 자리) 이미지 zip과 코드 zip을 거기에 푼다. 코드 폴더 이름을 벌 폴더 이름으로 바꾼다 — `mv sbl_data_parsing-<판> sbl_data_parsing-main-1`(한 벌만 띄우는 서버·운영 서버는 번호 없이 `sbl_data_parsing-main` — 이름 끝 `-<숫자>`가 벌 번호, 아래 "한 서버에 여러 벌").
-2. 이미지를 불러온다(공용 폴더에서 — 서버에 한 번, 이미 불러온 판이면 건너뜀): `cd /home/sbl && DOCKER=podman bash sbl_images-main/load.sh <이미지 판>` — 조각 sha256 확인 → 합치기 → load, 끝에 `<판>/BUILD.txt`(빌드 커밋·DEPS_HASH). **코드의 `deploy/docker/DEPS_HASH`가 `BUILD.txt`의 DEPS_HASH와 같은 판**을 고른다(확인 명령 — [§1-3](#실행-모드)).
+1. 공용 폴더를 만들고 이미지 zip과 코드 zip을 거기에 푼 뒤, 코드 폴더 이름을 벌 폴더 이름으로 바꾼다.
+   ```bash
+   mkdir -p /home/sbl && cd /home/sbl                # 공용 폴더(자리는 아무 곳)
+   unzip -q <이미지 zip> && unzip -q <코드 zip>       # 기대: sbl_images-main/ · sbl_data_parsing-<판>/
+   mv sbl_data_parsing-<판> sbl_data_parsing-main    # 한 벌 — 번호 없음(운영 서버는 늘 이것)
+   B=/home/sbl/sbl_data_parsing-main                  # 아래 <루트> — 새 셸을 열면 다시 적는다
+   ```
+   개발자마다 벌을 나누는 개발 서버만 `sbl_data_parsing-main-1`처럼 끝에 번호를 붙인다. 번호가 있으면 4번의 포트 두 칸을 꼭 바꾼다(아래 "한 서버에 여러 벌").
+2. 이미지를 불러온다(공용 폴더에서 — 서버에 한 번, 이미 불러온 판이면 건너뜀). `<이미지 판>`은 `ls sbl_images-main/`에 보이는 판 폴더 이름이다: `cd /home/sbl && DOCKER=podman bash sbl_images-main/load.sh <이미지 판>` — 조각 sha256 확인 → 합치기 → load, 끝에 `<판>/BUILD.txt`(빌드 커밋·DEPS_HASH). **코드의 `deploy/docker/DEPS_HASH`가 `BUILD.txt`의 DEPS_HASH와 같은 판**을 고른다(확인 명령 — [§1-3](#실행-모드)).
 3. 루트 채우기: `cd <루트> && bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>` — `output/`·`output/_mcp_parse/jobs`(UID 10001, 2775)(settings.yaml에 `option.devbox.ssh_port`가 있으면 `home/`도 — 10001, 700), 코드 a+rX(`settings.yaml`·`edw_chain.yaml`·`output/`·`home/`은 빼고), `settings.sample.yaml` → `<루트>/settings.yaml`, `resources/config/edw_chain.yaml` → `<루트>/edw_chain.yaml`(둘 다 없을 때만, 10001:<운영 그룹> 640). 끝에 빈 필수 칸 **이름**을 찍는다. 여러 번 불러도 안전하다.
 4. 설정을 채운다 — `<루트>/settings.yaml` 맨 위 `required`의 빈 값(§5-3 ② "꼭 채울 값"). 이미지 칸에는 2에서 불러온 실행 이미지 태그(`data-pipeline-runtime:<이미지 판>`·`mcp-server-runtime:<이미지 판>`). 자원 상한도 본다(아래).
+   - **번호가 붙은 벌 폴더**(`…-main-1`)면 `search.server.mcp_port`·`ops.services.data_parsing.data_parsing_port`를 기본값(8765·8766)이 아닌 값으로 적는다 — 그대로면 5번에서 `[설정] 여러 벌 — … 기본값 그대로`로 멈춘다.
+   - **개발 서버**는 `required.source.source_systems: [DEV-<번호>]`를 적는다 — 비우면 운영 5개 원천 전부를 파싱한다.
+   - 운영 기준 결과를 내려면 `transform.represent.post_steps: all`([env-guide "서버 값으로 적는 칸"](docs/operations/env-guide.md)).
+   - `required.deploy.host_docs_dir`는 서버에 **이미 있는 폴더**여야 한다(없으면 `mkdir -p` 후 UID 10001이 읽을 수 있게).
+   - `init`이 찍는 "빈 필수 칸" 목록에는 비워도 되는 칸(`source_systems`·모델 `*_api_key` 등 — sample 주석 `[선택]`)도 섞여 있다. 무엇을 꼭 채울지는 §5-3 ② 표로 판단한다.
+   - 다 적은 뒤 칸 이름이 맞는지 한 번 읽어 본다 — [env-guide §4 "칸 이름 확인"](docs/operations/env-guide.md#4-확인)(기대 `설정-읽힘`). 틀린 칸이 있으면 5번에서 모든 컨테이너가 시작을 거부한다.
    - EDW 표 설명 자료(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료, 받는 곳은 refactor.md C-91)를 루트 아래 결과 폴더에 복사하고(`<루트>/output/edw_meta/`, UID 10001이 읽을 수 있게) `search.edw_meta.edw_meta_catalog_dir: /app/output/edw_meta`를 적는다. 없으면 `edw_meta` 도구만 `not_configured`로 답한다(나머지 도구는 그대로).
 5. `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline`(코드 폴더에서 — DB 도구가 그 안에서 돈다).
 6. DB 표를 만든다 — [§5-3 ③](#5-3-서버--처음-설치-자세히)의 명령(검토용 SQL → `migrate up` → `migrate master load` → `migrate check`).
 7. `bash deploy/host/scripts/host_ctl.sh up -d mcp-data-parsing mcp`(검색 MCP는 시작할 때 마스터 표를 읽으므로 6 뒤).
 8. `bash deploy/host/scripts/host_ctl.sh check` — check_env → ping_models → migrate check → 두 이미지 selftest → 검색 MCP `/health`, 처음 실패에서 멈춘다. 기대 마지막 줄: `[host_ctl check] 통과 — 6개`. 실행 이미지(`*-runtime`)면 스크립트가 자기 코드 폴더를 `/app/deploy`에 붙인다(셸·systemd에 `CODE_DIR`가 있으면 그 값).
-9. 시작 로그 첫 줄 `[image] 이미지 … · 코드 <커밋> · 의존성 …`으로 판을 확인하고, 첫 게시는 §5-3 ④의 미리보기부터, 첫 문서를 넣은 뒤 `mcp_smoke --source <원천>`으로 검색 근거를 확인한다(§4-5).
+9. 첫 실행을 확인한다.
+   - 판: `bash deploy/host/scripts/host_ctl.sh logs data-pipeline 2>&1 | grep -m1 '^\[image\]'` — 기대 `[image] 이미지 … · 코드 <커밋> · 의존성 …`.
+   - 게시 미리보기: §5-3 ④의 `pipe_exec.sh publish --dry-run`(쓰기 0).
+   - 문서 2건: [핵심 명령](#핵심-명령) "파이프라인 한 번(시험 2건)" — 기대 `progress.log` 끝 줄 `… 종료 코드 0 ===`.
+   - 검색: 서버용 `mcp_smoke` 명령은 [server-guide §4](docs/operations/server-guide.md#4-검색-mcp-사용) — 기대 끝 줄 `MCP 바깥 호출 통과`.
 10. 자동 실행을 켠다 — `bash deploy/host/scripts/host_ctl.sh timers`(§5-5). 다른 서버의 AI 클라이언트가 붙어야 하면 아래 "밖에서 붙기".
 
 **자원(기본 상한 — 합계 CPU 9 · 메모리 36g)**
@@ -504,7 +522,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 **밖에서 붙기(다른 서버의 AI 클라이언트)**
 - 기본 바인드는 `127.0.0.1`. 밖에서 붙게 하려면 `search.server.mcp_bind_host`에 서버 IP를 적는다(`0.0.0.0`은 거부).
-- 이때 `required.tokens.mcp_token`가 꼭 있어야 한다(없으면 시작 거부). 만들기: `openssl rand -hex 24`.
+- 이때 `required.tokens.mcp_token`가 꼭 있어야 한다(없으면 시작 거부). 만들기: `openssl rand -hex 32`.
 - 방화벽에서 `search.server.mcp_port`(기본 8765)를 연다 — 예: `firewall-cmd --add-port=8765/tcp --permanent && firewall-cmd --reload`.
 
 **한 서버에 여러 벌 띄우기(개발자별 — 폴더 이름 끝 번호로 나뉨, 개발 서버만)**
@@ -608,13 +626,14 @@ bash deploy/release/stage_images.sh pipeline-runtime mcp-runtime                
 | `required.edw.edw_host`·`edw_port`·`edw_database`·`edw_read_*` | 회사 DB(EDW) 접속 — 읽기 계정(원천 목록·`query_edw`, EDW는 읽기만 함 — 쓰기 계정 칸은 없음) · `edw_port`는 비우면 1433 | DB 담당 | `edw.example.local` · (비움) · `EDW` · `<계정>` · `<비밀>` | dev·prd | `run_pipeline` 시작(빠지면 칸 이름을 찍고 멈춤) · `pipe_exec.sh publish --dry-run`(④) |
 | `required.edw.edw_file_table` | 파싱 대상 파일 목록을 읽을 EDW 표(`<스키마>.<표>` — 영문·숫자·_만) · 기본 `AI.FileStorageMap` | DB 담당 | `AI.FileStorageMap` | dev·prd | 설정을 읽을 때(꼴이 틀리면 시작 거부) · `run_pipeline` 대상 목록 |
 | `dev.local.*` | PC 전용 값(가짜 EDW·게시 폴더·원본 폴더·새 문서 상한) — **서버는 읽지 않음**(`local_edw_sqlite_file`이 적혀 있으면 EDW를 쓸 때 거부) | — | (sample 그대로) | PC만 | — |
-| `required.publish.publish_bucket`·`publish_prefix` | silver 게시 위치 — 버킷(원천 원본 버킷과 달라야 함)과 그 안 경로 접두(PC는 `publish_bucket` 대신 `dev.local.local_publish_dir`) | 운영 담당 | `rag-silver` · `parse` | dev·prd | `run_pipeline` 시작 · publish 미리보기 |
-| `required.object_storage.object_storage_endpoint`·`object_storage_region`·`object_storage_access_key`·`object_storage_secret_key`·`object_storage_verify_tls` | Object Storage(S3 호환) 접속 — `object_storage_region`은 비우면 `us-east-1`, `object_storage_verify_tls`는 비우면 `1`(사내 CA면 CA 파일 경로) | 스토리지 담당 | `https://os.example.local:9000` · (비움) · `<비밀>` · `<비밀>` · (비움) | dev·prd | `run_pipeline` 시작 · publish `--apply` |
-| `extract.source.source_input_location`·`source_default_bucket`·`source_uri_prefix` | 원본 위치 | 운영 담당 | `rdb:csv:<루트>/list.csv` · `<버킷>` · `s3://<버킷>/<접두>` | dev·prd | 첫 `run_pipeline` |
-| `required.tokens.mcp_token` | MCP 토큰 하나 — 검색 MCP와 `parse_document` 작업 서비스가 함께 씀 | `openssl rand -hex 24` | 48자 16진수 | dev·prd(밖에서 붙을 때 필수) | `host_ctl.sh check` ⑥ `/health` · `parse_document` 호출이 토큰 오류 |
-| `required.tokens.fulltext_sign_key` | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키 — 비우면 두 도구가 `not_configured`, 바꾸면 이미 발급한 sfid가 모두 무효 | 같은 명령 | 48자 16진수 | dev·prd | 원문 도구 호출이 `not_configured` |
+| `required.publish.publish_bucket`·`publish_prefix` | silver 게시 위치 — 버킷(원천 원본 버킷과 달라야 함)과 그 안 경로 접두. **둘 다 비우면 안 된다**(sample은 `publish_prefix`를 `[선택]`으로 적지만 `run_pipeline`은 비면 `설정 필요`로 멈춤). PC는 `publish_bucket` 대신 `dev.local.local_publish_dir` | 운영 담당 | `rag-silver` · `parse` | dev·prd | `run_pipeline` 시작 · publish 미리보기 |
+| `required.object_storage.object_storage_endpoint`·`object_storage_access_key`·`object_storage_secret_key` | Object Storage(S3 호환) 접속 | 스토리지 담당 | `https://os.example.local:9000` · `<비밀>` · `<비밀>` | dev·prd | `run_pipeline` 시작 · publish `--apply` |
+| `common.connections.object_storage.object_storage_region`·`object_storage_verify_tls` | 리전(비우면 `us-east-1`)·TLS 검증(비우면 `1` — 사내 CA면 CA 파일 경로). **`required` 아래가 아니다** | 스토리지 담당 | (비움) · (비움) | dev·prd | 설정을 읽을 때(자리가 틀리면 시작 거부) |
+| `extract.source.source_input_location`·`source_default_bucket`·`source_uri_prefix` | 원본 위치 — `source_default_bucket`은 서버에서 **필수**(`run_pipeline`이 비면 멈춤) | 운영 담당 | `rdb:csv:<루트>/list.csv` · `<버킷>` · `s3://<버킷>/<접두>` | dev·prd | 첫 `run_pipeline` |
+| `required.tokens.mcp_token` | MCP 토큰 하나 — 검색 MCP와 `parse_document` 작업 서비스가 함께 씀 | `openssl rand -hex 32` | 64자 16진수 | dev·prd | `host_ctl.sh check` ⑥ `/health` · `parse_document` 호출이 토큰 오류 |
+| `required.tokens.fulltext_sign_key` | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키 — 비우면 두 도구가 `not_configured`, 바꾸면 이미 발급한 sfid가 모두 무효 | 같은 명령 | 64자 16진수 | dev·prd | 원문 도구 호출이 `not_configured` |
 | `required.deploy.pipeline_image` · `mcp_image` | 띄울 이미지 태그(같은 배포 묶음) | §5-0 2번 `load.sh` | dev: `data-pipeline-runtime:<이미지 판>` · prd: `data-pipeline:<VERSION>` | dev·prd | `host_ctl.sh up`이 이미지 없음으로 멈춤 |
-| `required.deploy.host_docs_dir` | 원본 문서 폴더 | 서버 관리자 | `/data/docs` | dev·prd | `host_ctl.sh up`이 `:?` 안내로 멈춤 |
+| `required.deploy.host_docs_dir` | 원본 문서 폴더(서버에 이미 있는 폴더) | 서버 관리자 | `/data/docs` | dev·prd | `host_ctl.sh up`이 `:?` 안내로 멈춤 |
 | `ops.host.host_output_dir` | 결과 폴더 — 비우면 `<루트>/output` | 서버 관리자 | (비움) | dev·prd | — |
 | `required.deploy.pg_container_name` | `pg_dump`·`psql`을 exec할 PG 컨테이너 이름 | DB 담당 | `<컨테이너>` | dev·prd | 백업 명령([upgrade-guide §2](docs/operations/upgrade-guide.md#2-백업)) |
 | `ops.host.container_cli` | 컨테이너 도구 | 정해진 값 | `podman` | dev·prd | 호스트 스크립트가 다른 도구를 부름 |
@@ -646,15 +665,15 @@ bash deploy/host/scripts/pipe_exec.sh check_env       # PG·VLM·설정 요약(�
 bash deploy/host/scripts/pipe_exec.sh check           # 자원·쓰기 권한·디스크·PG·모델 요약(⚠️ 실패해도 종료 0 — 출력을 읽는다)
 ```
 
-- EDW 로그인과 Object Storage 버킷을 따로 확인하는 명령은 없다. 첫 파싱 뒤 publish 미리보기(`bash deploy/host/scripts/pipe_exec.sh publish --dry-run` — 쓰기 0)로 확인하고, 실제 publish 한 번 뒤 EDW 행과 Object Storage 파일을 본다 — 명령은 [upgrade-guide §10](docs/operations/upgrade-guide.md#10-올린-뒤-점검).
-- ⚠️ 실제 publish(`pipe_exec.sh publish`)는 한 번만 한다. 다시 돌리면 Object Storage에 같은 결과를 새 시각 이름으로 또 올린다(EDW는 이미 있는 행을 건너뜀).
+- EDW 로그인과 Object Storage 버킷을 따로 확인하는 명령은 없다. 첫 파싱 뒤 publish 미리보기(`bash deploy/host/scripts/pipe_exec.sh publish --dry-run` — 쓰기 0)로 확인하고, 실제 publish 한 번 뒤 Object Storage 파일을 본다 — 명령은 [upgrade-guide §10](docs/operations/upgrade-guide.md#10-올린-뒤-점검).
+- ⚠️ 실제 publish(`pipe_exec.sh publish`)는 한 번만 한다. 다시 돌리면 Object Storage에 같은 결과를 새 시각 이름으로 또 올린다.
 
 **⑤ 이미지 점검**
 
 ```bash
 $DOCKER run --rm -v "$PWD:/app/deploy:ro,z" data-pipeline-runtime:<판> check-modules
-bash deploy/release/selftest_gate.sh $DOCKER run --rm --network host -v "$SETTINGS_FILE:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=dev -v "$PWD:/app/deploy:ro,z" data-pipeline-runtime:<판> selftest   # 기대: [판정] 통과 — FAIL 0
-bash deploy/release/selftest_gate.sh $DOCKER run --rm --network host -v "$SETTINGS_FILE:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=dev -v "$PWD:/app/deploy:ro,z" mcp-server-runtime:<판> selftest      # 기대: [판정] 통과 — FAIL 0
+bash deploy/release/selftest_gate.sh $DOCKER run --rm --network host -v "$PWD/settings.yaml:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=dev -v "$PWD:/app/deploy:ro,z" data-pipeline-runtime:<판> selftest   # 기대: [판정] 통과 — FAIL 0
+bash deploy/release/selftest_gate.sh $DOCKER run --rm --network host -v "$PWD/settings.yaml:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=dev -v "$PWD:/app/deploy:ro,z" mcp-server-runtime:<판> selftest      # 기대: [판정] 통과 — FAIL 0
 ```
 
 selftest는 종료 코드가 아니라 `[판정]` 줄로 판정한다. 운영 서버(구운 이미지)는 `-v …` 없이 `data-pipeline:<판>`·`mcp-server:<판>`.
@@ -696,7 +715,7 @@ WHERE stage = 'load.embed_guard' AND ts_start > now() - interval '7 days' ORDER 
 | 무엇 | 방법 |
 |---|---|
 | 검색 MCP·`mcp-data-parsing` 상주 확인 | systemd `mcp-server-keepalive.timer` — 부팅 1분 뒤 + 2분마다 `mcp_keepalive.sh` |
-| 새벽 배치 | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `ops.nightly.nightly_start_time: "HH:MM"`(그 시각부터 5분 안에 시작) · `max_docs`(새 문서 수 상한, 1 이상) · `deadline: "HH:MM"`(마감 — 시작보다 5분 넘게 뒤). **셋 중 하나라도 비면 돌지 않는다**(기본 비움) |
+| 새벽 배치 | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `ops.nightly.nightly_start_time: "HH:MM"`(그 시각부터 5분 안에 시작) · `ops.nightly.nightly_max_docs`(새 문서 수 상한, 1 이상) · `ops.nightly.nightly_stop_time: "HH:MM"`(마감 — 시작보다 5분 넘게 뒤). **셋 중 하나라도 비면 돌지 않는다**(기본 비움) |
 | 재부팅 뒤 되살리기(podman) | `systemctl enable --now podman-restart` — `restart: unless-stopped` 컨테이너를 부팅 때 다시 띄운다. 일괄 `data-pipeline`은 keepalive가 보지 않으니 재부팅 뒤 `host_ctl.sh ps`로 보고 없으면 `host_ctl.sh up -d data-pipeline` |
 
 systemd 설치(DB 판과 컨테이너를 확인한 뒤 — 벌마다 그 벌 폴더에서, 새 판으로 덮어쓴 뒤에도 다시):
@@ -730,24 +749,19 @@ sudo systemctl enable --now podman-restart
 
 | 바꿀 것 | 방법 |
 |---|---|
-| 설정 값 | settings.yaml을 직접 고치고 `host_ctl.sh up -d --force-recreate …`(서비스 이름 `mcp`, 컨테이너 이름 `mcp-server`). 띄우기 전 확인: `bash deploy/host/scripts/pipe_exec.sh check_env`(도는 컨테이너 안 — 빠진 필수 값) · 칸 이름 틀림은 §5-8 3번의 한 번 읽기 명령 |
+| 설정 값 | settings.yaml을 직접 고치고 `host_ctl.sh up -d --force-recreate …`(서비스 이름 `mcp`, 컨테이너 이름 `mcp-server`). 다시 띄우기 전에 [env-guide §4 "칸 이름 확인"](docs/operations/env-guide.md#4-확인) |
 | 이번 실행만 다른 값 | `--set 이름=값` |
 | 엔진 구성 | 코드 폴더의 `resources/config/pipeline_stack.json`을 고쳐 코드 폴더 바꾸기(§5-8) — 확인 `show-stack`([resources.md §1](docs/architecture/resources.md)) |
 
 ### 5-8. 새 판 올리기 — 덮어쓰기
 
-벌 폴더(코드 폴더)에 새 코드를 덮어쓴다. 백업·새 이미지·DB 판·되돌리기까지 전체 순서는 [upgrade-guide.md](docs/operations/upgrade-guide.md) — 아래는 줄인 것이다.
-1. 옛 벌 폴더를 각자 벌 폴더 밖에 백업한다(서버에서 고친 코드는 gitea에도 올린다).
-2. 벌 폴더에서 옛 코드만 지우고(설정·결과·홈은 남김) 새 코드 zip을 그 위에 푼다 — `cd /home/sbl && unzip -q <코드 zip> && B=sbl_data_parsing-main-1 T=deploy/host/scripts/test_space && { [ ! -e $B.test_space ] || { echo "[멈춤] $B.test_space가 이미 있음 — upgrade-guide §4 '중간에 끊겼을 때'대로 먼저 되돌림" >&2; false; }; } && { [ ! -d $B/$T ] || mv $B/$T $B.test_space; } && find $B -mindepth 1 -maxdepth 1 ! -name .git ! -name output ! -name home ! -name edw_chain.yaml ! -name "settings*" -exec rm -rf {} + && cp -a sbl_data_parsing-<판>/. $B/ && rm -rf sbl_data_parsing-<판> && { [ ! -d $B.test_space ] || mv $B.test_space $B/$T; }`(run_pipeline 작업 폴더 `test_space/`는 `deploy/`와 함께 지워지지 않게 잠시 밖으로 옮겼다 되돌린다)(이미지가 바뀌었으면 이미지 zip도 — §5-0 2번).
-3. **설정 고치기** — 새 판에서 지운 칸이 `settings.yaml`에 남으면 모든 컨테이너가 시작을 거부한다. 벌 폴더에서 백업하고 지운 칸을 찾아 지운 뒤, 새 코드로 설정을 한 번 읽어 본다(지울 칸 표와 자세한 순서는 [upgrade-guide §5](docs/operations/upgrade-guide.md#5-설정-고치기)):
-   ```bash
-   cd $B && cp -p settings.yaml settings.yaml.bak-$(date +%Y%m%d-%H%M)                 # 백업
-   grep -noE '^[[:space:]]*(skipped_docs_log|secure_doc|source_column_content_version|embed_query_cache_file|embed_query_cache_max_rows|pg_standin|instance_name|edw_write_user|edw_write_password|parsing_meta_table)[[:space:]]*:' settings.yaml   # 칸 이름·줄 번호만 — 나온 줄을 vi로 지움
-   $DOCKER run --rm --entrypoint python -v "$PWD:/app/deploy:ro,z" -v "$PWD/settings.yaml:/etc/rag/settings.yaml:ro,z" \
-     -e SETTINGS_FILE=/etc/rag/settings.yaml <새 실행 이미지> -m pipeline.config >/dev/null && echo 설정-읽힘   # 기대: 설정-읽힘
-   ```
-   `설정-읽힘` 대신 `[설정] 설정 검증 실패 … — N건`이 나오면 그 아래 줄마다 찍힌 칸(값은 안 찍음)을 지우고 다시 친다.
-4. 벌 폴더에서 `host_ctl.sh init --group <운영 그룹>` → `host_ctl.sh up -d --force-recreate data-pipeline mcp-data-parsing mcp` → `host_ctl.sh check` → `host_ctl.sh timers`.
+벌 폴더(코드 폴더)에 새 코드를 덮어쓴다. **명령은 [upgrade-guide.md](docs/operations/upgrade-guide.md) 한 곳에만 있다** — 그 순서대로 복사해 친다. 큰 흐름:
+1. 자동 실행을 멈추고 벌 폴더를 밖에 백업한다 — [upgrade-guide §2](docs/operations/upgrade-guide.md#2-백업)(서버에서 고친 코드는 gitea에도 올린다).
+2. 실행 이미지가 바뀐 판이면 새 이미지를 불러온다 — [§3](docs/operations/upgrade-guide.md#3-새-실행-이미지-불러오기--의존성-지문-확인).
+3. 옛 코드만 지우고 새 코드를 덮어쓴다 — [§4](docs/operations/upgrade-guide.md#4-벌-폴더에-새-코드-덮어쓰기).
+4. 새 판에서 지운 설정 칸을 지우고 새 코드로 설정을 한 번 읽어 본다 — [§5](docs/operations/upgrade-guide.md#5-설정-고치기)(기대 `설정-읽힘` — 남은 칸이 있으면 모든 컨테이너가 시작을 거부한다).
+5. DB 판을 올린다 — [§6](docs/operations/upgrade-guide.md#6-db-판-올리기--migrate-up).
+6. 다시 띄우고 점검한다 — [§10](docs/operations/upgrade-guide.md#10-올린-뒤-점검)(`host_ctl.sh check` 마지막 줄 `[host_ctl check] 통과 — 6개`).
 - 덮어써도 남는 것 — 지우거나 옮기지 않는다: `settings.yaml`·`edw_chain.yaml`·`output/`(파싱 캐시·임베딩 캐시·FAQ 교체 기록 — 잃으면 전부 다시 처리)·`home/`·`deploy/host/scripts/test_space/`(run_pipeline 진행 기록·잠금 — 위 명령이 옮겼다 되돌림).
 - 옛 코드를 먼저 지우는 까닭: 새 판에서 지운 파일(옛 시험 등)이 남으면 `host_ctl.sh check`의 selftest가 그 파일 때문에 실패한다.
 - 검색 DB는 같은 PG를 그대로 본다. 벌이 여럿이면 모두 같은 판으로 올린다(같은 기준 스키마).

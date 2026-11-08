@@ -8,7 +8,7 @@
 | [PRD.md](PRD.md) · [prd/extract.md](prd/extract.md) · [prd/transform.md](prd/transform.md) · [prd/transform-cleanup.md](prd/transform-cleanup.md) · [prd/load.md](prd/load.md) · [prd/load-schema.md](prd/load-schema.md) · [prd/mcp.md](prd/mcp.md) · [prd/ops.md](prd/ops.md) · [prd/ops-settings.md](prd/ops-settings.md) · [prd/test.md](prd/test.md) · [prd/doc.md](prd/doc.md) | 기능 요건 — 카테고리 7개: 수집, 변환(정리·지문 배치는 transform-cleanup), 적재(DB 스키마는 load-schema), 검색 MCP, 운영(설정은 ops-settings), 테스트, 문서·릴리스. PRD.md는 묶음 표와 지금 진행 중. 카테고리 파일 끝에 요건과 다른 코드·요건 없는 코드 | 기능을 고치거나 더하기 전에, 할 일을 고를 때 |
 | [CLAUDE.md](../CLAUDE.md) | 작업 규칙 — 지문·계약·운영 가드, 경계·이름, 배포 환경 규칙, 로컬 하네스·점검 명령 | 작업을 시작하기 전에 늘 |
 | [refactoring/refactor.md](refactoring/refactor.md) | 서버·사람이 확인할 열린 사항(C-xx) — 무엇을 돌리고 무엇이 통과인지 | 서버 배포 전후, 담당자와 협의할 때 |
-| [operations/server-guide.md](operations/server-guide.md) | 서버 가이드 — 이미지 역할, 설치·첫 실행, 일상 실행, 결과 확인, 문제 해결 | 서버를 설치·운영할 때 |
+| [operations/server-guide.md](operations/server-guide.md) | 서버 가이드 — 이미지 역할, 설정·기동 확인, 일상 실행(설치 순서는 README §5-0), 결과 확인, 문제 해결 | 서버를 설치·운영할 때 |
 | [operations/mcp-guide.md](operations/mcp-guide.md) | 검색 MCP 도구 6개의 입력·출력·한도·오류·예(표는 `tests/general/mcp/test_mcp_guide.py`가 코드와 대조) | MCP 클라이언트를 붙이거나 도구 입출력을 바꿀 때 |
 | [operations/env-guide.md](operations/env-guide.md) | 설정 작성 가이드 — 서버·PC `settings.yaml`의 자리·권한·키·기본값 | 설정 값을 채우거나 바꿀 때 |
 | [operations/release-and-patch.md](operations/release-and-patch.md) | 릴리스 — 실행 이미지 + 코드 폴더(개발 서버)·운영 굽기(`bake_prod_image.sh`)·selftest 반입 판정, EDW 사슬 파일 고치기(§8)·서버에서 만드는 파일(§9) | 새 판을 만들거나 서버에 넣을 때 |
@@ -47,7 +47,7 @@
 | 말 | 뜻 |
 |---|---|
 | 묶음(번들) | 구조화 결과 폴더(`docs.jsonl`·청크·벡터) — 적재의 입력(검색은 PG만 읽는다) |
-| 대역 | PC에서 외부 시스템을 흉내 내는 것(EDW sqlite `valid_env/edw/edw.sqlite`, PG 대역 SQLite) |
+| 대역 | PC에서 외부 시스템을 흉내 내는 것(EDW sqlite `valid_env/edw/edw.sqlite` — PG는 대역 없이 PC 시험 pgvector 컨테이너) |
 | 스택 | 파일 형식마다 도는 엔진 목록(`resources/config/pipeline_stack.json`) |
 | represent | 엔진 결과 중 대표를 고르고 고치는 단계 |
 | flow 러너 | 서버 호스트의 문서별 실행기 `run_pipeline.py` — 레인 light·medium·vlm, staging(미리 받기) |

@@ -93,3 +93,17 @@
 - 파일: `deploy/host/scripts/{load_settings.sh,host_ctl.sh,run_pipeline.py,prune_images.sh,…}`(루트 구하기·`host_ctl.sh init`·`host_ctl.sh timers`) · `deploy/host/compose/*.yml`(`${RAG_ROOT}` 마운트) · `deploy/host/systemd/*.service`(`@CODE_DIR@` 틀) · `deploy/release/{bake_prod_image.sh,build_ship.sh,load.sh}` · `common/config/{settings.py,layout.py,sample.py,keyscan.py,setarg.py}`(서버 이미지 기본 `APPLOG_DB_ENABLED`·`log_fallback_dir` `output/logs`·지운 칸 경고) · `common/core/{runlog.py,paths.py}` · `common/ai/guard.py` · `mcp_server/services/{edw_query.py,search/search_svc.py}`(`qa_log.py` 삭제) · `pipeline/run_mcp_parsing.py` · README §5 · `docs/operations/{release-and-patch,server-guide,env-guide,mcp-guide}.md`.
 - QA: `tests/general/deploy/test_dc_init.py`(init 배치·루트 = 코드 폴더·`home/`은 `ssh_port` 있을 때만·`timers` 틀 채우기) · `test_compose.py`(루트 마운트) · `test_host_env.py` · `tests/server/common/test_layout.py`(지운 칸은 시작 거부) · `tests/server/common/test_settings.py`(서버 이미지 DB 로그 기본 켬). 서버 확인: [refactor.md C-90](../refactoring/refactor.md).
 - Status: done
+
+<a id="op-19"></a>
+## op-19 · 서버 문서는 신입도 혼자 따라 칠 수 있다
+- 이유: 기초 교육만 받은 개발자가 새 서버 설치·판 올리기·설정 바꾸기를 문서만 보고 끝내야 한다. 같은 절차를 여러 문서에 복사해 두어 이미 서로 어긋난 곳이 있었다(신입·시니어 관점 검토, 사용자 11-09).
+- 규칙:
+  1. 절차마다 명령 원본은 한 곳 — 새 서버 설치는 README §5-0 "서버 설치 순서", 판 올리기는 upgrade-guide, 설정 칸 확인은 env-guide §4. 다른 문서는 링크만 둔다.
+  2. README §5 첫머리에 "새 서버 설치 · 판 올리기 · 설정 바꾸기" 세 갈래 입구 표.
+  3. 명령 블록마다 쓰는 변수(`B`·`DOCKER`·`IMG`)를 그 블록 첫 줄에서 정하거나 어디서 정했는지 적는다. 단계마다 기대 출력 한 줄.
+  4. 낱말(벌·벌 폴더·공용 폴더·판·갈래·원천·게시)은 `docs/INDEX.md` 용어집 한 곳에서 풀이한다.
+  5. 지난 판에서만 하는 일(0.1.0·0.2.0 갈래)은 `docs/history/`로 옮기고, upgrade-guide 맨 위 "이번 판에서 바뀐 것" 표만 판마다 바꾼다.
+  6. 문서와 코드가 다른 칸 설명(필수·선택)은 코드(설정 모델 설명)를 고쳐 맞춘다.
+- 파일: `README.md` §5, `docs/operations/{upgrade-guide,release-and-patch,server-guide,env-guide,handover-guide}.md`, `docs/INDEX.md`, `common/config/settings.py`·`pipeline/config.py`(칸 설명), `deploy/host/scripts/host_ctl.sh`(init의 빈 필수 칸 목록).
+- QA: 새 사람이 README §5-0만 보고 새 서버(또는 PC의 podman 시험 서버)에 설치해 `[host_ctl check] 통과 — 6개`까지 간다. 문서 링크·앵커 점검이 0건.
+- Status: todo
