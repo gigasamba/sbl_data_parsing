@@ -12,7 +12,7 @@ from mcp_server.config import CFG
 from mcp_server.schemas.evidence import EVIDENCE_KEYS, K_MAX, SEARCH_FILTERS
 from mcp_server.services.search.evidence_shape import _evidence, cap, evidence_status
 from mcp_server.services.search.internal_docs import _manifest_by_name
-from mcp_server.services.search.server_state import _retriever, dev_hint, dev_served
+from mcp_server.services.search.server_state import _STATE, _retriever, dev_hint, dev_served
 
 KST = timezone(timedelta(hours=9))  # 시간대 없는 등록 시각은 KST(운영 계약)
 _SYSTEMS = tuple(s.upper() for s in ST.SOURCES)
@@ -160,8 +160,12 @@ def _doc_attrs(src, paths):
 
 
 def _source_docs(src):
-    """원천 스키마의 문서 수(source_system만 줬을 때의 scope_docs)."""
-    R = _retriever(src)
+    """원천 스키마의 문서 수(source_system만 줬을 때의 scope_docs) — 재적재 확인이 들고 있는 개수(server_state 적재 버전
+    (원천, MAX(doc_id), COUNT(*)))를 그대로 씀. 그 원천 값이 없거나 None일 때만 COUNT(*)를 직접 셈."""
+    R = _retriever(src)  # 재적재 확인이 먼저 — 버전(개수)이 새로 고쳐진 뒤 읽음
+    n = next((v[2] for v in _STATE.get("version") or () if v[0] == src), None)
+    if n is not None:
+        return int(n)
     r = R.pg.q(f"SELECT COUNT(*) AS n FROM {R.pg.schema}.doc")
     return int(r[0]["n"]) if r else 0
 

@@ -33,7 +33,7 @@
   - `attrs: {키: 값 또는 목록}` — 그 원천 `doc.attrs`(JSONB)의 키로 정확 일치(키끼리 AND, 목록 OR). 받는 키 = 사슬 파일(`resources/config/edw_chain.yaml`) `fields`에서 `filter`가 있는 키 + `doc_class`(SFDC·LAS). 모르는 키는 `{"error"}`에 그 원천의 키 목록을 담는다. SQL은 `attrs @> %s::jsonb`(GIN 색인).
   - 이름 있는 거르기 `project_id`·`division`·`service_type`·`doc_class`·`sf_op_id`·`sf_op_name`·`contract_id`는 사슬의 `filter:`로 attrs 키에 이어진다(예 `project_id` → `project_code__c`). 그 원천에 이어진 키가 없으면 0건. `FAQ_group`은 청크 칸.
 - 출력:
-  - 맨 위 5칸(`SEARCH_TOP_KEYS`): `question` · `evidence[]`(최대 k) · `evidence_status`(`found`·`weak`·`none`) · `filter`(정규화한 거르기 메아리 — 빈 값 뺌, `-test` 뗌) · `scope_docs`(맞은 문서 수). `filter`·`scope_docs`는 늘 나온다.
+  - 맨 위 5칸(`SEARCH_TOP_KEYS`): `question` · `evidence[]`(최대 k) · `evidence_status`(`found`·`weak`·`none`) · `filter`(정규화한 거르기 메아리 — 빈 값 뺌, `-test` 뗌) · `scope_docs`(맞은 문서 수 — 거르기가 `source_system`뿐이면 재적재 확인(기본 30초 간격)이 세어 둔 그 원천 스키마의 문서 수를 쓰고, 없을 때만 직접 센다). `filter`·`scope_docs`는 늘 나온다.
   - 근거 13칸(`EVIDENCE_KEYS`, 값이 없으면 null): `text` · `file_name`(원본 경로의 마지막 조각) · `file_path`(Object Storage 원본 전체 경로) · `page` · `line` · `section` · `client`(= `client_edw`) · `contract_no`(사슬에서 `filter: contract_id`인 키의 값) · `doc_date`(gold `doc.content_date`) · `version`(수집 manifest 값만) · `superseded`(늘 null) · `chunk_key`(`<doc_id>:<seq>` — `doc_id`는 스키마 5벌이 함께 쓰는 시퀀스) · `attrs`(사슬에서 `evidence: true`인 키 모두 — 근거 키가 없는 FAQ·Other는 null).
 - 운영과 다른 점:
   - 거르기 값은 모두 글자 하나 또는 목록(운영 명세는 `client`만 목록).
