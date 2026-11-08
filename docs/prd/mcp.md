@@ -75,7 +75,7 @@
   5. 적재 판이 바뀌면 원천마다 Retriever와 색인 정보를 다시 읽는다(`server_state`).
 - 데이터: 판 `0004_doc_embed`(5벌 `doc`에 `content_date TEXT`·`embed_model TEXT`, `corpus_stat.dim` 없음) — [architecture/db_schema.md](../architecture/db_schema.md).
 - 파일: `mcp_server/services/search/{retriever,pgsearch,server_state}.py`.
-- QA: `tests/server/mcp/` 검색 시험(SQLite 대역 `tests/server/mcp/pgfix.py`) · 통과. 서버 확인 refactor.md C-87.
+- QA: `tests/server/mcp/` 검색 시험(실 pgvector 임시 스키마 `tests/server/mcp/pgfix.py`) · 통과. 서버 확인 refactor.md C-87.
 - Status: done
 
 <a id="mc-10"></a>
@@ -121,7 +121,7 @@
   - 등록 시각 가드는 검색 DB(gold `doc.created_at`)에서 읽는다.
   - `docs`에 원본 전체 경로도 받는다.
 - 파일: `mcp_server/routers/fulltext_tool.py`, `mcp_server/services/fulltext_svc.py`, `mcp_server/schemas/fulltext.py`.
-- QA: `tests/server/mcp/test_fulltext.py`(gold `doc`는 SQLite 대역 — 처리 기록 칸에서 읽음 · 출력 모양 그대로) · `test_dev_search.py`(`FULLTEXT` 표 — DEV 입력) · 통과. 서버 확인 refactor.md C-75.
+- QA: `tests/server/mcp/test_fulltext.py`(gold `doc`는 실 pgvector 임시 스키마 — 처리 기록 칸에서 읽음 · 출력 모양 그대로) · `test_dev_search.py`(`FULLTEXT` 표 — DEV 입력) · 통과. 서버 확인 refactor.md C-75.
 - Status: done
 
 <a id="mc-06"></a>
@@ -205,9 +205,6 @@
 - Status: done
 
 ## 코드와 다른 점 · 지울 코드
-
-### 요건 없는 코드 — 남길지 지울지
-- PG 대역(PG 접속 칸이 없으면 SQLite — PC·이미지 selftest). `common/store/pg_standin.py`.
 
 ### 설정이 있어야 도는 것
 | 기능 | 필요한 것 |

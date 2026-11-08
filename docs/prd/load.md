@@ -80,7 +80,7 @@
 3. 모델을 바꾸려면 새 검색 스키마에 적재한다(`--replace`도 거부).
 
 ### QA
-- `tests/server/pipeline/test_pgvector_load.py::test_embed_guard`(SQLite 대역 — 같은 모델·표기만 다른 같은 모델은 적재, 다른 모델은 거부 + `pipe_event` 한 행).
+- `tests/server/pipeline/test_pgvector_load.py::test_embed_guard`(실 pgvector 임시 스키마 — 같은 모델·표기만 다른 같은 모델은 적재, 다른 모델은 거부 + `pipe_event` 한 행).
 - Status: done
 
 <a id="pl-19"></a>
@@ -137,7 +137,7 @@ FAQ는 판을 잇지 않는다. 새 FAQ가 오면 gold faq를 비우고 FAQ 전�
 7. 한계: 같은 실행 안에서 지우고 다시 넣는 사이에는 검색에 FAQ가 일부만 보인다. FileStorageMap에서 사라진 FAQ는 다음 교체 때 함께 빠진다.
 
 ### QA
-- `tests/server/pipeline/test_faq_rows.py::test_faq_sync`(SQLite 대역) · `tests/server/pipeline/test_target_list.py`(FAQ 순서 사례).
+- `tests/server/pipeline/test_faq_rows.py::test_faq_sync`(실 pgvector 임시 스키마) · `tests/server/pipeline/test_target_list.py`(FAQ 순서 사례).
 - Status: done
 
 <a id="pl-08"></a>
@@ -155,7 +155,7 @@ FAQ는 판을 잇지 않는다. 새 FAQ가 오면 gold faq를 비우고 FAQ 전�
 
 ### 규칙
 1. 게시·적재는 EDW에 쓰지 않는다(`deleted`도 — [ops.md#op-17](ops.md#op-17) 규칙 18).
-2. 서버(`dev`·`prd`)는 PG가 없으면 로컬 대체 DB(SQLite 대역)로 바꿔 타지 않고 멈춘다.
+2. PG가 없으면 대체 DB로 바꿔 타지 않고 멈춘다(PC 포함 — 대역 없음).
 
 ### QA
 - `tests/server/common/test_no_deleted.py`.
@@ -171,7 +171,7 @@ FAQ는 판을 잇지 않는다. 새 FAQ가 오면 gold faq를 비우고 FAQ 전�
 1. 대상 CSV 하나 `resources/vocab/glossary/glossary.csv` — 고객 명부·용어 사전·ID 꼴을 합친 표 `glossary`(꼴은 [ops.md#op-17](ops.md#op-17) 규칙 19~21). `client_master.example.csv`·`client_master_map.example.json`·`client_roster_seed.json`은 파일로 남는다.
 2. 스키마 `<PG_SCHEMA>_master`, 표·칸은 Alembic 갈래 `master`로만(`dbtool up --target master`, `--target all`에 포함). 칸·해시 규칙은 [db_schema.md](../architecture/db_schema.md) §4.
 3. `dbtool master load`가 CSV로 표 내용을 한 트랜잭션에 통째로 바꾼다. 내용 해시는 읽을 때 계산한다. 초기화 순서: `dbtool up`(search·applog·master) → `dbtool master load`.
-4. 읽는 곳: `common/core/terms.py`의 용어 사전·ID 모양·고객 명부 로더(프로세스마다 한 번, 마스터 해시가 바뀌면 다시) — 구조화 고객 판별(`infer_clients`)과 검색. PC·시험은 같은 CSV로 채운 SQLite 대역. 서버(`dev`·`prd`)는 마스터를 못 읽으면 시작하지 않는다.
+4. 읽는 곳: `common/core/terms.py`의 용어 사전·ID 모양·고객 명부 로더(프로세스마다 한 번, 마스터 해시가 바뀌면 다시) — 구조화 고객 판별(`infer_clients`)과 검색. 마스터를 못 읽으면 시작하지 않는다(PC·시험도 — 시험은 임시 스키마에 같은 CSV를 채움).
 5. `gold_version` = `<VERSION>+m<마스터 해시 앞 8자>` — 구조화가 읽은 해시를 묶음 `meta.json` `master_hash`로 넘기고 적재가 gold `doc.gold_version`에 쓴다(`master_hash`가 없는 묶음은 `<VERSION>`만). `silver_version`에는 붙이지 않는다. 마스터 해시는 캐시 열쇠·code_fp에 넣지 않는다(마스터가 바뀌어도 자동 재처리 없음).
 
 ### 예시

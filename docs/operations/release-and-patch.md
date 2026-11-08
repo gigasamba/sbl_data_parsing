@@ -42,8 +42,11 @@
 ## 3. 배포 판정 — selftest
 
 ```bash
-bash deploy/release/selftest_gate.sh $DOCKER run --rm <코드 폴더 옵션> <태그> selftest
+bash deploy/release/selftest_gate.sh $DOCKER run --rm --network host -v "$SETTINGS_FILE:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=<local|dev|prd> <코드 폴더 옵션> <태그> selftest
 ```
+- **판정 시험의 DB 사례는 그 서버의 PG에 붙는다**(sqlite 대역 없음 — [e2-22](../prd/test.md#e2-22)). 그래서 판정 명령에 상주 컨테이너와 같은 설정 파일(읽기 전용)·host 네트워크·`RUN_ENV`를 준다. `host_ctl.sh`(서버)와 `build_ship.sh`(빌드·원격 판정)가 이 옵션을 넣는다 — `build_ship.sh`의 원격 판정은 `REMOTE_SETTINGS_FILE`(수집 서버의 settings.yaml 절대 경로)·`REMOTE_RUN_ENV`(`dev`·`prd`)가 있어야 한다. PG에 못 붙으면 DB 사례가 FAIL(이유를 적음)이라 판정도 실패한다.
+- PC 시험 빌드(`BUILD_ONLY=1`)는 루트 `settings.yaml`(또는 `SETTINGS_FILE`)을 붙이고 끝에 `--set PG_HOST=host.docker.internal`을 더한다(Docker Desktop 컨테이너의 `127.0.0.1`은 PC가 아님).
+- local·dev: DB에 쓰는 사례는 임시 스키마 `test_<임의 8자>`를 만들어 쓰고 지운다(이름이 `test_`로 시작하는지 확인한 뒤 DROP). prd: 쓰는 사례는 SKIP(FAIL로 세지 않음 — 요약 줄 `시험 함수 SKIP N`), 읽기 시험 `test_pg_read`(접속·vector 확장·판 번호 끝·원천 스키마 표·색인·검색 질의 1회 — 세션을 읽기 전용으로)만 운영 DB를 읽는다.
 - **selftest는 종료 코드로 판정하지 않는다**(FAIL이 하나라도 있으면 1). `selftest_gate.sh`가 FAIL 줄을 알려진 목록 `deploy/release/known_fail.txt`(이미지 안 `/app/docker/known_fail.txt`)와 대조해 마지막 `[판정]` 줄과 종료 코드를 낸다 — 목록 밖 FAIL 0이면 통과(0), 아니면 실패(1).
 - 지금 기대값: 두 이미지 모두 `[판정] 통과 — FAIL 0`(알려진 FAIL 목록은 비어 있음).
 - 실행 이미지(`*-runtime`)는 `-v "$PWD:/app/deploy:ro,z"`로 코드 폴더를 붙인다. 구운 이미지는 붙이지 않는다.

@@ -90,7 +90,7 @@
 | 게시는 늘 하고 게시·EDW 칸은 settings.yaml `required` 한곳(`publish`·`object_storage`·`edw`) — 서버는 접속 칸, PC(`local`)는 채우지 않음(`dev.local` 게시 폴더·가짜 EDW — op-14) | `run_pipeline`는 문서마다 늘 게시하고 게시 위치·Object Storage·EDW 읽기 계정 칸이 비면 시작을 거부한다(쓰기 계정은 쓰지 않음) | done | [pl-26](prd/load.md#pl-26) |  |
 | FAQ를 다시 올리면 gold faq의 문서·청크를 모두 지우고 지금 FAQ 파일 전체를 다시 적재(판을 잇지 않음) | pl-13 "지우지 않음"의 FAQ 예외(등급 A) | done | [pl-41](prd/load.md#pl-41) |  |
 | 정형 DB(`struct` 스키마 — 마스터·문서 대장·표·칸)를 두지 않는다. 엔진 구성은 파일만 | 쓰이지 않았다. 서버에 남은 표는 DB 담당자가 정리 | done | [pl-08](prd/load.md#pl-08) |  |
-| 문서 대장(`doc_registry`)·숨김(`doc_hidden`)·원천 삭제 처리를 두지 않는다. 서버는 PG가 없으면 로컬 대체 DB로 바꿔 타지 않고 멈춘다 | 빼야 할 문서는 원천에서 지우거나 사람이 SQL로 | done | [pl-12](prd/load.md#pl-12) |  |
+| 문서 대장(`doc_registry`)·숨김(`doc_hidden`)·원천 삭제 처리를 두지 않는다. PG가 없으면 대체 DB로 바꿔 타지 않고 멈춘다 | 빼야 할 문서는 원천에서 지우거나 사람이 SQL로 | done | [pl-12](prd/load.md#pl-12) |  |
 | 마스터 표 — 용어집·고객 명부·ID 꼴 CSV 하나(`glossary.csv`)를 검색 PG `<PG_SCHEMA>_master.glossary`로(Alembic 갈래 `master` · `dbtool master load`가 git CSV로 통째로 바꿈). 구조화 고객 판별과 검색이 PG에서 읽고, `gold_version` = `<VERSION>+m<마스터 해시 8자>` | 원본은 git CSV. 대표 결과(silver)는 마스터를 읽지 않는다. 서버는 마스터를 못 읽으면 시작 안 함 | done | [pl-38](prd/load.md#pl-38) |  |
 | (잠재 문제) 같은 문서의 다른 판(`s3_key` 다름) 묶기 — 검색 '최신' 질문에서 옛 판이 위로 올 수 있음, 필요해지면 다시 설계 | — | todo | [pl-56](prd/load.md#pl-56) |  |
 | 저장 자리 셋 — 파싱 결과 저장본(silver)은 Object Storage 문서 폴더(이름 = `s3_key`로 만든 uuid5), 처리 기록과 검색 DB(gold)는 pgvector | 로컬에는 로그·임베딩 캐시만. 다시 처리하면 같은 폴더를 덮어쓴다(지금 게시는 실행마다 새 날짜 폴더) | todo | [pl-32](prd/load-schema.md#pl-32) |  |
@@ -108,7 +108,7 @@
 |---|---|---|---|---|
 | `search` — 질문으로 근거 찾기. 혼합 검색 = 뜻이 비슷한 글(벡터) + 낱말 점수(BM25) + 드문 ID 일치를 순위 합치기(RRF)로 묶음 | 클라이언트가 출처 달린 근거를 얻는 단 하나의 입구. 가중치 벡터 1·BM25 1·ID 2(`tuning.search.weights.*_weight`) | done | [mc-01](prd/mcp.md#mc-01) |  |
 | `search` 입력 `k` 기본 8·상한 50, 근거 13칸 `text`·`file_name`·`file_path`·`page`·`line`·`section`·`client`·`contract_no`·`doc_date`·`version`·`superseded`·`chunk_key`·`attrs`(`mcp_server/schemas/evidence.py`), 근거 상태 `evidence_status` found·weak·none. 응답은 20,000바이트까지(낮은 순위부터 줄임) | 근거 상태는 표시만 하고 근거를 빼지 않는다. 질문 핵심어가 근거에 없으면 weak | done | [mc-01](prd/mcp.md#mc-01) |  |
-| 검색 저장소는 검색 DB(gold — pgvector) 하나. PC는 SQLite 대역(`pg_standin`) | 서버·PC가 같은 SQL | done | [mc-01](prd/mcp.md#mc-01) |  |
+| 검색 저장소는 검색 DB(gold — pgvector) 하나. PC도 같은 pgvector(대역 없음) | 서버·PC가 같은 SQL | done | [mc-01](prd/mcp.md#mc-01) |  |
 | 질문 + 하드 거르기(`client`·`client_like`·`source_system`·`project_id`·`division`·`service_type`) — 후보 `min(50, max(3k,30))`개에서 범위 안만 남김 | 조건 밖 문서가 근거에 섞이지 않게 | done | [mc-01](prd/mcp.md#mc-01) |  |
 | 질문 넓히기 — 용어집으로 BM25 낱말을 더함(동의어 1.0·약어 0.8·약한 것 0.3), 고객 별칭 최대 20토큰 | 동의어·약어로 물어도 찾게 | done | [mc-02](prd/mcp.md#mc-02) |  |
 | 고객 2명 이상 비교 질문은 고객별(최대 4명)로 나눠 찾고 번갈아 합침. 집계형 질문은 BM25 가중치 0.2 | 한 고객이 근거 자리를 독차지하지 않게 | done | [mc-02](prd/mcp.md#mc-02) |  |
@@ -201,7 +201,7 @@
 | 검색 점검 페이지 `validation/search_ui`(기본 포트 8790, MCP `127.0.0.1:8765/mcp`) | 사람이 브라우저로 근거를 본다 | done | [e2-07](prd/test.md#e2-07) |  |
 | PC 평가 도구는 검색 점검 페이지·답변 점검 둘뿐 | PC 전용 설정 약 50개의 관리 비용 | done | [e2-10](prd/test.md#e2-10) |  |
 | 요건에 닿지 않는 함수·코드(시험만 부르는 것 포함)는 없다 | 죽은 코드 비용. MCP 도구 이름·입출력은 그대로 | done | [e2-17](prd/test.md#e2-17) · [e2-18](prd/test.md#e2-18) |  |
-| 배포 판정 시험의 DB 시험은 진짜 pgvector로 돈다 — PC는 시험 pgvector 컨테이너(없으면 띄움), 개발 서버(dev)는 쓰는 시험까지(임시 스키마 `test_*`를 만들고 지움), 운영 서버(prd)는 읽기만(접속·vector 확장·판 번호·표·색인·검색 1회). sqlite 대역 없음 | 대역과 실 DB 차이로 판정이 틀리지 않게. 운영 DB에는 쓰지 않는다(사용자 11-08) | todo | [e2-22](prd/test.md#e2-22) | 지금 서버 판정 시험은 sqlite 대역(`common/store/pg_standin.py`)으로 돈다 |
+| 배포 판정 시험의 DB 시험은 진짜 pgvector로 돈다 — PC는 시험 pgvector 컨테이너(없으면 띄움), 개발 서버(dev)는 쓰는 시험까지(임시 스키마 `test_*`를 만들고 지움), 운영 서버(prd)는 읽기만(접속·vector 확장·판 번호·표·색인·검색 1회). sqlite 대역 없음 | 대역과 실 DB 차이로 판정이 틀리지 않게. 운영 DB에는 쓰지 않는다(사용자 11-08) | done | [e2-22](prd/test.md#e2-22) | PC에 시험 pgvector가 없으면 띄우지 않고 DB 사례가 FAIL(이유를 적음 — 사용자 11-08) |
 | 모듈 경계 점검은 import 규칙(앱 사이·단계 방향·`validation`/`tests` import 금지·routers)만 코드 분석으로, 설정 env 읽기 규칙(⑩⑪)은 글자 검색으로 본다 | 점검 코드를 줄인다(사용자 11-08) | done | [e2-23](prd/test.md#e2-23) | 글자 검색은 앱 코드(common·pipeline·mcp_server)만 본다 |
 
 ## 문서·릴리스 (doc) — 문서 배치·버전·이미지·서버 설치

@@ -439,7 +439,7 @@ sequenceDiagram
 | 쓰기 | `pipeline.load.pgvector_load._load_src()` | 문서의 source_system으로 원천 스키마(SFDC·CRMS·LAS·FAQ·other)를 고르고 `doc`·`chunk`·용어 행. 묶음에 없는 문서는 지우지 않음 | → PG |
 | 기록 | `pipeline.load.pgvector_load.load()`(`--silver <문서 폴더>/publish/silver.jsonl`) → `pipeline.load.pgvector_load._load_src()` | `doc`에 게시 기록(원본 키 `source_key` = `file_path`로 이음 — 이미 있는 행은 그 칸만 고침, `--replace`인데 줄이 없으면 옛 값 유지, 새 문서에 줄이 없으면 NULL)·`gold_version`(`<VERSION>+m<마스터 해시 앞 8자>`)·`loaded_at`(적재 시각) | → PG `doc` |
 | FAQ 교체 | `python -m pipeline.load.pgvector_load faq-sync [--reset]` | 새 FAQ가 오면 gold FAQ를 통째로 비움(`candidate_pick list`의 `faq_first()`가 부름) | — |
-| 접속 | `common/store/pg.py`·`common/store/pg_standin.py` | PG 연결, PC 시험용 SQLite 대역 | — |
+| 접속 | `common/store/pg.py` | PG 연결 | — |
 
 요건: [load.md#pl-07](../prd/load.md#pl-07) · [load.md#pl-13](../prd/load.md#pl-13) · [load.md#pl-29](../prd/load.md#pl-29) · [transform.md#pl-33](../prd/transform.md#pl-33) · [load.md#pl-41](../prd/load.md#pl-41).
 

@@ -175,11 +175,35 @@ pgvector의 표는 코드가 실행 중에 만들지 않는다. 모두 Alembic �
 uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python -r deploy/docker/requirements-core.txt -r deploy/docker/requirements-image.txt -r requirements-dev.txt
 git config core.hooksPath .githooks      # 커밋·push 때 점검 자동 실행(CLAUDE.md §5-2)
-
-# 전용 pgvector(PG 16 + pgvector) — 처음만 run, 이후 docker start sbl-mcp-pg / docker stop sbl-mcp-pg
-docker run -d --name sbl-mcp-pg -p 127.0.0.1:55433:5432 -v sbl_mcp_pgdata:/var/lib/postgresql/data \
-  -e POSTGRES_DB=rag -e POSTGRES_USER=rag -e POSTGRES_PASSWORD=<비밀번호> pgvector/pgvector:pg16
 ```
+
+**PC 시험 DB(pgvector) 준비 — 없으면 띄우기.** 배포 판정 시험(selftest)과 pytest의 DB 사례는 이 PG에 붙는다(sqlite 대역 없음 — 없으면 그 사례가 FAIL). 시험이 컨테이너를 대신 띄우지는 않으니 아래를 순서대로 한다.
+
+1. 상태 보기 — 빈 줄이면 아직 안 만듦, `Exited …`면 멈춤, `Up …`이면 돌고 있음(3으로).
+   ```bash
+   docker ps -a --filter name=^sbl-mcp-pg$ --format '{{.Status}}'
+   ```
+2. 안 만들었으면 만들고, 멈췄으면 켠다.
+   ```bash
+   docker run -d --name sbl-mcp-pg --restart no --memory 1g --cpus 2 -p 127.0.0.1:55433:5432 \
+     -v sbl_mcp_pgdata:/var/lib/postgresql/data -e POSTGRES_DB=rag -e POSTGRES_USER=rag \
+     -e POSTGRES_PASSWORD=<settings.yaml required.pg.pg_password와 같은 값> pgvector/pgvector:pg16
+   docker start sbl-mcp-pg      # 멈춘 것을 켤 때
+   ```
+3. 받을 준비가 될 때까지 기다린다.
+   ```bash
+   until docker exec sbl-mcp-pg pg_isready -U rag -d rag; do sleep 1; done
+   ```
+4. `POSTGRES_PASSWORD`는 볼륨을 처음 만들 때만 걸린다. 볼륨이 이미 다른 비밀번호로 있으면 직접 바꾼다(값은 화면·기록에 남기지 말고 손으로 친다).
+   ```bash
+   docker exec -i sbl-mcp-pg psql -U rag -d rag -c "ALTER USER rag PASSWORD '<settings.yaml 값>'"
+   ```
+5. settings.yaml `required.pg`를 모두 채운다 — `127.0.0.1` · `55433` · `rag` · `rag` · 같은 비밀번호(빈 칸이 있으면 시작 거부).
+6. 판 올리기 — §4-4 ④의 `dbtool up --target all --schema <이름> --bundle <묶음> --create-extension`, 그다음 확인.
+   ```bash
+   .venv/bin/python -m common.store.db.dbtool check --target all   # 최신 판이 아니면 종료 코드 1
+   ```
+7. §4-3 점검을 차례로 하나씩 돌린다(pipeline.config → check_modules → keyscan → selftest → pytest).
 
 - 작업 폴더(git worktree)에는 `settings.yaml`이 없다. 거기서 점검·시험을 돌릴 때는 `export RUN_ENV=local`을 먼저 한다 — 없으면 실행 환경을 읽지 못해 결과 폴더 `output/`이 저장소 한 단계 위에 생긴다.
 
@@ -216,9 +240,9 @@ tuning:
     runtime: {max_cpu_load: 5}                   # 부하가 높은 PC라면(기본 0.9에서는 계속 대기함)
 ```
 
-- `settings.sample.yaml`을 그대로 복사해 시작해도 된다 — **빈 칸**(`pg_host:` 뒤가 비어 있음)은 꼭 적을 값(주석의 `[필수 · 모드]`와 예), **`null`**은 비워 두면 코드 기본값을 쓰는 칸이다. **PC(local)에 꼭 필요한 칸은 `run_env: local`과 모델 접속(`embed_base_url`·`embed_model`·`llm_base_url`·`llm_model`·`vlm_base_url`·`vlm_model`)뿐이다.** PG는 접속 칸을 채우면 그 PG, 모두 비우면 SQLite 대역을 쓴다(`pg_schema`는 비우면 `data_parsing`). EDW·Object Storage·토큰·배포 칸은 PC에서 채우지 않는다.
+- `settings.sample.yaml`을 그대로 복사해 시작해도 된다 — **빈 칸**(`pg_host:` 뒤가 비어 있음)은 꼭 적을 값(주석의 `[필수 · 모드]`와 예), **`null`**은 비워 두면 코드 기본값을 쓰는 칸이다. **PC(local)에 꼭 필요한 칸은 `run_env: local`, 모델 접속(`embed_base_url`·`embed_model`·`llm_base_url`·`llm_model`·`vlm_base_url`·`vlm_model`), PG 접속이다.** PG 접속 칸도 꼭 채운다(PC는 전용 pgvector 컨테이너 — sqlite 대역 없음, `pg_schema`는 비우면 `data_parsing`). EDW·Object Storage·토큰·배포 칸은 PC에서 채우지 않는다.
 - 옛 배치(최상위 `common`·`pipeline`·`mcp`)·옛 자리·지운 칸·모르는 칸이 있으면 시작하지 않고 그 칸 이름만 알린다 — `settings.sample.yaml`과 대조해 고친다(자리 찾기 `python -m common.config.sample --where <이름>`).
-- PC 전용 칸(외부 모델 허용·지출 상한·단가, 로컬 대체 DB, 시험 하네스)은 `dev` 절에 모여 있다(sample 맨 아래).
+- PC 전용 칸(외부 모델 허용·지출 상한·단가, 시험 하네스)은 `dev` 절에 모여 있다(sample 맨 아래).
 - **외부 임베딩은 `allow_external: true`이고 `run_env: local`일 때만** 호출된다(서버 dev·prd는 늘 거부).
 - **LLM·VLM도 같다:** `required.models`의 `llm_*`·`vlm_*`(주소·모델·키)를 채우고 `dev.models.llm.llm_allow_external`·`dev.models.vlm.vlm_allow_external`을 `true`로 두면 PC에서 분류(SFDC·LAS)와 그림·스캔 쪽 VLM이 외부 모델을 부른다(`run_env: local`일 때만). 비우면 분류가 실패해 SFDC·LAS 문서는 적재되지 않는다. OpenRouter 하나로 임베딩·LLM·VLM을 모두 쓸 수 있다(같은 주소·키, 모델만 다름 — 단가표 `common/ai/llm.py` `PRICES`에 있는 모델이어야 예산 상한이 걸림).
 - **VLM 설정은 한 벌:** 스캔·이미지 문서의 VLM 엔진(`qwen_vlm`)·쪽 VLM·그림 VLM이 같은 호출과 같은 칸(`common.models.vlm.*` — 동시 수·제한 시간·재시도·`vlm_extra_request_body`, 해상도 `extract.page_render_dpi` 150, 쪽 상한 `transform.vlm.vlm_max_pages_per_doc`)을 쓴다. 생각(추론) 모델이면 `common.models.vlm.vlm_extra_request_body`에 생각 끄기를 넣는다(OpenRouter는 `{"reasoning": {"enabled": false}}`) — 칸 설명은 [env-guide §2](docs/operations/env-guide.md), 규칙은 PRD [pl-43](docs/prd/transform.md#pl-43).
@@ -235,7 +259,7 @@ tuning:
   게시 폴더에 `<prefix>/<출처>/<원본 경로>/<파일명>_<날짜>.md`로 쓴다(게시 폴더는 원본 목록에서 빠진다). 원본 폴더(`ops.paths.source_docs_dir`)·파싱 원본(`extract.source.source_input_location` — 폴더 또는 `rdb:csv:<경로>`)·PG 대체 폴더(`dev.pg_standin.pg_standin_dir`)도 상대 경로를 받는다.
   `run_env: local`은 서버 전용 칸(`required.edw.edw_host`·EDW 계정, `required.object_storage.*`, 원천 버킷, `required.publish.publish_bucket`)을 **무시한다** — 적혀 있어도 비우고 `[settings] local(PC) — 서버 전용 칸을 무시함(비움): …` 한 줄에 칸 이름만 찍은 뒤 시작한다. 그래서 PC는 실제 EDW·Object Storage에 닿지 않는다. 서버(dev·prd)는 이 칸들을 쓰고 `dev.local`은 읽지 않는다.
 - **PG 접속 칸을 채운 PC는 파싱 전에 한 번 `.venv/bin/python -m common.store.db.dbtool up --target applog`** — 받기가 DRM·암호·지원 안 함·내용 중복 문서를 적재 안 된 문서 표 `applog.except_doc_info`에 쓰는데, 표가 없으면 그 문서에서 파싱이 멈춘다(PG를 비운 PC는 SQLite 대역이 표를 만든다). ④의 `up --target all`에도 들어 있다.
-- PG 접속 칸(`required.pg`의 `pg_host`·`pg_port`·`pg_database`·`pg_user`·`pg_password` 다섯 칸)은 **모두 채우거나 모두 비운다.** 일부만 채우면 채울 자리를 알려 주고 멈춘다. PC에서 host·password가 둘 다 비면 SQLite 대역(`output/pg_standin/`)으로 돌고 첫 줄에 `WARNING: PG 접속 정보 없음`을 찍는다(서버는 멈춤).
+- PG 접속 칸(`required.pg`의 `pg_host`·`pg_port`·`pg_database`·`pg_user`·`pg_password` 다섯 칸)은 **모두 채운다.** 빈 칸이 있으면 채울 자리를 알려 주고 멈춘다(PC·서버 모두 — sqlite 대역 없음).
 
 ### 4-3. 점검
 
@@ -495,6 +519,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 - 포트는 벌마다 그 벌의 `settings.yaml`에 다르게 적는다 — `search.server.mcp_port`(검색 MCP, 기본 8765) · `ops.services.data_parsing.data_parsing_port`(작업 서비스, 기본 8766) · (작업 공간을 켜면) `option.devbox.ssh_port`. **번호가 붙은 벌은 `-1`이라도 앞 두 포트가 기본값 그대로면 시작 거부**(다른 벌과 겹침).
 - 운영 서버(`prd`)에서 번호가 붙은 폴더면 시작 거부(종료 2 — 운영은 한 벌, 폴더 이름에서 번호를 뗀다).
 - PG 스키마·EDW 기록 표·게시 경로는 벌마다 나뉘지 않는다 — 모든 벌이 같은 기준 스키마를 함께 쓴다. 그래서 **모든 벌이 같은 코드 판**이어야 한다(DB 표 판이 하나). `migrate up --target all`·`migrate master load`는 공용 DB에 아무 벌 하나에서 한 번.
+- 개발 서버에서 개발자는 SSH로 `data-pipeline` 컨테이너 안에 들어가 작업한다(`option.devbox` — 아래 "개발 작업 공간"). `RUN_ENV`는 모든 벌이 `dev` 그대로이고, 벌은 폴더 끝 `-1`·`-2`와 자기 원천 `DEV-<숫자>`로 나뉜다.
 - 벌마다 문서를 나누는 것은 원천이다 — 그 벌의 settings.yaml `required.source.source_systems`에 자기 원천 `DEV-<숫자>`(예 `[DEV-2]`)를 적으면 그 문서만 파싱해 원천 스키마 `<기준>_dev_<숫자>`에 적재하고 `DEV-<숫자>/…`에 게시한다. **비우면 운영 5개 원천 전부를 파싱한다.** 벌 번호와 `DEV-<숫자>`는 따로 정해지므로 같은 숫자로 맞춰 쓴다.
 - 새 `DEV-<숫자>`를 넣은 벌은 `migrate up --target search`를 한 번 해 원천 스키마를 만든다(없으면 적재가 멈춤). ⚠️ 이 명령은 어느 벌에서 부르든 **DB에 있는 모든 `<기준>_dev_*` 스키마(다른 벌 것 포함)를 함께 끝 판으로 올린다.** 검토용 SQL·순서는 [handover-guide §5](docs/operations/handover-guide.md#5-db-판--검토용-sql-뽑기--migrate-up).
 - compose를 직접 부르지 않는다 — `host_ctl.sh`가 폴더 이름과 settings.yaml로 이름·포트를 채운다. 컨테이너 명령은 셸 `DOCKER`가 있으면 그 값, 없으면 `ops.host.container_cli`.
@@ -628,8 +653,8 @@ bash deploy/host/scripts/pipe_exec.sh check           # 자원·쓰기 권한·�
 
 ```bash
 $DOCKER run --rm -v "$PWD:/app/deploy:ro,z" data-pipeline-runtime:<판> check-modules
-bash deploy/release/selftest_gate.sh $DOCKER run --rm -v "$PWD:/app/deploy:ro,z" data-pipeline-runtime:<판> selftest   # 기대: [판정] 통과 — FAIL 0
-bash deploy/release/selftest_gate.sh $DOCKER run --rm -v "$PWD:/app/deploy:ro,z" mcp-server-runtime:<판> selftest      # 기대: [판정] 통과 — FAIL 0
+bash deploy/release/selftest_gate.sh $DOCKER run --rm --network host -v "$SETTINGS_FILE:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=dev -v "$PWD:/app/deploy:ro,z" data-pipeline-runtime:<판> selftest   # 기대: [판정] 통과 — FAIL 0
+bash deploy/release/selftest_gate.sh $DOCKER run --rm --network host -v "$SETTINGS_FILE:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=dev -v "$PWD:/app/deploy:ro,z" mcp-server-runtime:<판> selftest      # 기대: [판정] 통과 — FAIL 0
 ```
 
 selftest는 종료 코드가 아니라 `[판정]` 줄로 판정한다. 운영 서버(구운 이미지)는 `-v …` 없이 `data-pipeline:<판>`·`mcp-server:<판>`.

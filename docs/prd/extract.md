@@ -53,7 +53,7 @@
 2. 쓰는 곳은 세 곳이다 — 받기 전 `candidate_pick.rdb_pick`(`_record_source_skipped`), 받은 뒤 `candidate_ready.stage_batch`(`_record_filtered` — `filter_and_rotate`의 `prepared/_records/skipped.csv`), 내용 중복 `candidate_ready._dedup`.
 3. 파싱·게시·적재 실패는 `except_type` `error` 행(`record_error` — 기록만, 다음 실행이 다시 시도 — [ops.md#op-17](ops.md#op-17) 규칙 16).
 4. `candidate_pick list --skip-done`은 gold에 끝난 키와 함께 이 표의 `skip` 키를 뺀다(`skipped_keys` — `error` 키는 빼지 않음). `--skip-done`이 없으면 빼지 않는다(사람이 다시 돌려 볼 때).
-5. 표는 applog 판 `0003_applog`(Alembic — 옛 `skip_doc_info` 행을 `skip`으로 옮김)가 만든다 — 앱은 DDL을 실행하지 않는다. PG 접속 정보가 없으면(PC) 대역 sqlite `<standin_dir>/applog.sqlite`에 표 정의로 바로 만든다. 서버(dev·prd)는 대역을 쓰지 않고 멈춘다. `ops.log.log_db_enabled`와 관계없이 쓴다.
+5. 표는 applog 판 `0003_applog`(Alembic — 옛 `skip_doc_info` 행을 `skip`으로 옮김)가 만든다 — 앱은 DDL을 실행하지 않는다. PG 접속 정보가 없으면 멈춘다(대역 없음). `ops.log.log_db_enabled`와 관계없이 쓴다.
 
 ### QA
 - `tests/server/pipeline/test_skip_docs.py`(이유 사례 표 → 쓴 행·횟수 · `error` 행은 따로·빼지 않음 · rdb:csv가 모두 지원 안 함이면 0건으로 끝남 · `list --skip-done`이 `skip`만 뺌) · `tests/server/pipeline/test_stage_batch.py`(거르기가 뺀 DRM·압축과 내용 중복이 표에 들어감) · `dbtool check --target applog`(DB 판).

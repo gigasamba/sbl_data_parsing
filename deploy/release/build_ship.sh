@@ -16,6 +16,8 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."                                # deploy/release/ → 저장소 루트 = 빌드 컨텍스트
 BUILD_ONLY=${BUILD_ONLY:-0}
 [ "$BUILD_ONLY" = 1 ] || TARGET=${TARGET:?TARGET=user@수집서버 를 지정(빌드만 하려면 BUILD_ONLY=1)}
+# 원격 판정(4단계)이 그 서버 PG에 붙을 설정 파일·실행 환경(e2-22) — 보내기 전에 확인
+[ "$BUILD_ONLY" = 1 ] || : "${REMOTE_SETTINGS_FILE:?REMOTE_SETTINGS_FILE=<수집 서버의 settings.yaml 절대 경로> 필요(원격 판정이 그 서버 PG에 붙음)}" "${REMOTE_RUN_ENV:?REMOTE_RUN_ENV=dev|prd 필요(prd면 DB에 쓰는 시험은 SKIP)}"
 IMAGE_TARGET=${IMAGE_TARGET:-pipeline}
 case "$IMAGE_TARGET" in
   pipeline|mcp|pipeline-runtime|mcp-runtime) ;;   # *-runtime = 코드 없는 실행 이미지(개발 서버, 코드 폴더를 APP_CODE_ROOT에 마운트)
@@ -89,7 +91,15 @@ if [ "$RUNTIME" = 1 ]; then
   export MSYS_NO_PATHCONV=1   # Windows Git Bash가 -v 인자를 바꾸지 않게
   RUN_ARGS="-v $(cygpath -m "$CODE_DIR" 2>/dev/null || echo "$CODE_DIR"):$APP_CODE_ROOT:ro"
 fi
-bash deploy/release/selftest_gate.sh $DOCKER run --rm $RUN_ARGS "$TAG" selftest   # 알려진 FAIL 밖 FAIL 0이어야 통과(selftest 종료 코드만 보지 않음)
+# 판정 시험의 DB 사례는 PG에 붙는다(e2-22): 설정 파일(SETTINGS_FILE 또는 루트 settings.yaml)·RUN_ENV를 주고 host 네트워크로(상주 compose와 같게).
+#   PC BUILD_ONLY: Docker Desktop 컨테이너의 127.0.0.1은 PC가 아님 — PG 주소만 host.docker.internal로 덮음(--set).
+G_SET=${SETTINGS_FILE:-$PWD/settings.yaml}
+[ -f "$G_SET" ] || { echo "[오류] 판정에 쓸 설정 파일 없음: $G_SET (SETTINGS_FILE 또는 루트 settings.yaml — PG 접속 required.pg)"; exit 1; }
+G_ARGS="--network host -v $(cygpath -m "$G_SET" 2>/dev/null || echo "$G_SET"):/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=${RUN_ENV:-local}"
+G_TAIL=""
+[ "$BUILD_ONLY" = 1 ] && G_TAIL="--set PG_HOST=host.docker.internal"
+export MSYS_NO_PATHCONV=1   # Windows Git Bash가 -v 인자를 바꾸지 않게
+bash deploy/release/selftest_gate.sh $DOCKER run --rm $G_ARGS $RUN_ARGS "$TAG" selftest $G_TAIL   # 알려진 FAIL 밖 FAIL 0이어야 통과(selftest 종료 코드만 보지 않음)
 $DOCKER run --rm $RUN_ARGS "$TAG" resources
 if $DOCKER history --no-trunc "$TAG" | grep -Eiq 'PASSWORD=[^ $]|API_KEY=[^ $]'; then echo "[오류] 이미지 기록에 비밀값 흔적"; exit 1; fi
 if [ "$BUILD_ONLY" = 1 ]; then echo "완료(빌드만): $TAG — 저장·전송 안 함(BUILD_ONLY=1)"; exit 0; fi
@@ -118,7 +128,7 @@ if [ "$RUNTIME" = 1 ]; then   # 판정용 코드 폴더를 같이 보내 붙임
   R_ARGS="-v $RCODE:$APP_CODE_ROOT:ro,z"
 fi
 ssh "$TARGET" "$REMOTE_DOCKER run --rm $R_ARGS $TAG resources"
-bash deploy/release/selftest_gate.sh ssh "$TARGET" "$REMOTE_DOCKER run --rm $R_ARGS $TAG selftest"
+bash deploy/release/selftest_gate.sh ssh "$TARGET" "$REMOTE_DOCKER run --rm --network host -v $REMOTE_SETTINGS_FILE:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=$REMOTE_RUN_ENV $R_ARGS $TAG selftest"
 cat <<EOF
 완료: $TAG
 다음(수집 서버):

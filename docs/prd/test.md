@@ -8,10 +8,10 @@
 ## e2-02 · 시험 층과 기준선
 - 이유: 반입 판정은 네트워크 없이 이미지 안에서 돌아야 한다.
 - 규칙:
-  1. `tests/server/`(이미지 반입 관문 — `python -m pipeline.cli selftest`가 `tests/runner.py`로 실행, 외부 접속 없음) · `tests/general/`(PC 전용: PG, Docker, 느린 것 — pytest).
+  1. `tests/server/`(이미지 반입 관문 — `python -m pipeline.cli selftest`가 `tests/runner.py`로 실행, PG 말고는 외부 접속 없음 — [e2-22](#e2-22)) · `tests/general/`(PC 전용: PG, Docker, 느린 것 — pytest).
   2. 알려진 실패 목록: 반입 `deploy/release/known_fail.txt`, PC `tests/conftest.py` `GENERAL_KNOWN_FAIL`. 목록에 있는 시험이 통과하면 XPASS 경고(목록에서 지움).
-  3. PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕(`run_env: local`만, 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `_PC_SETTINGS_CASES`(지금 빔).
-- 기준선(11-08, slim/load — 0.3.0 + 압축 원본 풀기·문서 안 문서 꺼내기 pl-63·pl-65 · 옛 오피스 검사기 하나로 pl-66 · 실버만 게시 상태 기록 pl-68 · 대표 결과 교차 병합·엑셀 날짜 표기 통일 pl-67 · 검색 MCP 동시 요청 mc-09): `selftest` 112개 모두 통과 · `pytest tests/` 173 통과 · 3 건너뜀 · 알려진 실패 0(두 목록 모두 빔) · FINGERPRINT `50588adec5d6d525` · code_fp p0 `ecb899b210ac` · p1 `8a0cc3ba2ab8` · r `9e10a60aa39e` · s `40afd2f57a2f`(기록용 — 0.3.0과 달라 서버는 다시 처리, refactor.md C-114) · 엔진 지문(`engine_code_fp`, 기록용): anydoc `01d0d7813c77` · archive `563e19556b61`(새 엔진) · docx2python `9ba622227470` · html_stdlib·mhtml·msg_extract `6b86d3b876c3` · hwpx `1ce4058a3a0a` · kreuzberg `e7797391d046` · markitdown `c6263c0c0984` · office `98145bcf3ef7` · plaintext `e61fe9d86b40` · pymupdf `8611e97ce9ec` · qwen_vlm `a0fd63c5062a`(엔진 폴더는 그대로 — 함께 셈하는 `pipeline/shared/vlmcall.py`의 설정 이름이 바뀜) · rapidocr_ko `1e08f27b5ddd`.
+  3. PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕(`run_env: local`과 부모의 PG 접속만, 다른 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `_PC_SETTINGS_CASES`(지금 빔).
+- 기준선(11-08, slim/load — 0.3.0 + 압축 원본 풀기·문서 안 문서 꺼내기 pl-63·pl-65 · 옛 오피스 검사기 하나로 pl-66 · 실버만 게시 상태 기록 pl-68 · 대표 결과 교차 병합·엑셀 날짜 표기 통일 pl-67 · 검색 MCP 동시 요청 mc-09 · 배포 판정 DB 시험 실 pgvector e2-22): `selftest` 113개 모두 통과(시험 함수 SKIP 0 — e2-22 뒤) · `pytest tests/` 177 통과 · 0 건너뜀 · 알려진 실패 0(두 목록 모두 빔) · FINGERPRINT `50588adec5d6d525` · code_fp p0 `a98e7098a8b3` · p1 `b4eca54905f3` · r `aa18ec151fbe` · s `2ea402fb3206`(기록용 — 0.3.0과 달라 서버는 다시 처리, refactor.md C-114 · e2-22에서 공용 `settings.py`·`layout.py` 설명이 바뀜) · 엔진 지문(`engine_code_fp`, 기록용): anydoc `01d0d7813c77` · archive `563e19556b61`(새 엔진) · docx2python `9ba622227470` · html_stdlib·mhtml·msg_extract `6b86d3b876c3` · hwpx `1ce4058a3a0a` · kreuzberg `e7797391d046` · markitdown `c6263c0c0984` · office `98145bcf3ef7` · plaintext `e61fe9d86b40` · pymupdf `8611e97ce9ec` · qwen_vlm `a0fd63c5062a`(엔진 폴더는 그대로 — 함께 셈하는 `pipeline/shared/vlmcall.py`의 설정 이름이 바뀜) · rapidocr_ko `1e08f27b5ddd`.
 - 지문 확인 명령: [CLAUDE.md](../../CLAUDE.md) §4. 공용·레이어 파일을 고친 커밋은 전후 값을 커밋 메시지에 적는다.
 - QA: `python -m pipeline.cli selftest` · `[판정]` 통과, 기준선보다 나빠지지 않음.
 - Status: done
@@ -114,8 +114,9 @@
 <a id="e2-22"></a>
 ## e2-22 · 배포 판정 DB 시험은 진짜 pgvector
 - 요건: PC·dev는 쓰는 시험(임시 스키마 만들고 지움), prd는 읽기만. sqlite 대역과 그 갈림길(`has_conn`)은 지운다.
-- 반영: 없음(사용자 11-08 결정 — 다음 작업).
-- Status: todo
+- 반영: 11-08 slim/load — `common/store/pg_standin.py`·`has_conn` 갈림길 삭제(앱에 sqlite 대역 없음 — PC도 PG 필수). 시험 도우미 `tests/server/common/pgcase.py`(임시 스키마 `test_<임의 8자>` — `test_`인지 확인 뒤 DROP, `db_write_allowed()` local·dev만 참, prd는 `need_write()`가 SKIP). `tests/runner.py`가 SKIP을 FAIL로 세지 않고 selftest 요약에 `시험 함수 SKIP N`. 읽기 시험 `tests/server/common/test_pg_read.py`(접속·vector 확장·판 번호 끝·표·색인·검색 1회, 세션 읽기 전용). PG에 못 붙으면 DB 사례 FAIL(이유를 적음). 판정 명령: `host_ctl.sh`·`build_ship.sh`가 설정 파일·`--network host`·`RUN_ENV`를 넣는다(release-and-patch §3).
+- QA: `python -m pipeline.cli selftest` 113/113 · `RUN_ENV=prd` 모의(이주한 임시 스키마)에서 쓰는 사례 SKIP·`test_pg_read` 통과.
+- Status: done
 
 <a id="e2-23"></a>
 ## e2-23 · 모듈 경계 점검 줄이기

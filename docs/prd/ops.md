@@ -32,7 +32,7 @@
 - 규칙:
   1. "새 문서" = `AI.FileStorageMap`에 있고 gold `doc`에 행이 없는 것. 키 = `s3_key` = `doc.file_path`(갱신 시각은 보지 않음).
   2. "끝난 문서" = 원천 스키마 5벌 어디든 `doc` 행이 있는 원본 키([op-17](#op-17) 규칙 15). 파싱·게시·적재에 실패한 문서는 `doc` 행이 없어 다시 고른다. 영구 뺌(`applog.except_doc_info` `skip`)도 뺀다.
-  3. 끝난 문서 빼기는 `pipeline/extract/candidate_pick.py` `done_keys` 하나(읽기는 `pipeline/shared/gold_docs.py`) — 서버는 `candidate_pick list --skip-done`, PC 직접 파싱(`pipeline.cli parse --source`)은 고르기 때. PG를 한 번 읽는다(PC는 sqlite 대역). 못 읽으면 RUN_ENV가 local이 아니면 종료 4, 그 밖은 받은 목록 그대로 + 로그 한 줄. 키 = 수집 manifest의 `key`(없으면 이름).
+  3. 끝난 문서 빼기는 `pipeline/extract/candidate_pick.py` `done_keys` 하나(읽기는 `pipeline/shared/gold_docs.py`) — 서버는 `candidate_pick list --skip-done`, PC 직접 파싱(`pipeline.cli parse --source`)은 고르기 때. PG를 한 번 읽는다. 못 읽으면 RUN_ENV가 local이 아니면 종료 4, 그 밖은 받은 목록 그대로 + 로그 한 줄. 키 = 수집 manifest의 `key`(없으면 이름).
   4. 전체 재파싱은 사람이 전체 e2e를 시작할 때만([pl-54](#pl-54)).
   5. 새벽 배치: settings.yaml `ops.nightly.nightly_start_time`(시작 HH:MM)·`nightly_max_docs`(새 문서 수 상한, 1 이상)·`nightly_stop_time`(마감 HH:MM, 시작보다 5분 넘게 뒤) — 하나라도 비면 돌지 않는다. systemd `data-pipeline-nightly.timer`(`OnCalendar=*:0/5`)가 `nightly_batch.sh scheduled`를 부르고, 시작 시각부터 5분 안이면 applog 파티션 정리(`pipe_exec.sh migrate maintain --target applog` — 실패해도 경고만, 배치는 계속) 뒤 `run_pipeline.py --start-offset 0 --skip-done --max-docs <n> --deadline <hh:mm>`. 형식 오류면 종료 2. 서비스 `TimeoutStartSec=6h`.
 - 파일: `pipeline/extract/candidate_pick.py`(`done_keys`·`list_targets`·`unparsed`), `pipeline/shared/gold_docs.py`, `deploy/host/scripts/{run_pipeline.py,nightly_batch.sh}`, `deploy/host/systemd/data-pipeline-nightly.{timer,service}`.
