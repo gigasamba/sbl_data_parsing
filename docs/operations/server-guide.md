@@ -51,7 +51,7 @@ PC 설치·문서 몇 건 돌리기·검증 페이지는 [README §4](../../READ
 
 ### 0-2. dev — 개발 서버, 개발자별 벌
 
-개발자마다 벌 폴더 하나(`sbl_data_parsing-main-<번호>`)와 컨테이너 `data-pipeline-<번호>` 하나다. 기능 개발·파싱·적재·검색 확인은 모두 이 컨테이너 안에서 한다 — 코드 폴더를 붙이므로 코드를 고치면 바로 반영된다. 검색 MCP 컨테이너는 띄우지 않는다(검색은 `data-pipeline` 안에서 명령으로).
+개발자마다 벌 폴더 하나(`sbl_data_parsing-main-<번호>`)와 컨테이너 `data-pipeline-<번호>` 하나다. 기능 개발·파싱·적재·검색 기능 시험은 모두 이 컨테이너 안에서 한다 — 코드 폴더를 붙이므로 코드를 고치면 바로 반영된다. 검색 MCP 컨테이너는 따로 띄우지 않고, MCP가 필요하면 이 컨테이너 안에서 잠깐 연다(④). 전체 e2e·성능·worker 수 시험은 운영판(컨테이너 셋)으로 한다(⑦).
 
 **① 이미지 불러오기**(서버에 한 번 — 공용 폴더에서)
 ```bash
@@ -98,10 +98,22 @@ bash deploy/release/selftest_gate.sh docker run --rm --network host \
 ```
 `host_ctl.sh`로: `bash deploy/host/scripts/host_ctl.sh check` — 기대 마지막 줄 `[host_ctl check] 통과 — 4개(개발 서버 — data-pipeline만)`. (`pipe_exec.sh check_env`처럼 도구 하나만도 된다.)
 
-**④ 검색 확인**(검색 MCP 없이 data-pipeline 안에서)
+**④ 검색·MCP 기능 시험**(data-pipeline 안에서)
+
+검색만 볼 때(토큰·포트 없이 DB 검색):
 ```bash
 docker exec data-pipeline-1 python -m mcp_server.cli.search_ask ask --source DEV-1 --k 3 --q "<처리한 문서에 있는 낱말>"
 ```
+MCP를 열어 실제 클라이언트와 같은 길(HTTP)로 시험할 때 — 컨테이너가 호스트 네트워크를 쓰므로 `<MCP 포트>`는 벌마다 다르게 고른다:
+```bash
+docker exec -d data-pipeline-1 sh -c 'echo $$ > /tmp/mcp.pid; exec python -m mcp_server.main --set MCP_PORT=<MCP 포트>'   # 열기(PID를 남김)
+until docker exec data-pipeline-1 python -c "import urllib.request as u; u.urlopen('http://127.0.0.1:<MCP 포트>/health', timeout=3)"; do sleep 2; done
+docker exec data-pipeline-1 python -m mcp_server.cli.mcp_smoke --url http://127.0.0.1:<MCP 포트>/mcp --source DEV-1 --q "<낱말>"   # 토큰을 정했으면 --token "<토큰>" · 기대 끝 줄 MCP 바깥 호출 통과
+docker exec data-pipeline-1 python -m validation.e2e.answer_gen --url http://127.0.0.1:<MCP 포트>/mcp --q "<질문>"           # 답변 생성 점검(§3-3-4)
+docker exec data-pipeline-1 sh -c 'kill $(cat /tmp/mcp.pid)'                                                              # 닫기(PID로)
+```
+- 이렇게 연 MCP는 컨테이너를 다시 띄우면 사라진다. `parse_document`는 작업 서비스(`mcp-data-parsing`)가 없어 연결 실패를 돌려준다 — 이 도구는 ⑦의 운영판으로 시험한다.
+- `host_ctl.sh`에는 이 단계가 없다(직접 명령만).
 
 **⑤ 새벽 배치 타이머**(선택 — 개발 서버는 이것 하나)
 
@@ -116,6 +128,15 @@ systemctl list-timers 'data-pipeline-nightly*'              # 기대: 다음 실
 `host_ctl.sh`로: `bash deploy/host/scripts/host_ctl.sh timers` — 기대 `  씀  /etc/systemd/system/data-pipeline-nightly-1.service`·`.timer` 두 줄.
 
 **⑥ 개발을 마치면** — 시험한 코드 폴더를 운영 이미지로 굽는다(아래 prd ①).
+
+**⑦ 운영판으로 전체 시험**(개발 서버 — 전체 e2e·성능·worker 수)
+
+구운 이미지(`data-pipeline:<VERSION>`·`mcp-server:<VERSION>`)를 개발 서버에서 운영과 같은 컨테이너 셋으로 띄워 본다. 자기 개발 벌과 이름이 겹치지 않게 **시험용 벌 폴더를 따로** 만든다(예 `sbl_data_parsing-main-9` — 굽기가 만든 코드 묶음 `code-<판>-<커밋>.tar.gz`를 푼 폴더).
+- 그 벌의 settings.yaml: 이미지 칸에 구운 이미지 태그, `required.env.run_env: dev` 그대로, `search.server.mcp_port`·`ops.services.data_parsing.data_parsing_port`는 다른 벌이 연 MCP 포트와 겹치지 않게.
+- 띄우기: 아래 prd ③의 직접 명령 셋(이름 끝에 `-9`, `-e RUN_ENV=dev`, 경로는 이 벌 폴더) 또는 `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp`.
+- 점검: `host_ctl.sh check`는 개발 서버라 data-pipeline 넷에서 멈추므로, 검색 MCP는 `bash deploy/host/scripts/mcp_keepalive.sh`(응답 확인)와 `mcp_smoke`로 따로 본다.
+- worker 수·자원을 바꿔 가며 잴 때는 그 벌의 settings.yaml(`ops.containers.*`·`tuning.*`)을 고치고 `host_ctl.sh up -d --force-recreate …`(직접 명령이면 `docker rm -f` 뒤 다시 `docker run`).
+- 끝나면 `host_ctl.sh down`(또는 `docker rm -f <세 이름>`)으로 내린다. 타이머는 켜지 않는다.
 
 ### 0-3. prd — 운영 서버, 코드를 구운 이미지
 
@@ -736,7 +757,7 @@ docker exec data-pipeline-1 python -m mcp_server.cli.search_ask ask --source DEV
 ```
 - **성공이면** `질문: … (원천 DEV-1 · 근거 <N>건)` 줄 뒤에 `[1] <파일 경로>  p.<쪽> L.<줄>`처럼 근거가 나온다. `[ask] …`로 끝나면 그 오류 글자를 읽는다(원천 스키마가 없으면 2-6).
 - `근거 0건` → 2-9에서 `doc` 행이 있는지, 질문 낱말이 문서에 있는지 본다.
-- 실제 클라이언트와 같은 길(HTTP + 토큰)로 부르는 시험(`mcp_smoke`)은 검색 MCP가 떠 있는 운영 서버에서 한다 — [§3-8](#3-8-검색-mcp-사용)·[mcp-guide.md](mcp-guide.md).
+- 실제 클라이언트와 같은 길(HTTP)로 부르는 시험(`mcp_smoke`)은 이 컨테이너 안에서 MCP를 잠깐 열어 한다 — [§0-2 ④](#0-2-dev--개발-서버-개발자별-벌)·[mcp-guide.md](mcp-guide.md).
 
 ### 2-11. 로그 보기
 
@@ -978,7 +999,7 @@ bash deploy/host/scripts/pipe_exec.sh publish                    # 대표 결과
 - 도구만 따로: `bash deploy/host/scripts/pipe_exec.sh <rdb_discover|check_env|ping_models|migrate|show-stack|check> [인자]`.
 
 #### 3-3-4. 답변 생성 점검(개발 서버 — 컨테이너 안에서)
-호스트 python에는 PyYAML만 있으므로 도구는 컨테이너 안에서 돌린다. `validation/`은 코드 폴더를 붙인 개발 서버의 실행 이미지에만 있다(운영 이미지에는 없음).
+호스트 python에는 PyYAML만 있으므로 도구는 컨테이너 안에서 돌린다. `validation/`은 코드 폴더를 붙인 개발 서버의 실행 이미지에만 있다(운영 이미지에는 없음). 검색 MCP는 같은 컨테이너 안에서 먼저 연다([§0-2 ④](#0-2-dev--개발-서버-개발자별-벌)) — 그때 쓴 포트를 아래 `<search.server.mcp_port>` 자리에 넣는다.
 ```bash
 $DOCKER exec $PIPELINE_CNAME python -m validation.e2e.answer_gen --url http://127.0.0.1:<search.server.mcp_port>/mcp --q "<질문>"   # --concurrency N · 결과 /app/output/eval/answer_gen/
 ```
