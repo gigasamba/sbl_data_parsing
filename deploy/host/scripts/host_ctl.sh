@@ -129,14 +129,14 @@ dc_check() {
   # 판정 시험의 DB 사례는 서버 PG에 붙는다(e2-22 — prd는 읽기만): 상주 컨테이너(compose x-settings)와 같은 설정 파일·host 네트워크·RUN_ENV
   local gate=(--network host -v "${SETTINGS_FILE:?SETTINGS_FILE 필요 — load_settings}:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e "RUN_ENV=${RUN_ENV:?RUN_ENV 필요 — load_settings}")
   # shellcheck disable=SC2086 — DOCKER는 낱말 나눔(sudo docker)
-  _step check_env "출력의 FAIL 줄 확인(server-guide §2)" bash deploy/host/scripts/pipe_exec.sh check_env || return 1
+  _step check_env "출력의 FAIL 줄 확인(server-guide §1-9)" bash deploy/host/scripts/pipe_exec.sh check_env || return 1
   _step ping_models "모델 주소·키(settings.yaml required.models) — 서버는 내부망 모델만" bash deploy/host/scripts/pipe_exec.sh ping_models || return 1
-  _step "migrate check" "migrate up --target all · master load(upgrade-guide §6)" bash deploy/host/scripts/pipe_exec.sh migrate check --target all || return 1
+  _step "migrate check" "migrate up --target all · master load(server-guide §4-7)" bash deploy/host/scripts/pipe_exec.sh migrate check --target all || return 1
   _vol "${DATA_PIPELINE_IMAGE:-}"
-  _step "selftest data-pipeline" "FAIL 줄의 시험 이름으로 원인 찾기(release-and-patch §3)" bash deploy/release/selftest_gate.sh $DOCKER run --rm "${gate[@]}" ${vol[@]+"${vol[@]}"} "${DATA_PIPELINE_IMAGE:-}" selftest || return 1
+  _step "selftest data-pipeline" "FAIL 줄의 시험 이름으로 원인 찾기(server-guide §5-5)" bash deploy/release/selftest_gate.sh $DOCKER run --rm "${gate[@]}" ${vol[@]+"${vol[@]}"} "${DATA_PIPELINE_IMAGE:-}" selftest || return 1
   if [ "${RUN_ENV:-}" = dev ]; then echo "[host_ctl check] 통과 — ${n}개(개발 서버 — data-pipeline만)"; return 0; fi
   _vol "${MCP_SERVER_IMAGE:-}"
-  _step "selftest mcp-server" "FAIL 줄의 시험 이름으로 원인 찾기(release-and-patch §3)" bash deploy/release/selftest_gate.sh $DOCKER run --rm "${gate[@]}" ${vol[@]+"${vol[@]}"} "${MCP_SERVER_IMAGE:-}" selftest || return 1
+  _step "selftest mcp-server" "FAIL 줄의 시험 이름으로 원인 찾기(server-guide §5-5)" bash deploy/release/selftest_gate.sh $DOCKER run --rm "${gate[@]}" ${vol[@]+"${vol[@]}"} "${MCP_SERVER_IMAGE:-}" selftest || return 1
   _step "검색 MCP" "\`$DOCKER logs $MCP_CNAME\` 마지막 줄 — mcp_keepalive.sh가 다시 띄웠는데도 /health 응답 없음" bash deploy/host/scripts/mcp_keepalive.sh || return 1
   echo "[host_ctl check] 통과 — ${n}개"
 }

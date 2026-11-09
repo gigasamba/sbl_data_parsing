@@ -62,4 +62,4 @@ for t in "${TARGETS[@]}"; do
   OUT="$OUT" DOCKER="$DOCKER" CODE_BUNDLE="$BUNDLE" bash "$HERE/stage_images.sh" "$TAG" "$t" \
     || { echo "[bake_prod_image] 저장 실패 — $tag 지움" >&2; $DOCKER rmi "$tag" >/dev/null || true; exit 1; }
 done
-echo "[bake_prod_image] 끝 — $OUT 아래 조각·sha256을 운영 서버로 옮겨 재조립·load(release-and-patch.md §1-2)"
+echo "[bake_prod_image] 끝 — $OUT 아래 조각·sha256을 운영 서버로 옮겨 재조립·load(server-guide.md §5-4)"

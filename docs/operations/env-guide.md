@@ -1,6 +1,6 @@
 # 설정 작성 가이드 — `settings.yaml`(서버·PC)
 
-↑ [server-guide.md](server-guide.md) · [release-and-patch.md](release-and-patch.md) · [upgrade-guide.md](upgrade-guide.md)
+↑ [server-guide.md](server-guide.md#3-일상-운영) · [server-guide.md](server-guide.md#5-릴리스--실행-이미지--코드-폴더) · [server-guide.md](server-guide.md#4-운영-중인-서버를-새-판으로-올리기)
 
 **원칙**
 - 서버에서 손대는 것은 **설정 파일 하나**(`settings.yaml`)뿐이다. 값은 문서·채팅·로그에 쓰지 않는다 — 이 문서는 **이름만** 적는다.
@@ -19,7 +19,7 @@
 | 기계 | 파일 | 적용 | 모델 엔드포인트 |
 |---|---|---|---|
 | PC(개발) | 저장소 루트 `settings.yaml`(git 밖, 권한 600) | `RUN_ENV`가 없거나 `local`이면 코드가 이 파일을 찾음. 한 번만 몇 칸 바꿀 때는 명령 인자 `--set PIPE_OUT_ROOT=… --set EMBED_ALLOW_EXTERNAL=1` | 내부망 또는 OpenRouter(기능 시험만 — CLAUDE.md §7) |
-| 수집·개발 서버 | `<루트>/settings.yaml`(루트 = 코드 폴더 자체 — git·코드 zip에 없는 파일이라 새 판을 덮어써도 남음, README §5). **주인 UID 10001·그룹 운영 그룹·권한 640**(운영 계정 UID가 10001이면 600) | 컨테이너: compose가 `/etc/rag/settings.yaml`에 읽기 전용(`:ro,z`)으로 붙이고 env는 `SETTINGS_FILE`·`RUN_ENV`만 준다. **값을 바꿀 때는 이 파일을 직접 고친다.** 셸·systemd: `deploy/host/scripts/load_settings.sh`의 `load_settings`가 호스트 칸(이미지·자원·포트·`RAG_OUT`·`DOC_SRC`·`NIGHTLY_*` 등)을 셸 env로 내보내 compose가 치환한다 | 내부망만 |
+| 수집·개발 서버 | `<루트>/settings.yaml`(루트 = 코드 폴더 자체 — git·코드 zip에 없는 파일이라 새 판을 덮어써도 남음, server-guide §1-2). **주인 UID 10001·그룹 운영 그룹·권한 640**(운영 계정 UID가 10001이면 600) | 컨테이너: compose가 `/etc/rag/settings.yaml`에 읽기 전용(`:ro,z`)으로 붙이고 env는 `SETTINGS_FILE`·`RUN_ENV`만 준다. **값을 바꿀 때는 이 파일을 직접 고친다.** 셸·systemd: `deploy/host/scripts/load_settings.sh`의 `load_settings`가 호스트 칸(이미지·자원·포트·`RAG_OUT`·`DOC_SRC`·`NIGHTLY_*` 등)을 셸 env로 내보내 compose가 치환한다 | 내부망만 |
 
 ### 0-0. 실행 기록(JSON 로그·DB 감사·성능)
 
@@ -62,7 +62,7 @@
 - 모르는 이름·호스트 칸·**비밀 칸**은 모든 환경에서 종료 2. 값 형식 오류는 서버 종료 2·local 경고. 서버에서 `SETTINGS_FILE`이 없으면 종료 2.
 
 ### 0-3. 새 서버 설정
-`host_ctl.sh init`이 `settings.sample.yaml`을 복사해 둔다(README [서버 설치 순서](../../README.md#서버-설치-순서) 3번). **PC의 settings.yaml을 복사하지 않는다.** `required`(`[서버만]` 포함)와 위 "서버 값으로 적는 칸"만 채우고 `bash deploy/host/scripts/pipe_exec.sh check_env`로 확인한다.
+`host_ctl.sh init`이 `settings.sample.yaml`을 복사해 둔다(README [서버 설치 순서](server-guide.md#서버-설치-순서) 3번). **PC의 settings.yaml을 복사하지 않는다.** `required`(`[서버만]` 포함)와 위 "서버 값으로 적는 칸"만 채우고 `bash deploy/host/scripts/pipe_exec.sh check_env`로 확인한다.
 
 ## 1. 칸 (영역별)
 
@@ -112,7 +112,7 @@
 | `MCP_PG_STATEMENT_TIMEOUT`(`tuning.search.server.mcp_pg_statement_timeout_sec`) | `25` | 검색 MCP 연결 풀의 PostgreSQL 질의 하나의 시간 제한(초) — 도구 시간 상한(`mcp_tool_timeout_sec` 30초)보다 짧게 둔다. 넘으면 DB가 그 질의를 멈추고 도구는 `timeout`. `0`이면 제한 없음. DB에 닿지 못하면(끊긴 연결은 한 번 새 연결로 바꾼 뒤에도) 도구는 `db_unavailable` |
 
 ### EDW 쿼리 도구(`query_edw`·`edw_meta`)
-`required.edw`의 **읽기 계정**만 쓴다(파이프라인 원천 조회와 같은 계정 — 운영 준비는 [server-guide §4-1](server-guide.md#4-1-edw-쿼리-도구-설정--edw_metaquery_edw)).
+`required.edw`의 **읽기 계정**만 쓴다(파이프라인 원천 조회와 같은 계정 — 운영 준비는 [server-guide §3-8-1](server-guide.md#3-8-1-edw-쿼리-도구-설정--edw_metaquery_edw)).
 
 | 이름 | 기본 | 메모 |
 |---|---|---|
@@ -152,7 +152,7 @@
 | `OS_ENDPOINT`·`OS_REGION`·`OS_ACCESS_KEY`·`OS_SECRET_KEY`·`OS_VERIFY_TLS` | `required.object_storage`(`object_storage_endpoint`·`object_storage_access_key`·`object_storage_secret_key`) · `common.connections.object_storage`(`object_storage_region`·`object_storage_verify_tls` — `required` 아래가 아님) — 서버만. PC(local)는 적혀 있어도 주소·키를 비우고 경고(게시는 `dev.local.local_publish_dir` 폴더). `object_storage_region` 비우면 `us-east-1` · `object_storage_verify_tls` 비우면 `1`, 사내 CA면 CA 파일 경로(`0`이면 검증 끔 — 경고) |
 | `RDB_CONNECT_KWARGS` | EDW 연결 추가 인자(JSON — 비밀) |
 | `PM_BUCKET`·`PM_PREFIX`(`required.publish.publish_bucket`·`publish_prefix`) | silver 게시 위치 — 서버: 버킷 이름(원천 원본 버킷과 달라야 함) · PC(local): 이 칸은 무시하고 `dev.local.local_publish_dir`(`LOCAL_PM_DIR` — 폴더 경로, 기본 `valid_env/object_storage/Parsing_Result`, 처음 게시할 때 만듦)에 쓴다. `publish_prefix`는 버킷(폴더) 안 경로 접두(비우면 맨 위). |
-| `EDW_CHAIN_FILE`(`ops.paths.edw_chain_file`) | EDW 조인 사슬 파일 — 적재와 검색 MCP가 같은 칸을 읽는다. 비우면 코드의 `resources/config/edw_chain.yaml`, 서버 사본을 쓰려면 `/etc/rag/edw_chain.yaml`. 쓰는 법: [release-and-patch §8](release-and-patch.md#8-edw-조인-사슬-파일-고쳐-쓰기서버) |
+| `EDW_CHAIN_FILE`(`ops.paths.edw_chain_file`) | EDW 조인 사슬 파일 — 적재와 검색 MCP가 같은 칸을 읽는다. 비우면 코드의 `resources/config/edw_chain.yaml`, 서버 사본을 쓰려면 `/etc/rag/edw_chain.yaml`. 쓰는 법: [server-guide §3-9-2](server-guide.md#3-9-2-edw-조인-사슬-파일-고쳐-쓰기) |
 
 ### 새벽 배치 (systemd `data-pipeline-nightly`)
 코드 주석의 "env-guide 1-3"이 이 절이다. **세 칸이 모두 있어야 돈다**(하나라도 비면 없음).
@@ -164,7 +164,7 @@
 | `NIGHTLY_DEADLINE`(`ops.nightly.nightly_stop_time`) | 마감 HH:MM(시작보다 이르면 다음 날, 시작보다 5분 넘게 뒤) — 지나면 새 문서를 받지 않고 받은 문서는 끝까지 |
 
 ### 선택 기능 — 개발 작업 공간 (`option`, 파일 맨 아래)
-앱은 이 절을 읽지 않는다 — 호스트 스크립트(`host_ctl.sh`)와 작업 공간 시작 스크립트(`dev_entry.sh` → `git_cred.py`)만 쓴다. 비우면 끔. 쓰는 법: README §5-0 "개발 작업 공간".
+앱은 이 절을 읽지 않는다 — 호스트 스크립트(`host_ctl.sh`)와 작업 공간 시작 스크립트(`dev_entry.sh` → `git_cred.py`)만 쓴다. 비우면 끔. 쓰는 법: server-guide §2-13.
 
 | 이름 | 기본 | 뜻 |
 |---|---|---|
@@ -176,7 +176,7 @@
 
 ## 2. 자원·병렬 (보통 안 건드림)
 
-`PIPE_PROCS`(기본 `auto`)·`PIPE_WORKERS`·`VLM_CONCURRENCY`·`OCR_DPI`·`OCR_MAX_PAGES`·`MAX_FILE_MB`·`MEM_MAX_PCT`(90)·`CPU_MAX_LOAD`(0.9)·`EMBED_BATCH`·`EMBED_TIMEOUT`·`VLM_TIMEOUT` — 설명·기본값은 `settings.sample.yaml`. 자동 계산 계수와 호출 제한 시간·병렬 세부값은 `tuning` 절. 컨테이너 CPU·메모리 상한은 README §5-0 "자원".
+`PIPE_PROCS`(기본 `auto`)·`PIPE_WORKERS`·`VLM_CONCURRENCY`·`OCR_DPI`·`OCR_MAX_PAGES`·`MAX_FILE_MB`·`MEM_MAX_PCT`(90)·`CPU_MAX_LOAD`(0.9)·`EMBED_BATCH`·`EMBED_TIMEOUT`·`VLM_TIMEOUT` — 설명·기본값은 `settings.sample.yaml`. 자동 계산 계수와 호출 제한 시간·병렬 세부값은 `tuning` 절. 컨테이너 CPU·메모리 상한은 server-guide §1-10.
 
 **VLM(그림 읽는 모델) 설정은 한 벌이다**(엔진 `qwen_vlm`·쪽 VLM·그림 VLM 공통):
 
@@ -212,7 +212,7 @@ $DOCKER run --rm --entrypoint python -v "$PWD:/app/deploy:ro,z" \
   -v "$PWD/settings.yaml:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml \
   <실행 이미지> -m pipeline.config >/dev/null && echo 설정-읽힘
 # 기대: 설정-읽힘 · 아니면 "[설정] 설정 검증 실패(…) — N건" 뒤 칸마다 "<칸 전체 이름>: Extra inputs are not permitted [extra_forbidden]"
-# prd(운영 이미지 — 코드가 이미지 안)는 첫 -v를 뺀다 · 지울 칸 표: upgrade-guide §5
+# prd(운영 이미지 — 코드가 이미지 안)는 첫 -v를 뺀다 · 지울 칸 표: server-guide §4-6
 ```
 PC는 `.venv/bin/python -m pipeline.config`(루트 `settings.yaml`)가 같은 확인이다.
 

@@ -1,12 +1,12 @@
 # 0.1.0 배포 기록 — 사람이 할 일 · 부록 · 옛 설정 이관
 
-11-02에 옮겼다(운영 서버가 0.1.0으로 돎 — 사용자). 0.2.0 배포 할 일은 [release-and-patch.md §8](../operations/release-and-patch.md#8-020-배포--사람이-할-일), 열린 확인 항목은 [refactor.md](../refactoring/refactor.md). 아래 글은 옮길 때 그대로 두었다(경로·링크·R§·C 번호는 그때 기준 — 옮긴 C 항목은 [refactor_c_items.md](refactor_c_items.md)).
+11-02에 옮겼다(운영 서버가 0.1.0으로 돎 — 사용자). 0.2.0 배포 할 일은 [server-guide.md §3-9-2](../operations/server-guide.md#5-릴리스--실행-이미지--코드-폴더), 열린 확인 항목은 [refactor.md](../refactoring/refactor.md). 아래 글은 옮길 때 그대로 두었다(경로·링크·R§·C 번호는 그때 기준 — 옮긴 C 항목은 [refactor_c_items.md](refactor_c_items.md)).
 
 ## 1. 옛 refactor.md "최종 — 사람이 할 일"(0.1.0)
 
 **결정(사용자 10-30) — PRD [pl-23](../prd/ops.md#pl-23)·[pl-25](../prd/load-schema.md#pl-25):** 버전 0.1.0에 모든 변경을 넣고 재처리는 한 번(첫 적재 = 전체 e2e — 새 스키마, 옛 스키마는 되돌리기용). 새벽 배치는 켜지 않는다.
 
-S11(10-28)에 VS10 배포 준비 목록(`output/orca/VS10-verify.md` 끝 절)을 옮겨 와 사용자 결정(D-034)을 반영하고, 사용자 요청(10-28 "사람이 할 일도 refactor.md에 최종적으로")대로 이 절을 **사람 할 일의 정본**으로 묶었다(S11b — VS11 B-1·B-2·U-1·U-2·R-1~R-7 반영 · S11c — VS11b B-1 parse 작업 서비스 띄우기 ③-9·B-2 새벽 배치 스위치 ③-12·W-3·W-4 반영). 명령은 [docs/operations/release-and-patch.md](../operations/release-and-patch.md)(R§ — 그 문서 §5가 이 절을 가리킴). 항목마다 **할 일 · 누가 · 언제 · C**. 값·비밀은 쓰지 않는다. 이 절에는 할 일이 남은 것만 있다(①~④ 이번 배포 · ⑤ 다음 버전으로 미룬 것). "C" 열은 근거로 가리키는 항목이라, 결정만 된 C(C-43 등 — 상태는 아래 표 · 10-30·11-02에 옮긴 C는 [docs/history/refactor_c_items.md](refactor_c_items.md))도 배경·결정 내용을 보라는 뜻으로 들어 있다. 새 저장소에는 `output/`(보고서)과 옛 커밋이 가지 않으므로, 검토·되돌리기에 필요한 표는 맨 아래 **부록**(S11b)에 옮겼다.
+S11(10-28)에 VS10 배포 준비 목록(`output/orca/VS10-verify.md` 끝 절)을 옮겨 와 사용자 결정(D-034)을 반영하고, 사용자 요청(10-28 "사람이 할 일도 refactor.md에 최종적으로")대로 이 절을 **사람 할 일의 정본**으로 묶었다(S11b — VS11 B-1·B-2·U-1·U-2·R-1~R-7 반영 · S11c — VS11b B-1 parse 작업 서비스 띄우기 ③-9·B-2 새벽 배치 스위치 ③-12·W-3·W-4 반영). 명령은 [docs/operations/server-guide.md](../operations/server-guide.md#5-릴리스--실행-이미지--코드-폴더)(R§ — 그 문서 §5가 이 절을 가리킴). 항목마다 **할 일 · 누가 · 언제 · C**. 값·비밀은 쓰지 않는다. 이 절에는 할 일이 남은 것만 있다(①~④ 이번 배포 · ⑤ 다음 버전으로 미룬 것). "C" 열은 근거로 가리키는 항목이라, 결정만 된 C(C-43 등 — 상태는 아래 표 · 10-30·11-02에 옮긴 C는 [docs/history/refactor_c_items.md](refactor_c_items.md))도 배경·결정 내용을 보라는 뜻으로 들어 있다. 새 저장소에는 `output/`(보고서)과 옛 커밋이 가지 않으므로, 검토·되돌리기에 필요한 표는 맨 아래 **부록**(S11b)에 옮겼다.
 - 누가: **사용자** · **서버 운영**(서버 운영 담당) · **DB 담당**(공유 PostgreSQL·회사 DB) · **EDW 담당**(운영 EDW 계정·데이터) · **사용자(grill-me 검토)**(검토 등급 A — Claude가 변경을 하나씩 설명하는 grill-me 세션에서 사용자가 검토·승인, C-07 · 옛 engine-qa·be-qa 자리) · **devops**(이미지 빌드·배포 번들) · **각 개발자**.
 
 ### ① 검토 등급 A — 사람 검토(🔒 Claude 검토로 갈음하지 않음)
@@ -389,7 +389,7 @@ S2(10-26)에 패키지에서 `README.md`·`cases.json`이 빠져 키가 모두 �
 
 - 셈: S1 28(이 표 27 + `rag_qa`) → S5a 26(`research_decompose`·`research_rewrite` 삭제) → S11 **25**(`research_check` 삭제) = `resources/prompts/` 23 + PC 전용 `triple_extract`·`rag_qa`. 남은 25개 값은 S11 전과 같음(VS11).
 
-## 3. 옛 release-and-patch §5-4 — `pipeline.env` → settings.yaml 이관(S7e1)
+## 3. 옛 server-guide §3-3 — `pipeline.env` → settings.yaml 이관(S7e1)
 
 S7e1(사용자 10-27, D-028) 버전부터 compose·셸·systemd·`run_docs.py`는 `$SERVER_ENV_DIR/settings.yaml`만 읽는다(옛 `pipeline.env`가 있고 settings.yaml이 없으면 "설정 이관 필요"로 종료 코드 2). **새 이미지 적재 뒤·컨테이너를 새로 띄우기 전에** 한다. 호스트 python에 pydantic·PyYAML이 없으면 `python -m …` 대신 이미지 안에서(아래 `docker run` 꼴).
 ```bash

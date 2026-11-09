@@ -26,7 +26,7 @@
 ## e2-08 · 이미지 빌드와 반입 관문
 - 이유: 서버는 selftest를 통과한 이미지만 받아야 한다.
 - 규칙: 빌드 `deploy/release/build_ship.sh`, 판정 `deploy/release/selftest_gate.sh <명령>` — 종료 코드가 아니라 `[판정]` 줄로 판정한다. 코드만 바뀌면 코드 폴더를 바꾼다([doc.md#op-06](doc.md#op-06)).
-- 파일: `deploy/release/{build_ship.sh,selftest_gate.sh}`, `docs/operations/release-and-patch.md`.
+- 파일: `deploy/release/{build_ship.sh,selftest_gate.sh}`, `docs/operations/server-guide.md`.
 - QA: `bash deploy/release/selftest_gate.sh docker run --rm <이미지:시험 태그> selftest` · `[판정] 통과`.
 - Status: done
 
@@ -114,7 +114,7 @@
 <a id="e2-22"></a>
 ## e2-22 · 배포 판정 DB 시험은 진짜 pgvector
 - 요건: PC·dev는 쓰는 시험(임시 스키마 만들고 지움), prd는 읽기만. sqlite 대역과 그 갈림길(`has_conn`)은 지운다.
-- 반영: 11-08 slim/load — `common/store/pg_standin.py`·`has_conn` 갈림길 삭제(앱에 sqlite 대역 없음 — PC도 PG 필수). 시험 도우미 `tests/server/common/pgcase.py`(임시 스키마 `test_<임의 8자>` — `test_`인지 확인 뒤 DROP, `db_write_allowed()` local·dev만 참, prd는 `need_write()`가 SKIP). `tests/runner.py`가 SKIP을 FAIL로 세지 않고 selftest 요약에 `시험 함수 SKIP N`. 읽기 시험 `tests/server/common/test_pg_read.py`(접속·vector 확장·판 번호 끝·표·색인·검색 1회, 세션 읽기 전용). PG에 못 붙으면 DB 사례 FAIL(이유를 적음). 판정 명령: `host_ctl.sh`·`build_ship.sh`가 설정 파일·`--network host`·`RUN_ENV`를 넣는다(release-and-patch §3).
+- 반영: 11-08 slim/load — `common/store/pg_standin.py`·`has_conn` 갈림길 삭제(앱에 sqlite 대역 없음 — PC도 PG 필수). 시험 도우미 `tests/server/common/pgcase.py`(임시 스키마 `test_<임의 8자>` — `test_`인지 확인 뒤 DROP, `db_write_allowed()` local·dev만 참, prd는 `need_write()`가 SKIP). `tests/runner.py`가 SKIP을 FAIL로 세지 않고 selftest 요약에 `시험 함수 SKIP N`. 읽기 시험 `tests/server/common/test_pg_read.py`(접속·vector 확장·판 번호 끝·표·색인·검색 1회, 세션 읽기 전용). PG에 못 붙으면 DB 사례 FAIL(이유를 적음). 판정 명령: `host_ctl.sh`·`build_ship.sh`가 설정 파일·`--network host`·`RUN_ENV`를 넣는다(server-guide §5-5).
 - QA: `python -m pipeline.cli selftest` 113/113 · `RUN_ENV=prd` 모의(이주한 임시 스키마)에서 쓰는 사례 SKIP·`test_pg_read` 통과.
 - Status: done
 

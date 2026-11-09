@@ -33,7 +33,7 @@
 # 아래 pipeline 단계의 `RUN python - <<'EOF'`(heredoc)는 BuildKit dockerfile 1.4+ 문법 — Docker 23 미만(예: 20.10)은
 #   DOCKER_BUILDKIT=1 + `--build-arg BUILDKIT_SYNTAX=docker/dockerfile:1.7`이 있어야 파일을 읽는다(타깃과 무관 —
 #   파일 전체를 먼저 읽음, 이 인자는 docker/dockerfile 이미지를 받으므로 인터넷 필요). deploy/release/build_ship.sh가 자동으로 붙인다.
-#   (10-16 3분할 이름 동결 data-parsing·data-structure·data-retrieval과 옛 core·all 타깃 폐지 이력은 git log·release-and-patch.md §8)
+#   (10-16 3분할 이름 동결 data-parsing·data-structure·data-retrieval과 옛 core·all 타깃 폐지 이력은 git log·docs/history/release_history.md)
 # 원칙: 비밀값·원본 문서·결과는 이미지에 넣지 않는다(실행 시 설정 파일 마운트·볼륨) · 바꿀 값은 모두 settings.yaml(settings.sample.yaml — S7e1·S7e2,
 #   옛 --env-file pipeline.env 대신). S7e2(VS7e1 B-2, 사용자 10-28) — 설정 칸이 있는 값(PIPE_EMBED·PIPE_PROCS·DOC_DIR·DOC_DIR_PREPARED·SOFFICE_BIN)은
 #   이미지 ENV로 굽지 않고 이미지 안 설정 모델 기본값으로(settings.yaml이 늘 이김 — 옛 ENV는 settings.yaml이 못 덮었음). ENV에는 이미지 바탕·

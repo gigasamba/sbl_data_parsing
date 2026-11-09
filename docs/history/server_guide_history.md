@@ -2,7 +2,7 @@ moved from server-guide.md on 10-30, do-04
 
 # 서버 가이드 — 옛 동작 기록
 
-지금 운영에는 영향이 없다. 현재 절차는 [server-guide.md](../operations/server-guide.md).
+지금 운영에는 영향이 없다. 현재 절차는 [server-guide.md](../operations/server-guide.md#3-일상-운영).
 
 ## §0 이미지·코드 폴더
 - 이미지 2개 구성은 S6b(D-020)에서 정했고, 이름은 사용자 10-27에 바꿨다: `data-parsing`·`data-structure` → `data-pipeline`, `data-retrieval` → `mcp-server`. 상주 트리거 컨테이너도 `data-parsing`·`data-structure` → `data-pipeline-parse`·`data-pipeline-structure`.

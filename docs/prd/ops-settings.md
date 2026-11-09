@@ -83,8 +83,8 @@
   1. 벌 폴더(코드 폴더 = 루트) 하나 = 한 벌. 벌 번호 = 코드 폴더 이름 끝 `-<숫자>`(예 `sbl_data_parsing-main-2` → `2`) — 있으면 컨테이너 3개·compose 묶음(`compose-<번호>`)·systemd 단위 4개 이름 끝에 `-<번호>`. 없으면(`sbl_data_parsing-main`·`sbl_data_parsing-0.3.0`) 이름 그대로(한 벌). 벌 이름 설정 칸은 없다(`ops.host.instance_name`이 남으면 모르는 칸으로 시작 거부).
   2. 번호를 구하는 곳은 `load_settings.sh load_settings`(`INSTANCE`·`NAME_SUFFIX`) 한 곳, 호스트 스크립트(`host_ctl.sh`·`mcp_keepalive.sh`·`nightly_batch.sh`·`pipe_exec.sh`)와 compose 파일은 그 값을 쓴다. `run_pipeline.py`는 같은 규칙(`instance_of`)으로 `configure()`에서.
   3. PG 스키마·EDW 기록 표·게시 경로·버전에는 벌 표시를 붙이지 않는다 — 모든 벌이 같은 기준 스키마를 함께 쓰므로 모든 벌이 같은 코드 판이어야 한다(벌끼리 데이터를 나누는 길은 [op-17](ops.md#op-17)).
-  4. 포트 두 칸(`search.server.mcp_port` · `ops.services.data_parsing.data_parsing_port` — 작업 서비스와 검색 MCP가 같은 칸)은 벌마다 다르게 — 번호가 붙은 벌인데 기본값이면 시작 거부. `prd`에서 번호가 붙은 폴더면 시작 거부(종료 2). 거부는 `load_settings.sh`·`run_pipeline.py configure()` 둘 — server-guide §1-3.
-- 파일: `deploy/host/scripts/{load_settings.sh,host_ctl.sh,mcp_keepalive.sh,nightly_batch.sh,pipe_exec.sh,run_pipeline.py}` · `deploy/host/compose/compose.{pipeline,data-parsing,mcp-server}.yml` · README §5-0 "한 서버에 여러 벌".
+  4. 포트 두 칸(`search.server.mcp_port` · `ops.services.data_parsing.data_parsing_port` — 작업 서비스와 검색 MCP가 같은 칸)은 벌마다 다르게 — 번호가 붙은 벌인데 기본값이면 시작 거부. `prd`에서 번호가 붙은 폴더면 시작 거부(종료 2). 거부는 `load_settings.sh`·`run_pipeline.py configure()` 둘 — server-guide §2-1.
+- 파일: `deploy/host/scripts/{load_settings.sh,host_ctl.sh,mcp_keepalive.sh,nightly_batch.sh,pipe_exec.sh,run_pipeline.py}` · `deploy/host/compose/compose.{pipeline,data-parsing,mcp-server}.yml` · server-guide §2-1.
 - QA: `tests/general/deploy/test_dc.py`(묶음 이름 `compose`·`compose-2` · 판 번호 폴더 `sbl_data_parsing-0.3.0`은 한 벌 · 기본 포트·prd 종료 2) · `test_dc_init.py`(루트 = 코드 폴더 · 타이머 단위 이름 끝) · `test_run_pipeline.py::test_instance_names` · `test_compose.py`(컨테이너 이름 끝 `${NAME_SUFFIX:-}`) · 통과.
 - Status: done
 
@@ -103,7 +103,7 @@
 <a id="op-18"></a>
 ## op-18 · 안 읽는 설정 칸 없음 · 덮어쓰기는 `--set` 하나
 - 요건: 지운 칸은 upgrade-guide에 적는다(서버 `settings.yaml`에 남으면 모르는 칸으로 시작 거부). 한 번만 다른 값은 모든 진입점(`mcp_server.main`·`ask` 포함)의 `--set` 하나다(PC 덮기 파일 도구 없음).
-- 반영: 지운 칸 — `extract.skipped_docs_log`(건너뜀 기록은 늘 `<준비 폴더>/_records/skipped.jsonl`) · `extract.secure_doc.secure_doc_passwords_file` · `tuning.extract.source_columns.source_column_content_version` · 구성 파일 `retrieve`·`k`. 남긴 칸 — `extract.source.source_fetch_threads`(`candidate_ready` 받기 스레드)·`ops.run_pipeline.staging.staging_fetch_threads`(서버 러너가 넘김)·`source_column_increment`(증분 판정). 서버에서 지울 줄: [upgrade-guide §5](../operations/upgrade-guide.md#5-설정-고치기) · C-110. 덮기 파일 도구 `common.config.overrides`를 지웠다 — `mcp_server.main`·`mcp_server.cli.search_ask`가 `--set`을 받는다(시험 `tests/server/mcp/test_mcp_setarg.py`).
+- 반영: 지운 칸 — `extract.skipped_docs_log`(건너뜀 기록은 늘 `<준비 폴더>/_records/skipped.jsonl`) · `extract.secure_doc.secure_doc_passwords_file` · `tuning.extract.source_columns.source_column_content_version` · 구성 파일 `retrieve`·`k`. 남긴 칸 — `extract.source.source_fetch_threads`(`candidate_ready` 받기 스레드)·`ops.run_pipeline.staging.staging_fetch_threads`(서버 러너가 넘김)·`source_column_increment`(증분 판정). 서버에서 지울 줄: [server-guide §4-6](../operations/server-guide.md#4-6-설정-고치기) · C-110. 덮기 파일 도구 `common.config.overrides`를 지웠다 — `mcp_server.main`·`mcp_server.cli.search_ask`가 `--set`을 받는다(시험 `tests/server/mcp/test_mcp_setarg.py`).
 - Status: done
 
 ## 코드와 다른 점 · 지울 코드

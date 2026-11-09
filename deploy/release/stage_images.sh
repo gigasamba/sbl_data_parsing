@@ -1,10 +1,10 @@
 #!/bin/bash
-# 서버 이미지(2개: pipeline·mcp) — 로컬 스테이징만(push 안 함·저장소 생성 안 함 — 사람 승인 뒤 수동 push, docs/operations/release-and-patch.md §1-1·§1-2).
+# 서버 이미지(2개: pipeline·mcp) — 로컬 스테이징만(push 안 함·저장소 생성 안 함 — 사람 승인 뒤 수동 push, docs/operations/server-guide.md §4-5·§5-3).
 #   bash deploy/release/stage_images.sh [태그 — 기본 저장소 루트 VERSION, 예: 0.1.0] [대상들… 기본 pipeline mcp]
-#   개발 서버: 대상 pipeline-runtime·mcp-runtime(코드 없는 실행 이미지 — 코드는 코드 저장소 zip, README §5-0)
+#   개발 서버: 대상 pipeline-runtime·mcp-runtime(코드 없는 실행 이미지 — 코드는 코드 저장소 zip, server-guide §1-1)
 #   운영 서버: bake_prod_image.sh가 pipeline·mcp + CODE_BUNDLE(시험한 코드 폴더 묶음 — 호스트 스크립트용, 판 폴더에 같이 놓음)
 # 전제: 이미지가 이미 로컬에 있어야 함(build_ship.sh·bake_prod_image.sh) — 이 스크립트는 빌드하지 않는다.
-# 이미지 저장소 배치 하나(README §5-0 — 이미지 git `sbl_images`):
+# 이미지 저장소 배치 하나(server-guide §1-1 — 이미지 git `sbl_images`):
 #   $OUT/<저장소>/load.sh                                   ← deploy/release/load.sh 사본(조각 확인 → 합치기 → docker/podman load)
 #   $OUT/<저장소>/<판>/BUILD.txt                             ← 판·빌드 커밋·DEPS_HASH·이미지 태그
 #   $OUT/<저장소>/<판>/<이미지 이름>/<이미지 이름>.tar.gz.part000… · <이미지 이름>.sha256

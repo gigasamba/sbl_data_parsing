@@ -144,7 +144,7 @@ def _require_one(q, target, schema):
     if st == "없음":
         print(
             f"[migrate] 경고: {schema} 판 기록 없음(alembic_version) — 기준판과 같은 스키마로 보고 계속. "
-            "판 기록이 있는 새 스키마로 올려 전체를 다시 적재(docs/operations/release-and-patch.md §5-5)",
+            "판 기록이 있는 새 스키마로 올려 전체를 다시 적재(docs/operations/server-guide.md §1-8)",
             file=sys.stderr,
             flush=True,
         )
