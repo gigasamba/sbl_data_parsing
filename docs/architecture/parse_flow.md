@@ -69,18 +69,18 @@ flowchart TD
 | 15 | transform | 엔진 실행 | 한 문서의 엔진들을 동시에, 문서×엔진마다 자식 프로세스(엔진이 죽어도 전체는 계속), 쪽 수에 맞춘 제한 시간·재시도, `runs.jsonl`에 한 줄 | 컨테이너(자식) | `pipeline/transform/parse/parse_engines.py` | `_run_pipeline()` → `run_job()` → `_run_with_retry()` → `_isolated()` |
 | 16 | transform | 엔진 하나 | 등록표에서 엔진을 찾아 돌리고(`run()`), 결과 json에 출처(엔진 판·열쇠)를 표시(`stamp()` — `parse_engines.py`) | 컨테이너(자식의 자식) | `pipeline/transform/parse/parse_engines.py` → `engines/registry.py` → `engines/<이름>/parser.py` | `one_main()` → `run()` · `stamp()` |
 | 17 | transform | 엔진 결과 채점 | 엔진마다 결과를 합격선(`criteria.json`)으로 채점 | 컨테이너(자식) | `pipeline/transform/represent/parse_scoring.py` | `main()` → `run()` |
-| 18 | transform | 대표 결과 고르기 | 채점으로 가장 나은 엔진 결과를 고르고, 다른 엔진 글로 문단·쪽·표를 보완 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` | `main()` → `represent()` → `_select_best()`·`_merge_paragraphs()`·`_merge_pages()`·`fix_tables()` |
+| 18 | transform | 대표 결과 고르기 | 채점으로 가장 나은 엔진 결과를 고르고, 다른 엔진에만 있는 조각(소제목·표·문단)을 대표 본문에 끼워 보완 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` | `main()` → `represent()` → `_select_best()`·`cross_merge()`·`fix_tables()` |
 | 19 | transform | 스캔 쪽 채움 | 글자층 PDF 안의 스캔 쪽만 쪽 VLM 글로 바꿈 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` → `pipeline/transform/figures/scan_page_vlm.py` | `fill_scan_pages()` → `page_text_pages()` |
 | 20 | transform | 후보정 ① 쪽 VLM 글 | 쪽마다 VLM이 옮긴 글을 덧붙임(19행이 이미 채운 쪽은 뺌). 레인 설정에 `vlm_page`가 있을 때만 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` → `pipeline/transform/figures/scan_page_vlm.py` | `apply_post()` → `page_text_pages()` |
 | 21 | transform | 후보정 ② 슬라이드 VLM | pptx 슬라이드를 그림으로 그려 VLM이 옮긴 글을 덧붙임. 20행과 같이 `vlm_page`가 있을 때만(pptx가 아니면 바로 빈 결과) | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` → `pipeline/transform/figures/pptx_render.py` | `apply_post()` → `pptx_slide_vlm()` |
 | 22 | transform | 후보정 ③ 그림 | 문서 안 그림을 꺼내 그림 VLM 설명을 기록 블록으로 덧붙이고 그림 목록을 씀. `figures`가 켜졌을 때만, 근처 본문 언급은 `context`도 켜졌을 때만 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` → `pipeline/transform/figures/figure_extract.py` | `apply_post()` → `build_records()`·`write_index()` |
 | 23 | transform | 후보정 ④ 차트 | 오피스 내장 차트의 제목·계열·값을 `[차트]` 줄로. `charts`가 켜졌을 때만 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` → `pipeline/transform/figures/chart_values.py` | `apply_post()` → `chart_text()` |
 | 24 | transform | 후보정 ⑤ 위·아래 첨자 | 본문의 해당 줄만 첨자 표기로 바꿈. `supsub`가 켜졌을 때만 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` → `pipeline/transform/represent/superscripts.py` | `apply_post()` → `merge_supsub()` |
-| 25 | transform | 후보정 ⑥ 메일 첨부 | 메일 첨부 파일을 파싱해 블록으로 덧붙임. `attachments`가 켜졌을 때만 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` → `pipeline/transform/represent/mail_attachments.py` | `apply_post()` → `mail_blocks()` |
+| 25 | transform | 후보정 ⑥ 메일 첨부 | 받기 단계가 꺼내 둔 안 파일(`_parts/<이름>/parts.json` — 압축·메일 첨부·오피스 개체)을 파싱해 제목 줄 `## [파일 …]`·`## [첨부 …]`·`## [개체 …]`로 시작하는 절로 덧붙이고 개체 자리에 위치 표시. `attachments`가 켜졌을 때만 | 컨테이너(자식) | `pipeline/transform/represent/doc_represent.py` → `pipeline/transform/represent/mail_attachments.py` | `apply_post()` → `mail_blocks()` |
 | 26 | transform | 끝 표시 | `_rep/_DONE.json`을 대표 결과가 바뀌었을 때만 씀(`write_mark()`가 True) | 컨테이너 | `pipeline/cli.py` → `pipeline/transform/represent/doc_represent.py` | `parse_module()` → `rep_digest()`·`write_mark()` |
 | 27 | extract | 받기 끝 기록 | 26행 `write_mark()`가 True이고 원본이 Object Storage에서 왔을 때만: 대표 결과가 나온 문서의 처리 기록(`processed.jsonl`)을 남김(sha256은 4행이 이미 manifest에 씀, 파일은 지우지 않음) | 컨테이너 | `pipeline/cli.py` → `pipeline/extract/candidate_ready.py` | `parse_module()` → `finish()` |
 | 28 | load | silver 게시 명령 | 호스트가 컨테이너 안 게시 명령을 부르고, 게시 명령이 대표 결과·원본 주소·건너뜀 기록을 모음 | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/load/publish_parse_result.py` | `publish_one()` → `main()` → `run()` → `_load_inputs()` |
-| 29 | load | silver 게시 계획 | 문서마다 상태를 정함(`ok`·`partial`·`failed`·중복 `skipped_dup`·DRM·암호 `skipped_drm`·이번 대상 아님 `not_parsed` — 지원 안 함으로 빠진 문서도 `not_parsed`)과 올릴 자리(`rep.md` 키). 올리는 상태는 `ok`·`partial`(`skipped_drm`·`failed`는 30행 제외 보고서로). 건너뛴 문서는 올리지 않고 gold를 돌지 않음 | 컨테이너 | `pipeline/load/publish_parse_result.py` | `run()` → `plan()` → `status_of()`·`rep_md_key()`·`render_md()` |
+| 29 | load | silver 게시 계획 | 문서마다 상태를 정함(`ok`·`partial`·`failed`·중복 `skipped_dup`·받기가 뺀 원본(DRM·암호·미지원·깨진 압축 — `except_docs.PERMANENT`) `skipped_document`·이번 대상 아님 `not_parsed`)과 올릴 자리(`rep.md` 키). 올리는 상태는 `ok`·`partial`(`skipped_document`·`failed`는 30행 제외 보고서로). 건너뛴 문서는 올리지 않고 gold를 돌지 않음 | 컨테이너 | `pipeline/load/publish_parse_result.py` | `run()` → `plan()` → `status_of()`·`rep_md_key()`·`render_md()` |
 | 30 | load | silver 게시 실행 | gold에 이미 끝난 문서는 빼고(`--reparse` 목록만 예외) `rep.md`·엔진별 원결과를 Object Storage에 올리고(같은 이름이 있으면 새 이름), 올린 문서마다 처리 기록 한 줄을 `publish/silver.jsonl`에 씀(`apply()`). 실패는 `applog.except_doc_info` `error`, DRM·실패는 `run()`이 제외 보고서(`publish/excluded_<날짜>.md`)에도 씀 | 컨테이너 → Object Storage | `pipeline/load/publish_parse_result.py` → `pipeline/shared/except_docs.py` | `apply()` → `put()`·`record_error()` · `run()` → `render_excluded_report()` |
 | 31 | — | 원본 삭제(한 곳) | 게시 성공 뒤에만 받은 원본(`_staging/<…>.bin`)과 문서 폴더 링크(`_source_files/`)를 지움. `prepared/` 하드 링크는 40행 임시 폴더 삭제 때 지워짐 | 호스트 | `deploy/host/scripts/run_pipeline.py` | `drop_original()` |
 | 32 | transform | 구조화·적재 명령 | 호스트가 컨테이너 안 구조화(`gold_bundle --src prepared/`)와 적재(`pgvector_load load`)를 한 명령으로 이어서(`&&`) 부름 — 33~39행 | 호스트 → 컨테이너 | `deploy/host/scripts/run_pipeline.py` → `pipeline/transform/structure/gold_bundle.py` | `gold_one()` → `struct_cmd()` → `main()` |
@@ -205,7 +205,7 @@ PC에서는 `run_pipeline.py`를 돌리지 않는다(운영 EDW·Object Storage�
 
 `pipeline.cli.parse_module()`이 아래 단계를 차례로 부른다. 원본 가져오기·중복 확인·거르기는 `pipeline.extract.candidate_ready.stage_batch()` 하나(서버는 `candidate_ready stage`가 먼저 끝내고 `parse --staged`는 그 목록만 읽음), `--max-new` 고르기는 `pipeline.extract.candidate_pick.pick_new()`가 맡는다. 대부분 자식 프로세스 묶음(`pipeline.cli._run_step()`)으로 돈다.
 
-- extract(원본을 고르고 받아 파싱 입력으로 준비 — 결과는 staging): `candidate_pick.py`(대상 고르기 — 받기 전에 끝난 문서·처리 기록·미지원 형식을 뺌) · `candidate_ready.py`(받기·중복·거르기 묶음 `stage`·끝 정리) · `deduplication.py`(중복 문서 감지) · `filter_and_rotate.py`(준비 — 지원 안 되는·보호된 파일 거르기, 회전(기본 꺼짐), prepared로 복사) · `doc_lane_group.py`(run_pipeline 레인 분류, §2-1) · `protected_docs.py`·`discover_columns.py`(흐름 밖 도구).
+- extract(원본을 고르고 받아 파싱 입력으로 준비 — 결과는 staging): `candidate_pick.py`(대상 고르기 — 받기 전에 끝난 문서·처리 기록·미지원 형식을 뺌) · `candidate_ready.py`(받기·중복·거르기 묶음 `stage`·끝 정리) · `deduplication.py`(중복 문서 감지) · `filter_and_rotate.py`(준비 — 지원 안 되는·보호된 파일 거르기, 회전(기본 꺼짐), prepared로 복사) · `doc_lane_group.py`(run_pipeline 레인 분류, §2-1) · `discover_columns.py`(흐름 밖 도구).
 - transform/parse(엔진 파싱 — 결과는 silver): `parse_engines.py`(문서마다 구성된 엔진을 모두 동시에, 엔진마다 자식 프로세스 `--one` · 엔진 판·캐시 열쇠·중간 캐시 정리·형식 키) · `engine_check.py`(엔진 구성 검사) · `engines/`(엔진).
 
 ```mermaid
@@ -225,25 +225,25 @@ flowchart TD
 |---|---|---|---|
 | 엔진 구성 검사 | `pipeline.parse_steps.stack()` → `pipeline.transform.parse.engine_check.resolve()` · `pipeline.transform.parse.engines.registry.installed()` | `resources/config/pipeline_stack.json`을 읽고, 등록부에 없거나 설치 안 된 엔진이 있으면 종료 2 | 구성 파일 → 사전(`pipeline.config.stack()`) |
 | 대상 고르기 | `pipeline.extract.candidate_pick.done_keys()`·`pipeline.extract.candidate_pick.rdb_pick()` → `pipeline/shared/gold_docs.py` | gold `doc` 행이 있는 원본 키를 한 번 읽어 받기 전에 뺌(rdb는 s3_key, 하위 폴더는 상대 경로, 평평한 폴더는 이름). 서버에서 PG를 못 읽으면 종료 4(전체 재파싱 방지). 처리 기록(`processed.jsonl`)에 있는 판·압축·처리 엔진 없는 형식도 뺌 | PG·문서 위치 csv → 받을 목록 |
-| 원본 가져오기 | `pipeline.extract.candidate_ready.resolve()` | 폴더: 파일 목록 그대로. `rdb:csv:<경로>`: csv의 `AI.FileStorageMap` 다섯 칸(id·s3_key·original_filename·file_size·content_version_id)으로 Object Storage에서 받음(`extract.source.source_staging_dir` 폴더에 한 번 받고 문서 폴더에는 링크, 같은 크기 파일이 있으면 다시 안 받음, `extract.source.source_fetch_threads` 병렬). 다른 원천의 같은 내용 파일도 따로 받는다(원천마다 독립) | csv → `<out>/_source_files/`, `parse/_source/manifest.jsonl`·`selected.txt` |
-| 중복 확인 | `pipeline.extract.deduplication.run_folder()` | 파일 내용 SHA-256이 같으면 대표 하나만 keep(지우지 않음, 대표 = 사본 표시 없는 이름 → 최신 → 큰 파일). 받기(`candidate_ready._dedup`)가 같은 프로세스에서 부르고, sha256은 받기가 manifest에 남긴 값(`pipeline.shared.srcsha.sha_of`). 문서 1건이면 해시만 돌려주고 아무것도 쓰지 않음 | 원본 폴더 → `dedup/keep.txt`·`groups.csv`·`report.md`·`fingerprints.jsonl` |
+| 원본 가져오기 | `pipeline.extract.candidate_ready.resolve()` | 폴더: 파일 목록 그대로. `rdb:csv:<경로>`: csv의 `AI.FileStorageMap` 칸(id·s3_key·original_filename·file_size·source_system)으로 Object Storage에서 받음(`extract.source.source_staging_dir` 폴더에 한 번 받고 문서 폴더에는 링크, 같은 크기 파일이 있으면 다시 안 받음, `extract.source.source_fetch_threads` 병렬). 다른 원천의 같은 내용 파일도 따로 받는다(원천마다 독립) | csv → `<out>/_source_files/`, `parse/_source/manifest.jsonl` |
+| 중복 확인 | `pipeline.extract.deduplication.run_folder()` | 파일 내용 SHA-256이 같으면 대표 하나만 keep(지우지 않음, 대표 = 사본 표시 없는 이름 → 최신 → 큰 파일). 받기(`candidate_ready._dedup`)가 같은 프로세스에서 부르고, sha256은 받기가 manifest에 남긴 값(`pipeline.shared.srcsha.sha_of`). 파일은 쓰지 않고(1건이면 묶지 않고 해시만), 남은 이름은 `_dedup`이 `dedup/keep.txt`에 씀 | 원본 폴더 → `dedup/keep.txt` |
 | 준비 | `pipeline.extract.filter_and_rotate.main()` | 머리 바이트로 DRM·OLE 암호·압축 등 미지원·열기 암호 PDF를 거르고 기록, 회전은 `extract.prepare.rotate_pages`(`PREPARE_ROTATE`, 기본 꺼짐)일 때만(`--no-scan-rotate`면 이미지 PDF는 회전 안 함 — run_pipeline `ops.run_pipeline.parse.batch_rotate_scans`) RapidOCR 점수로 0·90·180·270도 중 고름(`pipeline.extract.filter_and_rotate.best_angle()`), 나머지는 복사(`pipeline.extract.filter_and_rotate.place()`). 형식 변환은 하지 않는다 | 원본 → `prepared/`, `prepared/rotation.csv`(회전 전 `orig_sha256`), `prepared/_records/skipped.{csv,jsonl}` |
 | 엔진 일괄 파싱 | `pipeline.transform.parse.parse_engines.main()` | 문서마다 형식 키(`.pdf_text`·`.pdf_image`·확장자 — `pipeline.transform.parse.parse_engines.doc_types()`)의 엔진 목록(`pipeline.transform.parse.parse_engines.engines_for_doc()`)을 **동시에** 돌림. OCR 엔진(`rapidocr_ko`)은 파싱 엔진으로 안 돎. 제한 시간 = 쪽 수 × 쪽당 초(글자 엔진 `tuning.extract.text_engine_page_timeout_sec` 10 · VLM 엔진 `common.models.vlm.vlm_timeout_sec` 180), 넘으면 두 배로 한 번 더. `--procs`면 문서를 조각내 프로세스 여럿. 같은 실행 안 같은 내용은 한 번만 파싱 후 복사 | `prepared/` → `parse/<엔진>/<문서>.json`, `parse/runs.jsonl` |
 | 엔진 1건 | `pipeline.transform.parse.parse_engines.one_main()` → `pipeline.transform.parse.engines.registry.run()` | 문서 1건 × 엔진 1개를 별도 프로세스로(엔진이 죽어도 전체가 안 멈춤). 결과에 출처(`provenance` — 엔진 판·`p0_key`)를 찍음(`pipeline.transform.parse.parse_engines.stamp()`) | 문서 → 엔진 결과 json |
-| 엔진 | `pipeline/transform/parse/engines/<이름>/parser.py` | 형식별 실제 읽기(pymupdf·kreuzberg·office_stdlib·anydoc·mhtml·hwpx·plaintext·markitdown·docx2python·rapidocr·qwen_vlm). 폴더 하나 = 엔진 묶음, `pipeline.transform.parse.engines.registry.engines()`가 자동 등록 | — |
+| 엔진 | `pipeline/transform/parse/engines/<이름>/parser.py` | 형식별 실제 읽기(pymupdf·kreuzberg·office_stdlib·anydoc·mhtml·hwpx·plaintext·markitdown·docx2python·rapidocr·qwen_vlm). 폴더 하나 = 엔진 묶음, `pipeline.transform.parse.engines.registry.engines()`가 자동 등록. 엑셀 날짜 칸은 어느 엔진이든 `YYYY-MM-DD[ HH:MM]`(시각만이면 `HH:MM`, 초는 0이 아닐 때만) | — |
 | 엔진 공통 | `pipeline/transform/parse/engines/_common/contract.py`·`fields.py` | 모든 엔진의 출력 계약(`text`·`tables`·`facts`·`fields`·`boxes`·`trace`), PDF 쪽 이미지 렌더(`extract.page_render_dpi`), 표 칸 → 업무 필드 정규화 | — |
 | VLM 엔진 | `pipeline/transform/parse/engines/qwen_vlm/parser.py` | 이미지·스캔 PDF(`.pdf_image`)의 쪽을 쪽 VLM 후보정과 같은 함수 `pipeline.shared.vlmcall.transcribe()`로 옮김(→ `pipeline.shared.vlmcall.vlm_page()` → `pipeline.shared.vlmcall.ask()` → `common.ai.llm.complete("vlm")`). 쪽 수 상한 `transform.vlm.vlm_max_pages_per_doc`, 나머지 VLM 규칙(해상도·동시 수·제한 시간·생각 끄기·캐시)은 §4-2와 같음. 마크다운 코드펜스는 벗김. 빈 답은 빈 쪽, 그 밖의 호출 실패는 문서×엔진 실패 | 쪽 이미지 → 마크다운 |
 
 엔진 구성(형식 → 엔진 목록)과 바꾸는 법: [resources.md §1](resources.md#1-엔진-구성pipeline_stack). 요건: [extract.md#pl-01](../prd/extract.md#pl-01) · [extract.md#pl-02](../prd/extract.md#pl-02) · [transform.md#pl-03](../prd/transform.md#pl-03) · [transform.md#pl-22](../prd/transform.md#pl-22).
 
-**흐름 밖 도구**(사람이 따로 돌림): `pipeline.extract.protected_docs.main()`(`scan`·`decrypt`·`purge` — 보안 문서 판별·복호화 사본, DRM PC용), `pipeline.extract.discover_columns.main()`(원천 표 열 이름 탐색).
+**흐름 밖 도구**(사람이 따로 돌림): `pipeline.extract.discover_columns.main()`(원천 표 열 이름 탐색).
 
 ### extract 산출물
 
 | 산출물 | 자리(문서 폴더 `<out>` 기준) | 다시 쓰는 기준 |
 |---|---|---|
 | 받은 원본 | `<결과 폴더>/_staging/`(`extract.source.source_staging_dir`), 문서 폴더 `_source_files/`는 링크 | staging 파일 이름 = sha1(버킷 + s3_key). 대표 결과가 나오면 `pipeline.extract.candidate_ready.finish()`가 링크를 지우고, staging 원본은 게시 뒤 `drop_original()`이 지움 |
-| 원본 목록 | `parse/_source/manifest.jsonl`·`processed.jsonl` | `processed.jsonl`의 (key, ETag/증분값)이 같으면 다시 안 받음 |
+| 원본 목록 | `parse/_source/manifest.jsonl`·`processed.jsonl` | `processed.jsonl`의 (key, 증분값)이 같으면 다시 안 받음 |
 | 중복 판정 | `dedup/keep.txt` | 파일 내용 SHA-256 |
 | 끝난 문서 판정 | (PG 원천 스키마 `doc`) | 그 원본 키의 `doc` 행이 있으면 다시 파싱 안 함 |
 | 준비본 | `prepared/`, `rotation.csv`, `_records/skipped.*` | 원본 수정 시각이 같고 회전 기록이 있으면 다시 안 함 |
@@ -261,26 +261,24 @@ flowchart TD
 ```mermaid
 flowchart TD
     Q["parse_scoring.py: 엔진 결과 채점 (criteria.json 문턱)"]
-    X["crosscheck.py: 계열이 다른 엔진 2개+가 낸 (라벨, 값)"]
     R1["doc_represent.py: 후보 = 구성 엔진 중 성공한 것"]
     R2["대표 고르기 (rep_select: first · acc · best)"]
-    R3["standardize · 다른 엔진 facts 보충 · 쪽/문단 보정 · fragment_vote.py 투표"]
+    R3["standardize · 다른 엔진 facts 보충 · 교차 병합(대표 본문 그대로 + 빠진 조각 끼움)"]
     R4["scan_page_vlm.page_text_pages → fill_scan_pages (스캔 쪽 채움)"]
     R5["apply_post: vlm_page · figures(+context) · charts · supsub · attachments"]
     R6["table_inline.py 표 제자리 넣기"]
-    O["_rep/문서.json · index.json · sources.jsonl · engines.csv · conflicts.jsonl"]
+    O["_rep/문서.json · index.json · sources.jsonl · engines.csv"]
     M["doc_represent.py rep_digest·write_mark: digest 비교 → _rep/_DONE.json"]
-    Q --> X --> R1 --> R2 --> R3 --> R4 --> R5 --> R6 --> O --> M
+    Q --> R1 --> R2 --> R3 --> R4 --> R5 --> R6 --> O --> M
 ```
 
 | 단계 | 파일·함수 | 하는 일 | 입력 → 출력 |
 |---|---|---|---|
-| 채점 | `pipeline.transform.represent.parse_scoring.main()` | 정답 순서 truth(PC) → answer_key → native → consensus로 엔진 결과를 재고 합격선(`resources/config/criteria.json`)으로 판정. 계열 합의는 같은 파일의 `FAMILY` | `parse/<엔진>/` → `parse/qa.json`·`route.json`·`parse_summary.json` |
-| 교차 확인 | `pipeline.transform.represent.crosscheck.build()` | 계열이 다른 엔진 2개 이상이 같은 (라벨, 값)을 냈는지(규칙은 `common/core/repfmt.py`) | 엔진 결과 → `rep.meta.pairs` |
+| 채점 | `pipeline.transform.represent.parse_scoring.main()` | 정답 순서 truth(PC) → answer_key → native → consensus로 엔진 결과를 재고 합격선(`resources/config/criteria.json`)으로 판정. 계열 합의는 같은 파일의 `FAMILY` | `parse/<엔진>/` → `parse/qa.json`·`parse_summary.json` |
 | 대표 고르기 | `pipeline.transform.represent.doc_represent.represent()` | 후보 = 구성이 그 형식에 정한 엔진 중 성공한 것. `transform.represent.engine_pick`(`PARSE_REP_SELECT` — run_pipeline은 `first`)로 고름, 기본은 정확도(`pipeline.transform.represent.parse_scoring.doc_accuracy()`) + 구조 풍부도. 모두 실패하면 구성 밖 성공 엔진(fallback) | `qa.json` + 엔진 결과 → 대표 1개 |
-| 보정 | `pipeline.transform.represent.doc_represent.represent()`·`pipeline.transform.represent.fragment_vote.fuse()`·`pipeline/transform/represent/table_standard.py` | 기호·첨자 표준화(`common/core/text.py`), 다른 엔진의 표 행·키-값 보충, 표/그림을 더 잘 읽은 엔진의 쪽·문단으로 교체, 조각 단위 투표(모델 호출 없음) | → `rep.fused`, `conflicts.jsonl` |
+| 보정 | `pipeline.transform.represent.doc_represent.represent()`·`cross_merge()`·`pipeline/transform/represent/table_standard.py` | 기호·첨자 표준화(`common/core/text.py`), 다른 엔진의 표 행·키-값 보충, 교차 병합 — 대표 본문은 바꾸지 않고, 다른 엔진 조각(빈 줄·쪽 나눔으로 나눈 소제목·표·문단)의 낱말이 98% 이상 대표(쪽 수가 같으면 같은 쪽, 다르면 문서 전체)에 있으면 같은 내용으로 보고 건너뛰고, 아니면 바로 앞에 맞은 대표 조각 뒤에 끼움. 공백을 뺀 글이 같은 쪽은 먼저 걸러 비교하지 않음. 비교 전 줄 끝(`\r\n` → `\n`)을 맞춤(모델 호출 없음) | → `rep.text`, `rep.rep.merge`(엔진별 끼운 조각 수) |
 | 스캔 쪽 채움 | `pipeline.transform.represent.doc_represent.fill_scan_pages()` · `pipeline.transform.figures.scan_page_vlm.scan_pages_detail()` | 글자 PDF 안의 스캔 쪽(글자 거의 없음·숨은 글자·깨진 글자)만 쪽 VLM 글로 채움. 이미 VLM 엔진이 옮긴 이미지·스캔 문서는 건너뜀 | → `rep.rep.scan_fill` |
-| 후보정 | `pipeline.transform.represent.doc_represent.apply_post()` · `pipeline.config.active_features()` | `transform.represent.post_steps`(`PARSE_POST`, 기본 all)에 든 기능만: `vlm_page`(쪽 VLM 옮기기, pptx는 `pipeline.transform.figures.pptx_render.pptx_slide_vlm()`) · `figures`(+`context`) · `charts` · `supsub`(`represent/superscripts.py`) · `attachments`(`represent/mail_attachments.py` — .eml·.msg 첨부를 구성 엔진으로 다시 파싱) | → `rep.text`에 덧붙임, `rep.post`(`code_fp` p1 포함) |
+| 후보정 | `pipeline.transform.represent.doc_represent.apply_post()` · `pipeline.config.active_features()` | `transform.represent.post_steps`(`PARSE_POST`, 기본 all)에 든 기능만: `vlm_page`(쪽 VLM 옮기기, pptx는 `pipeline.transform.figures.pptx_render.pptx_slide_vlm()`) · `figures`(+`context`) · `charts` · `supsub`(`represent/superscripts.py`) · `attachments`(`represent/mail_attachments.py` — 받기 단계가 꺼낸 `_parts/`의 안 파일을 구성 엔진으로 파싱) | → `rep.text`에 덧붙임, `rep.post`(`code_fp` p1 포함) |
 | 표 넣기 | `pipeline.transform.represent.table_inline.inline_tables()`·`pipeline/transform/represent/figure_context.py` | 엔진들의 표 격자 중 가장 완전한 것을 본문 표 자리에 넣음 | → `rep.rep.table_inline` |
 | 끝 표시 | `pipeline.transform.represent.doc_represent.rep_digest()`·`write_mark()` | 대표 결과 본문·facts의 sha256 묶음(digest — 대표 결과 단계가 `_rep/index.json` `digest`에 넣어 둠)과 `CONTRACT`가 앞 표시와 같으면 그대로 둠, 다르면 `FINGERPRINT`·엔진·문서 수와 함께 새로 씀. 원격 원본이면 `pipeline.extract.candidate_ready.finish()` | → `_rep/_DONE.json` |
 
@@ -357,7 +355,7 @@ flowchart TD
 | 읽기 | `pipeline.transform.structure.gold_bundle.main()` | `_rep/index.json`의 대표 결과만 읽음. 원본 키는 `manifest.jsonl`에서 | `parse/_rep/` → 문서 목록 |
 | 청킹 | `pipeline.transform.structure.chunking.chunk_all()` | 본문 → 청크(구조 청커 — 제목 경계·표 블록) + 위치(쪽·줄·문자 범위·절), 쪽 번호 줄은 뺌(`common/core/meaning.py`). 쪽 안 위치(bbox)는 OCR 상자 또는 원본 PDF에서. FAQ 원천은 엑셀 행 단위 | → 청크 |
 | 그림 청크 | `pipeline.transform.structure.gold_bundle.figure_chunk()` | 그림 기록 하나 = 청크 하나(쪽 VLM 쪽의 그림은 본문 청크에 이미지 id만 연결) | `_images/index.jsonl` → 청크 |
-| 고객·메타 | `pipeline/transform/structure/client_roster.py`·`common/core/terms.py`·`common/store/master.py`·`common/core/docmeta.py` | 고객 이름(마스터 표 `<PG_SCHEMA>_master` — 서버에서 못 읽으면 멈춤), 계약 번호(교차 확인 값만), 날짜·개정·구판 | → `docs.jsonl` 칸 |
+| 고객·메타 | `pipeline/transform/structure/client_roster.py`·`common/core/terms.py`·`common/store/master.py`·`common/core/docmeta.py` | 고객 이름(마스터 표 `<PG_SCHEMA>_master` — 서버에서 못 읽으면 멈춤), 날짜·개정·구판 | → `docs.jsonl` 칸 |
 | 임베딩 | `pipeline.transform.structure.gold_bundle.embed_all()` → `common.ai.embed.embed_texts()` | 청크 본문(머리말 포함)을 내부망 임베딩 API로(L2 정규화). 같은 모델·같은 본문은 캐시에서 | → `vectors.npy` |
 | 묶음 정보 | `pipeline.transform.structure.gold_bundle.main()` | 구성 이름·임베딩 모델·차원·청크 수·`master_hash` | → `meta.json` |
 
@@ -367,8 +365,8 @@ flowchart TD
 
 | 산출물 | 자리(문서 폴더 `<out>` 기준) | 다시 쓰는 기준 |
 |---|---|---|
-| 채점 | `parse/qa.json`·`route.json`·`parse_summary.json` | 매 실행 새로 씀(원본이 지워진 문서는 앞 `qa.json` 항목을 이어 씀) |
-| 대표 결과 | `parse/_rep/<문서>.json`, `index.json`, `sources.jsonl`, `engines.csv`, `conflicts.jsonl` | 매 실행 새로 만듦. 성공 엔진이 없으면 원본 sha가 같은 앞 대표 결과를 그대로 올림 |
+| 채점 | `parse/qa.json`·`parse_summary.json` | 매 실행 새로 씀(원본이 지워진 문서는 앞 `qa.json` 항목을 이어 씀) |
+| 대표 결과 | `parse/_rep/<문서>.json`, `index.json`, `sources.jsonl`, `engines.csv` | 매 실행 새로 만듦. 성공 엔진이 없으면 원본 sha가 같은 앞 대표 결과를 그대로 올림 |
 | 끝 표시 | `parse/_rep/_DONE.json` | 대표 결과 digest + `CONTRACT`가 같으면 안 바꿈 |
 | 쪽 VLM 결과 | `parse/raw/vlm/<모델>/page-v1-<sha8>/det-<열쇠16>.json` (`ops.paths.raw_cache_dir` = `PARSE_RAW_ROOT`) — VLM 엔진과 쪽 VLM 후보정이 함께 씀 | 열쇠 = 원본 sha256(회전 전 `orig_sha256`) + 쪽 번호 + DPI(`extract.page_render_dpi` — PDF만)·긴 변 2000 + 회전 각도 + 모델 + 지시서 id. DPI를 바꾸면 열쇠도 바뀜 |
 | 그림 VLM 결과 | `parse/raw/vlm/<모델>/<지시서 id>/<이미지 sha12>.json` | 이미지 sha + 모델 + 지시서 id |
@@ -441,7 +439,7 @@ sequenceDiagram
 | 쓰기 | `pipeline.load.pgvector_load._load_src()` | 문서의 source_system으로 원천 스키마(SFDC·CRMS·LAS·FAQ·other)를 고르고 `doc`·`chunk`·용어 행. 묶음에 없는 문서는 지우지 않음 | → PG |
 | 기록 | `pipeline.load.pgvector_load.load()`(`--silver <문서 폴더>/publish/silver.jsonl`) → `pipeline.load.pgvector_load._load_src()` | `doc`에 게시 기록(원본 키 `source_key` = `file_path`로 이음 — 이미 있는 행은 그 칸만 고침, `--replace`인데 줄이 없으면 옛 값 유지, 새 문서에 줄이 없으면 NULL)·`gold_version`(`<VERSION>+m<마스터 해시 앞 8자>`)·`loaded_at`(적재 시각) | → PG `doc` |
 | FAQ 교체 | `python -m pipeline.load.pgvector_load faq-sync [--reset]` | 새 FAQ가 오면 gold FAQ를 통째로 비움(`candidate_pick list`의 `faq_first()`가 부름) | — |
-| 접속 | `common/store/pg.py`·`common/store/pg_standin.py` | PG 연결, PC 시험용 SQLite 대역 | — |
+| 접속 | `common/store/pg.py` | PG 연결 | — |
 
 요건: [load.md#pl-07](../prd/load.md#pl-07) · [load.md#pl-13](../prd/load.md#pl-13) · [load.md#pl-29](../prd/load.md#pl-29) · [transform.md#pl-33](../prd/transform.md#pl-33) · [load.md#pl-41](../prd/load.md#pl-41).
 
@@ -477,7 +475,7 @@ flowchart TD
     H["거르기 범위: edw_chain.yaml 이름 → gold doc 칸·attrs"]
     R["server_state.py _retriever → retriever.py Retriever"]
     P["pgsearch.py: 벡터(HNSW) + BM25 + 드문 ID → RRF"]
-    Q["common/ai/embed.py 질문 임베딩 (query_cache.sqlite)"]
+    Q["common/ai/embed.py 질문 임베딩 (프로세스 안 LRU)"]
     O["evidence_shape.py → schemas/evidence.py 근거 13칸"]
     FT["fulltext_tool.py → services/fulltext_svc.py: gold doc의 silver 위치 → Object Storage"]
     PD["parse_tool.py → parse_proxy.py → mcp-data-parsing 의 pipeline/run_mcp_parsing.py"]
@@ -550,12 +548,12 @@ flowchart TD
    ├─ _docflow/<seq>/            문서 하나의 작업 폴더(PIPE_OUT_ROOT — 문서가 끝나면 삭제)
    │  ├─ batch.csv · .staged
    │  ├─ _source_files/          받은 원본(_staging 링크)
-   │  ├─ dedup/                  keep.txt · groups.csv · report.md
+   │  ├─ dedup/                  keep.txt
    │  ├─ prepared/               준비본 · rotation.csv · _records/
    │  ├─ parse/
-   │  │  ├─ _source/             manifest.jsonl · processed.jsonl · selected.txt · only.txt
+   │  │  ├─ _source/             manifest.jsonl · processed.jsonl · only.txt
    │  │  ├─ <엔진>/<문서>.json   엔진 결과
-   │  │  ├─ runs.jsonl · qa.json · route.json · parse_summary.json
+   │  │  ├─ runs.jsonl · qa.json · parse_summary.json
    │  │  ├─ _rep/                대표 결과 · index.json · _DONE.json
    │  │  ├─ _images/             그림 PNG · index.jsonl
    │  │  └─ raw/                 P0 캐시(VLM · 첨부)
@@ -593,7 +591,7 @@ flowchart TD
 |---|---|
 | `common.ai.guard.require_internal()`·`common.ai.guard.precheck()`·`common.ai.guard.spend_reserve()` | 주소가 내부망(사설 IP·회사 접미사 등)이 아니면 거부. 외부 허용은 `dev.models.<역할>.allow_external`(`LLM_ALLOW_EXTERNAL`·`VLM_ALLOW_EXTERNAL`·`EMBED_ALLOW_EXTERNAL`)이 켜지고 `run_env`가 정확히 local일 때만. 리다이렉트로 밖에 나가는 것도 막음. 하루 지출 장부로 예산을 미리 떼고 정산 |
 | `common.ai.llm.chat()`·`common.ai.llm.complete()` | OpenAI 호환 호출, 응답 캐시, 가짜 LLM(`dev.fake_llm`, local만), 빈 응답 한 번 재요청, 모델 서버 '다운' 판정(`tuning.common.models.transport.*`). VLM은 `pipeline.shared.vlmcall.ask()`만 이 함수를 부름(§4-2) |
-| `common.ai.embed.embed_texts()` | 문서 청크('passage')와 질문('query')을 같은 모델·접두·정규화로, 질문 캐시 `output/query_cache.sqlite` |
+| `common.ai.embed.embed_texts()` | 문서 청크('passage')와 질문('query')을 같은 모델·접두·정규화로, 질문은 프로세스 안 LRU(2048개)로 다시 씀 |
 | `common/ai/agent_prompts.py` | `resources/prompts/**` 지시서 읽기(글자 해시가 캐시 열쇠에 들어감) |
 
 `pipeline.cli parse`는 자식 프로세스에 `LLM_BASE_URL`을 비워 넘긴다(파싱 모듈은 LLM을 부르지 않음 — VLM·임베딩만). 비용 규칙: [CLAUDE.md §7](../../CLAUDE.md), 요건 [ops.md#pl-11](../prd/ops.md#pl-11).

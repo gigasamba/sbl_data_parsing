@@ -147,13 +147,23 @@
   ],
   ".log": [
    "plaintext"
+  ],
+  ".zip": [
+   "archive"
+  ],
+  ".tar": [
+   "archive"
+  ],
+  ".tgz": [
+   "archive"
+  ],
+  ".gz": [
+   "archive"
   ]
  },
  "source": "selection.json(단계 1 최종 엔진 조합)",
  "name": "dev-v1",
  "embed": "api",
  "chunk": "structure",
- "retrieve": "hybrid",
- "k": 10,
  "updated": "2026-10-07 19:29"
 }

@@ -26,12 +26,8 @@ PAGE_SCAN_GARBAGE = 0.5  # garbage_ratio "높음"
 PAGE_HIDDEN_RATIO = 0.6  # 보이지 않는 글자(render mode 3·순백색) 비율 "높음"
 PAGE_HIDDEN_AREA = 0.3  # 숨은 글자층 쪽의 완화된 이미지 면적 기준
 # 쪽 대부분은 정상 글자인데 값 하나만 그림 위 숨은 글자로 깔린 경우 — 쪽 전체 비율로 못 잡아 국소 겹침을 따로 본다.
-# 문서당 상한(0 = 이 신호를 안 봄)
-PARSE_HIDDEN_OVERLAP_MAX_DEFAULT = "20"
-# 회전·벡터 도형 신호 — 문서당 상한(0 = 이 신호를 안 봄)
+# 숨은 글자 겹침·회전·벡터 도형 신호는 문서당 상한이 있다(설정 — 0 = 이 신호를 안 봄).
 PAGE_VECTORS_MIN = 3  # 쪽 안 벡터 도식 군집 수 "많음" — 복잡한 도형·SmartArt류 쪽 후보
-PARSE_VECTORS_MAX_DEFAULT = "20"
-PARSE_ROTATED_MAX_DEFAULT = "20"  # filter_and_rotate가 돌린(각도≠0) 쪽 — 회전 전 OCR 품질이 낮았을 수 있어 쪽 VLM 후보
 
 
 def is_scan(p):
@@ -162,10 +158,10 @@ def scan_pages_detail(path):
     'rotated' = filter_and_rotate가 돌린 쪽(rotation.csv angle≠0) — 회전이 글자층 신뢰도를 낮출 수 있다. 상한 PARSE_ROTATED_MAX(0=끔).
     'vectors' = 쪽 안 벡터 도식 군집 수가 PAGE_VECTORS_MIN 이상 — 글자층만으로 구조를 못 담는 쪽. 상한 PARSE_VECTORS_MAX(0=끔).
     문서 전체가 스캔(is_scan)이면 이 함수를 부르지 않는다."""
-    cap = int(pc.by_env("PARSE_HIDDEN_OVERLAP_MAX", PARSE_HIDDEN_OVERLAP_MAX_DEFAULT))
+    cap = int(pc.by_env("PARSE_HIDDEN_OVERLAP_MAX"))
     vec_cap, rot_cap = (
-        int(pc.by_env("PARSE_VECTORS_MAX", PARSE_VECTORS_MAX_DEFAULT)),
-        int(pc.by_env("PARSE_ROTATED_MAX", PARSE_ROTATED_MAX_DEFAULT)),
+        int(pc.by_env("PARSE_VECTORS_MAX")),
+        int(pc.by_env("PARSE_ROTATED_MAX")),
     )
     rot = rotation_info(path) if rot_cap else {}  # rot_cap==0이면 rotation.csv를 안 읽음
     n_overlap = n_rot = n_vec = 0

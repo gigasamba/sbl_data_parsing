@@ -2,7 +2,7 @@
 
 ## 1. 엔진 구성(pipeline_stack)
 
-엔진 구성(형식마다 파싱 엔진 · 청킹 · 임베딩 · 검색 방식 · 상위 k)이 어디에 있고 어떻게 바꾸는지. 파싱 규칙은 [prd/transform.md#pl-03](../prd/transform.md#pl-03).
+엔진 구성(형식마다 파싱 엔진 · 청킹 · 임베딩)이 어디에 있고 어떻게 바꾸는지. 파싱 규칙은 [prd/transform.md#pl-03](../prd/transform.md#pl-03).
 
 ### 1-1. 어디서 읽나
 
@@ -17,18 +17,18 @@
 
 ### 1-2. 파일 모양
 
-- `name`(예 `dev-v1`) · `parse`(형식 키 → 엔진 목록 — 문서마다 그 엔진들이 동시에 돎) · `source` · `embed` · `chunk` · `retrieve` · `k`, 선택 `updated` · `client_aliases`(`common/core/terms.py`가 읽음 — 지금 파일에 없음).
+- `name`(예 `dev-v1`) · `parse`(형식 키 → 엔진 목록 — 문서마다 그 엔진들이 동시에 돎) · `source` · `embed` · `chunk`, 선택 `updated` · `client_aliases`(`common/core/terms.py`가 읽음 — 지금 파일에 없음).
 - 형식 키는 확장자, PDF는 `.pdf_text`·`.pdf_image`.
 
 ### 1-3. 바꾸기·되돌리기·보기
 
 | 할 일 | 방법 |
 |---|---|
-| 바꾸기 | 저장소의 파일을 고쳐 커밋 → 서버에는 **코드 폴더 바꾸기**로 보낸다([release-and-patch.md](../operations/release-and-patch.md) §1) |
+| 바꾸기 | 저장소의 파일을 고쳐 커밋 → 서버에는 **코드 폴더 바꾸기**로 보낸다([server-guide §4-5](../operations/server-guide.md#4-5-벌-폴더에-새-코드-덮어쓰기)) |
 | 되돌리기 | git으로 이전 파일로 되돌려 다시 코드 폴더를 바꾼다 |
 | 보기 | `show-stack`(PC `python -m pipeline.cli show-stack` · 이미지 `data-pipeline` 컨테이너) — 이름·sha·파일 경로와 내용 요약 |
 
-- **이미지에 없는 엔진 거부:** `parse` 목록의 엔진마다 등록부(`pipeline/transform/parse/engines`)에 있고 설치(REQUIRES 모듈·도구)됐는지 — 파이프라인 진입점(`pipeline.cli`·`pipeline.run_mcp_parsing`)이 시작 때 `pipeline.transform.parse.engine_check.resolve()`로 검사한다(어긋나면 종료 2). 모델 주소 설정(REQUIRES_ENV)은 보지 않는다. 검색은 `retrieve`·`k`만 쓴다.
+- **이미지에 없는 엔진 거부:** `parse` 목록의 엔진마다 등록부(`pipeline/transform/parse/engines`)에 있고 설치(REQUIRES 모듈·도구)됐는지 — 파이프라인 진입점(`pipeline.cli`·`pipeline.run_mcp_parsing`)이 시작 때 `pipeline.transform.parse.engine_check.resolve()`로 검사한다(어긋나면 종료 2). 모델 주소 설정(REQUIRES_ENV)은 보지 않는다. 검색 방식은 파일에 없다(늘 하이브리드 — 근거 수는 search의 k).
 - `show-stack`은 실행 기록을 `/app/output/logs`에 쓰므로 `/app/output`이 읽기 전용인 `mcp-server` 컨테이너에서는 종료 2다 — `data-pipeline` 컨테이너에서 본다.
 - **파싱과 구조화가 같은 구성:** 호스트 `run_pipeline.py`는 시작 때 `data-pipeline` 컨테이너 안에서 `show-stack`을 한 번 돌려 파일이 읽히는지 확인한다(못 읽으면 멈춤).
 - **층과 code_fp:** 층 파일 `parse_engines`·`mail_attachments`·`doc_represent`·`gold_bundle`은 `pipeline.config.stack()`으로 같은 파일을 읽는다. 파일 읽기 코드(`cfgfile`)는 층의 의존이 아니라 구성을 바꿔도 code_fp가 그대로다. `--stack <파일>`(`represent`·`gold_bundle`)은 PC 실험·시험 전용이다. 묶음 `meta.json`의 `stack_conf`에 구성이 남는다.
@@ -53,7 +53,7 @@ LLM·VLM을 **부르는** 단계의 지시서 패키지 7개 — `resources/prom
 - `agent.json`(manifest — `model_role`·`output_schema`·`common_tail`·`agentic`·`budget`·`local_tools`) · `agent.py`(코드가 읽지 않음 — 지시서 지문 때문에 바이트 그대로 둠, 처리는 [prd/transform-cleanup.md#pl-53](../prd/transform-cleanup.md#pl-53)) · 지시문 `prompt.md`(1개) 또는 `<prompt_id>.md`(여러 개 — 지금은 그런 패키지가 없음 · 로더 `common/ai/agent_prompts.py`는 지원) · 여러 턴 패키지(`rag_qa`)는 설계 절 `instructions.md`.
 - **지시문:** `common/ai/agent_prompts.py` `load(agent_id, prompt_id)`가 읽어 호출부 모듈 상수를 만든다. 찾는 순서는 ① 패키지에 지시문이 하나면 `prompt.md` ② `<prompt_id>.md` ③ 옛 `prompts/<prompt_id>.md`(한 판 폴백). `.format()` 자리표시는 호출부가 채운다. 글자는 바이트 그대로 두고(지시문 지문 — CLAUDE.md §4), 줄끝은 LF다(`.gitattributes`).
 - **캐시 열쇠:** 모델 응답 캐시 열쇠는 모델·메시지 해시라 지시문 글자가 같으면 그대로다.
-- **output_schema:** JSON을 돌려주는 패키지는 `agent.json`에 `output_schema`를 둔다(호출부 파서가 기대하던 키·형식 그대로, 더 엄격하지 않게). `common.ai.llm.complete(..., agent=...)`가 응답을 이 스키마로 검사하고, 어긋나면 원 메시지 + 안내 한 줄로 1회만 다시 묻는다(새 메시지라 원 캐시는 그대로). 그래도 어긋나면 호출부 기본값 처리에 맡긴다. 집계는 `llm.schema_stats()`(`invalid`·`retry_ok`·`retry_failed`). `LLM_FAKE=1` 경로는 `complete()`를 거치지 않아 검사 대상이 아니다.
+- **output_schema:** JSON을 돌려주는 패키지는 `agent.json`에 `output_schema`를 둔다(호출부 파서가 기대하던 키·형식 그대로, 더 엄격하지 않게). `common.ai.llm.complete(..., agent=...)`가 응답을 이 스키마로 검사하고, 어긋나면 원 메시지 + 안내 한 줄로 1회만 다시 묻는다(새 메시지라 원 캐시는 그대로). 그래도 어긋나면 호출부 기본값 처리에 맡긴다. `LLM_FAKE=1` 경로는 `complete()`를 거치지 않아 검사 대상이 아니다.
 - **공용 꼬리(인젝션 방어):** `resources/prompts/common/_common/tail.md`(패키지 아님 — 꼬리 파일만) — 자료 속 지시 무시·지어내기 금지·형식 준수 3줄을 `load()`가 지시문 **맨 끝**에 붙인다. `agent.json` `common_tail`: 칸 없음 = `tail.md` · `false` = 안 붙음 · `"free_text"` = `tail_free.md`(JSON 전용 3번째 줄을 뺀 것 — 출력이 자유 글인 패키지). 자료를 문자열 이어붙이기로 템플릿 뒤에 붙이는 호출부는 `load()` 대신 `template()`(꼬리 없음) + 자료 + `tail(agent_id)`를 써서 꼬리가 항상 자료 뒤에 오게 한다(아래 표 "꼬리" 칸 `template+tail`).
 - **실행:** `common/ai/llm.py` `complete(role, messages, agent=<id>)` — OpenAI 호환 HTTP 한 길이 가드·재시도·사용량·형식 검사를 감싼다. 1회 호출 패키지는 local_tools가 없다(되돌이·분기는 호출자 파이썬 코드). 여러 턴 도구 왕복은 PC 답변 점검(`rag_qa`)만 — `validation/e2e/tool_loop.py`.
 

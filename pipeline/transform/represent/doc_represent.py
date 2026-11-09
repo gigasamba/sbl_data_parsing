@@ -4,10 +4,9 @@
 문서마다:
   후보 = 그 형식에 구성된 엔진 중 파싱에 성공한 것. 대표 = 정확도(parse_scoring.doc_accuracy) → 구조 풍부도 → 구성 순서.
   모두 실패하면 구성 밖 성공 엔진으로 대체(fallback) — 빠진 문서가 없게.
-  표준화(기호·첨자 표기) → 다른 후보의 표 행·키-값 보충 → 쪽·문단 보정 → 조각 투표(fragment_vote).
+  표준화(기호·첨자 표기) → 다른 후보의 표 행·키-값 보충 → 교차 병합(cross_merge — 대표 본문은 그대로, 다른 엔진에만 있는 조각을 끼움).
   스캔 쪽 채움 — .pdf_text 대표 안의 스캔 쪽만 쪽 VLM 글로(쪽 번호를 확정할 수 없거나 글이 깨졌으면 건너뜀).
   후보정(apply_post — vlm_page·figures·charts·supsub·attachments) → 표 제자리 넣기(table_inline).
-  표기가 갈린 엔진 충돌은 _rep/conflicts.jsonl에도 모은다.
 산출 = 엔진 공통 출력 계약(text·tables·facts·boxes) + "rep" — 구조화(gold_bundle)는 이것만 읽는다.
 사용: python -m pipeline.transform.represent.doc_represent [--stack stack.json] [--parse-dir output/parse]
 """
@@ -15,12 +14,15 @@
 import argparse
 import hashlib
 import json
+import re
 import time
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from common.core import span as SP
 from common.core.console import utf8_stdout
 from pipeline import config as pc
+from pipeline.shared.env_error import is_env_error
 from pipeline.shared.ext_groups import IMG_EXTS
 from pipeline.shared.pdf_kind import doc_pages
 
@@ -54,129 +56,81 @@ def _select_best(ok, pd, doc):
     return max(ok, key=score)
 
 
-def _para_has_structure(para):
-    """문단에 표(마크다운 표 패턴) 또는 그림 표식이 포함되어 있는지."""
-    stripped = para.strip()
-    if not stripped:
-        return False
-    # 표 패턴: 연속된 | 줄 (2줄 이상)
-    lines = stripped.split("\n")
-    pipe_lines = [ln for ln in lines if "|" in ln and ln.count("|") >= 1]
-    has_table = len(pipe_lines) >= 2 or any("|" in ln and ("---" in ln or "─" in ln) for ln in lines)
-    # 그림 패턴: [그림 ...] 또는 ![]( 표식
-    has_figure = "[그림" in stripped or "![" in stripped
-    return has_table or has_figure
+COVER_MIN = 0.98  # 다른 엔진 조각의 낱말이 이 비율 이상 대표(같은 쪽)에 있으면 같은 내용 — 끼우지 않음
+_SEP = re.compile(r"\f|(?:\r?\n[ \t]*){2,}")  # 조각 경계 = 쪽 나눔 또는 빈 줄(\r\n도 같은 줄 끝)
 
 
-def _merge_paragraphs(rep_text, other_texts, other_docs=None):
-    """문단별 조각 보정 — 대표 본문의 각 문단을 다른 엔진의 같은 위치 문단과 비교.
-    우선순위:
-      1) 대표 문단에 구조(표/이미지)가 없는데 다른 엔진에는 있으면 → 무조건 교체
-      2) 양쪽 모두 구조가 있으면 → 더 풍부한 엔진(표/이미지를 더 많이 인식한 엔진) 우선
-      3) 구조가 양쪽 다 없으면 → 더 긴(정보가 더 많은) 문단으로 교체
-    문단 = 빈 줄(\\n\\n) 경계 분할. 위치 매칭은 순서 기반(같은 인덱스의 문단끼리 비교).
-    반환: (보정된 본문, 교체된 문단 수)."""
-    if not other_texts or not rep_text:
-        return rep_text, 0
-    rep_paras = rep_text.split("\n\n")
-    replaced = 0
-    # other_docs가 있으면 엔진별 구조 인식 풍부도로 정렬 — 표/이미지를 더 많이 인식한 엔진 우선
-    sorted_texts = other_texts
-    if other_docs:
-        docs_list = list(other_docs.values())
-        scored = sorted(zip(other_texts, docs_list), key=lambda pair: _richness(pair[1]), reverse=True)
-        sorted_texts = [t for t, _ in scored]
-    split_others = [other.split("\n\n") for other in sorted_texts if other]  # 엔진마다 한 번만 나눔
-    for i, para in enumerate(rep_paras):
-        if not para.strip() or "\x0c" in para.lstrip():  # 문단 안·끝 쪽 나눔은 다른 엔진 글에서 자리를 못 맞춤 → 그대로
+def _words(s):
+    return re.findall(r"\w+", s.lower())
+
+
+def _blocks(text):
+    """본문 → 조각 [(시작, 끝, 쪽 번호 0부터)] — 빈 줄·쪽 나눔(\\f) 경계(소제목·표·문단이 각각 한 조각)."""
+    out, start, page = [], 0, 0
+    for m in _SEP.finditer(text):
+        if text[start : m.start()].strip():
+            out.append((start, m.start(), page))
+        page += m.group() == "\f"
+        start = m.end()
+    if text[start:].strip():
+        out.append((start, len(text), page))
+    return out
+
+
+def cross_merge(rep, other):
+    """대표 본문(rep["text"])은 그대로 두고 다른 엔진 본문(other) 조각 중 대표에 없는 것만 끼운다 → 끼운 조각 수.
+    쪽 수(\\f)가 같으면 쪽끼리, 다르면 문서 전체끼리 비교. 공백을 뺀 글이 같은 쪽은 조각 비교 없이 건너뜀(가벼운 비교 먼저).
+    조각 낱말의 COVER_MIN 이상이 대표 쪽에 있으면 같은 내용(그 조각과 드문 낱말을 가장 많이 함께 가진 대표 조각을
+    맞은 자리로 기억), 아니면 바로 앞에 맞은 대표 조각 뒤(없으면 그 쪽 첫머리)에 끼운다. 비교 전 \\r\\n → \\n."""
+    text = rep.get("text") or ""
+    otext = (other or "").replace("\r\n", "\n").replace("\r", "\n")
+    if not text.strip() or not otext.strip():
+        return 0
+    rb, ob = _blocks(text), _blocks(otext)
+    same_pages = text.count("\f") == otext.count("\f")
+    starts = [0] + [i + 1 for i, ch in enumerate(text) if ch == "\f"]
+    r_pages, o_pages = text.split("\f"), otext.split("\f")
+    inserts: dict = {}  # 대표 본문 위치 → 끼울 조각들(순서대로)
+    r_by, o_by = defaultdict(list), defaultdict(list)  # 쪽 번호 → 그 쪽 조각들(순서대로)
+    for b in rb:
+        r_by[b[2]].append(b)
+    for b in ob:
+        o_by[b[2]].append(b)
+    for p in range(len(r_pages)) if same_pages else [None]:
+        if p is None:
+            rs, os_ = rb, ob
+            same = "".join(text.split()) == "".join(otext.split())
+        else:
+            rs, os_ = r_by[p], o_by[p]
+            same = "".join(r_pages[p].split()) == "".join(o_pages[p].split())
+        if same:
             continue
-        rep_has_struct = _para_has_structure(para)
-        best_para = para
-        best_len = len(para.strip())
-        best_has_struct = rep_has_struct
-        for other_paras in split_others:
-            if i < len(other_paras):
-                cand = other_paras[i].strip()
-                if not cand:
-                    continue
-                cand_has_struct = _para_has_structure(cand)
-                # 우선순위 1: 대표에 구조 없는데 다른 엔진에 있으면 → 무조건 교체
-                if not rep_has_struct and cand_has_struct:
-                    best_para = cand
-                    best_len = len(cand)
-                    best_has_struct = True
-                    replaced += 1
-                    break  # 구조 있는 문단 찾으면 더 이상 안 봄
-                # 우선순위 2: 양쪽 다 구조 있으면 → 더 긴 것으로 (구조가 더 풍부할 가능성)
-                if rep_has_struct and cand_has_struct and len(cand) > best_len:
-                    best_para = cand
-                    best_len = len(cand)
-                    replaced += 1
-                    continue
-                # 우선순위 3: 양쪽 다 구조 없으면 → 더 긴 것으로
-                if not best_has_struct and not cand_has_struct and len(cand) > best_len:
-                    best_para = cand
-                    best_len = len(cand)
-        # 문단 첫머리 쪽 나눔(\f)은 대표 본문의 쪽 시작: 다른 엔진 문단으로 바꿔도 앞에 남긴다(안 남기면 청크 page가 비고 bbox만 남음)
-        lost = para.count("\x0c") - best_para.count("\x0c")
-        rep_paras[i] = "\x0c" * lost + best_para if lost > 0 else best_para
-    return "\n\n".join(rep_paras), replaced
-
-
-def _merge_pages(rep, other_docs):
-    """쪽(\\f 경계) 단위 보정 — 대표 엔진이 인식하지 못한 표/이미지가 있는 쪽을,
-    그 표/이미지를 인식한 다른 엔진의 같은 쪽으로 교체.
-    교체 조건: 다른 엔진이 그 쪽에 표(tables) 또는 그림(figures)을 인식했고,
-               대표 엔진은 해당 쪽에 표/그림이 없거나 더 적은 경우.
-    반환: (교체된 쪽 수, 교체 상세 목록)."""
-    if not other_docs or not rep.get("text"):
-        return 0, []
-    rep_pages = rep["text"].split("\f")
-    # 대표 엔진의 쪽별 표/그림 수 계산
-    rep_table_pages = {}
-    for t in rep.get("tables") or []:
-        p = t.get("page")
-        if p is not None:
-            rep_table_pages[p] = rep_table_pages.get(p, 0) + 1
-    rep_fig_pages = {}
-    for fig in (rep.get("post") or {}).get("figures") or []:
-        p = (fig.get("loc") or {}).get("page") or (fig.get("loc") or {}).get("slide")
-        if p is not None:
-            rep_fig_pages[p] = rep_fig_pages.get(p, 0) + 1
-
-    replaced_pages = []
-    for engine, other in other_docs.items():
-        if not other.get("text"):
-            continue
-        other_pages = other["text"].split("\f")
-        if len(other_pages) != len(rep_pages):
-            continue  # 쪽 수가 다르면 매칭 불가 — 안전하게 건너뜀
-        # 다른 엔진의 쪽별 표/그림 수
-        other_table_pages = {}
-        for t in other.get("tables") or []:
-            p = t.get("page")
-            if p is not None:
-                other_table_pages[p] = other_table_pages.get(p, 0) + 1
-        other_fig_pages = {}
-        for fig in (other.get("post") or {}).get("figures") or []:
-            p = (fig.get("loc") or {}).get("page") or (fig.get("loc") or {}).get("slide")
-            if p is not None:
-                other_fig_pages[p] = other_fig_pages.get(p, 0) + 1
-        # 각 쪽 비교 — 다른 엔진이 표/그림을 더 많이 인식한 쪽만 교체
-        for pi in range(len(rep_pages)):
-            if not rep_pages[pi].strip() or not other_pages[pi].strip():
+        have: Counter = Counter()
+        post: dict = {}  # 낱말 → 그 낱말이 있는 대표 조각 번호(rs 안)
+        for i, (s, e, _) in enumerate(rs):
+            ws = _words(text[s:e])
+            have.update(ws)
+            for w in set(ws):
+                post.setdefault(w, []).append(i)
+        last = None
+        for s, e, _ in os_:
+            seg = otext[s:e].strip()
+            c = Counter(_words(seg))
+            n = sum(c.values())
+            if n and sum(min(k, have[w]) for w, k in c.items()) >= COVER_MIN * n:
+                votes = Counter(i for w in sorted((w for w in c if w in post), key=lambda w: len(post[w]))[:5] for i in post[w])
+                if votes:
+                    last = max(votes, key=lambda i: (votes[i], -abs(i - (last or 0))))
                 continue
-            rep_rich = rep_table_pages.get(pi, 0) + rep_fig_pages.get(pi, 0)
-            other_rich = other_table_pages.get(pi, 0) + other_fig_pages.get(pi, 0)
-            if other_rich > rep_rich and other_rich > 0:
-                rep_pages[pi] = other_pages[pi]
-                replaced_pages.append({"page": pi, "engine": engine, "rep_rich": rep_rich, "other_rich": other_rich})
-                # 대표의 표/그림 정보도 업데이트
-                rep_table_pages[pi] = other_table_pages.get(pi, 0)
-                rep_fig_pages[pi] = other_fig_pages.get(pi, 0)
-    if replaced_pages:
-        rep["text"] = "\f".join(rep_pages)
-    return len(replaced_pages), replaced_pages
+            at = rs[last][1] if last is not None else (rs[0][0] if rs else starts[p or 0])
+            inserts.setdefault(at, []).append(seg)
+    for at in sorted(inserts, reverse=True):
+        segs = inserts[at]
+        before = any(b[1] == at for b in rb)  # 대표 조각 끝 = 그 뒤에 / 아니면(쪽 첫머리) 그 앞에
+        add = "".join("\n\n" + s for s in segs) if before else "".join(s + "\n\n" for s in segs)
+        text = text[:at] + add + text[at:]
+    rep["text"] = text
+    return sum(len(v) for v in inserts.values())
 
 
 def row_key(f):
@@ -383,13 +337,13 @@ def fill_scan_pages(rep, dd, doc_path, page_vlm=None):
 
 
 def status(r):
-    """runs.jsonl 기록 하나 → 상태: 성공 · 시간 초과 · 환경(미설치·미설정·연결) · 실패."""
+    """runs.jsonl 기록 하나 → 상태: 성공 · 시간 초과 · 환경(미설치·미설정 — env_error.is_env_error) · 실패."""
     e = r.get("error") or ""
     if not e:
         return "성공"
     if "Timeout" in e:
         return "시간 초과"
-    if any(k in e for k in ("미설정", "미설치", "NotFoundError", "not found", "FileNotFoundError", "SpawnError", "initialization fai")):
+    if is_env_error(e):
         return "환경"
     return "실패"
 
@@ -430,7 +384,6 @@ from common.core.artifacts import code_fp  # noqa: E402
 from common.core.contract import source_record  # noqa: E402
 from pipeline.shared import runtrace  # noqa: E402
 from pipeline.transform.figures.chart_values import chart_text  # noqa: E402
-from pipeline.transform.represent import fragment_vote as fuse_mod  # noqa: E402
 from pipeline.transform.represent import table_inline  # noqa: E402
 
 
@@ -541,7 +494,7 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
     if "attachments" in feats:
         from pipeline.transform.represent import mail_attachments as att_mod
 
-        att_blocks, att_stats = att_mod.mail_blocks(doc_path, base)
+        base, att_blocks, att_stats = att_mod.mail_blocks(doc_path, base)  # base — 오피스 개체 자리 표시만 더함(pl-63)
         blocks += att_blocks
         info["attachments_parsed"] = att_stats["parsed"]
         info["attachments_cached"] = att_stats["cached"]
@@ -587,11 +540,9 @@ def represent(stack, parse_dir, src=None):
     qa = json.loads((pd / "qa.json").read_text(encoding="utf-8"))
     out_dir = pd / "_rep"
     out_dir.mkdir(parents=True, exist_ok=True)
-    index, last, conflicts_out = [], last_runs(pd), []  # conflicts_out — 표 행 라벨 자리의 엔진 간 표기 충돌
+    index, last = [], last_runs(pd)
     side: dict = {}  # 문서 → (stage_times, 본문·facts sha) — 끝에서 _rep/<문서>.json을 다시 읽지 않게
-    from pipeline.transform.represent.crosscheck import build
 
-    meta = build(parse_dir, src) if src else {}  # 교차 확인 (라벨, 값) — 엔진별 결과가 있는 파싱 모듈에서 미리 → 구조화는 _rep만 읽음
     feats = pc.active_features()  # PARSE_POST(기본 all)
 
     def _doc_one(_pair):
@@ -638,7 +589,6 @@ def represent(stack, parse_dir, src=None):
                             "chars": len(old.get("text") or ""),
                             "figures_capped": (old.get("post") or {}).get("figures_capped", False),
                         }
-                        return None
                 except (OSError, ValueError):
                     pass  # 못 읽으면 아래 일반 경로로(성공한 엔진 없음)
             return {
@@ -650,8 +600,7 @@ def represent(stack, parse_dir, src=None):
                 "reason": "성공한 엔진 없음",
                 "tried": tried_of(doc, last, pd),
             }
-            return None
-        _t = {"load": 0.0, "merge": 0.0, "fuse": 0.0, "scanfill": 0.0, "post": 0.0, "table": 0.0, "agent": 0.0}
+        _t = {"load": 0.0, "merge": 0.0, "scanfill": 0.0, "post": 0.0, "table": 0.0}
         _t0 = time.time()
         # PARSE_REP_SELECT: first(첫 성공 엔진·파일 읽기 0) | acc(정확도만·파일 읽기 0) | best(정확도+풍부도, 기본)
         _sel = pc.cfg().transform.represent.rep_select or ""
@@ -664,13 +613,12 @@ def represent(stack, parse_dir, src=None):
         rep = json.loads((pd / best["engine"] / f"{doc}.json").read_text(encoding="utf-8"))
         _t["load"] = time.time() - _t0
         _t0 = time.time()
-        std_n = standardize_rep(rep)  # 엔진 묶음 직후·융합(facts 합치기) 전
-        best_facts_raw = [dict(f) for f in rep.get("facts") or []]  # 보충 전 대표 facts — fuse_mod가 엔진별 원본을 보게
-        other_docs = {}  # {엔진: 그 엔진 원본 결과}(fuse_mod 입력)
+        std_n = standardize_rep(rep)  # 엔진 묶음 직후·병합 전
+        other_docs = {}  # {엔진: 그 엔진 원본 결과}(table_inline 입력)
         have = {row_key(f) for f in rep.get("facts") or []}
         _t["load"] += time.time() - _t0
         _t0 = time.time()
-        texts = []  # 다른 후보 본문 — 표 머리글 칸 나눔 규칙(fix_tables) + 문단 보정 근거
+        texts = []  # 다른 후보 본문 — 교차 병합·표 머리글 칸 나눔 규칙(fix_tables) 근거
         added = 0
         for c in ok:
             if c is best:
@@ -688,17 +636,8 @@ def represent(stack, parse_dir, src=None):
                     have.add(k)
                     rep.setdefault("facts", []).append({**fact, "from": c["engine"]})
                     added += 1
-        # 쪽 단위 보정 — 대표 엔진이 표/이미지를 인식 못한 쪽을, 인식한 다른 엔진의 쪽으로 교체
-        page_merged, page_details = 0, []
-        para_merged, para_replaced = 0, 0
-        if other_docs and rep.get("text"):
-            page_merged, page_details = _merge_pages(rep, other_docs)
-        # 문단별 조각 보정 — 표/이미지를 더 많이 인식한 엔진의 문단을 우선, 같은 위치 문단 중 더 긴 것으로 교체
-        if texts and rep.get("text"):
-            merged, para_replaced = _merge_paragraphs(rep["text"], texts, other_docs)
-            if para_replaced:
-                rep["text"] = merged
-            para_merged = para_replaced
+        # 교차 병합 — 대표 본문은 그대로, 다른 엔진에만 있는 조각을 맞은 자리 뒤에 끼움(엔진 하나면 그대로)
+        merged = {e: cross_merge(rep, od.get("text")) for e, od in other_docs.items()}
         _t["merge"] = time.time() - _t0
         _t0 = time.time()
         n_ok = sum(1 for m in dd["engines"].values() if m.get("ok"))
@@ -711,24 +650,13 @@ def represent(stack, parse_dir, src=None):
             "source": source_record(src, doc) or _old_source(out_dir, doc),  # Object Storage 원본을 지운 뒤에도 이전 기록 유지
             "format": dd["format"],
             "pages": dd.get("pages"),
-            "meta": {k: (meta.get(doc) or {}).get(k, []) for k in ("pairs", "all")},
+            "meta": {},  # 인계 계약 칸(contract.REP_KEYS) — 내용은 없음(교차 확인은 pl-67에 지움)
             "facts_added": added,
             "table_fix": fix_tables(rep, texts),
             "low_n": n_ok <= LOW_N or (dd.get("n_fam", 9) <= LOW_N and dd.get("ref") not in ("truth", "answer_key")),
-            "para_merged": para_merged,  # 문단 보정으로 교체된 문단 수
-            "page_merged": page_merged,  # 쪽 보정으로 교체된 쪽 수 (표/이미지 인식 우선)
-            "page_merge_details": page_details if page_merged else [],  # 쪽별 교체 상세
-            "richness": _richness(rep),  # 대표 엔진의 구조 인식 풍부도 (tables, facts, figures, boxes)
+            "merge": merged,  # 엔진별 끼운 조각 수(교차 병합)
             "standardize": {"on": True, "changed": std_n},
         }  # standardize.on은 늘 True(형식 유지)
-        # 조각(라벨:값·표 칸) 단위 맞추기+투표(모델 호출 0)
-        engine_docs = {best["engine"]: {"facts": best_facts_raw}}
-        engine_docs.update({e: {"facts": od.get("facts") or []} for e, od in other_docs.items()})
-        rep["fused"] = fuse_mod.fuse(engine_docs, best["engine"])  # 대표 본문·기존 facts는 안 건드림 — 새 칸만 추가
-        _t["fuse"] = time.time() - _t0
-        _t0 = time.time()
-        if rep["fused"].get("conflicts"):  # 자리(행 라벨)·엔진별 원문 표기·계열 수를 conflicts.jsonl로도 모음
-            conflicts_out.append({"doc": doc, "conflicts": rep["fused"]["conflicts"]})
         source = rep["rep"]["source"]
         doc_path = Path(source["path"]) if source else None
         # 쪽 VLM은 PARSE_POST에 vlm_page가 있을 때만, 문서당 한 번만.
@@ -767,7 +695,7 @@ def represent(stack, parse_dir, src=None):
         )
         print(
             f"[represent] {doc[:50]:50s} "
-            + " ".join(f"{k}={_t[k]:.1f}s" for k in ("load", "merge", "fuse", "scanfill", "post", "table"))
+            + " ".join(f"{k}={_t[k]:.1f}s" for k in ("load", "merge", "scanfill", "post", "table"))
             + _pdetail,
             flush=True,
         )
@@ -791,9 +719,7 @@ def represent(stack, parse_dir, src=None):
         _doc, _dd = _pair
         with SP.span("transform.represent", doc_id=_doc, ext=Path(_doc).suffix.lower(), cpu=_par == 1) as _sp:
             _r = _doc_one(_pair)
-            if _r is None:
-                _sp.result("skip", None, SP.safe("대표 결과 없음"))
-            elif not _r.get("engine"):
+            if not _r.get("engine"):
                 _sp.result("fail", "doc", SP.safe(_r.get("reason")))
             _sp.add(pages=_dd.get("pages"), format=_dd.get("format"))
             _done[0] += 1
@@ -806,12 +732,9 @@ def represent(stack, parse_dir, src=None):
             import concurrent.futures as _cf  # 문서간 병렬 — ex.map 회수는 제출 순서라 index·engines.csv 순서 불변
 
             with _cf.ThreadPoolExecutor(max_workers=_par) as _ex:
-                index.extend(r for r in _ex.map(SP.carry(_doc_traced), _pairs) if r is not None)
+                index.extend(_ex.map(SP.carry(_doc_traced), _pairs))
         else:
-            for _p in _pairs:
-                _r = _doc_traced(_p)
-                if _r is not None:
-                    index.append(_r)
+            index.extend(map(_doc_traced, _pairs))
     with (out_dir / "sources.jsonl").open("w", encoding="utf-8") as f:  # 문서 ID ↔ 원본 위치 표(인계용 — 검색 결과에서 원본 찾기)
         for r in index:
             if r.get("doc_key"):
@@ -843,13 +766,10 @@ def represent(stack, parse_dir, src=None):
     (out_dir / "index.json").write_text(
         json.dumps({"stack": stack.get("name"), "docs": index, "digest": digest}, ensure_ascii=False, indent=1), encoding="utf-8"
     )
-    with (out_dir / "conflicts.jsonl").open("w", encoding="utf-8") as f:  # 값은 같은데 표기가 갈린 표 행
-        for r in conflicts_out:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
     _times = [side[d][0] for d in done]
-    _agg = {k: round(sum(t.get(k, 0) for t in _times), 1) for k in ("load", "merge", "fuse", "scanfill", "post", "table")}
+    _agg = {k: round(sum(t.get(k, 0) for t in _times), 1) for k in ("load", "merge", "scanfill", "post", "table")}
     print(
-        "[represent] 단계별 누적: " + " ".join(f"{k}={_agg[k]:.0f}s" for k in ("load", "merge", "fuse", "scanfill", "post", "table")),
+        "[represent] 단계별 누적: " + " ".join(f"{k}={_agg[k]:.0f}s" for k in ("load", "merge", "scanfill", "post", "table")),
         flush=True,
     )
     return index

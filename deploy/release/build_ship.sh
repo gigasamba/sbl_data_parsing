@@ -1,5 +1,5 @@
 #!/bin/bash
-# PC에서: 이미지 빌드 → 점검 → 압축 저장(sha256) → ssh로 수집 서버에 전송·적재 → 원격 점검(운영 이미지는 개발 서버 bake_prod_image.sh가 기본 — release-and-patch §1-2).
+# PC에서: 이미지 빌드 → 점검 → 압축 저장(sha256) → ssh로 수집 서버에 전송·적재 → 원격 점검(운영 이미지는 개발 서버 bake_prod_image.sh가 기본 — server-guide §5-4).
 #   [IMAGE_TARGET=pipeline|mcp|pipeline-runtime|mcp-runtime — 이미지 2개, *-runtime = 코드 없는 실행 이미지(코드 폴더 묶음도 만듦), 기본 pipeline]
 #   TARGET=user@수집서버 [TAG=data-pipeline:0.1.0] [REMOTE_DIR=/var/tmp] [DOCKER=docker|podman] [REMOTE_DOCKER=docker] \
 #   [BUILD_ARGS="--build-arg BASE=<사내 기반 이미지> --build-arg APT=0"] bash deploy/release/build_ship.sh
@@ -16,6 +16,8 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."                                # deploy/release/ → 저장소 루트 = 빌드 컨텍스트
 BUILD_ONLY=${BUILD_ONLY:-0}
 [ "$BUILD_ONLY" = 1 ] || TARGET=${TARGET:?TARGET=user@수집서버 를 지정(빌드만 하려면 BUILD_ONLY=1)}
+# 원격 판정(4단계)이 그 서버 PG에 붙을 설정 파일·실행 환경(e2-22) — 보내기 전에 확인
+[ "$BUILD_ONLY" = 1 ] || : "${REMOTE_SETTINGS_FILE:?REMOTE_SETTINGS_FILE=<수집 서버의 settings.yaml 절대 경로> 필요(원격 판정이 그 서버 PG에 붙음)}" "${REMOTE_RUN_ENV:?REMOTE_RUN_ENV=dev|prd 필요(prd면 DB에 쓰는 시험은 SKIP)}"
 IMAGE_TARGET=${IMAGE_TARGET:-pipeline}
 case "$IMAGE_TARGET" in
   pipeline|mcp|pipeline-runtime|mcp-runtime) ;;   # *-runtime = 코드 없는 실행 이미지(개발 서버, 코드 폴더를 APP_CODE_ROOT에 마운트)
@@ -62,7 +64,7 @@ if [ "${IMAGE_TARGET%-runtime}" = pipeline ] && ! ls assets/rapidocr/*.onnx >/de
 fi
 if [ ! -f assets/opencode/opencode ]; then   # 개발 작업 공간의 opencode(선택 — 네 이미지 모두 base 단계에서 넣음)
   [ "${ALLOW_NO_ASSETS:-0}" = 1 ] && echo "[경고] assets/opencode/opencode 없음 — ALLOW_NO_ASSETS=1로 opencode 없이 빌드" \
-    || { echo "[오류] assets/opencode/opencode 없음 — assets.py pack으로 채우거나(release-and-patch §5-6) opencode 없이 빌드하려면 ALLOW_NO_ASSETS=1"; exit 2; }
+    || { echo "[오류] assets/opencode/opencode 없음 — assets.py pack으로 채우거나(server-guide §5-3-1) opencode 없이 빌드하려면 ALLOW_NO_ASSETS=1"; exit 2; }
 fi
 
 if [ "$TAG_DEFAULT" = 1 ] && [ "${FORCE_TAG:-0}" != 1 ] && $DOCKER image inspect "$TAG" >/dev/null 2>&1; then
@@ -85,11 +87,19 @@ if [ "$RUNTIME" = 1 ]; then
   # 맨 위 폴더 755 + 모든 항목 모두가 읽기(head로 자르지 않음 — pipefail에서 tar가 SIGPIPE로 실패함)
   bad=$(tar -tvzf - < "$CODE_OUT" | awk 'NR==1 && $1 != "drwxr-xr-x" {print "맨위폴더 " $1} $1 !~ /^.r..r..r/ {print $NF}')
   [ -z "$bad" ] || { echo "[오류] 코드 폴더 묶음 권한 — 컨테이너 사용자 10001이 못 읽음: $bad"; exit 1; }
-  echo "[코드 폴더 묶음] $CODE_OUT ($(du -h "$CODE_OUT" | cut -f1)) — 서버의 벌 폴더(sbl_data_parsing-main-<번호>)로 풂(release-and-patch.md §8 — op-13)"
+  echo "[코드 폴더 묶음] $CODE_OUT ($(du -h "$CODE_OUT" | cut -f1)) — 서버의 벌 폴더(sbl_data_parsing-main-<번호>)로 풂(server-guide.md §4-5 — op-13)"
   export MSYS_NO_PATHCONV=1   # Windows Git Bash가 -v 인자를 바꾸지 않게
   RUN_ARGS="-v $(cygpath -m "$CODE_DIR" 2>/dev/null || echo "$CODE_DIR"):$APP_CODE_ROOT:ro"
 fi
-bash deploy/release/selftest_gate.sh $DOCKER run --rm $RUN_ARGS "$TAG" selftest   # 알려진 FAIL 밖 FAIL 0이어야 통과(selftest 종료 코드만 보지 않음)
+# 판정 시험의 DB 사례는 PG에 붙는다(e2-22): 설정 파일(SETTINGS_FILE 또는 루트 settings.yaml)·RUN_ENV를 주고 host 네트워크로(상주 compose와 같게).
+#   PC BUILD_ONLY: Docker Desktop 컨테이너의 127.0.0.1은 PC가 아님 — PG 주소만 host.docker.internal로 덮음(--set).
+G_SET=${SETTINGS_FILE:-$PWD/settings.yaml}
+[ -f "$G_SET" ] || { echo "[오류] 판정에 쓸 설정 파일 없음: $G_SET (SETTINGS_FILE 또는 루트 settings.yaml — PG 접속 required.pg)"; exit 1; }
+G_ARGS="--network host -v $(cygpath -m "$G_SET" 2>/dev/null || echo "$G_SET"):/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=${RUN_ENV:-local}"
+G_TAIL=""
+[ "$BUILD_ONLY" = 1 ] && G_TAIL="--set PG_HOST=host.docker.internal"
+export MSYS_NO_PATHCONV=1   # Windows Git Bash가 -v 인자를 바꾸지 않게
+bash deploy/release/selftest_gate.sh $DOCKER run --rm $G_ARGS $RUN_ARGS "$TAG" selftest $G_TAIL   # 알려진 FAIL 밖 FAIL 0이어야 통과(selftest 종료 코드만 보지 않음)
 $DOCKER run --rm $RUN_ARGS "$TAG" resources
 if $DOCKER history --no-trunc "$TAG" | grep -Eiq 'PASSWORD=[^ $]|API_KEY=[^ $]'; then echo "[오류] 이미지 기록에 비밀값 흔적"; exit 1; fi
 if [ "$BUILD_ONLY" = 1 ]; then echo "완료(빌드만): $TAG — 저장·전송 안 함(BUILD_ONLY=1)"; exit 0; fi
@@ -118,12 +128,12 @@ if [ "$RUNTIME" = 1 ]; then   # 판정용 코드 폴더를 같이 보내 붙임
   R_ARGS="-v $RCODE:$APP_CODE_ROOT:ro,z"
 fi
 ssh "$TARGET" "$REMOTE_DOCKER run --rm $R_ARGS $TAG resources"
-bash deploy/release/selftest_gate.sh ssh "$TARGET" "$REMOTE_DOCKER run --rm $R_ARGS $TAG selftest"
+bash deploy/release/selftest_gate.sh ssh "$TARGET" "$REMOTE_DOCKER run --rm --network host -v $REMOTE_SETTINGS_FILE:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=$REMOTE_RUN_ENV $R_ARGS $TAG selftest"
 cat <<EOF
 완료: $TAG
 다음(수집 서버):
   1) 공용 폴더(예 /home/sbl/)에 코드 zip을 풀어 벌 폴더(sbl_data_parsing-main-<번호>)로 두고 그 안에서 sudo bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>(op-13)
   2) <벌 폴더>/settings.yaml의 맨 위 required 빈 값을 채움(새 판 덮어쓰기면 settings.yaml·edw_chain.yaml·output/은 그대로 둠)
-  3) 띄우기·점검: README §5(host_ctl.sh up -d … → host_ctl.sh check)
+  3) 띄우기·점검: server-guide §1-5(host_ctl.sh up -d … → host_ctl.sh check)
   압축본 $REMOTE_DIR/$(basename "$OUT") 은 적재 확인 뒤 지워도 됨
 EOF

@@ -17,7 +17,7 @@
   vector 확장(없으면 멈춤, --create-extension이면 직접 생성 — PC·단독 시험만)·남의 스키마 거부(판 표 alembic_version 없음)·차원(DB와 다르면 새 PG_SCHEMA).
 · 차원은 --dim 또는 --bundle <묶음>/meta.json, 있는 스키마는 DB 차원(설정 칸 없음).
 · 적재 전 판 확인(require_current): 판 기록 없음 = 경고 뒤 계속(기준판 = 지금 스키마), 끝보다 낮거나 모르는 판 = 거부. MCP(읽기)는 안 봄.
-· SQLite 대체(pg_standin)는 판 관리 밖 — 표 정의에서 바로 만든다(standin_script). 접속 값은 settings.yaml(common.store.pg.conf).
+· 접속 값은 settings.yaml(common.store.pg.conf — 비면 채울 자리를 적고 멈춤).
 · 비밀값·행 값은 찍지 않는다(카탈로그·판 번호만)."""
 
 import argparse
@@ -144,7 +144,7 @@ def _require_one(q, target, schema):
     if st == "없음":
         print(
             f"[migrate] 경고: {schema} 판 기록 없음(alembic_version) — 기준판과 같은 스키마로 보고 계속. "
-            "판 기록이 있는 새 스키마로 올려 전체를 다시 적재(docs/operations/release-and-patch.md §5-5)",
+            "판 기록이 있는 새 스키마로 올려 전체를 다시 적재(docs/operations/server-guide.md §1-8)",
             file=sys.stderr,
             flush=True,
         )
@@ -411,26 +411,6 @@ def check(target, schema, conn=None):
     return status(_q(conn), target, schema)
 
 
-# ── SQLite 대역(pg_standin) — 판 관리 밖, 표 정의에서 바로 ───────────────────────────────
-def standin_script(schema, dim):
-    """원천 스키마 하나(`<기준>_<원천>`)를 PostgreSQL 꼴 DDL 글자로(표 정의에서 컴파일 + 뷰) — pg_standin이 DDL 묶음으로 받아 SQLite로
-    번역한다(첫 문장 CREATE SCHEMA로 DDL 묶음임을 알아봄). 대역은 스키마마다 파일 하나라 공용 시퀀스를 흉내 내지 않고(자동 번호) HNSW 색인도 넣지 않는다."""
-    from sqlalchemy.dialects import postgresql
-    from sqlalchemy.schema import CreateIndex, CreateTable
-
-    from common.store.db.models import search_tables as ST
-
-    md = ST.search_metadata(schema, dim, shared_seq=False)
-    _, src = ST.split_schema(schema)
-    d = postgresql.dialect()
-    parts = [f"CREATE SCHEMA IF NOT EXISTS {schema}"]
-    for t in md.tables.values():  # 정의 순서(doc·chunk·…)
-        parts.append(str(CreateTable(t, if_not_exists=True).compile(dialect=d)).strip())
-        parts += [str(CreateIndex(i, if_not_exists=True).compile(dialect=d)).strip() for i in sorted(t.indexes, key=lambda i: i.name)]
-    parts.append(ST.view_ddl(src).replace("{S}", schema))
-    return ";\n".join(parts) + ";\n"
-
-
 # ── 명령 ─────────────────────────────────────────────────────────────
 def _dim_arg(a):
     if a.dim is not None:
@@ -492,10 +472,6 @@ def main(argv=None):
         schema_of("applog", a.schema)  # 스키마 이름 거부는 접속 확인보다 먼저
     if a.sql:
         return up_sql(a, a.sql)
-    from common.store.pg import has_conn
-
-    if not has_conn():
-        raise DbToolError("PG 접속 정보 없음(settings.yaml required.pg) — SQLite 대역은 판 관리 밖(표 정의에서 바로 만듦)")
     if a.cmd == "master":
         schema, h = master_load(a.schema, a.dir)
         print(f"[migrate] master {schema}: glossary.csv로 채움 · 해시 {h[:8]}")

@@ -26,9 +26,6 @@ from common.config.settings import (
 
 
 class PipelineConnectionsRdbColumns(Section):
-    content_version: str | None = F(
-        "content_version_id", "RDB_COL_CONTENT_VERSION", "RDB 문서 위치 표에서 문서 판(content version) ID 열의 이름", blank="keep"
-    )
     doc_id: str | None = F("id", "RDB_COL_DOC_ID", "RDB 문서 위치 표에서 문서 ID 열의 이름", blank="keep")
     filename: str | None = F("original_filename", "RDB_COL_FILENAME", "RDB 문서 위치 표에서 원본 파일 이름 열의 이름", blank="keep")
     key: str | None = F("s3_key", "RDB_COL_KEY", "RDB 문서 위치 표에서 Object Storage 키(s3_key) 열의 이름", blank="keep")
@@ -50,17 +47,24 @@ class PipelineConnectionsRdb(Section):
     columns: PipelineConnectionsRdbColumns = Field(default_factory=PipelineConnectionsRdbColumns)
 
 
-class PipelineConnectionsSecureDoc(Section):
-    passwords_file: str | None = F(
-        None, "SECURE_DOC_PASSWORDS_FILE", "암호 걸린 문서용 암호 목록 파일 경로(한 줄에 암호 하나) — 비우면 암호 문서는 못 열고 건너뜀"
-    )
-
-
 class PipelineExtractAttach(Section):
-    max_depth: int | None = F(1, "ATTACH_MAX_DEPTH", "메일 등 첨부 안의 첨부를 따라갈 최대 깊이(단계)")
-    max_mb: float | None = F(20.0, "ATTACH_MAX_MB", "첨부 1개당 크기 상한(MB, 넘으면 건너뜀)")
-    max_n: int | None = F(10, "ATTACH_MAX_N", "문서 하나에서 처리할 첨부 개수 상한(개)")
+    max_depth: int | None = F(
+        2,
+        "ATTACH_MAX_DEPTH",
+        "문서 안 문서(압축 안 파일·메일 첨부·오피스 개체)를 꺼낼 최대 깊이 — 원본에서 종류가 섞여도 같이 셈(단계, pl-63)",
+    )
+    max_mb: float | None = F(20.0, "ATTACH_MAX_MB", "메일 첨부·오피스 개체 1개당 크기 상한(MB, 넘으면 건너뜀)")
+    max_n: int | None = F(10, "ATTACH_MAX_N", "메일·오피스 문서 하나에서 꺼낼 첨부·개체 개수 상한(개)")
     timeout: float | None = F(120.0, "ATTACH_TIMEOUT", "첨부 1개를 별도 프로세스로 파싱할 때 제한 시간(초)")
+
+
+class PipelineExtractArchive(Section):
+    max_total_mb: float | None = F(
+        2048.0, "ARCHIVE_MAX_TOTAL_MB", "압축 원본 하나의 풀린 크기 합계 상한(MB, 넘으면 archive_too_big으로 건너뜀 — 안전 상한)"
+    )
+    max_files: int | None = F(
+        1000, "ARCHIVE_MAX_FILES", "압축 원본 하나의 안 파일 수 상한(개, 넘으면 archive_too_big으로 건너뜀 — 안전 상한)"
+    )
 
 
 class PipelineExtractCache(Section):
@@ -261,7 +265,6 @@ class PipelineExtract(Section):
     )
     rapidocr_page_workers: int | None = F(1, "RAPIDOCR_PAGE_WORKERS", "rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개)")
     rotated_max: int | None = F(20, "PARSE_ROTATED_MAX", "쪽 VLM 후보로 올릴 '회전된 쪽' 상한(쪽 수) — 0이면 rotation.csv를 안 읽음")
-    skipped_log: str | None = F(None, "PARSE_SKIPPED_LOG", "건너뛴 문서(암호 PDF 등) 기록 jsonl 경로")
     text_page_sec: float | None = F(
         10.0, "PARSE_TEXT_PAGE_SEC", "글자 엔진(VLM 아님) 문서×엔진 1건의 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
     )
@@ -269,6 +272,7 @@ class PipelineExtract(Section):
         2000, "TABLE_GRID_MAX_ROWS", "표 grid JSON에 담는 최대 행 수(개) — 넘으면 앞부분만 자르고 truncated 표시"
     )
     warmup_sec: float | None = F(60.0, "PARSE_WARMUP_SEC", "엔진 첫 문서의 제한 시간 하한(초) — import·모델 적재 여유")
+    archive: PipelineExtractArchive = Field(default_factory=PipelineExtractArchive)
     attach: PipelineExtractAttach = Field(default_factory=PipelineExtractAttach)
     cache: PipelineExtractCache = Field(default_factory=PipelineExtractCache)
     ocr: PipelineExtractOcr = Field(default_factory=PipelineExtractOcr)
@@ -379,7 +383,6 @@ class PipelinePaths(Section):
 
 class PipelineConnections(Section):
     rdb: PipelineConnectionsRdb = Field(default_factory=PipelineConnectionsRdb)
-    secure_doc: PipelineConnectionsSecureDoc = Field(default_factory=PipelineConnectionsSecureDoc)
 
 
 class PipelineService(Section):

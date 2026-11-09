@@ -13,8 +13,6 @@ def selftest():
         "parse": {".txt": ["plaintext"]},
         "embed": "api",
         "chunk": "structure",
-        "retrieve": "hybrid",
-        "k": 10,
     }
     assert engines_of({**body, "parse": {".txt": ["plaintext", "markitdown"]}}) == ["markitdown", "plaintext"] and not engine_problems(body)
     bad = {**body, "parse": {".txt": ["no_such_engine_xyz"]}}

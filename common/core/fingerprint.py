@@ -24,7 +24,7 @@ _ROOT = Path(__file__).resolve().parent.parent  # 공용 패키지 루트(common
 HANDOFF_FILES = (
     "core/contract.py",  # 인계 형식 자체(_rep REP_KEYS·bundle CHUNK_KEYS/DOC_KEYS 스키마, jl() 읽기) + doc_key(file_sha256)·chunk_key
     # — structure·load가 시작 전에 이걸로 거부 판정, parse·structure가 독립적으로 다시 계산해 맞춤
-    "core/repfmt.py",  # (라벨,값) 쌍 추출·계약번호/고객 정규식 — parse(crosscheck→_rep meta.pairs)가 뽑고 structure(gold_bundle.py AQ.pick)가 같은 규칙으로 해석
+    "core/repfmt.py",  # _rep 본문의 원문 위치(locate — 쪽·줄·소제목)·표 행 해석 — structure(청크 위치)가 parse 본문 형식대로 읽음
     "core/terms.py",  # 고객 명부·별칭·모달리티 — parse(융합)·structure(사실 추출)·load(계약 연결)가 "같은 규칙"으로 명시(docstring)
     "core/text.py",  # 토큰·정규화 규칙 — structure(색인 본문 chunk_term)·search(질의 토큰)이 반드시 같아야 함(docs/architecture.md §2)
 )
@@ -46,7 +46,6 @@ EXCLUDED_FILES = (
     "core/parse_limit.py",  # parse_document 파일 크기 상한 — 서비스 입구만, 인계 내용과 무관
     "core/fingerprint.py",  # 이 파일 자신 — CONTRACT는 따로 버전으로 확인, pipeline_version()은 인계 내용과 무관
     "config/boot.py",  # 컨테이너 시작 설정(entrypoint의 RUN_ENV 관문·셸 칸·라이브러리 env) — 운영 도구
-    "config/overrides.py",  # 덮기 파일 만들기(PC 한 번 실행) — 운영 도구
     "config/setarg.py",  # 명령 인자 --set 이름=값(한 번 실행 덮기, 서버 포함) — 운영 설정, 인계 내용과 무관
     "config/layout.py",  # settings.yaml 칸 자리 ↔ 모델 경로 — 운영 설정, 인계 내용과 무관
     "config/keyscan.py",  # 설정 키 모으기 — 개발 점검 도구, 인계 내용과 무관
@@ -67,7 +66,6 @@ EXCLUDED_FILES = (
     "core/paths.py",  # cli 평가 도구 경로 기본값 + 원자적 파일 쓰기 헬퍼(쓰는 방식만·내용은 안 바꿈)
     "store/pg.py",  # PostgreSQL 연결 설정
     "store/edw_chain.py",  # EDW 조인 사슬 파일 읽기·검사(적재 edw_meta·검색 거르기 이름) — 인계 형식과 무관
-    "store/pg_standin.py",  # pg.py의 연결 정보 없을 때 스탠드인(sqlite) — 연결 방법만, 핸드오프 내용과 무관(pg.py가 shared라 같이 있음)
     "store/master.py",  # 마스터 표(용어집·고객 명부) 읽기·채우기 — DB 연결·표 내용, 인계 형식과 무관(terms.py가 읽은 값으로 판별)
     "core/resources.py",  # 실행 자원(CPU·메모리) 판단 — 병렬 수 결정만
     "core/jsonlog.py",  # JSON 사건 기록·상관 ID — 인계 내용과 무관

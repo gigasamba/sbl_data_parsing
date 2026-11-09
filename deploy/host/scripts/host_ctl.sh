@@ -106,6 +106,7 @@ PY
 # check — 이미 있는 점검을 차례로(새 점검 없음). 처음 실패에서 멈추고 마지막 한 줄 "[host_ctl check] 통과 — N개" 또는 "[host_ctl check] 실패 — <단계>: <안내>".
 #   ① check_env ② ping_models ③ migrate check --target all(pipe_exec.sh — 상주 data-pipeline 안) ④⑤ selftest_gate.sh(두 이미지 — "[판정] 통과" 줄로 판정)
 #   ⑥ mcp_keepalive.sh(/health). 검색 근거가 필요한 MCP 호출(mcp_smoke)은 넣지 않음 — 첫 적재 전에는 근거가 없음(§8-3 7 손 확인).
+#   개발 서버(RUN_ENV=dev)는 개발자 벌마다 data-pipeline 하나만 띄우므로 ①~④만(검색 MCP 이미지·/health는 운영 서버에서).
 #   DC_FAKE=<명령>이면 각 단계를 `<명령> <단계 이름>`으로 바꿔 부른다(시험용 — 출력·종료 코드를 그대로 판정).
 dc_check() {
   local n=0 name out rc
@@ -125,14 +126,17 @@ dc_check() {
   }
   local vol=()
   _vol() { vol=(); case "$1" in *-runtime:*) vol=(-v "$(pwd):$APP_CODE_ROOT:ro,z") ;; esac; }   # 실행 이미지(개발)는 이 코드 폴더를 붙임
-  # shellcheck disable=SC2086 — DOCKER는 낱말 나눔(sudo podman)
-  _step check_env "출력의 FAIL 줄 확인(server-guide §2)" bash deploy/host/scripts/pipe_exec.sh check_env || return 1
+  # 판정 시험의 DB 사례는 서버 PG에 붙는다(e2-22 — prd는 읽기만): 상주 컨테이너(compose x-settings)와 같은 설정 파일·host 네트워크·RUN_ENV
+  local gate=(--network host -v "${SETTINGS_FILE:?SETTINGS_FILE 필요 — load_settings}:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e "RUN_ENV=${RUN_ENV:?RUN_ENV 필요 — load_settings}")
+  # shellcheck disable=SC2086 — DOCKER는 낱말 나눔(sudo docker)
+  _step check_env "출력의 FAIL 줄 확인(server-guide §1-9)" bash deploy/host/scripts/pipe_exec.sh check_env || return 1
   _step ping_models "모델 주소·키(settings.yaml required.models) — 서버는 내부망 모델만" bash deploy/host/scripts/pipe_exec.sh ping_models || return 1
-  _step "migrate check" "migrate up --target all · master load(upgrade-guide §6)" bash deploy/host/scripts/pipe_exec.sh migrate check --target all || return 1
+  _step "migrate check" "migrate up --target all · master load(server-guide §4-7)" bash deploy/host/scripts/pipe_exec.sh migrate check --target all || return 1
   _vol "${DATA_PIPELINE_IMAGE:-}"
-  _step "selftest data-pipeline" "FAIL 줄의 시험 이름으로 원인 찾기(release-and-patch §3)" bash deploy/release/selftest_gate.sh $DOCKER run --rm ${vol[@]+"${vol[@]}"} "${DATA_PIPELINE_IMAGE:-}" selftest || return 1
+  _step "selftest data-pipeline" "FAIL 줄의 시험 이름으로 원인 찾기(server-guide §5-5)" bash deploy/release/selftest_gate.sh $DOCKER run --rm "${gate[@]}" ${vol[@]+"${vol[@]}"} "${DATA_PIPELINE_IMAGE:-}" selftest || return 1
+  if [ "${RUN_ENV:-}" = dev ]; then echo "[host_ctl check] 통과 — ${n}개(개발 서버 — data-pipeline만)"; return 0; fi
   _vol "${MCP_SERVER_IMAGE:-}"
-  _step "selftest mcp-server" "FAIL 줄의 시험 이름으로 원인 찾기(release-and-patch §3)" bash deploy/release/selftest_gate.sh $DOCKER run --rm ${vol[@]+"${vol[@]}"} "${MCP_SERVER_IMAGE:-}" selftest || return 1
+  _step "selftest mcp-server" "FAIL 줄의 시험 이름으로 원인 찾기(server-guide §5-5)" bash deploy/release/selftest_gate.sh $DOCKER run --rm "${gate[@]}" ${vol[@]+"${vol[@]}"} "${MCP_SERVER_IMAGE:-}" selftest || return 1
   _step "검색 MCP" "\`$DOCKER logs $MCP_CNAME\` 마지막 줄 — mcp_keepalive.sh가 다시 띄웠는데도 /health 응답 없음" bash deploy/host/scripts/mcp_keepalive.sh || return 1
   echo "[host_ctl check] 통과 — ${n}개"
 }
@@ -140,17 +144,21 @@ dc_check() {
 # timers — systemd 단위 4개(deploy/host/systemd — 새벽 배치·MCP 살리기)의 코드 폴더 자리(@CODE_DIR@)를 이 코드 폴더로 채워
 #   /etc/systemd/system에 쓰고 두 타이머를 켠다. 다른 코드 폴더에서 다시 부르면 그 폴더로 바뀐다(벌 번호가 다르면 단위 이름도 따로). root가 아니면 종료 3.
 #   DC_UNIT_DIR=<폴더>는 /etc/systemd/system 대신(시험용 — root 확인·systemctl을 건너뜀).
+#   개발 서버(RUN_ENV=dev)는 검색 MCP를 띄우지 않으므로 새벽 배치 단위 2개만(MCP 살리기 없음).
 dc_timers() {
-  local dest=${DC_UNIT_DIR:-/etc/systemd/system} u n
+  local dest=${DC_UNIT_DIR:-/etc/systemd/system} u n t timers=(data-pipeline-nightly)
+  [ "${RUN_ENV:-}" = dev ] || timers+=(mcp-server-keepalive)
   if [ "$(id -u)" != 0 ] && [ -z "${DC_UNIT_DIR:-}" ]; then
     echo "[host_ctl timers] root로 실행할 것(sudo) — /etc/systemd/system에 쓴다" >&2; return 3
   fi
-  for u in deploy/host/systemd/*.service deploy/host/systemd/*.timer; do   # 여러 벌이면 단위 이름 끝에 -<벌 번호>(타이머·서비스 짝이 같은 이름)
-    n=$(basename "$u"); n="${n%.*}$NAME_SUFFIX.${n##*.}"
-    sed "s#@CODE_DIR@#$(pwd)#g" "$u" > "$dest/$n" && echo "  씀  $dest/$n" || return 1
+  for t in "${timers[@]}"; do
+    for u in "deploy/host/systemd/$t.service" "deploy/host/systemd/$t.timer"; do   # 여러 벌이면 단위 이름 끝에 -<벌 번호>(타이머·서비스 짝이 같은 이름)
+      n=$(basename "$u"); n="${n%.*}$NAME_SUFFIX.${n##*.}"
+      sed "s#@CODE_DIR@#$(pwd)#g" "$u" > "$dest/$n" && echo "  씀  $dest/$n" || return 1
+    done
   done
   [ -n "${DC_UNIT_DIR:-}" ] && return 0
-  systemctl daemon-reload && systemctl enable --now "data-pipeline-nightly$NAME_SUFFIX.timer" "mcp-server-keepalive$NAME_SUFFIX.timer"
+  systemctl daemon-reload && systemctl enable --now "${timers[@]/%/$NAME_SUFFIX.timer}"
 }
 
 case "${1:-}" in
@@ -187,5 +195,5 @@ for f in ${extra[@]+"${extra[@]}"}; do
   [ -f "$f" ] || { echo "[host_ctl] ops.host.extra_compose 파일 없음: $f — 만들거나 settings.yaml에서 지울 것" >&2; exit 2; }
   files="$files -f $f"
 done
-# shellcheck disable=SC2086 — DOCKER(sudo podman처럼 두 낱말)·파일 인자는 낱말 나눔
+# shellcheck disable=SC2086 — DOCKER(sudo docker처럼 두 낱말)·파일 인자는 낱말 나눔
 exec $DOCKER compose -p "$COMPOSE_PNAME" $files "$@"   # 묶음 이름 — 한 벌은 compose 기본(폴더 이름 compose) 그대로, 여러 벌은 compose-<벌 번호>

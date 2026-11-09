@@ -93,15 +93,16 @@ def test_root_is_code_folder():
 
 def test_timers():
     """host_ctl.sh timers가 단위 파일 4개의 @CODE_DIR@를 이 코드 폴더로 채워 쓴다(DC_UNIT_DIR — systemctl 없음).
-    여러 벌(루트 이름 끝 -<숫자>)이면 단위 이름 끝에 -<숫자>(타이머·서비스 짝이 같은 이름)."""
+    여러 벌(루트 이름 끝 -<숫자>)이면 단위 이름 끝에 -<숫자>(타이머·서비스 짝이 같은 이름).
+    개발 서버(dev)는 새벽 배치 2개만(검색 MCP를 띄우지 않아 MCP 살리기 없음), 운영 서버(prd)는 4개."""
     bash = _need_bash()
     if not bash:
         return
     src = sorted(p.name for p in (SCRIPT.parents[1] / "systemd").iterdir())
-    for inst in ("", "2"):
+    for inst, run_env in (("", "prd"), ("2", "dev"), ("", "dev")):
         with tempfile.TemporaryDirectory() as d:
             sf = Path(d) / "settings.yaml"
-            sf.write_text("required:\n  env: {run_env: dev}\n", encoding="utf-8")
+            sf.write_text(f"required:\n  env: {{run_env: {run_env}}}\n", encoding="utf-8")
             units_dir = Path(d) / "units"
             units_dir.mkdir()
             sp = _posix(sf)
@@ -110,15 +111,15 @@ def test_timers():
                 "SETTINGS_FILE": sp,
                 "SETTINGS_LOADED": sp,
                 "RAG_ROOT": _posix(Path(d) / f"sbl_data_parsing-main{'-' + inst if inst else ''}"),  # 루트 이름 끝 -<숫자> = 벌 번호
-                "MCP_PORT": "8775",
-                "DATA_PARSING_PORT": "8776",
+                "RUN_ENV": run_env,  # load_settings가 내던 값(위 파일과 같음)
             }
             r = _run(bash, ["timers"], env)
             assert r.returncode == 0, r.stderr + r.stdout
             suffix = f"-{inst}" if inst else ""
             units = sorted(p.name for p in units_dir.iterdir())
-            assert units == sorted(n.replace(".", suffix + ".", 1) for n in src) and len(units) == 4, units
-            for name in ("data-pipeline-nightly.service", "mcp-server-keepalive.service"):
+            want = [n for n in src if run_env != "dev" or n.startswith("data-pipeline-nightly")]
+            assert units == sorted(n.replace(".", suffix + ".", 1) for n in want) and len(units) == (2 if run_env == "dev" else 4), units
+            for name in [n for n in want if n.endswith(".service")]:
                 text = (units_dir / name.replace(".", suffix + ".", 1)).read_text(encoding="utf-8")
                 assert "@CODE_DIR@" not in text and f"WorkingDirectory={_posix(SCRIPT.parents[3])}\n" in text, (name, text)
                 assert "DOCKER=" not in text, (name, "컨테이너 도구는 settings.yaml ops.host.container_cli — unit이 덮지 않음")
@@ -131,9 +132,10 @@ FAKE = """case "$1" in
   *) echo "ok $1" ;;
 esac
 """
-# (FAIL 단계, NOJUDGE, 컨테이너가 꺼진 단계, 기대 종료 코드, 마지막 줄 시작, 나오면 안 되는 단계)
+# (FAIL 단계, NOJUDGE, 컨테이너가 꺼진 단계, 기대 종료 코드, 마지막 줄 시작, 나오면 안 되는 단계[, RUN_ENV — 없으면 dev])
 CHECK_CASES = [
-    ("", "", "", 0, "[host_ctl check] 통과 — 6개", None),
+    ("", "", "", 0, "[host_ctl check] 통과 — 4개(개발 서버 — data-pipeline만)", "── selftest mcp-server"),  # 개발 서버 — 검색 MCP 단계 없음
+    ("", "", "", 0, "[host_ctl check] 통과 — 6개", None, "prd"),
     ("migrate check", "", "", 1, "[host_ctl check] 실패 — migrate check:", "── selftest data-pipeline"),
     (
         "",
@@ -164,10 +166,11 @@ def test_check():
         fake.write_text(FAKE, encoding="utf-8", newline="\n")
         sf = Path(d) / "settings.yaml"
         sf.write_text("required:\n  env: {run_env: dev}\n", encoding="utf-8")
-        for fail, nojudge, down, rc, last, absent in CHECK_CASES:
+        for fail, nojudge, down, rc, last, absent, *run in CHECK_CASES:
             env = {
                 "SETTINGS_FILE": _posix(sf),
                 "SETTINGS_LOADED": _posix(sf),  # 이미 읽은 것으로 — settings_to_env.py를 부르지 않음
+                "RUN_ENV": run[0] if run else "dev",  # load_settings가 내던 값 — 판정 명령이 -e RUN_ENV로 넘김(e2-22)
                 "DOCKER": "echo",
                 "DC_FAKE": f"bash {_posix(fake)}",
                 "FAIL": fail,

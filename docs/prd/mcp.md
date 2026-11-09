@@ -33,7 +33,7 @@
   - `attrs: {키: 값 또는 목록}` — 그 원천 `doc.attrs`(JSONB)의 키로 정확 일치(키끼리 AND, 목록 OR). 받는 키 = 사슬 파일(`resources/config/edw_chain.yaml`) `fields`에서 `filter`가 있는 키 + `doc_class`(SFDC·LAS). 모르는 키는 `{"error"}`에 그 원천의 키 목록을 담는다. SQL은 `attrs @> %s::jsonb`(GIN 색인).
   - 이름 있는 거르기 `project_id`·`division`·`service_type`·`doc_class`·`sf_op_id`·`sf_op_name`·`contract_id`는 사슬의 `filter:`로 attrs 키에 이어진다(예 `project_id` → `project_code__c`). 그 원천에 이어진 키가 없으면 0건. `FAQ_group`은 청크 칸.
 - 출력:
-  - 맨 위 5칸(`SEARCH_TOP_KEYS`): `question` · `evidence[]`(최대 k) · `evidence_status`(`found`·`weak`·`none`) · `filter`(정규화한 거르기 메아리 — 빈 값 뺌, `-test` 뗌) · `scope_docs`(맞은 문서 수). `filter`·`scope_docs`는 늘 나온다.
+  - 맨 위 5칸(`SEARCH_TOP_KEYS`): `question` · `evidence[]`(최대 k) · `evidence_status`(`found`·`weak`·`none`) · `filter`(정규화한 거르기 메아리 — 빈 값 뺌, `-test` 뗌) · `scope_docs`(맞은 문서 수 — 거르기가 `source_system`뿐이면 재적재 확인(기본 30초 간격)이 세어 둔 그 원천 스키마의 문서 수를 쓰고, 없을 때만 직접 센다). `filter`·`scope_docs`는 늘 나온다.
   - 근거 13칸(`EVIDENCE_KEYS`, 값이 없으면 null): `text` · `file_name`(원본 경로의 마지막 조각) · `file_path`(Object Storage 원본 전체 경로) · `page` · `line` · `section` · `client`(= `client_edw`) · `contract_no`(사슬에서 `filter: contract_id`인 키의 값) · `doc_date`(gold `doc.content_date`) · `version`(수집 manifest 값만) · `superseded`(늘 null) · `chunk_key`(`<doc_id>:<seq>` — `doc_id`는 스키마 5벌이 함께 쓰는 시퀀스) · `attrs`(사슬에서 `evidence: true`인 키 모두 — 근거 키가 없는 FAQ·Other는 null).
 - 운영과 다른 점:
   - 거르기 값은 모두 글자 하나 또는 목록(운영 명세는 `client`만 목록).
@@ -75,7 +75,7 @@
   5. 적재 판이 바뀌면 원천마다 Retriever와 색인 정보를 다시 읽는다(`server_state`).
 - 데이터: 판 `0004_doc_embed`(5벌 `doc`에 `content_date TEXT`·`embed_model TEXT`, `corpus_stat.dim` 없음) — [architecture/db_schema.md](../architecture/db_schema.md).
 - 파일: `mcp_server/services/search/{retriever,pgsearch,server_state}.py`.
-- QA: `tests/server/mcp/` 검색 시험(SQLite 대역 `tests/server/mcp/pgfix.py`) · 통과. 서버 확인 refactor.md C-87.
+- QA: `tests/server/mcp/` 검색 시험(실 pgvector 임시 스키마 `tests/server/mcp/pgfix.py`) · 통과. 서버 확인 refactor.md C-87.
 - Status: done
 
 <a id="mc-10"></a>
@@ -105,12 +105,12 @@
 - 규칙:
   1. 목록: 원천 스키마 5벌 + 있는 DEV 원천 스키마(dev·local — op-17)(또는 `source_system`이 고른 하나 — 개발 서버는 있는 `DEV-<숫자>`도, prd는 5개 값만)의 gold `doc`에서 거른다 — `source_system`·`doc_class`·`sf_op_id`(둘은 `attrs` 키)·`created_since/until`·`docs`. 공용 `doc_id` 순으로 합치고 `cursor` = 마지막 `doc_id`.
   2. `docs` 항목은 파일 이름(확장자 포함 — 경로 끝 조각) · 원본 전체 경로(정확히 하나) · 64자 `doc_key`(`doc.sha256`) 중 하나.
-  3. 결과 폴더 = 그 `doc` 행 `silver_key`의 폴더(`silver_bucket` 안). 폴더가 없는 값이면 목록을 보지 않는다.
+  3. 결과 폴더 = 그 `doc` 행 `silver_key`의 폴더(`silver_bucket` 안). 폴더가 없는 값이면 목록을 보지 않는다. 돌려줄 문서들의 폴더 목록은 동시에(8개씩) 보고, 결과는 행 순서 그대로다.
   4. 파일 = 결과 폴더 바로 아래 최신 `<이름>_<parse_date>.md`·`.json`만(`engine/`·`source.json` 제외). 출력 `doc_key` = `doc.sha256`, `source_system` = 스키마 원천 이름(`SFDC`·`DEV-1` 등 — 입력 값과 같은 꼴).
   5. `since`/`until`(게시 시각)은 `doc.parsed_at`으로 같은 질의에서 거른다.
   6. sfid = `sf1.<base64url(버킷/키)>.<HMAC-SHA256>`, 서명 키 `required.tokens.fulltext_sign_key`.
-  7. `get_doc_fulltext`의 등록 시각 가드: sfid 폴더 → 그 폴더를 `silver_key`로 가진 gold `doc`의 `created_at`.
-  8. 한도: `docs` 200 · `limit` 기본 50, 상한 200 · get 한 번 20개 · 파일 16 MiB(`too_large`) · 합계 24 MiB(나머지 `batch_full`) · 파일 하나 60초.
+  7. `get_doc_fulltext`의 등록 시각 가드: sfid의 대표 결과 .md 키(.json이면 같은 이름 .md)를 `silver_key`로 가진 gold `doc`의 `created_at` — 요청한 키 전부를 원천 스키마마다 질의 한 번으로 읽는다.
+  8. 한도: `docs` 200 · `limit` 기본 50, 상한 200 · get 한 번 20개 · 파일 16 MiB(`too_large`) · 합계 24 MiB(나머지 `batch_full`) · 저장소 호출 하나 25초(실패면 한 번 더). 크기 확인·받기는 동시에(8개씩) 하되 판정과 출력 순서는 요청한 순서대로다(한 개씩 받을 때와 같은 결과).
   9. 오류: 서명 키가 비면 `not_configured` · 키를 바꾸면 옛 sfid는 `bad_sfid` · PG(gold `doc`)를 못 읽으면 `registry_unavailable` · Object Storage를 못 읽으면 `source_storage_unavailable` · 처리 기록(`silver_key`)이 없는 적재 문서는 `no_files`.
 - 운영과 다른 점:
   - `rep_engine` 출력 없음.
@@ -121,7 +121,7 @@
   - 등록 시각 가드는 검색 DB(gold `doc.created_at`)에서 읽는다.
   - `docs`에 원본 전체 경로도 받는다.
 - 파일: `mcp_server/routers/fulltext_tool.py`, `mcp_server/services/fulltext_svc.py`, `mcp_server/schemas/fulltext.py`.
-- QA: `tests/server/mcp/test_fulltext.py`(gold `doc`는 SQLite 대역 — 처리 기록 칸에서 읽음 · 출력 모양 그대로) · `test_dev_search.py`(`FULLTEXT` 표 — DEV 입력) · 통과. 서버 확인 refactor.md C-75.
+- QA: `tests/server/mcp/test_fulltext.py`(gold `doc`는 실 pgvector 임시 스키마 — 처리 기록 칸에서 읽음 · 출력 모양 그대로) · `test_dev_search.py`(`FULLTEXT` 표 — DEV 입력) · 통과. 서버 확인 refactor.md C-75.
 - Status: done
 
 <a id="mc-06"></a>
@@ -172,8 +172,9 @@
 <a id="mc-09"></a>
 ## mc-09 · 서버 실행과 안전
 - 이유: 공용 내부 서비스라 계속 떠 있어야 하고 위험한 노출은 거부해야 한다.
-- 규칙: FastMCP streamable HTTP(`/mcp`, 기본 `search.server.mcp_bind_host` 127.0.0.1 · `mcp_port` 8765) 또는 `--stdio`. loopback이 아닌 주소는 `required.tokens.mcp_token` 필요(상수 시간 비교), 0.0.0.0 거부, DNS 리바인딩 가드(`search.server.mcp_allowed_hosts`). `/health`(준비 중이면 503). 도구 동시 8(`search.server.mcp_max_concurrent_tools`) + 대기열, 도구 한 번 30초. 새 적재 판이면 다시 읽는다. 호출 감사 기록은 [ops.md#op-01](ops.md#op-01).
-- 파일: `mcp_server/main.py`, `mcp_server/services/tool_runner.py`, `mcp_server/config.py`.
+- 규칙: FastMCP streamable HTTP(`/mcp`, 기본 `search.server.mcp_bind_host` 127.0.0.1 · `mcp_port` 8765) 또는 `--stdio`. loopback이 아닌 주소는 `required.tokens.mcp_token` 필요(상수 시간 비교), 0.0.0.0 거부, DNS 리바인딩 가드(`search.server.mcp_allowed_hosts`). `/health`(준비 중이면 503). 도구 동시 8(`search.server.mcp_max_concurrent_tools`) + 대기열(`mcp_max_queued_tools`, 비우면 자리 수 × 4 — 차면 바로 `busy`), 도구 한 번 30초. `parse_document`와 `get_doc_fulltext`는 공용 자리를 쓰지 않고 도구마다 자기 자리 2개 + 같은 규칙의 대기열을 쓴다(파싱은 오래 걸리고, 원문 받기는 한 번에 최대 24 MiB를 메모리에 올린다). `parse_document`는 `time_out_threshold`만큼 기다리되 10분에서 자른다. 안쪽 제한은 모두 도구 30초보다 짧다 — PG 질의 하나 25초(`tuning.search.server.mcp_pg_statement_timeout_sec` — 검색 MCP 풀만, 넘으면 `timeout`) · 질의 임베딩 호출 하나 25초(연결·시간 초과면 한 번 더) · 원문 도구의 저장소 호출 하나 25초(실패면 한 번 더). 시간 초과로 응답한 뒤에도 끊지 못한 작업 스레드는 정말 끝날 때까지 자기 자리를 쥔다(그동안 새 요청은 그 자리를 기다린다). 요청 안에서 난 `SystemExit`(설정 거부 등)는 그 요청의 도구 오류로 돌려주고 서버는 계속 뜬다. 질의 임베딩은 프로세스 안 LRU(2048개)로 다시 쓴다(캐시 파일 없음). 원문 도구 저장소 연결 풀 16(get 자리 2 × 동시 8). 끊긴 풀 연결은 꺼낼 때 새 연결로 한 번 바꾸고, 그래도 DB에 닿지 못하면 `db_unavailable`(원문 도구는 `registry_unavailable` 그대로). 새 적재 판이면(`tuning.search.server.mcp_reload_check_sec` 30초마다 확인) 검색기를 다시 만든다 — 판 확인 질의가 실패하면 안 바뀐 것으로 보고 그대로 둔다. PG 연결 풀은 프로세스에 하나이고 다시 만들 때도 그대로 쓴다. 호출 감사 기록은 [ops.md#op-01](ops.md#op-01).
+- 파일: `mcp_server/main.py`, `mcp_server/services/tool_runner.py`, `mcp_server/config.py`, `common/store/pg.py`(`PGPool`).
+- QA: `tests/server/mcp/test_tool_runner.py`(`test_db_errors` · `test_own_slots` — 자기 자리 2개·셋째 대기·대기열 차면 `busy`) · `tests/server/mcp/test_server_state.py`(`test_reload_keeps_pool` — 확인 실패는 그대로·판이 바뀌면 다시·풀 하나·질의 제한 25초) · `test_tool_runner.py::test_slot_held`·`test_db_errors`(`SystemExit` → 오류) · `tests/server/common/test_embed.py`(LRU) · `test_rank_rules.py::test_embed_retry` · `test_fulltext.py::test_storage_client` · `tests/general/common/test_pg.py`(`test_pool_options`) · 통과.
 - Status: done
 
 <a id="mc-20"></a>
@@ -196,18 +197,14 @@
 쓰지 않는 칸은 고칠 때 헷갈리게 한다.
 
 ### 규칙
-1. `mcp_server/services/search/question_type.TYPE_TABLE`은 (유형 이름, 단서 정규식) 쌍만 가진다 — 첫 도구·검색 설정 칸은 없다. `classify()`는 유형 이름 하나를 낸다. 검색이 읽는 것은 `rank_rules.weights()`의 `aggregate` 판정(BM25 가중을 표 집계용으로)이고, 다른 유형은 정확도 점검(`resources/vocab/qtype_labels.json`)만 쓴다.
+1. `mcp_server/services/search/question_type.py`는 집계 질문 단서 `AGGREGATE_RE`(건수·합계·최대/최소·평균) 하나만 가진다. 검색이 읽는 것은 `rank_rules.weights()`의 집계 판정(BM25 가중을 표 집계용으로)뿐이다.
 
 ### QA
-- `tests/server/mcp/test_question_type.py` — 질문 → 유형 사례 표 + 고정 세트 정확도. MCP 도구 계약은 그대로.
+- `tests/server/mcp/test_question_type.py` — 질문 → 집계 여부 사례 표. MCP 도구 계약은 그대로.
 - 반영: 0.3.0(11-05).
 - Status: done
 
 ## 코드와 다른 점 · 지울 코드
-
-### 요건 없는 코드 — 남길지 지울지
-- 질문 개체로 동점 가르기(늘 켬). `search_svc.py`.
-- PG 대역(PG 접속 칸이 없으면 SQLite — PC·이미지 selftest). `common/store/pg_standin.py`.
 
 ### 설정이 있어야 도는 것
 | 기능 | 필요한 것 |

@@ -10,7 +10,7 @@
 #   값을 바꿀 때는 settings.yaml을 직접 고친다(앱은 env 이름을 읽지 않음 · 덮기 파일 도구는 PC 전용).
 set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트
-. deploy/host/scripts/load_settings.sh && load_settings || exit $?   # DOCKER(셸 env > ops.host.container_cli > podman)
+. deploy/host/scripts/load_settings.sh && load_settings || exit $?   # DOCKER(셸 env > ops.host.container_cli > docker)
 . deploy/host/scripts/in_container.sh
 
 tool=${1:?도구 이름 — 예: parse·publish·check_env·migrate·show-stack}; shift || true

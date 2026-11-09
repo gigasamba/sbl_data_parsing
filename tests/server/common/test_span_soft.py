@@ -23,7 +23,7 @@ def _capture():
 
 
 def _reset_warn():
-    span._FAIL.update(count=0, warned=False)
+    span._FAIL.update(warned=False)
 
 
 def test_emit_oserror_keeps_ok_block_ok():
@@ -36,7 +36,7 @@ def test_emit_oserror_keeps_ok_block_ok():
                 with span.span("extract.parse", doc_id="a.pdf") as sp:
                     sp.add(pages=1)
                     value = 42
-    assert value == 42 and span.failure_count() == 3
+    assert value == 42
     assert buf.getvalue().count("[applog]") == 1 and "EACCES" in buf.getvalue()
 
 
@@ -131,7 +131,7 @@ def test_span_api_misuse_is_soft_but_result_validation_kept():
     with patched, redirect_stderr(io.StringIO()), jsonlog.context(run_id=str(uuid.uuid4())):
         with span.span("embed.bundle") as sp:
             assert sp.observe("x", "not-a-number").add_wait(mem_ms="x").set(pages=1) is sp
-    assert rows[0]["status"] == "ok" and span.failure_count() >= 2
+    assert rows[0]["status"] == "ok"
 
 
 def test_run_start_end_failures_are_soft():
@@ -147,7 +147,6 @@ def test_run_start_end_failures_are_soft():
             assert str(ex) == "진짜 오류"
         else:
             raise AssertionError("업무 예외가 삼켜짐")
-    assert span.failure_count() >= 2
 
 
 def test_run_progress_thread_survives_and_never_raises():

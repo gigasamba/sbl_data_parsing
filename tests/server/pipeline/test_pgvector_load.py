@@ -186,17 +186,16 @@ def test_require_vectors():
 
 def test_embed_guard():
     """pl-51 — 묶음 임베딩 모델이 검색 스키마의 기존 문서 모델과 다르면 적재 거부(종료 2 · 아무것도 안 씀 · pipe_event 한 행).
-    SQLite 대역 · 임시 폴더만(외부 접속 없음). 첫 적재는 모델 m-A로 문서 a."""
+    실 pgvector 임시 스키마(`test_*`). 첫 적재는 모델 m-A로 문서 a."""
     import json
     import shutil
     import tempfile
     from pathlib import Path
     from unittest.mock import patch
 
-    from common.config.settings import COMMON
     from common.store import logsink
-    from common.store import pg_standin as PS
-    from common.store.db.dbtool import standin_script
+    from tests.server.common import pgcase
+    from tests.server.pipeline.goldseed import gold
     from tests.server.pipeline.test_pl13_no_prune import DIM, _bundle
 
     def bundle(path, model, tmp):
@@ -209,12 +208,10 @@ def test_embed_guard():
         ("같은 모델 다른 표기(openai/ 앞붙이) — 적재", "openai/m-A", False),
         ("다른 모델 — 거부", "m-B", True),
     ]
-    S, tmp = "orca_pl51_t", Path(tempfile.mkdtemp())
+    tmp = Path(tempfile.mkdtemp())
     try:
-        with COMMON.env(PG_STANDIN_DIR=str(tmp / "pg")):
-            db, sf = PS.StandinPG(S), PS.StandinPG(f"{S}_sfdc")
-            with sf.cn.cursor() as cur:
-                cur.execute(standin_script(f"{S}_sfdc", DIM))
+        with gold(DIM) as S:
+            db = sf = pgcase.connect(S)
             M.load(db, bundle("SFDC/u/a.txt", "m-A", tmp))
             for i, (case, model, refused) in enumerate(cases):
                 path = f"SFDC/u/n{i}.txt"
@@ -232,5 +229,6 @@ def test_embed_guard():
                     table, row = emit.call_args.args
                     assert table == "pipe_event" and row["status"] == "fail" and row["err_kind"] == "env", row
                     assert "embed_model_mismatch" in row["err"] and "m-A" in row["err"] and "m-B" in row["err"], row
+            db.cn.close()
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

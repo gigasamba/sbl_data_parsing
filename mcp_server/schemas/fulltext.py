@@ -16,4 +16,4 @@ LIST_LIMIT_DEFAULT, LIST_LIMIT_MAX = 50, 200  # 쪽 크기(넘으면 200으로 �
 GET_FILES_MAX = 20  # get 한 번에 sfid 수(0개·넘으면 bad_request)
 FILE_MAX_BYTES = 16 * 1024 * 1024  # 파일 하나 원본 상한 — 넘으면 too_large
 BATCH_MAX_BYTES = 24 * 1024 * 1024  # 한 번 합계 상한 — 차면 나머지 batch_full
-FILE_TIMEOUT_SEC = 60  # 파일 하나 받기 시간 상한
+FILE_TIMEOUT_SEC = 25  # 저장소 호출 하나(목록·크기 확인·받기) 시간 상한 — 도구 시간 상한(30초) 안, 실패면 한 번만 더

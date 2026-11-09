@@ -16,7 +16,7 @@
   (개발 PC) PYTHONPATH=. python deploy/release/assets.py pack           → assets/ 채움(아래 SOURCES 경로에서) + MANIFEST.json
   (서버)    python /app/docker/assets.py install [--python <venv python>]  → 합치기·해시 확인·제자리 복사·휠 설치
             PYTHONPATH=. python deploy/release/assets.py check → 설치 상태만 표로
-paddle·mineru·임베딩(bge-m3 등)은 크기·venv가 달라 여기 없음. 준비 가이드: docs/operations/release-and-patch.md §5-6.
+paddle·mineru·임베딩(bge-m3 등)은 크기·venv가 달라 여기 없음. 준비 가이드: docs/operations/server-guide.md §5-3-1.
 """
 
 import argparse
@@ -65,11 +65,8 @@ def sources():
 
 
 def sha(p):
-    h = hashlib.sha256()
     with open(p, "rb") as f:
-        for b in iter(lambda: f.read(1 << 20), b""):
-            h.update(b)
-    return h.hexdigest()
+        return hashlib.file_digest(f, "sha256").hexdigest()
 
 
 def pack():

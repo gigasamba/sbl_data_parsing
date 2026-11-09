@@ -8,17 +8,13 @@
 | [PRD.md](PRD.md) · [prd/extract.md](prd/extract.md) · [prd/transform.md](prd/transform.md) · [prd/transform-cleanup.md](prd/transform-cleanup.md) · [prd/load.md](prd/load.md) · [prd/load-schema.md](prd/load-schema.md) · [prd/mcp.md](prd/mcp.md) · [prd/ops.md](prd/ops.md) · [prd/ops-settings.md](prd/ops-settings.md) · [prd/test.md](prd/test.md) · [prd/doc.md](prd/doc.md) | 기능 요건 — 카테고리 7개: 수집, 변환(정리·지문 배치는 transform-cleanup), 적재(DB 스키마는 load-schema), 검색 MCP, 운영(설정은 ops-settings), 테스트, 문서·릴리스. PRD.md는 묶음 표와 지금 진행 중. 카테고리 파일 끝에 요건과 다른 코드·요건 없는 코드 | 기능을 고치거나 더하기 전에, 할 일을 고를 때 |
 | [CLAUDE.md](../CLAUDE.md) | 작업 규칙 — 지문·계약·운영 가드, 경계·이름, 배포 환경 규칙, 로컬 하네스·점검 명령 | 작업을 시작하기 전에 늘 |
 | [refactoring/refactor.md](refactoring/refactor.md) | 서버·사람이 확인할 열린 사항(C-xx) — 무엇을 돌리고 무엇이 통과인지 | 서버 배포 전후, 담당자와 협의할 때 |
-| [operations/server-guide.md](operations/server-guide.md) | 서버 가이드 — 이미지 역할, 설치·첫 실행, 일상 실행, 결과 확인, 문제 해결 | 서버를 설치·운영할 때 |
+| [operations/server-guide.md](operations/server-guide.md) | 서버 가이드 한 문서 — §0 환경별 실행 명령(local · dev · prd, 직접 명령과 `host_ctl.sh`) · §1 새 서버 설치 · §2 개발 서버의 개발자 벌 · §3 일상 운영·문제 해결 · §4 새 판 올리기 · §5 릴리스·운영 이미지 굽기 · §6 gitea | 서버를 설치·실행·운영·올리거나 이미지를 만들 때 |
 | [operations/mcp-guide.md](operations/mcp-guide.md) | 검색 MCP 도구 6개의 입력·출력·한도·오류·예(표는 `tests/general/mcp/test_mcp_guide.py`가 코드와 대조) | MCP 클라이언트를 붙이거나 도구 입출력을 바꿀 때 |
 | [operations/env-guide.md](operations/env-guide.md) | 설정 작성 가이드 — 서버·PC `settings.yaml`의 자리·권한·키·기본값 | 설정 값을 채우거나 바꿀 때 |
-| [operations/release-and-patch.md](operations/release-and-patch.md) | 릴리스 — 실행 이미지 + 코드 폴더(개발 서버)·운영 굽기(`bake_prod_image.sh`)·selftest 반입 판정, EDW 사슬 파일 고치기(§8)·서버에서 만드는 파일(§9) | 새 판을 만들거나 서버에 넣을 때 |
-| [operations/upgrade-guide.md](operations/upgrade-guide.md) | 운영 중인 서버를 새 판으로 올리기 — 판 확인·백업·새 이미지·새 코드 덮어쓰기·`migrate up`·다시 처리·점검·되돌리기 | 돌고 있는 서버의 판을 바꿀 때 |
-| [operations/handover-guide.md](operations/handover-guide.md) | 개발 서버 인수인계 — 벌 폴더 만들기·settings.yaml·컨테이너 띄우기·점검·DB 판·`DEV-<숫자>` 문서 한 번 처리·검색 확인·로그·이름 바꾸기·두 번째 벌·정리를 차례로(명령과 성공 출력) | 개발 서버를 처음 맡았을 때, 자기 벌을 새로 만들 때 |
-| [operations/gitea-guide.md](operations/gitea-guide.md) | 내부망 코드 관리(gitea) — 개발자별 clone·벌 | 내부망 gitea를 쓰거나 서버 코드 변경을 합칠 때 |
 | [architecture/db_schema.md](architecture/db_schema.md) | DB 스키마 명세 — gold(원천별 5벌 — 처리 기록 칸 포함)·EDW(`AI.FileStorageMap` — 읽기만)·마스터(`<스키마>_master`)·`applog`. 시험 `tests/server/common/test_db_schema.py`가 판·SQL과 대조 | DB 표·칸을 바꾸거나 DB 담당자와 협의할 때 |
 | [architecture/resources.md](architecture/resources.md) | 코드가 읽는 자료 — §1 엔진 구성 파일(`resources/config/pipeline_stack.json` — 모양 검사·바꾸기·되돌리기·엔진 거부) · §2 AI 지시서 패키지(`resources/prompts/` + 답변 점검 `rag_qa` — 찾는 순서·구성·캐시 열쇠·입출력·호출부) | 엔진 구성을 바꾸거나 지시서·LLM·VLM 호출부를 볼 때 |
 | [architecture/parse_flow.md](architecture/parse_flow.md) | 파싱 실행 흐름 — 입구(`run_pipeline.py`·`pipeline.cli`) → extract → transform → load → 검색 MCP를 단계별 그림(mermaid)과 파일 역할 표로, 단계별 산출물·캐시 열쇠, 설정·로그·출력 폴더 | 코드가 실제로 어떤 순서로 도는지, 결과가 어디에 쌓이는지 볼 때 |
-| [history/](history/) | 지난 기록(보관만 — 고치지 않음) — 예 0.2.0 배포 절차 [history/deploy_0_2_0.md](history/deploy_0_2_0.md). [refactoring/refactor_plan.md](refactoring/refactor_plan.md)는 옮긴 곳 안내 | 옛 결정(`D-xxx`·`P-xx`)·이력을 찾을 때 |
+| [history/](history) | 지난 기록(보관만 — 고치지 않음) — 예 0.2.0 배포 절차 [history/deploy_0_2_0.md](history/deploy_0_2_0.md). [refactoring/refactor_plan.md](refactoring/refactor_plan.md)는 옮긴 곳 안내 | 옛 결정(`D-xxx`·`P-xx`)·이력을 찾을 때 |
 
 ## 예외
 
@@ -47,7 +43,7 @@
 | 말 | 뜻 |
 |---|---|
 | 묶음(번들) | 구조화 결과 폴더(`docs.jsonl`·청크·벡터) — 적재의 입력(검색은 PG만 읽는다) |
-| 대역 | PC에서 외부 시스템을 흉내 내는 것(EDW sqlite `valid_env/edw/edw.sqlite`, PG 대역 SQLite) |
+| 대역 | PC에서 외부 시스템을 흉내 내는 것(EDW sqlite `valid_env/edw/edw.sqlite` — PG는 대역 없이 PC 시험 pgvector 컨테이너) |
 | 스택 | 파일 형식마다 도는 엔진 목록(`resources/config/pipeline_stack.json`) |
 | represent | 엔진 결과 중 대표를 고르고 고치는 단계 |
 | flow 러너 | 서버 호스트의 문서별 실행기 `run_pipeline.py` — 레인 light·medium·vlm, staging(미리 받기) |

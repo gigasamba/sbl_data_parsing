@@ -93,7 +93,7 @@ def _selftest_pg_schema():
     real_connect = psycopg.connect
     psycopg.connect = lambda **kw: FakeConn()
     try:
-        # S7c — pg.conf()·has_conn()가 설정 객체(COMMON)로 읽으므로 객체에 겹쳐 씀(os.environ 안 건드림)
+        # S7c — pg.conf()가 설정 객체(COMMON)로 읽으므로 객체에 겹쳐 씀(os.environ 안 건드림)
         with C.COMMON.env(PG_HOST="x", PG_PORT="5432", PG_DB="x", PG_USER="x", PG_PASSWORD="x", PG_SCHEMA="ai_test"):
             script.update(schema_exists=True, usage_ok=True, create_ok=False, create_db=False)
             buf = io.StringIO()

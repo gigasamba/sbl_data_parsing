@@ -47,7 +47,6 @@ from common.config.settings import (
     list_sep,
     load,
     overlay_file,
-    overridden,
     pin_env,
     put,
     read_yaml,
@@ -399,21 +398,10 @@ def selftest():
         )
         check("child_env(): 자식 env만 새 덮기 파일(부모 값 그대로) · 앞 put 값 이어받음", child_ok)
         check("덮기 파일 이어받기: 상대 base는 그 덮기 파일 폴더 기준(임시 폴더로 옮겨도 원본을 찾음)", rel_ok)
-        # 덮기 파일 — 서버는 overrides 도구 막음(코드 안 child_env는 그대로) · 손으로 쓴 YAML 값 · 서버 거부
-        from common.config import overrides as OV
-
+        # 덮기 파일 — 코드 안 child_env는 서버에서도 그대로 · 손으로 쓴 YAML 값 · 서버 거부
         srv = d / "srv"
         srv.mkdir()
         (srv / "settings.yaml").write_text(_new("common:\n  run_env: dev\n  models:\n    embed:\n      timeout: 7\n"), encoding="utf-8")
-        blocked = (
-            OV.server_run_env(environ={"RUN_ENV": "dev"}) == "dev"
-            and OV.server_run_env(environ={"SETTINGS_FILE": str(srv / "settings.yaml")}) == "dev"
-            and OV.server_run_env(base=srv / "settings.yaml", environ={}) == "dev"
-            and OV.server_run_env(environ={"RUN_ENV": "local", "SETTINGS_FILE": str(srv / "settings.yaml")}) is None
-            and raises(lambda: OV.server_run_env(environ={"RUN_ENV": "prod"}), "RUN_ENV")[0]
-        )
-        (srv / "typo.yaml").write_text(_new("common:\n  run_env: prod\n"), encoding="utf-8")
-        blocked = blocked and raises(lambda: OV.server_run_env(base=srv / "typo.yaml", environ={}), "RUN_ENV")[0]  # --base도 같은 규칙
         senv = {"RUN_ENV": "dev", "SETTINGS_FILE": str(srv / "settings.yaml")}  # 컨테이너 안 꼴(env RUN_ENV·SETTINGS_FILE = 붙인 파일)
         ce_srv = child_env(senv, EMBED_TIMEOUT="13", PIPE_PROCS=None)
         ce_doc = read_yaml(ce_srv["SETTINGS_FILE"])
@@ -422,10 +410,7 @@ def selftest():
             and Path(str(ce_doc["base"])) == (srv / "settings.yaml").absolute()
             and ce_srv["RUN_ENV"] == "dev"
         )
-        check(
-            "덮기 파일 도구는 서버(env·원본 파일 run_env가 dev·prd, 모르는 글자)면 막음 · 코드 안 child_env는 서버에서도 그대로(base = 붙인 파일 경로)",
-            blocked and srv_child,
-        )
+        check("코드 안 child_env는 서버에서도 그대로(base = 붙인 파일 경로)", srv_child)
         (d / "ovb.yaml").write_text(
             f"base: {tf}\noverrides:\n  LLM_FAKE: true\n  EMBED_TIMEOUT: 9\n  LLM_MODEL: true\n  VLM_MODEL: 1.10\n  PM_PREFIX: 0123\n",
             encoding="utf-8",
@@ -471,11 +456,6 @@ def selftest():
         check(
             "env의 옛 설정 이름 알림 없음(0.2.0 — pl-46: 알림을 지움)",
             "PIPE_PROCS" not in buf.getvalue() and "RAG_ROOT" not in buf.getvalue(),
-        )
-        check(
-            "overridden()(R-11): 지금 덮기 파일의 overrides 이름만(공유 settings.yaml 값은 아님)",
-            overridden({"SETTINGS_FILE": str(d / "ovb.yaml")}) == {"LLM_FAKE", "EMBED_TIMEOUT", "LLM_MODEL", "VLM_MODEL", "PM_PREFIX"}
-            and overridden({"SETTINGS_FILE": str(tf)}) == frozenset(),
         )
         check(
             "dropped(): 형식 틀려 버린 옛 env 이름을 알림",

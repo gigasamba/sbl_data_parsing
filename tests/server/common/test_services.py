@@ -1,12 +1,10 @@
 """PG 연결 고르기(common.store.pg) 자기 점검.
-PG 접속 칸이 비면 거부(채울 자리를 적음 — 자동 탐지 없음), --local이 아니면 로컬로 빠지지 않음."""
-
-import types
+PG 접속 칸이 비면 거부(채울 자리를 적음 — 자동 탐지 없음), 이름이 아니라 붙어서 능력 확인."""
 
 import common.store.pg as _pgmod
 from common.ai.guard import require_internal
 from common.config.settings import isolated
-from common.store.pg import _pg_capable, conf, connect, detect_pg
+from common.store.pg import _pg_capable, conf, detect_pg
 
 _FULL = dict(PG_HOST="h", PG_PORT="5432", PG_DB="d", PG_USER="u", PG_PASSWORD="x", PG_SCHEMA="ai")
 
@@ -33,12 +31,8 @@ def selftest():
     with isolated(**{**_FULL, "PG_HOST": None, "PG_DB": None}):
         msg = _refused(conf)
         assert "required.pg.pg_host" in msg and "required.pg.pg_database" in msg and "required.pg.pg_port" not in msg, msg
-        assert _refused(lambda: connect(types.SimpleNamespace(pg=False, local=False)))  # --local이 아니면 PG 필수
     with isolated(**_FULL):
         assert conf()["PG_HOST"] == "h" and conf()["PG_DB"] == "d"
-    a = types.SimpleNamespace(pg=True, local=True)
-    connect(a)  # --local은 PG를 보지 않음
-    assert a.pg is False
 
     # 능력 확인(이름이 아니라 붙어서 vector 확장·스키마 확인)
     class _FakePG:
@@ -60,11 +54,8 @@ def selftest():
         with isolated(**{**_FULL, "PG_PORT": "9999"}):
             ok, why = detect_pg()
             assert not ok and why == "h:9999: vector 확장 없음", why
-            assert "PostgreSQL에 붙지 못함" in _refused(lambda: connect(types.SimpleNamespace(pg=False, local=False)))
         with isolated(**{**_FULL, "PG_PORT": "9998"}):
-            a = types.SimpleNamespace(pg=False, local=False)
-            connect(a)
-            assert a.pg is True and detect_pg() == (True, "h:9998")
+            assert detect_pg() == (True, "h:9998")
     finally:
         _pgmod.PG = real_pg
 

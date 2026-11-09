@@ -84,7 +84,7 @@ def expand_query(q, glossary=None, aliases=None, draft_glossary=None):
     (길이 내림·이름 오름).
     draft_glossary(기본 None → load_draft_glossary(), 즉 output/ 자동 draft CSV의 status=draft 행 — GLOSSARY_DIR/
     마스터 domain_terms가 아님) — 사람 승인 없이 쌓인 새 이름 후보도 BM25에 weak(0.3)로만(승격
-    전엔 approved 취급 안 함 — match_clients·하드 필터에는 안 들어간다, _aliases()는 마스터 domain_terms approved
+    전엔 approved 취급 안 함 — 하드 필터에는 안 들어간다, _aliases()는 마스터 domain_terms approved
     org_client만 봄)."""
     terms = {t: 1.0 for t in tokens(q)}
     notes = []
@@ -159,7 +159,7 @@ def _script(name):
 
 def vector_alias_text(q, aliases=None):
     """SI43⑤ — 벡터 질의 임베딩 입력에만 명부 별칭의 다른 표기를 덧붙인다(원문 q는 그대로 돌려주지 않고, 호출부가
-    표시·BM25에는 원문을 계속 쓰고 이 함수의 반환값은 임베딩 호출 한 곳에만 — retriever.py _search_ex). 배경: 한글 질문 '셀트리온' ↔ 영어 문서 'Celltrion'처럼 BM25는 expand_query가 토큰을 맞춰 주지만
+    표시·BM25에는 원문을 계속 쓰고 이 함수의 반환값은 임베딩 호출 한 곳에만 — retriever.py Retriever.search). 배경: 한글 질문 '셀트리온' ↔ 영어 문서 'Celltrion'처럼 BM25는 expand_query가 토큰을 맞춰 주지만
     벡터는 원문 그대로라 표기가 다르면 각 언어 임베딩이 멀어질 수 있다 — 질문에 나온 표기(명부 쪽, _name_hit로
     조사 포함 탐지)를 찾으면 같은 고객의 '다른 문자 체계' 표기만(_script — 한글 [가-힣] vs 라틴 [A-Za-z], 둘 다
     아니면 비교 불가로 건너뜀) 결정적 순서(이름 오름차순)로 괄호에 덧붙인다(같은 문자 체계 별칭은 BM25

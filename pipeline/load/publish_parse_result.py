@@ -20,7 +20,7 @@ settings.sample.yaml `load.publish`·`required`). PC는 버킷 `file://<폴더>`
 ④ gold에 이미 끝난 문서는 올리기 전에 걸러 아예 올리지 않는다(`apply()` — 같은 문서의 결과 폴더가 쌓이지 않게). `--reparse` 목록만 예외(새 날짜 폴더).
 ⑥ DRM·파싱 실패(`EXCLUDED_STATUSES`)는 `render_excluded_report()`로 마크다운 보고서만.
 
-상태(parse_status) = ok · partial(교차 정확도 < criteria.json run.cross_acc_full) · failed · skipped_drm(DRM·암호 래핑) ·
+상태(parse_status) = ok · partial(교차 정확도 < criteria.json run.cross_acc_full) · failed · skipped_document(받기가 뺀 원본 — DRM·암호·미지원·깨진 압축, except_docs.PERMANENT) ·
 skipped_dup(dedup keep.txt에서 빠짐) · not_parsed(이번 파싱 대상 아님). 원본은 게시 뒤 지워지므로 ok·partial도 로컬 원본이 없을 수
 있다 — 그때는 manifest의 "sha256"(candidate_ready가 남김)으로 대체한다(parse_status는 그대로).
 
@@ -42,28 +42,23 @@ from common.config import settings as C  # common 칸(VLM_MODEL·OS_*) · 비밀
 from common.core import span as SP  # 성능 span
 from common.core.console import utf8_stdout
 from common.core.contract import file_hash, jl, safe_filename, safe_path_join
+from common.core.fingerprint import pipeline_version
 from common.core.paths import APP_ROOT, CRITERIA_FILE
 from pipeline import config as pc
+from pipeline.shared.except_docs import PERMANENT
 
 ROOT = APP_ROOT  # output/ 등 런타임 경로용
-_KST = datetime.timezone(datetime.timedelta(hours=9))  # parsed_at 표기(적재 created_at과 같은 시간대 — 대역 글자 비교도 맞음)
+_KST = datetime.timezone(datetime.timedelta(hours=9))  # parsed_at 표기(적재 created_at과 같은 시간대)
 _CROSS_ACC_FULL = json.loads(CRITERIA_FILE.read_text(encoding="utf-8"))["run"][
     "cross_acc_full"
 ]  # partial 사유 글자도 같은 정본(판정은 parse_scoring이 이미 함)
-STATUSES = ("ok", "partial", "failed", "skipped_drm", "skipped_dup", "not_parsed")
+STATUSES = ("ok", "partial", "failed", "skipped_document", "skipped_dup", "not_parsed")
 DEFAULT_UPLOAD_STATUSES = ("ok", "partial")  # 안전 기본값 — DRM·실패·중복·미파싱은 올리지 않음
-EXCLUDED_STATUSES = ("skipped_drm", "failed")  # ⑥ render_excluded_report()로(실패는 except_doc_info error에도)
+EXCLUDED_STATUSES = ("skipped_document", "failed")  # ⑥ render_excluded_report()로(실패는 except_doc_info error에도)
 SILVER_FILE = "silver.jsonl"  # <out>/publish/ 아래 처리 기록 — 적재가 gold doc 칸으로(pgvector_load --silver)
 
 
 sha256_of = file_hash
-
-
-def pipeline_version():
-    """버전 — common.pipeline_version()(저장소 루트 VERSION·오버레이 패치 PATCH_VERSION 중 높은 것, 실행 보드와 같은 규칙)."""
-    from common import pipeline_version as _pv
-
-    return _pv()
 
 
 def today():
@@ -165,10 +160,10 @@ def _local_md_name(row):
 
 
 def status_of(name, rep_by_doc, summary, skipped=None, keep=None):
-    """문서 하나의 파싱 상태 — skipped(이름→drm_*·encrypted_* 사유, filter_and_rotate의 skipped.jsonl)·
+    """문서 하나의 파싱 상태 — skipped(이름→사유, filter_and_rotate의 skipped.jsonl — except_docs.PERMANENT로 시작하면 skipped_document)·
     keep(dedup keep.txt에 있는 이름 집합, None = dedup 정보 없음 → 전부 포함) 순서로 먼저 걸러진 뒤 대표 결과(rep)를 본다."""
-    if skipped and name in skipped and str(skipped[name]).startswith(("drm", "encrypted")):
-        return "skipped_drm", skipped[name], None
+    if skipped and name in skipped and str(skipped[name]).startswith(PERMANENT):
+        return "skipped_document", skipped[name], None
     if keep is not None and name not in keep:
         return "skipped_dup", "완전 중복으로 제외(dedup keep.txt에 없음)", None
     r = rep_by_doc.get(name)
@@ -437,7 +432,8 @@ def render_excluded_report(entries):
 
 def apply(entries, storage, md_dir, prefix="", done=frozenset()):
     """업로드(.md — 같은 이름이 이미 있으면 덮어쓰지 않고 접미사로 새 이름) → (결과 숫자, 처리 기록 행 목록).
-    done = gold에 끝난 원본 키(gold_docs.done_keys) — 그 문서는 올리지 않는다(`--reparse` 목록만 예외). 실패(failed)는 except_doc_info error.
+    done = gold에 끝난 원본 키(gold_docs.done_keys) — 그 문서는 올리지 않는다(`--reparse` 목록만 예외). 실패(failed)는 except_doc_info error,
+    올린 문서는 except_doc_info silver(골드 적재가 성공하면 지움 — pl-68).
     entries = plan()의 반환값 그대로. md_dir: .md를 잠깐 썼다가 올린 뒤 바로 지우는 로컬 폴더.
     각 행에 "upload_result"를 채운다: "uploaded"(이 실행이 새로 올림) · "excluded"(PM_UPLOAD_STATUSES 밖이거나 렌더할 대표 결과가 없음) ·
     "exists"(gold에 이미 끝남 — 올리지 않음). 처리 기록 행 = 올린 문서마다 {doc_name, source_key, sha256, silver_bucket, silver_key(.md 객체),
@@ -505,6 +501,14 @@ def apply(entries, storage, md_dir, prefix="", done=frozenset()):
     ]
     if errors:
         except_docs.note_error(errors)  # 기록만 — 실패해도 게시는 계속
+    if silver:  # pl-68 — 골드 적재가 성공하면 지움(남으면 실버만 있는 문서)
+        except_docs.record_silver(
+            [
+                {"source_key": e["row"]["source_key"], "source_system": e["row"]["source_system"], "file_name": e["doc_name"]}
+                for e in entries
+                if e.get("upload_result") == "uploaded"
+            ]
+        )
     result = {
         "uploaded": uploaded,
         "upload_excluded": excluded,
@@ -529,9 +533,6 @@ class LocalFolderStore:
         if not p.exists():
             return None
         return {"size": p.stat().st_size, "etag": hashlib.md5(p.read_bytes()).hexdigest()}
-
-    def exists(self, key):
-        return self.head(key) is not None
 
     def put(self, local_path, key):
         dst = safe_path_join(self.root, key)
@@ -561,9 +562,6 @@ class S3Store:
                 return None
             raise
 
-    def exists(self, key):
-        return self.head(key) is not None
-
     def put(self, local_path, key):
         self.cli.upload_file(str(local_path), self.bucket, key)
 
@@ -583,10 +581,7 @@ def _load_inputs(out, manifest, source_dir, rep, summary, skipped, keep):
     source_dir = Path(source_dir) if source_dir else out / "_source_files"
     rep = Path(rep) if rep else out / "parse" / "_rep" / "index.json"
     summary = Path(summary) if summary else out / "parse" / "parse_summary.json"
-    if not skipped:  # filter_and_rotate가 기록을 prepared/_records/에 씀(예전 자리 prepared/skipped.jsonl도 읽음)
-        new, old = out / "prepared" / "_records" / "skipped.jsonl", out / "prepared" / "skipped.jsonl"
-        skipped = new if new.exists() or not old.exists() else old
-    skipped = Path(skipped)
+    skipped = Path(skipped) if skipped else out / "prepared" / "_records" / "skipped.jsonl"  # filter_and_rotate가 쓰는 자리
     keep = Path(keep) if keep else out / "dedup" / "keep.txt"
     if not manifest.exists():
         raise SystemExit(f"[publish_parse] manifest 없음 — {manifest}(Object Storage·RDB 기원 파싱만 대상, 폴더 직접 파싱은 PM3 범위 밖)")
@@ -696,9 +691,7 @@ def main(argv=None):
     ap.add_argument("--source-dir", help="기본 <out>/_source_files")
     ap.add_argument("--rep", help="기본 <out>/parse/_rep/index.json")
     ap.add_argument("--summary", help="기본 <out>/parse/parse_summary.json")
-    ap.add_argument(
-        "--skipped", help="기본 <out>/prepared/_records/skipped.jsonl(옛 자리 prepared/skipped.jsonl도 — DRM·암호, 없으면 무시)"
-    )
+    ap.add_argument("--skipped", help="기본 <out>/prepared/_records/skipped.jsonl(DRM·암호, 없으면 무시)")
     ap.add_argument("--keep", help="기본 <out>/dedup/keep.txt(중복 제외 — 없으면 dedup 정보 없음으로 전부 포함)")
     ap.add_argument(
         "--source-system",

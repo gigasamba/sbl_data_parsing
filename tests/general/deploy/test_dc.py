@@ -15,7 +15,7 @@ SCRIPT = DEPLOY_ROOT / "deploy" / "host" / "scripts" / "host_ctl.sh"
 BASE = ["compose.pipeline.yml", "compose.data-parsing.yml", "compose.mcp-server.yml"]
 CODE = ["compose.code.yml", "compose.code.data-parsing.yml", "compose.code.mcp-server.yml"]
 DEV = ["compose.dev.yml"]
-PORTS = {"MCP_PORT": "8775", "DATA_PARSING_PORT": "8776"}  # 여러 벌은 포트가 기본값이 아니어야 함
+PORTS = {"MCP_PORT": "8775", "DATA_PARSING_PORT": "8776"}  # 포트 칸 — 여러 벌(개발자 벌은 data-pipeline만)은 기본값이어도 됨
 SSH = {"DEVBOX_SSH_PORT": "2222"}  # option.devbox.ssh_port — 개발 작업 공간
 OC = {**SSH, "DEVBOX_OPENCODE_CONFIG": "/srv/x/opencode.json"}  # + option.devbox.opencode_config
 RT = "data-pipeline-runtime:0.2.0"
@@ -27,15 +27,7 @@ CASES = [
     ("data-pipeline:0.2.0", "/srv/x/code", CODE, "code", {}, "compose"),  # CODE_DIR를 주면 그 값
     ("data-pipeline:0.2.0", "", [], "sbl_data_parsing-main-2", PORTS, "compose-2"),  # 여러 벌 — 묶음 이름 끝 -<벌 번호>
     ("data-pipeline:0.2.0", "", [], "sbl_data_parsing-0.3.0", {}, "compose"),  # 판 번호(점)는 벌 번호가 아님
-    (
-        "data-pipeline:0.2.0",
-        "",
-        [],
-        "sbl_data_parsing-main-2",
-        {"MCP_PORT": "8775"},
-        "!ops.services.data_parsing.data_parsing_port",
-    ),  # 여러 벌인데 기본 포트 — 거부
-    ("data-pipeline:0.2.0", "", [], "sbl_data_parsing-main-2", {"DATA_PARSING_PORT": "8776"}, "!search.server.mcp_port"),
+    ("data-pipeline:0.2.0", "", [], "sbl_data_parsing-main-2", {}, "compose-2"),  # 여러 벌·기본 포트 — 받음(개발자 벌은 MCP 없음)
     ("data-pipeline:0.2.0", "", [], "sbl_data_parsing-main-2", {**PORTS, "RUN_ENV": "prd"}, "!운영(prd)"),  # prd는 한 벌
     (RT, "", CODE + DEV, "code", SSH, "compose"),  # 개발 작업 공간 — 코드 폴더 쓰기 가능·홈 폴더
     (RT, "", CODE + DEV + ["compose.opencode.yml"], "code", OC, "compose"),  # + opencode 설정 파일

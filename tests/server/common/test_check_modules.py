@@ -1,19 +1,13 @@
 """common.check.check_modules 자기 점검."""
 
 import ast
-import re
 import sys
 from pathlib import Path
 
 import common.check.check_modules as M
 from common.check.check_modules import (
     _area_of_import,
-    _child_env_names,
     _cli_eval_violations,
-    _comment_kinds,
-    _env_funcs,
-    _env_lines,
-    _EnvFile,
     _module_scope_imports,
     _virtual_rel,
     check,
@@ -35,152 +29,42 @@ def selftest():
     two = ast.parse("import pipeline.eval.stages\nimport mcp_server.main")
     assert len(_cli_eval_violations("evaluation/stack_matrix.py", two, None)) == 1  # ⑨ etl+search top-level 동시
     print("[selftest] check_modules — 점 이름 import 영역 판정·옛/새 검색 이름·⑨ 동시 import 통과")
-    src = (
-        "import os\nx = os.environ.get('A')\n"  # 2 분류 없음
-        "y = os.environ.get('HF_HOME')   # env 남김 — 라이브러리\n"  # 3
-        "# env 남김 — 하위 프로세스\nz = dict(os.environ,\n         A='1')\n"  # 5 위 주석 줄
-        "w = f(os.getenv('B'),\n      1)   # env 남김 — 내부 신호(여러 줄 문장 끝 주석)\n"  # 7
-        "s = 'os.environ in text'   # 문자열은 대상 밖\n"
-        "v = os.environ['C']   # env 남김 — 아무거나\n"
-    )  # 10 모르는 분류
-    got = _env_lines(src)
-    assert got == [(2, None), (3, "라이브러리"), (5, "하위 프로세스"), (7, "내부 신호"), (10, None)], got
-    print("[selftest] check_modules ⑩ — os.environ 토큰·분류 주석(같은 문장·바로 위 주석 줄)·문자열 제외 통과")
-    src = (
-        "import os as _o\nfrom os import environ as E, getenv\n"  # 2 import 줄도(별칭 이름)
-        "a = _o.environ.get('A')\nb = E['B']\n"  # 3·4
-        "c = getenv('C')   # env 남김 — 라이브러리\nd = x.environ\ne = y.E\n"  # 5 · 6·7 os가 아님
-        "_o.putenv('P', '1')\n_o.unsetenv('P')   # env 남김 — 시험\n"
-    )  # 8·9 putenv·unsetenv
-    got = _env_lines(src)
-    assert got == [(2, None), (3, None), (4, None), (5, "라이브러리"), (8, None), (9, "시험")], got
-    print(
-        "[selftest] check_modules ⑩ — os 별칭(import os as _o)·from os import environ 이름(VS7e2 R-10)·os.putenv·unsetenv(VS7e3 R-4)도 잡음 통과"
-    )
-    _child_env_selftest()
+    _env_selftest()
     _planted_selftest()
 
 
-def _child_env_selftest():
-    """⑪(다섯 갈래 꼴) — 심은 자리는 잡히고, 덮기 파일·설정 밖 이름·설정 칸 사전·연결 사전·분류 주석은 통과."""
-    names = frozenset({"PG_SCHEMA", "EDW_SUMMARY_LLM", "LLM_BASE_URL", "LLM_BUDGET_USD", "LLM_FAKE", "PARSE_SKIPPED_LOG"})
-    src = """import os
-import os as _o
-import subprocess
-import subprocess as sp
-from subprocess import run as srun
-from os import environ as E
-from common.config.settings import child_env as settings_env
-from common.core.paths import child_env
+ENV_NAMES = frozenset({"PG_SCHEMA", "LLM_FAKE", "LLM_BASE_URL"})
+ENV_CASES = [  # (코드 조각, 위반 꼴 ⑩·⑪ — 빈 값은 통과)
+    ("import os\ny = os.environ.get('HF_HOME')  # env 남김 — 라이브러리\n", ""),
+    ("import os\n# env 남김 — 하위 프로세스\nz = dict(os.environ,\n         A='1')\n", ""),  # 바로 위 주석 줄
+    ("import os\nw = f(os.getenv('B'),\n      1)  # env 남김 — 내부 신호\n", ""),  # 여러 줄 문장 끝 주석
+    ("import os\nx = os.environ.get('A')\n", "⑩"),  # 분류 주석 없음
+    ("import os as _os\nx = _os.getenv('A')\n", "⑩"),
+    ("import os as o\nx = o.environ.get('A')\n", "⑩"),  # 아무 별칭
+    ("from os import environ\nx = environ['A']\n", "⑩"),
+    ("from os import path, getenv as ge\nx = ge('A')\n", "⑩"),
+    ("from os import getenv as ge  # env 남김 — 라이브러리\nx = ge('A')  # env 남김 — 라이브러리\n", ""),
+    ("from os import path\nx = cfg.environ\n", ""),  # os 아닌 것의 .environ
+    ("import os\nv = os.environ['C']  # env 남김 — 아무거나\n", "⑩"),  # 모르는 분류
+    ("s = 'os.environ in text'  # 문자열·주석은 대상 밖\n", ""),
+    ("import os\nenv = {**os.environ, 'PG_SCHEMA': 'x'}  # env 남김 — 하위 프로세스\n", "⑪"),  # 자식 env 사전 키
+    ("env.pop('LLM_BASE_URL', None)\n", "⑪"),
+    ("env['LLM_FAKE'] = '1'\n", "⑪"),
+    ("import os\nos.environ['PG_SCHEMA'] = 't'  # env 남김 — 시험\n", ""),  # ⑪ 허용 분류
+    ("env = child_env(base, LLM_FAKE='1', VLM_CONCURRENCY='2')\n", ""),  # 키워드는 맞는 길
+    ("env['PYTHONUTF8'] = '1'\nconn = {'PG_SCHEMA': 'ai'}\n", ""),  # 설정 밖 이름 · env 없는 줄
+]
 
 
-def env_for(conf):
-    return settings_env(None, CHUNK_SIZE="1")
-
-
-def night(vlm):
-    env = {**child_env(), "VLM_CONCURRENCY": vlm, "EDW_SUMMARY_LLM": "0"}  # 14 bad EDW_SUMMARY_LLM(설정 밖 이름 VLM_CONCURRENCY는 통과)
-    env.pop("LLM_BASE_URL", None)                                          # 15 bad
-    penv = {**env_for({}), "PG_SCHEMA": "idx"}                              # 16 bad(저장소 함수 env_for — 별칭 settings_env 사슬)
-    e2 = child_env({"PYTHONUTF8": "1", "LLM_BUDGET_USD": "1"})               # 17 bad(위치 인자 dict)
-    for k in ("LLM_BASE_URL", "VLM_BASE_URL", "OTHER"):
-        e2.pop(k, None)                                                    # 19 bad LLM_BASE_URL(설정 밖 이름 VLM_BASE_URL은 통과)
-    e2["PARSE_SKIPPED_LOG"] = "x"                                          # 20 bad
-    subprocess.run(["x"], env=dict(os.environ, LLM_FAKE="1"))              # 21 bad
-    _o.environ["PG_SCHEMA"] = "x"                                          # 22 bad(os 별칭)
-    E.update(PG_SCHEMA="y")                                                # 23 bad(from os import environ)
-    del env["LLM_FAKE"]                                                    # 24 bad
-
-
-def param(env):
-    env["LLM_FAKE"] = "1"                                                  # 28 bad(매개변수 — subprocess env=로 넘김)
-    subprocess.run(["x"], env=env)
-
-
-def ok(c, Names, MM):
-    env = settings_env(child_env(), VLM_CONCURRENCY="2", LLM_BASE_URL=None)
-    env["VLM_CONCURRENCY"] = "3"
-    env["PYTHONUTF8"] = "1"
-    conn = {"PG_SCHEMA": "ai"}
-    os.environ["PG_SCHEMA"] = "t"   # env 남김 — 시험
-    names = Names()
-    names["LLM_FAKE"] = "1"
-    names = MM.child_env(names)
-    env = c.load()
-    env["LLM_FAKE"] = "1"
-    env = child_env(env)
-    subprocess.run(["x"], env=env)
-    return conn
-
-
-def more(c):
-    env = dict(os.environ)
-    env["PG_SCHEMA"], env["LLM_FAKE"] = c, "1"                             # bad 튜플 대상 PG_SCHEMA·LLM_FAKE
-    env |= {"LLM_BUDGET_USD": "1"}                                          # bad |=
-    e3: dict = {**os.environ, "EDW_SUMMARY_LLM": "0"}                      # bad 형 주석 대입
-    sp.run(["x"], env=e3)
-    p = {"LLM_BASE_URL": "x"}                                              # bad subprocess 별칭 env=로 넘김
-    sp.call(["x"], env=p)
-    q = {"PARSE_SKIPPED_LOG": "x"}                                         # bad from subprocess import run
-    srun(["x"], env=q)
-
-
-def blind(base, key, conn):
-    run = lambda: subprocess.run(["x"], env={**os.environ, "PG_SCHEMA": "a"})   # bad 람다 몸통(VS7e3 R-4)
-    _C[key] = child_env()
-    e4 = dict(_C[key])
-    e4["LLM_FAKE"] = "1"                                                   # bad 캐시 감싸개 사전
-    e5 = {**base, "LLM_BUDGET_USD": "1"}                                    # bad 매개변수 base
-    e6 = child_env(extra={"EDW_SUMMARY_LLM": "0"})                         # bad child_env(extra=…)
-    e7 = {**os.environ, **{"PARSE_SKIPPED_LOG": "x"}}                      # bad 겹친 사전
-    os.putenv("LLM_BASE_URL", "x")                                         # bad putenv
-    c2 = dict(conn)
-    c2["PG_SCHEMA"] = "struct"
-    _D[key] = {"PG_SCHEMA": "ai"}
-    d2 = dict(_D[key])
-    d2["LLM_FAKE"] = "1"
-    return run, e5, e6, e7, c2, d2
-
-
-def cached(k):
-    if k not in _J:
-        _J[k] = settings_env(None, CHUNK_SIZE="1")
-    return dict(_J[k])
-
-
-def use_cached():
-    e8 = cached("a")
-    e8["LLM_FAKE"] = "1"                                                   # bad 캐시 감싸개 함수
-    return e8
-"""
-    tree = ast.parse(src)
-    ef = _EnvFile(tree)
-    _env_funcs([ef])
-    got = {(ln, n) for ln, n, _ in _child_env_names(ef, lambda: _comment_kinds(src), names)}
-    want = {
-        (14, "EDW_SUMMARY_LLM"),
-        (15, "LLM_BASE_URL"),
-        (16, "PG_SCHEMA"),
-        (17, "LLM_BUDGET_USD"),
-        (19, "LLM_BASE_URL"),
-        (20, "PARSE_SKIPPED_LOG"),
-        (21, "LLM_FAKE"),
-        (22, "PG_SCHEMA"),
-        (23, "PG_SCHEMA"),
-        (24, "LLM_FAKE"),
-        (28, "LLM_FAKE"),
-    }
-    want = {(ln + 2, n) for ln, n in want}  # 위 import 두 줄(subprocess 별칭) 만큼
-    lines = src.splitlines()
-    for i, line in enumerate(lines, 1):  # more() — "# bad" 줄의 이름(글자 상수)
-        if "# bad" in line and i > 40:
-            want |= {(i, n) for n in re.findall(r'"([A-Z_]+)"', line.split("#")[0]) if n in names}
-    assert got == want, (sorted(got - want), sorted(want - got))
-    print(
-        f"[selftest] check_modules ⑪ — 자식 env의 설정 이름 심은 {len(want)}곳 모두 잡힘(dict·pop·for 상수·위치 인자·dict(…, X=)·os 별칭·"
-        "from os import environ·del·매개변수·저장소 env 함수 사슬·튜플 대상·|=·형 주석 대입·subprocess 별칭·람다 몸통·캐시 감싸개·"
-        "매개변수 {**base}·child_env(extra=)·겹친 **{…}·os.putenv — VS7e3 R-4) · 덮기 파일·설정 밖 이름·설정 칸 사전(Names)·연결 사전·분류 주석 통과"
-    )
+def _env_selftest():
+    """⑩·⑪ 글자 검색(e2-23) — 표의 코드 조각마다 위반 꼴이 맞는지."""
+    for src, want in ENV_CASES:
+        rows = M.env_lines(src, ENV_NAMES)
+        got = "⑩" * any(used and kind is None for _, kind, used, _ in rows) + "⑪" * any(
+            names and kind not in M.ENV_NAME_OK_KINDS for _, kind, _, names in rows
+        )
+        assert got == want, (src, got, want, rows)
+    print(f"[selftest] check_modules ⑩⑪ — 글자 검색 {len(ENV_CASES)}건(분류 주석·별칭·문자열 제외·자식 env 설정 이름) 통과")
 
 
 def _planted_selftest():
@@ -199,6 +83,8 @@ def _planted_selftest():
         "validation/e2e/v_old.py": "import common_tools.cli.assets\n",
         "mcp_server/v_etl.py": "import pipeline.eval.stages\n",  # 앱 사이(기존 규칙)
         "validation/e2e/v_both.py": "import pipeline.eval.stages\nimport mcp_server.main\n",  # ⑨
+        "pipeline/v_env.py": "import os\nx = os.environ.get('A')\n",  # ⑩ 분류 주석 없음
+        "common/v_child.py": "env = {}\nenv['LLM_FAKE'] = '1'\n",  # ⑪ 설정 이름(실제 설정 모델의 이름 묶음)
     }
     ok_cases = {  # 위반이 아니어야 함
         "mcp_server/cli/ok_ask.py": "import ask\n",  # 맨 이름 import는 경계 위반 아님
@@ -223,7 +109,7 @@ def _planted_selftest():
         finally:
             M.ROOT = saved
     hit = {e.split(":", 1)[0] for e in errs}
-    missed = [r for r in bad_cases if virt[r] not in hit]
+    missed = [r for r in bad_cases if virt[r] not in hit and r not in hit]  # ⑩⑪은 저장소 경로로 알림
     wrong = [r for r in ok_cases if virt[r] in hit]
     assert not missed and not wrong, (missed, wrong, errs)
     print(

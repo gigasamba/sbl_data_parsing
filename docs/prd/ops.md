@@ -32,7 +32,7 @@
 - 규칙:
   1. "새 문서" = `AI.FileStorageMap`에 있고 gold `doc`에 행이 없는 것. 키 = `s3_key` = `doc.file_path`(갱신 시각은 보지 않음).
   2. "끝난 문서" = 원천 스키마 5벌 어디든 `doc` 행이 있는 원본 키([op-17](#op-17) 규칙 15). 파싱·게시·적재에 실패한 문서는 `doc` 행이 없어 다시 고른다. 영구 뺌(`applog.except_doc_info` `skip`)도 뺀다.
-  3. 끝난 문서 빼기는 `pipeline/extract/candidate_pick.py` `done_keys` 하나(읽기는 `pipeline/shared/gold_docs.py`) — 서버는 `candidate_pick list --skip-done`, PC 직접 파싱(`pipeline.cli parse --source`)은 고르기 때. PG를 한 번 읽는다(PC는 sqlite 대역). 못 읽으면 RUN_ENV가 local이 아니면 종료 4, 그 밖은 받은 목록 그대로 + 로그 한 줄. 키 = 수집 manifest의 `key`(없으면 이름).
+  3. 끝난 문서 빼기는 `pipeline/extract/candidate_pick.py` `done_keys` 하나(읽기는 `pipeline/shared/gold_docs.py`) — 서버는 `candidate_pick list --skip-done`, PC 직접 파싱(`pipeline.cli parse --source`)은 고르기 때. PG를 한 번 읽는다. 못 읽으면 RUN_ENV가 local이 아니면 종료 4, 그 밖은 받은 목록 그대로 + 로그 한 줄. 키 = 수집 manifest의 `key`(없으면 이름).
   4. 전체 재파싱은 사람이 전체 e2e를 시작할 때만([pl-54](#pl-54)).
   5. 새벽 배치: settings.yaml `ops.nightly.nightly_start_time`(시작 HH:MM)·`nightly_max_docs`(새 문서 수 상한, 1 이상)·`nightly_stop_time`(마감 HH:MM, 시작보다 5분 넘게 뒤) — 하나라도 비면 돌지 않는다. systemd `data-pipeline-nightly.timer`(`OnCalendar=*:0/5`)가 `nightly_batch.sh scheduled`를 부르고, 시작 시각부터 5분 안이면 applog 파티션 정리(`pipe_exec.sh migrate maintain --target applog` — 실패해도 경고만, 배치는 계속) 뒤 `run_pipeline.py --start-offset 0 --skip-done --max-docs <n> --deadline <hh:mm>`. 형식 오류면 종료 2. 서비스 `TimeoutStartSec=6h`.
 - 파일: `pipeline/extract/candidate_pick.py`(`done_keys`·`list_targets`·`unparsed`), `pipeline/shared/gold_docs.py`, `deploy/host/scripts/{run_pipeline.py,nightly_batch.sh}`, `deploy/host/systemd/data-pipeline-nightly.{timer,service}`.
@@ -43,7 +43,7 @@
 ## pl-54 · 전체 e2e — local·dev·prd, prd 전체 문서 실행은 새 `PG_SCHEMA`로
 - 이유: 판 0002가 기준 스키마의 옛 표를 지우고 0.2.0은 전체 다시 적재다.
 - 할 일: 전체 e2e를 local·dev·prd에서 돌린다. 전체 문서 실행은 prd에서만, 새 기준 스키마 이름(`required.pg.pg_schema`)으로. 옛 gold·`struct` 스키마는 2주 뒤 DB 담당자가 백업하고 지운다.
-- 절차: [upgrade-guide.md](../operations/upgrade-guide.md) §7 (나)(새 스키마에 전부 다시) · 0.2.0 때 절차 [history/deploy_0_2_0.md](../history/deploy_0_2_0.md) · 서버 확인 refactor.md C-74.
+- 절차: [server-guide §4-8](../operations/server-guide.md#4-8-pgvector가-바뀔-때--두-경우) (나)(새 스키마에 전부 다시) · 0.2.0 때 절차 [history/deploy_0_2_0.md](../history/deploy_0_2_0.md) · 서버 확인 refactor.md C-74.
 - Status: todo
 
 <a id="pl-24"></a>
@@ -159,7 +159,7 @@
 - 이유(사용자 11-05): 폴더만 보고 그 단계가 무엇을 하는지 알 수 있어야 한다. 엔진으로 글자를 뽑는 일은 정제(transform)이고, 그 결과가 silver다.
 - 요건(되어야 할 모습):
   0. 층 이름: **staging** = Object Storage 원본을 임시 폴더로 받아 둔 것(원본은 이미 Object Storage에 있어 따로 보관하지 않음 — extract의 결과) · **silver** = 엔진별 파싱 결과 `parse/<엔진>/<문서>.json`과 대표 결과(transform의 첫 결과 — 실제 엔진 추출은 모두 transform) · **gold** = 검색용 묶음과 pgvector 적재.
-  1. `pipeline/extract` = 원본을 고르고 받아 파싱 입력으로 준비하는 일만 — 대상 고르기(목록 − 끝난 문서, 받기 전) `candidate_pick.py`, 미리 받기·받기 `candidate_ready.py`, 같은 파일 정리 `deduplication.py`, 형식 거르기·회전 `filter_and_rotate.py`, 레인 나누기 `doc_lane_group.py`(엔진을 돌리지 않음 — 형식·크기·앞 3쪽 글자 수), DRM 감지 `protected_docs.py`, 원천 열 찾기 `discover_columns.py`.
+  1. `pipeline/extract` = 원본을 고르고 받아 파싱 입력으로 준비하는 일만 — 대상 고르기(목록 − 끝난 문서, 받기 전) `candidate_pick.py`, 미리 받기·받기 `candidate_ready.py`, 같은 파일 정리 `deduplication.py`, 형식 거르기·회전 `filter_and_rotate.py`, 레인 나누기 `doc_lane_group.py`(엔진을 돌리지 않음 — 형식·크기·앞 3쪽 글자 수), 원천 열 찾기 `discover_columns.py`.
   2. `pipeline/transform/parse/` = 엔진 파싱 — 엔진 `engines/`(보호 파일), 엔진 준비 확인 `engine_check.py`, 엔진 실행은 한 파일(엔진마다 자식 프로세스로 분리), 엔진 버전·캐시 키(`engine_version`·`p0_key`·`engine_code_fp`)와 캐시 지우기. 그 뒤 `represent`(대표 결과) → `figures`(그림) → `structure`(gold 묶음 `gold_bundle.py`).
   3. `pipeline/shared`의 파일은 한 가지 일만 하고 이름이 그 일이다(원본 캐시·실패 단서·`pdf_kind` 각각). 한 단계만 쓰는 것은 그 단계 폴더에 둔다(차트 글자 → figures), 여러 단계가 읽는 설정 해석은 `pipeline/config.py`(후처리 스위치 `active_features` — represent·figures).
   4. 요건 행에 닿지 않는 코드(부르는 곳이 없거나 시험만 부르는 함수, 쓰지 않는 설정 칸·반환 칸)와 같은 일을 하는 두 번째 코드는 두지 않는다. `rep.meta`와 `parse_document` 출력(MCP 계약)은 그대로.
@@ -176,7 +176,7 @@
 - 규칙(`common/core/exitclean.py` 한 곳):
   1. `remove_at_exit(경로)` — 이 프로세스가 끝날 때(정상·오류·SIGTERM) 지운다. `track(Popen, group)` — 끝날 때 아직 돌면 끝내고 `wait`로 회수. `stop(p, group)` — POSIX는 (묶음째) SIGTERM → 10초 → SIGKILL, Windows는 `taskkill /T`.
   2. import 때 SIGTERM 처리기를 단다(기본 처리기일 때만): 바로 정리한 뒤 `SystemExit(143)`. 정리 중 두 번째 SIGTERM은 무시. 순서: 자식 전부 SIGTERM → 10초 → 남은 것 SIGKILL·회수 → 파일 지움. 정리를 시작한 뒤 띄운 자식은 바로 끝낸다.
-  3. 파일 주인: `settings.put`·`child_env`의 덮기 파일 = 만든 프로세스 · `settings.isolated` = 블록 끝 · `--set`(`setarg` — POSIX는 `execve`로 다시 뜸) = 다시 뜬 프로세스 · `python -m common.config.overrides` 출력 = 지우지 않음.
+  3. 파일 주인: `settings.put`·`child_env`의 덮기 파일 = 만든 프로세스 · `settings.isolated` = 블록 끝 · `--set`(`setarg` — POSIX는 `execve`로 다시 뜸) = 다시 뜬 프로세스.
   4. 연결: `resources.gated_popen`(파이프라인 자식 전부), `resources.kill_group`(→ `stop(group=True)`), `run_mcp_parsing` 작업 자식과 PID 기록 `service.json`.
   5. 한계: `subprocess.run`의 짧은 자식은 추적 안 함 · 주 스레드가 아닌 곳에서 처음 import되면 SIGTERM 처리기 없음 · SIGKILL·OOM은 정리 못 함 · 컨테이너 PID 1 고아 회수는 compose `init: true`.
 - 파일: `common/core/exitclean.py`, `common/config/{settings,setarg}.py`, `common/core/resources.py`, `pipeline/run_mcp_parsing.py`.
@@ -224,7 +224,7 @@
   3. 켜기 `ops.log.log_db_enabled` — 서버(두 이미지) 기본 true, PC 기본 false(op-13). 서버는 새 코드를 띄우기 전에 `migrate up --target all`(applog 포함). 보존 `log_retention_days` 90. `dbtool up --target applog`(현재 달 + 2개월 준비), 매일 `dbtool maintain --target applog`(다음 달 준비·만료 파티션 DROP·`pipe_run` DELETE — 서버는 새벽 배치가 run_pipeline 앞에 부름, [pl-23](#pl-23)). sink는 DDL을 하지 않는다.
 - 규칙 — MCP 감사(`mcp_server/services/call_log.py`):
   1. 도구 호출마다 `applog.mcp_log` 한 행 — 성공·도구 오류·busy·timeout·HTTP 인증 거부(rpc_method NULL), initialize(rpc_method=initialize, clientInfo 뺌). 칸은 [db_schema.md §6](../architecture/db_schema.md). sink 실패가 도구 응답을 바꾸지 않는다.
-  2. 본문: 마스킹 뒤 앞부분만 — 입력 `tuning.search.audit.audit_max_input_bytes` 16384 · 출력 `audit_max_output_bytes` 65536. `*_bytes`·`result_sha256`은 자르기 전 전체 기준. `parse_document`의 `content_b64`는 디코딩한 파일 sha256·바이트 수로 바꿈.
+  2. 본문: 마스킹 뒤 앞부분만 — 입력 `tuning.search.audit.audit_max_input_bytes` 16384 · 출력 `audit_max_output_bytes` 65536. 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)는 출력 본문 대신 `result_keys` 요약만 저장한다(원문은 싣지 않음). `*_bytes`·`result_sha256`은 자르기 전 전체 응답 기준. 행 전체의 가림은 sink(`logsink.emit`)가 한 번 한다(본문은 자르기 전에 가림). `parse_document`의 `content_b64`는 디코딩한 파일 sha256·바이트 수로 바꿈.
   3. `result_keys`: search = chunk_keys(순위 순)·evidence_status·filter·scope_docs · list_doc_fulltext = 건수·next_cursor·doc_keys · get_doc_fulltext = 건수와 파일별 name/kind/size/sha256/skip_reason · query_edw = row_count·columns · parse_document = job_id·engine·rep_path·text_chars · edw_meta = 단계·표·칸 수.
   4. 컨텍스트: `X-MCP-User`(없으면 `params._meta.user`) → knox_id, `X-MCP-Client`는 호출자 표시·콘솔 로그에만 쓰고 DB에는 남기지 않음(agent_id는 인증 체계가 생긴 뒤), Mcp-Session-Id(stateless라 도구 행은 대개 null). 유효한 UUID `X-Request-Id`는 그대로, 아니면 새 UUID를 응답 헤더로. 접속 소켓 주소는 client_ip에 남기고(사용자 11-04, 프록시 뒤면 프록시 IP) clientInfo는 남기지 않는다.
   5. 감사는 전용 데몬 스레드 하나가 처리한다(도구는 기다리지 않음). 본문 대기 큐 64건 + 바이트 합계 `tuning.search.audit.audit_max_queue_bytes`(기본 268435456) — 넘으면 본문 없는 메타 행(`result_keys.audit_body_omitted=queue_full`, `error_code=audit_queue_full`).
@@ -235,7 +235,7 @@
   4. `run_id`가 없으면(MCP 검색·시험) span은 아무것도 하지 않는다. 계측 안의 예외는 삼키고 업무 결과를 바꾸지 않는다(프로세스당 stderr 경고 한 번).
   5. `cpu_ms`·`rss_peak_mb`는 Linux에서 프로세스에 하나만 도는 span만 채우고, 겹치거나 측정 못 하면 NULL.
   6. 분석: `python -m pipeline.tools.perf_report [<run_id>] [--since <시간>] [--top N] [--compare <run_id>…] [--runs] [--file output/logs/*.jsonl]` — 읽기 전용.
-     다운로드(`extract.download`)는 `--since` 요약에 ■ 다운로드 표(크기 구간별 순수 전송 mbps·head·잠금 대기)로 나온다. 서버에서는 `podman exec data-pipeline python -m pipeline.tools.perf_report --since <시간>`으로 본다.
+     다운로드(`extract.download`)는 `--since` 요약에 ■ 다운로드 표(크기 구간별 순수 전송 mbps·head·잠금 대기)로 나온다. 서버에서는 `docker exec data-pipeline python -m pipeline.tools.perf_report --since <시간>`으로 본다.
 - 파일: `common/core/{jsonlog,span,exitclean}.py`, `common/store/logsink.py`, `mcp_server/services/call_log.py`, `pipeline/shared/runtrace.py`, `pipeline/tools/perf_report.py`, `pipeline/extract/{doc_lane_group,candidate_ready}.py`.
 - QA: `tests/server/common/test_{jsonlog,logsink,span,span_soft,call_event}.py`·`tests/server/mcp/test_call_log.py`·`tests/server/pipeline/test_{runtrace,perf,span_stages,doc_group}.py`·`tests/general/common/test_applog_pg.py`(PC 임시 PG 스키마) · 통과. 서버 적용 refactor.md C-79·C-80.
 - Status: done
@@ -329,7 +329,7 @@
 16. 적재되지 않은 문서 기록은 `applog.except_doc_info` 하나(`skip_doc_info`를 바꿈) — `except_type` `skip`(영구 뺌 — 미지원·DRM·암호·내용 중복) · `error`(기록만, 다음 실행이 다시 고름 — 파싱·적재 실패). 처음·마지막 시각·횟수 유지.
 17. 원천은 FileStorageMap `source_system` 값 하나로 고르기·구조화·적재·게시가 모두 정한다(목록 파일·manifest로 넘김). Object Storage 경로 = `<원천>/…`, PC = `valid_env/object_storage/<원천>/`. 원본 경로 첫 마디 규칙(pl-28 규칙 3)은 없앤다.
 18. EDW는 읽기만(FileStorageMap·메타 사슬) — 쓰기 계정 칸은 없앤다.
-19. 마스터 표는 `glossary` 하나(melt — 유사값마다 한 줄): 칸 = 구분(`client`·`term`·`id`) · 원본 값 · 유사값 · 유사 종류(동의어·약어·약한 동의어 — 용어 사전이 구분해 씀) · 설명 + 용어의 문맥 필요·대소문자 구분 표시. 고객 명부(`client_roster`)·용어 사전(`domain_terms`)·ID 꼴(`id_patterns`)을 합친다. `id` 줄은 원본 값 = 종류(`contract_no`·`product_code`), 유사값 = 정규식 — ID 우선 찾기·동점 순서는 그대로.
+19. 마스터 표는 `glossary` 하나(melt — 유사값마다 한 줄): 칸 = 구분(`client`·`term`·`id`) · 원본 값 · 유사값 · 유사 종류(동의어·약어·약한 동의어 — 용어 사전이 구분해 씀) · 설명 + 용어의 문맥 필요·대소문자 구분 표시. 고객 명부(`client_roster`)·용어 사전(`domain_terms`)·ID 꼴(`id_patterns`)을 합친다. `id` 줄은 원본 값 = 종류(`contract_no`·`product_code`), 유사값 = 정규식 — ID 우선 찾기는 그대로.
 20. 안 쓰는 마스터 표 `client_master`·`contract_master`·`units`는 없앤다. `master_meta`(해시 1행)도 없애고 해시는 glossary를 읽을 때 계산한다(`gold_version` 꼴 그대로).
 21. 핸드오프 파일 `common/core/terms.py`는 고치지 않는다 — `common/store/master.py`가 glossary를 읽어 지금과 같은 행 모양으로 넘긴다.
 22. `doc`에 찾기용 색인 3개 — `sha256` · (`silver_bucket`, `silver_key`) · `file_path`(일반 btree — `file_path`에 UNIQUE는 없다). 0.3.0의 새 판으로 넣는다(이미 올린 판은 고치지 않음).

@@ -20,6 +20,7 @@ from pipeline.transform.structure.gold_bundle import (
     main,
     warn_if_no_client_roster,
 )
+from tests.server.common import pgcase
 
 
 def selftest():
@@ -288,7 +289,12 @@ def selftest():
     print("[selftest] pl-06·pl-46 — 그래프·개념·그림 행·사실 파일 없음 통과")
 
 
-def test_main():  # 옛 `if __name__ == "__main__":` 몸통
+def test_main():  # 용어집·고객 명부는 실 pgvector 임시 스키마의 마스터 표(e2-22)
+    with pgcase.with_master():
+        _main()
+
+
+def _main():  # 옛 `if __name__ == "__main__":` 몸통
     selftest()
 
 

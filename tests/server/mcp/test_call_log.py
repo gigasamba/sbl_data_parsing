@@ -20,6 +20,7 @@ from mcp_server import config as mc
 from mcp_server import main
 from mcp_server.services import call_log as audit
 from mcp_server.services import tool_runner
+from tests.server.mcp.test_audit_worker import _full
 
 
 def _encoded(value):
@@ -35,7 +36,7 @@ def test_payload():
     def do_parse_document(content_b64, filename, api_key):
         return result
 
-    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):
+    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(audit.jsonlog.masked(r))):
         call = audit.start(do_parse_document, kwargs=source)
         call.finish(result)
         assert audit.drain()
@@ -58,7 +59,7 @@ def test_payload():
     def do_search(question):
         return None
 
-    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):
+    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(audit.jsonlog.masked(r))):
         call = audit.start(do_search, ("한" * 9000,))
         call.finish({"error": "token=do-not-store"})
         assert audit.drain()
@@ -72,7 +73,7 @@ def test_result_keys():
     hits = [{"text": "body", "file_name": "a.pdf", "page": 1, "chunk_key": f"k{i}"} for i in range(2000)]
     result = {"question": "q", "evidence": hits, "evidence_status": "found", "filter": {"source_system": ["SFDC"]}, "scope_docs": 3}
     rows = []
-    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):
+    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(audit.jsonlog.masked(r))):
         with audit.request_context({}) as context:
             audit.update_request(context, {"method": "tools/call", "params": {"name": "search"}})
             audit.start(lambda: None).finish(result)
@@ -106,6 +107,32 @@ def test_result_keys():
     }
 
 
+def test_fulltext_summary():
+    """원문 도구 감사 행 — 저장 본문(result)은 요약(result_keys)뿐, 원문은 싣지 않음 · 크기·sha256은 전체 응답 기준. 다른 도구는 본문 그대로."""
+    big = "원문" * 50000
+    got = {"batch": {"requested": 1, "ok": 1}, "files": [{"sfid": "s1", "name": "a.md", "kind": "md", "size": 3, "content": big}]}
+    cases = [  # (도구, 응답, 저장 본문에 원문이 있나)
+        ("get_doc_fulltext", got, False),
+        ("list_doc_fulltext", {"batch": {"matched": 1}, "documents": [{"doc_key": "d1", "file_name": big}]}, False),
+        ("search", {"evidence": [{"chunk_key": "c", "text": big}]}, True),
+    ]
+    for tool, result, stored in cases:
+        rows = []
+        with (
+            patch.object(audit.logsink, "emit", side_effect=lambda t, r, rows=rows: rows.append(audit.jsonlog.masked(r))),
+            audit.request_context({}) as ctx,
+        ):
+            audit.update_request(ctx, {"method": "tools/call", "params": {"name": tool, "arguments": {}}})
+            audit.start(lambda: None).finish(result)
+            assert audit.drain()
+        row = rows[-1]
+        full = json.dumps(result, ensure_ascii=False).encode()
+        assert (big[:100] in row["result"]) is stored and row["result_bytes"] == len(full), (tool, row["result"][:80])
+        assert row["result_sha256"] == hashlib.sha256(full).hexdigest(), tool
+        if not stored:
+            assert json.loads(row["result"]) == row["result_keys"], tool
+
+
 def test_dispatch_audit():
     rows, events = [], []
     stopped = threading.Event()
@@ -116,7 +143,7 @@ def test_dispatch_audit():
         return {"answer": 1}
 
     async def run():
-        tool_runner._LIMITER, tool_runner._INFLIGHT = None, 0
+        tool_runner._LANES.clear()
         with mc.senv(MCP_MAX_CONCURRENCY="1", MCP_MAX_QUEUE="1", MCP_TOOL_TIMEOUT_SEC="0.02"):
             out = await asyncio.gather(*[tool_runner._bg(slow) for _ in range(4)])
             assert out.count({"error": "busy"}) == 2
@@ -127,7 +154,7 @@ def test_dispatch_audit():
         assert len(rows) == 4
         assert any(e == "mcp.thread.finished" for e in events)
         assert all(r["queue_wait_ms"] >= 0 for r in rows)
-        tool_runner._LIMITER = None
+        tool_runner._LANES.clear()
         with mc.senv(MCP_TOOL_TIMEOUT_SEC="0"):
             assert await tool_runner._bg(lambda: {"answer": 2}) == {"answer": 2}
         assert audit.drain()
@@ -135,11 +162,9 @@ def test_dispatch_audit():
         assert await tool_runner._bg_long(lambda: {"engine": "x"}, 1) == {"engine": "x"}
         assert audit.drain()
         assert rows[-1]["status"] == "ok"
-        tool_runner._LIMITER = None
-        tool_runner._INFLIGHT = 2
-        with mc.senv(MCP_MAX_CONCURRENCY="1", MCP_MAX_QUEUE="1"):
+        tool_runner._LANES.clear()
+        with mc.senv(MCP_MAX_CONCURRENCY="1", MCP_MAX_QUEUE="1"), _full():
             assert await tool_runner._bg_long(lambda: None, 1) == {"error": "busy"}
-        tool_runner._INFLIGHT = 0
         assert await tool_runner._bg_long(slow, -9.99) == {"error": "timeout"}
         await asyncio.sleep(0.1)
         assert audit.drain()
@@ -149,7 +174,7 @@ def test_dispatch_audit():
         await asyncio.sleep(0.1)
         assert audit.drain()
         assert len(rows) == count + 1 and rows[-1]["status"] == "timeout"
-        assert await tool_runner._dispatch(slow, None, (), {}) == {"answer": 1}  # None만 무제한
+        assert await tool_runner._dispatch(slow, None, (), {}, "shared") == {"answer": 1}  # None만 무제한
         assert audit.drain()
         assert rows[-1]["status"] == "ok"
 
@@ -157,7 +182,7 @@ def test_dispatch_audit():
             raise TimeoutError("tool says so")
 
         try:
-            await tool_runner._dispatch(slow_error, None, (), {})  # 무제한 모드의 도구 TimeoutError는 그대로 올라온다
+            await tool_runner._dispatch(slow_error, None, (), {}, "shared")  # 무제한 모드의 도구 TimeoutError는 그대로 올라온다
             raise AssertionError("TimeoutError expected")
         except TimeoutError:
             pass
@@ -183,13 +208,13 @@ def test_dispatch_audit():
             assert await tool_runner._bg(lambda: 43) == 43
 
     with (
-        patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)),
+        patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(audit.jsonlog.masked(r))),
         patch.object(audit, "_debug", side_effect=lambda e, **kw: events.append(e)),
     ):
         try:
             asyncio.run(run())
         finally:
-            tool_runner._LIMITER, tool_runner._INFLIGHT = None, 0
+            tool_runner._LANES.clear()
 
 
 def test_http_context():
@@ -238,11 +263,11 @@ def test_http_context():
         assert audit._REQUEST.get() is None
         assert len(rows) == 3, (len(rows), [(row.get("tool_name"), row.get("status"), row.get("request_id")) for row in rows])
 
-    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):
+    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(audit.jsonlog.masked(r))):
         try:
             asyncio.run(run())
         finally:
-            tool_runner._LIMITER = None
+            tool_runner._LANES.clear()
 
 
 def test_sdk_logs_stay_out_of_audit_log():
@@ -356,11 +381,11 @@ def test_initialize_contract():
             assert rows[-1]["session_id"] is None
             assert audit._REQUEST.get() is None
 
-    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):
+    with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(audit.jsonlog.masked(r))):
         try:
             asyncio.run(run())
         finally:
-            tool_runner._LIMITER = None
+            tool_runner._LANES.clear()
 
 
 def test_stdio_channel():
@@ -446,7 +471,7 @@ def test_setting_audit():
     with (
         settings.isolated(PG_PASSWORD=secret),
         mc.senv(MCP_TOKEN="mcp-secret-value"),
-        patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)),
+        patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(audit.jsonlog.masked(r))),
     ):
         call = audit.start(lambda query: None, ({"nested": [secret, "mcp-secret-value"]},))
         call.finish({"nested": [secret, "mcp-secret-value"]}, err=secret)
@@ -465,7 +490,7 @@ def test_audit_off_loop():
 
     def observed_input(tool, args):
         assert threading.get_ident() != loop_thread
-        seen.append(tool_runner._INFLIGHT)
+        seen.append(tool_runner._lane("do_parse_document").accepted)
         entered.set()
         assert input_release.wait(30)  # 감사 입력 처리가 막혀 있어도 health/도구 응답은 먼저 온다.
         return original_input(tool, args)
@@ -497,8 +522,8 @@ def test_audit_off_loop():
         with patch.object(main, "build", return_value=FakeMcp()), patch.object(main.health, "register"):
             app = main.build_guarded_app("127.0.0.1", 8765, "")
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            tool_runner._LIMITER, tool_runner._INFLIGHT = None, 2
-            with mc.senv(MCP_MAX_CONCURRENCY="1", MCP_MAX_QUEUE="1"):
+            tool_runner._LANES.clear()
+            with mc.senv(MCP_MAX_CONCURRENCY="1", MCP_MAX_QUEUE="1"), _full():
                 task = asyncio.create_task(tool_runner._bg_long(do_parse_document, 1, encoded))
                 await ready(entered)
                 assert (await client.get("/health")).status_code == 200
@@ -506,10 +531,9 @@ def test_audit_off_loop():
                 assert await task == {"error": "busy"}
                 input_release.set()
                 assert audit.drain()
-                assert seen == [2]  # busy 판정/거부 뒤에만 입력 처리, 업무 함수는 안 돌림.
+                assert seen == [3]  # 2자리 + 대기 1 = 가득 — busy 판정/거부 뒤에만 입력 처리, 업무 함수는 안 돌림.
             entered.clear()
             input_release.clear()
-            tool_runner._INFLIGHT = 0
             task = asyncio.create_task(tool_runner._bg(do_parse_document, encoded))
             for event in (entered, output_entered):
                 await ready(event)
@@ -528,14 +552,14 @@ def test_audit_off_loop():
     with (
         patch.object(audit, "_input", side_effect=observed_input),
         patch.object(audit, "_body", side_effect=observed_body),
-        patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)),
+        patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(audit.jsonlog.masked(r))),
     ):
         try:
             asyncio.run(run())
         finally:
             input_release.set()
             release.set()
-            tool_runner._LIMITER, tool_runner._INFLIGHT = None, 0
+            tool_runner._LANES.clear()
 
 
 def test_bounded_receive():

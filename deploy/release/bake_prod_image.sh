@@ -5,7 +5,7 @@
 #     예: bash <루트>/sbl_data_parsing-<판>/deploy/release/bake_prod_image.sh 0.1.0   → data-pipeline-runtime:0.1.0 + 코드 폴더 → data-pipeline:<VERSION>
 #   CODE_DIR  코드 폴더(기본: 이 스크립트가 든 코드 폴더 — <루트>/sbl_data_parsing-<판>)
 #   TAG       새 이미지 태그 판 = 코드 폴더 VERSION(다르면 멈춤, PC 시험 태그만 BAKE_TEST=1)
-#   OUT       저장 폴더(기본 /var/tmp/bake — 코드 폴더 밖) · DOCKER(기본 podman, 없으면 docker)
+#   OUT       저장 폴더(기본 /var/tmp/bake — 코드 폴더 밖) · DOCKER(기본 docker, 없으면 podman)
 #   한 대상만 실패했으면 그 대상만 다시: bash bake_prod_image.sh <판> mcp(이미 구운 대상은 "이미 있는 태그"로 멈춤)
 # 순서(대상마다): ① 코드 DEPS_HASH = 실행 이미지 deps_hash ② Dockerfile.bake 빌드(문맥 = 코드 폴더) ③ selftest_gate [판정] 통과
 #   ④ stage_images.sh로 저장·gzip·분할·sha256 → $OUT/sbl_images/<TAG>/<이미지>/ + load.sh·BUILD.txt(개발 서버와 같은 배치, 서버에서 load.sh <TAG>)
@@ -17,7 +17,7 @@ RT_VER="$1"; shift
 if [ "$#" -gt 0 ]; then TARGETS=("$@"); else TARGETS=(pipeline mcp); fi
 OUT="${OUT:-/var/tmp/bake}"; mkdir -p "$OUT"; OUT=$(cd "$OUT" && pwd)   # stage_images.sh가 cd하므로 절대 경로로
 CODE_DIR=$(cd "${CODE_DIR:-$(dirname "$0")/../..}" && pwd)
-. "$(dirname "$0")/../host/scripts/load_settings.sh"   # docker_default 한 곳(podman, 없으면 docker) · 이 스크립트가 든 코드 폴더의 것(CODE_DIR가 다른 판 코드 폴더여도)
+. "$(dirname "$0")/../host/scripts/load_settings.sh"   # docker_default 한 곳(docker, 없으면 podman) · 이 스크립트가 든 코드 폴더의 것(CODE_DIR가 다른 판 코드 폴더여도)
 DOCKER="${DOCKER:-$(docker_default)}"
 HERE=$(cd "$(dirname "$0")" && pwd)   # 이 스크립트 폴더 — stage_images.sh는 여기 것(CODE_DIR가 stage_images.sh 없는 다른 판 코드 폴더여도)
 cd "$CODE_DIR"
@@ -62,4 +62,4 @@ for t in "${TARGETS[@]}"; do
   OUT="$OUT" DOCKER="$DOCKER" CODE_BUNDLE="$BUNDLE" bash "$HERE/stage_images.sh" "$TAG" "$t" \
     || { echo "[bake_prod_image] 저장 실패 — $tag 지움" >&2; $DOCKER rmi "$tag" >/dev/null || true; exit 1; }
 done
-echo "[bake_prod_image] 끝 — $OUT 아래 조각·sha256을 운영 서버로 옮겨 재조립·load(release-and-patch.md §1-2)"
+echo "[bake_prod_image] 끝 — $OUT 아래 조각·sha256을 운영 서버로 옮겨 재조립·load(server-guide.md §5-4)"

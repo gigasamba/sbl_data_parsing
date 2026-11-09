@@ -239,7 +239,7 @@ def test_read_settings_new_layout(tmp_path):
 
 def test_instance_names(tmp_path):
     """여러 벌 — 러너도 load_settings.sh와 같은 규칙(루트 = 코드 폴더, 벌 번호 = 그 이름 끝 -<숫자>)으로 컨테이너가 갈리고 PG 스키마는 그대로.
-    prd에서 벌 번호·기본 포트는 거부."""
+    prd에서 벌 번호는 거부. 개발자 벌은 data-pipeline만 띄우므로 기본 포트도 받는다."""
     req = {p: "x" for p, _ in RD.SETTINGS_REQUIRED}
     ports = {"mcp.server.port": "8775", "common.runtime.data_parsing_port": "8776"}
     # (run_env, 루트 이름, 더 적는 칸, 기대 컨테이너 — None이면 거부)
@@ -248,8 +248,7 @@ def test_instance_names(tmp_path):
         ("dev", "sbl_data_parsing-0.3.0", {}, "data-pipeline"),  # 판 번호(점)는 벌 번호가 아님
         ("dev", "sbl_data_parsing-main-2", ports, "data-pipeline-2"),
         ("prd", "sbl_data_parsing-main-2", ports, None),
-        ("dev", "sbl_data_parsing-main-2", {"mcp.server.port": "8775"}, None),  # 파싱 포트가 기본값 그대로
-        ("dev", "sbl_data_parsing-main-2", {"common.runtime.data_parsing_port": "8776"}, None),  # 검색 포트가 기본값 그대로
+        ("dev", "sbl_data_parsing-main-2", {}, "data-pipeline-2"),  # 포트가 기본값 그대로 — 받음
         ("dev", "sbl_data_parsing-main", {"common.host.pipeline_container": "rag-pipe"}, "rag-pipe"),  # 밑 이름 바꿈(한 벌)
         ("dev", "sbl_data_parsing-main-2", {**ports, "common.host.pipeline_container": "rag-pipe"}, "rag-pipe-2"),  # 밑 이름 + 벌 번호
         ("dev", "sbl_data_parsing-main", {"common.host.pipeline_container": "a b;ls"}, None),  # 명령 줄에 들어가는 이름 — 꼴 거부

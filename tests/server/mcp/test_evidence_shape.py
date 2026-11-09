@@ -10,7 +10,7 @@ def _cap_bytes(obj):
 
 
 def _selftest_cap_ranked():
-    """AR5 — 랭크 인지 cap(): 1위 보호·aggregate 보호·꼬리부터 뺌.
+    """AR5 — 랭크 인지 cap(): 1위 보호·꼬리부터 뺌.
     독립 검토 BLOCK(10-12) 뒤 — 랭크 경로의 모든 사례에 바이트 상한 assert 추가(truncation 칸이 루프 끝난 뒤
     붙어 그 칸만큼 limit을 넘기던 결함 재발 방지) + non-str text(int·list·None) 복원력 사례."""
     # 1) 1위(index 0) 보호 — 꼬리(가장 낮은 순위)만 줄여도 한도 안이면 1위는 안 건드림
@@ -20,13 +20,6 @@ def _selftest_cap_ranked():
     assert len(o["evidence"][2]["text"]) < 5000 + len(" …(잘림)")  # 꼬리(C)가 줄어듦
     assert o["truncation"]["trimmed"] >= 1
     assert _cap_bytes(o) <= 1000
-
-    # 2) via=aggregate 보호(index 0이 아니어도) — index 1이 aggregate면 그대로, index 2(꼬리)만 줄어듦
-    o = {"evidence": [{"text": "a" * 50}, {"text": "G" * 300, "via": "aggregate"}, {"text": "C" * 5000}]}
-    cap(o, 2000)
-    assert o["evidence"][1]["text"] == "G" * 300  # aggregate 항목은 안 건드림(다른 항목이 남아있는 동안)
-    assert len(o["evidence"][2]["text"]) < 5000
-    assert _cap_bytes(o) <= 2000
 
     # 3) 바닥(300자) 아래로는 못 줄이는 항목들 — 꼬리부터 통째로 뺌
     o = {"evidence": [{"text": "x" * 80}, {"text": "y" * 250}, {"text": "z" * 250}]}
@@ -46,7 +39,7 @@ def _selftest_cap_ranked():
     cap(o, 1000)
     assert _cap_bytes(o) <= 1000
 
-    print("[selftest] cap() AR5 — 1위·aggregate 보호·꼬리 drop 통과")
+    print("[selftest] cap() AR5 — 1위 보호·꼬리 drop 통과")
 
 
 def _selftest_cap_fuzz():
@@ -72,10 +65,7 @@ def _selftest_cap_fuzz():
     def rand_evidence(n_max):
         out = []
         for _ in range(rng.randint(0, n_max)):
-            e = {"text": rand_text()}
-            if rng.random() < 0.15:
-                e["via"] = "aggregate"
-            out.append(e)
+            out.append({"text": rand_text()})
         return out
 
     def rand_obj():

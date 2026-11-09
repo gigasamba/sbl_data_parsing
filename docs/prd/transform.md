@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md) 카테고리. [extract.md](extract.md) 다음, [load.md](load.md) 앞: 엔진 구성 파싱(pl-03·pl-22·pl-43·pl-42·pl-45) → represent(pl-04·pl-36·pl-37) → 그림(pl-05) → 구조화(pl-06) → 분류(pl-33). 지문이 바뀌는 정리 묶음은 [transform-cleanup.md](transform-cleanup.md).
 
-순서: pl-03 · pl-22 · pl-43 · pl-42 · pl-45 · pl-04 · pl-36 · pl-37 · pl-05 · pl-06 · pl-33 · pl-60 · pl-62.
+순서: pl-03 · pl-22 · pl-43 · pl-42 · pl-45 · pl-04 · pl-36 · pl-37 · pl-05 · pl-06 · pl-33 · pl-60 · pl-62 · pl-67.
 
 <a id="pl-03"></a>
 ## pl-03 · 엔진 구성 파싱
@@ -15,7 +15,7 @@
 2. 문서마다 그 형식 키의 `parse` 목록에 있는 엔진을 **모두** 돌린다(하나씩 차례로 시도하지 않음).
 3. 형식 키 = 확장자(소문자). 단 `.pdf`는 글자층이 쪽당 평균 20자 미만이면 `.pdf_image`(스캔), 아니면 `.pdf_text` — 판정은 `<out>/_types.json`에 크기·수정 시각과 함께 캐시한다. 판정 함수는 `pipeline.shared.pdf_kind.pdf_kind()` 하나 — 쪽 VLM의 문서 전체 스캔 판정(`scan_page_vlm.is_scan`)과 `parse_document`도 같은 함수를 쓴다(레인 분류 `doc_lane_group`의 앞 3쪽 규칙은 목적이 달라 따로).
 4. 만약 형식 키가 구성에 없으면 → 그 확장자를 읽는 등록 엔진 모두(OCR 엔진 제외)로 돌리고 형식마다 한 번 로그를 남긴다.
-5. 지원 형식 = 구성의 `parse` 키 43개: `.pptx` `.doc` `.docx` `.hwpx` `.png` `.jpg` `.jpeg` `.tif` `.tiff` `.bmp` `.eml` `.mht` `.mhtml` `.txt` `.html` `.htm` `.pdf_image` `.pdf_text` `.xls` `.xlsm` `.xlsx` `.ppt` `.msg` `.docm` `.pptm` `.rtf` `.csv` `.tsv` `.md` `.odt` `.ods` `.odp` `.xlsb` `.dotx` `.xltx` `.potx` `.ppsx` `.dot` `.xlt` `.pot` `.json` `.xml` `.log`. `.hwp`는 아직 아니다([pl-45](#pl-45)), 압축 파일은 지원하지 않는다.
+5. 지원 형식 = 구성의 `parse` 키 47개: `.pptx` `.doc` `.docx` `.hwpx` `.png` `.jpg` `.jpeg` `.tif` `.tiff` `.bmp` `.eml` `.mht` `.mhtml` `.txt` `.html` `.htm` `.pdf_image` `.pdf_text` `.xls` `.xlsm` `.xlsx` `.ppt` `.msg` `.docm` `.pptm` `.rtf` `.csv` `.tsv` `.md` `.odt` `.ods` `.odp` `.xlsb` `.dotx` `.xltx` `.potx` `.ppsx` `.dot` `.xlt` `.pot` `.json` `.xml` `.log` `.zip` `.tar` `.tgz` `.gz`. `.hwp`는 아직 아니다([pl-45](#pl-45)). 압축 원본(`.zip`·`.tar`·`.tgz`·`.tar.gz`)은 압축 엔진 `archive` + 첨부 단계([extract.md#pl-57](extract.md#pl-57)).
 6. 구성의 엔진이 등록부(`pipeline/transform/parse/engines`)에 없거나 설치되지 않았으면 → 시작하지 않는다(종료 2).
 7. 파싱(`parse_engines`)은 입력 폴더의 파일을 그대로 문서로 본다 — 같은 내용 사본을 한 번만 돌려 복사하는 일과 확장자 거르기를 하지 않는다(중복 제외·미지원 거르기는 [pl-02](extract.md#pl-02)). 처리 엔진 없는 확장자 파일이 들어오면 엔진 후보가 없어 그 문서는 작업 0건이다. `--shard i/k`는 내용 sha256으로 문서를 나눈다.
 8. `.pptx`(anydoc)·`.txt`(plaintext)·`.csv`(markitdown)는 엔진 하나만 돈다 — 0.3.0 엔진 비교(`valid_env` 86건, 11-06)에서 보조 엔진(kreuzberg·markitdown)이 대표 결과에 더한 것이 없었다(사용자 11-06).
@@ -58,7 +58,7 @@
 ### 규칙
 1. 모든 VLM 호출(엔진 `qwen_vlm`·쪽 VLM·pptx 슬라이드·그림 VLM·중첩 그림)은 `pipeline/shared/vlmcall.py`의 `ask()` 하나로 `common.ai.llm.complete('vlm')`를 부른다 — 내부망 가드·예산 장부·모델 다운 감지가 같고, 요청 본문에 `common.models.vlm.vlm_extra_request_body`(생각 끄기 등)를 합친다. 코드에 고정한 생각 끄기는 없다.
 2. 호출 1건 제한 시간 = `common.models.vlm.vlm_timeout_sec`(180초). 실패(시간 초과·연결 오류·429·5xx) 재시도 = `tuning.common.models.vlm.vlm_retries`(1 — 시도는 retry + 1번).
-3. 렌더 해상도 = `extract.page_render_dpi`(150) 하나 — 엔진·쪽 VLM·pptx·그림·`prepare --dpi` 기본값. 긴 변은 2000 px로 줄인다.
+3. 렌더 해상도 = `extract.page_render_dpi`(150) 하나 — 엔진·쪽 VLM·pptx·그림·준비(prepare) 회전이 같이 쓴다. 긴 변은 2000 px로 줄인다.
 4. 쪽 수 상한 = `transform.vlm.vlm_max_pages_per_doc`(비움 = 전부, 0 = 끔) — 엔진과 쪽 VLM 공통. `extract.ocr.ocr_max_pages_per_doc`는 OCR 엔진(VLM 아님)에만 남는다(엔진 공용 파일 `engines/_common`을 바꾸면 모든 엔진 지문이 바뀌어 두었다).
 5. 엔진과 쪽 VLM은 같은 쪽 옮기기 함수(`transcribe` — 같은 지시문 `page_transcribe`·렌더·캐시 열쇠)를 써서, 엔진이 옮긴 쪽은 후보정이 캐시로 다시 쓴다. 엔진은 쪽 하나라도 호출이 실패하면 문서×엔진 실패로 남긴다(빈 답은 빈 쪽).
 6. 동시 수: 한 프로세스 안 모든 VLM 호출의 합 상한 = `common.models.vlm.vlm_max_total_requests`(8, 호출 한 건이 자리 하나). 문서 하나 안 = `common.models.vlm.vlm_requests_per_doc`(4 — 쪽·그림 공통). 쪽 옮기기는 가장 느린 호출이 60초를 넘으면 다음 묶음 병렬 수를 절반(최소 2)으로 줄였다가 빨라지면 되돌린다(코드 상수).
@@ -112,14 +112,14 @@
 
 ### 규칙
 1. 대표 엔진은 정확도 + 풍부함으로 고른다(`transform.represent.engine_pick`, 기본 best).
-2. 줄 단위 투표로 합치고(`fragment_vote.py`), 엔진 사이 라벨·값을 서로 확인한다(`crosscheck.py`).
+2. 여러 엔진이 성공하면 대표 본문은 그대로 두고 다른 엔진에만 있는 조각을 끼운다([pl-67](#pl-67)).
 3. 후보정 `PARSE_POST`(일괄 파싱 기본 `all` = `vlm_page,supsub,charts,figures,context,attachments`, 파싱 서비스 기본 `supsub`): 쪽 VLM 채우기([pl-22](#pl-22)), 윗첨자 `^`·아래첨자 `_`, 차트·그림([pl-05](#pl-05)), 그림 근처 맥락([pl-37](#pl-37)), 메일 첨부([pl-36](#pl-36)).
 4. 여러 엔진의 표를 본문 제자리에 넣고(`table_inline.py`), 표준 표(`tables_std`)를 만든다. 바꾼 자리 안 칸 사이 글은 표 뒤에 남기되, 표 칸(하나 또는 공백으로 나뉜 여럿 — 고른 표와 본문 엔진 표의 칸 모두)으로만 된 글은 버린다.
 5. 파싱 QA(`parse_scoring.py`): 교차 정확도가 `resources/config/criteria.json` `run.cross_acc_full`(0.95) 미만이면 상태 `partial`, 아니면 `ok`.
 6. 대표 결과는 마스터(용어집·고객 명부)를 읽지 않는다.
 
 ### QA
-- `tests/general/pipeline/test_represent.py` · `tests/server/pipeline/test_fuse.py` · `tests/server/pipeline/test_table_inline.py` · `tests/server/pipeline/test_table_std.py` · `tests/server/pipeline/test_supsub.py` · `tests/general/pipeline/test_parse_qa.py`.
+- `tests/general/pipeline/test_represent.py` · `tests/server/pipeline/test_cross_merge.py` · `tests/server/pipeline/test_table_inline.py` · `tests/server/pipeline/test_table_std.py` · `tests/server/pipeline/test_supsub.py` · `tests/general/pipeline/test_parse_qa.py`.
 - Status: done
 
 <a id="pl-36"></a>
@@ -129,12 +129,12 @@
 메일의 핵심 내용이 첨부에 있는 경우가 많다.
 
 ### 규칙
-1. `.eml`·`.msg`의 첨부(zip 첨부는 풀어서)를 형식별 엔진으로 재귀 파싱한다 — 깊이 `tuning.extract.attach.attachment_max_depth`(1), 첨부 하나 `attachment_max_mb`(20 MB) 넘으면 건너뜀, 문서당 `attachment_max_count`(10)개까지.
+1. `.eml`·`.msg`의 첨부와 메일 안 메일(이름 없이 통째로 붙은 전달 메일 포함)은 받기 단계가 준비 폴더 `_parts/`에 꺼내 두고([extract.md#pl-63](extract.md#pl-63)), 첨부 단계가 형식별 엔진으로 파싱한다 — 깊이 `tuning.extract.attach.attachment_max_depth`(2 — 압축·오피스 개체와 같이 셈, 사용자 11-06), 첨부 하나 `attachment_max_mb`(20 MB) 넘으면 건너뜀, 메일 하나에서 `attachment_max_count`(10)개까지.
 2. 결과는 대표 본문에 `[첨부 <파일명>]` 절로 덧붙이고, 인용 스레드는 접는다.
 3. 인라인 그림(cid)은 그림 기능([pl-05](#pl-05))이 맡는다.
 
 ### QA
-- `tests/general/pipeline/test_attachments.py`.
+- `tests/general/pipeline/test_attachments.py` · `tests/server/pipeline/test_unpack.py`(pl-63).
 - Status: done
 
 <a id="pl-37"></a>
@@ -262,3 +262,16 @@
 ### QA
 - 정할 것: 규칙마다 `valid_env` 해당 문서의 대표 결과 전후 비교 + 단위 시험 표 한 줄.
 - Status: todo
+
+<a id="pl-67"></a>
+## pl-67 · 대표 결과 교차 병합
+- 요건: 엔진 하나면 그대로, 여럿이면 다른 쪽만 조각 단위로 병합(소제목·표·쪽·bbox). 시간 제한 대신 비교를 가볍게. 읽는 곳 없는 조각 투표·교차 확인은 이 구조로 바꾸며 지운다.
+- 규칙(사용자 11-08 결정):
+  1. 그 문서에 성공한 엔진이 하나면 그 결과를 그대로 쓴다(병합 없음).
+  2. 여럿이면 대표 엔진 본문은 **한 글자도 바꾸지 않는다**. 다른 엔진 본문을 조각(빈 줄·쪽 나눔 `\f`으로 나눈 소제목·표·문단)으로 나눠, 조각 낱말의 98% 이상이 대표에 있으면 같은 내용으로 보고 건너뛴다. 아니면 그 조각을 바로 앞에 맞은 대표 조각 바로 뒤에 끼운다(앞에 맞은 조각이 없으면 그 쪽 첫머리).
+  3. 쪽 수(`\f`)가 같으면 쪽끼리, 다르면 문서 전체끼리 견준다. 공백을 뺀 글이 같은 쪽은 조각 비교 없이 먼저 거른다(가벼운 비교 먼저 — 시간 제한 없음).
+  4. 비교 전 줄 끝(`\r\n`)을 `\n`으로 맞춘다(옛 버그: kreuzberg 본문의 `\r\n` 때문에 문단이 길어 보여 `kvx_rfp_main.pdf` 문단 7개 중 6개가 바뀌었다).
+  5. 끼운 조각 수를 엔진별로 `rep.rep.merge`에 남긴다.
+- 반영: `pipeline/transform/represent/doc_represent.py` `cross_merge()`. 지운 것 — 조각 투표 `fragment_vote.py`(`rep.fused`·`_rep/conflicts.jsonl`), 교차 확인 `crosscheck.py`(`rep.meta` 내용 — 인계 계약 칸이라 빈 값 `{}`만 남김), 옛 쪽·문단 교체(`_merge_pages`·`_merge_paragraphs`), 채점의 `route.json`(교차 확인만 읽음), `common/core/repfmt.py`의 `pairs_of`·`nlabel`·`pick`과 그것만 쓰던 것(핸드오프 지문 바뀜 — 서버 문서 전체 다시 처리, [C-113](../refactoring/refactor.md)). 시험 `tests/server/pipeline/test_cross_merge.py`.
+- 비고: 엑셀 날짜 칸은 모든 엔진이 `YYYY-MM-DD[ HH:MM]` 한 가지로 쓴다(office는 칸 서식을 읽어 일련번호 `46355` → `2026-11-29`, kreuzberg·markitdown은 `2026-11-29 00:00:00` → `2026-11-29`). 날짜 표기 차이로 시트 조각이 통째로 끼워지던 일이 없어졌다(`arg_abx101_stability_trend_ko.xlsx` 끼운 조각 1 → 0, 본문 32,085 → 16,455자). 시험 `tests/server/pipeline/test_office_dates.py`.
+- Status: done

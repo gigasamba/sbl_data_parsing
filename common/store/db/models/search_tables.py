@@ -1,7 +1,7 @@
 """검색 스키마 표 정의(정본). 원천 시스템마다 PG 스키마 하나 `<PG_SCHEMA>_<원천>`
 (원천 = sfdc·crms·las·faq·other + 개발 서버의 DEV 원천 dev_<n> — op-17) — 스키마마다 같은 표 doc·chunk·chunk_term·term_stat·corpus_stat + 뷰 v_chunk_source, 그 원천 전용 칸만 다름.
 기준 스키마 `<PG_SCHEMA>`에는 Alembic 판 표와 5벌이 함께 쓰는 doc_id 시퀀스(`doc_id_seq`)만 있다(실행 정보는 실행 기록에).
-임베딩 차원은 실행 값이라 함수로 만든다. 색인 정의 글자(index_defs)·뷰(views_expected — 칸 이름 순서 + 정의 글자)는 PostgreSQL이 돌려주는 꼴
+임베딩 차원은 실행 값이라 함수로 만든다. 색인 정의 글자(index_defs)·뷰(view_columns 칸 이름 순서·view_sql 정의 글자)는 PostgreSQL이 돌려주는 꼴
 (pg_get_indexdef·pg_get_viewdef — `{S}` = 원천 스키마). Alembic 판(migrations/versions/0002~0007)이 같은 DDL을 글자로 갖고,
 selftest(test_dbtool)가 판 파일의 칸·뷰를 이 정의와 대조한다."""
 
@@ -47,7 +47,7 @@ DOC_RECORD = (
     ("loaded_at", TIMESTAMP(timezone=True)),
 )
 
-# doc 찾기용 btree 색인(판 0007 — op-17): 이름 `ix_<원천 스키마>_<키>` → 칸. attrs GIN 색인(판 0005)은 index_defs에만 둔다(SQLite 대역은 GIN 없음).
+# doc 찾기용 btree 색인(판 0007 — op-17): 이름 `ix_<원천 스키마>_<키>` → 칸. attrs GIN 색인(판 0005)은 index_defs에만 둔다.
 # sha256 = 내용 중복 판정 · silver_bucket·silver_key = 게시한 대표 결과 위치 · file_path = 게시·--skip-done 끝난 문서·get_doc_fulltext가 원본 경로로 찾음.
 DOC_INDEX = {"doc_sha256": ("sha256",), "doc_silver": ("silver_bucket", "silver_key"), "doc_path": ("file_path",)}
 
@@ -77,26 +77,19 @@ def dev_order(srcs):
     return sorted(srcs, key=lambda s: int(s[len("dev_") :]))
 
 
-def dev_sources(base, q=None):
-    """있는 DEV 원천 스키마 `<base>_dev_<n>`의 원천 이름(번호 순) — q = PG 질의 함수(SQL → [dict]), 없으면 PC 대역 폴더의 `<스키마>.sqlite`.
+def dev_sources(base, q):
+    """있는 DEV 원천 스키마 `<base>_dev_<n>`의 원천 이름(번호 순) — q = PG 질의 함수(SQL → [dict]).
     prd는 찾지 않는다(빈 목록 — DEV 원천은 개발 서버·PC만)."""
     from common.config.settings import guard_run_env
 
     if guard_run_env() == "prd":
         return []
-    if q is None:
-        from common.store.pg_standin import standin_dir
-
-        names = [p.stem for p in standin_dir().glob(f"{base}_dev_*.sqlite")]
-    else:
-        names = [
-            r["s"] for r in q(f"SELECT schema_name AS s FROM information_schema.schemata WHERE schema_name ~ '^{base}_dev_[1-9][0-9]?$'")
-        ]
+    names = [r["s"] for r in q(f"SELECT schema_name AS s FROM information_schema.schemata WHERE schema_name ~ '^{base}_dev_[1-9][0-9]?$'")]
     found = {src for b, src in map(split_schema, names) if b == base and is_dev(src)}
     return dev_order(found)
 
 
-def all_sources(base, q=None):
+def all_sources(base, q):
     """고정 5벌 + 있는 DEV 원천(dev_sources) — 원천 스키마 어디든 보는 자리(끝난 문서·원문 도구·적재)가 쓴다."""
     return [*SOURCES, *dev_sources(base, q)]
 
@@ -132,20 +125,15 @@ def doc_columns(src):
 _DOC_BASE = ("doc_id", "file_path", "summary", "created_at", "client_edw", "clients_doc")
 
 
-def search_metadata(schema, dim, shared_seq=True):
-    """원천 스키마 하나의 표 정의 — schema = `<PG_SCHEMA>_<원천>`, dim = 임베딩 차원. shared_seq: doc_id 기본값을 기준 스키마의 공용 시퀀스로
-    (SQLite 대역은 False — 대역은 스키마마다 파일 하나라 시퀀스를 흉내 내지 않고 자동 번호)."""
+def search_metadata(schema, dim):
+    """원천 스키마 하나의 표 정의 — schema = `<PG_SCHEMA>_<원천>`, dim = 임베딩 차원. doc_id 기본값은 기준 스키마의 공용 시퀀스."""
     base, src = split_schema(schema)
     if src is None:
         raise ValueError(f"원천 스키마 이름이 아님(<기준>_<{'|'.join(SOURCES)}|dev_<n>>): {schema!r}")
     md = MetaData(schema=schema)
-    doc_id = (
-        Column(
-            "doc_id", Integer, primary_key=True, server_default=text(f"nextval('{base}.{SEQ}')")
-        )  # PG가 ::regclass를 붙여 저장 — Alembic 비교는 그것을 떼고 봄
-        if shared_seq
-        else Column("doc_id", Integer, primary_key=True)
-    )
+    doc_id = Column(
+        "doc_id", Integer, primary_key=True, server_default=text(f"nextval('{base}.{SEQ}')")
+    )  # PG가 ::regclass를 붙여 저장 — Alembic 비교는 그것을 떼고 봄
     Table(
         "doc",
         md,
@@ -231,7 +219,7 @@ def view_columns(src):
 
 
 def view_sql(src):
-    """CREATE VIEW 본문(`{S}` = 원천 스키마) — 판 0005와 SQLite 대역이 같은 글자를 쓴다."""
+    """CREATE VIEW 본문(`{S}` = 원천 스키마) — 판 0005가 쓰는 글자."""
     doc_cols = _VIEW_DOC
     sel = (
         ["c.chunk_id", "c.doc_id", "d.file_path", "regexp_replace(d.file_path, '^.*/', '') AS file_name"]
@@ -240,13 +228,3 @@ def view_sql(src):
         + [f"c.{n}" for n, _ in CHUNK_EXTRA.get(src, ())]
     )
     return "SELECT " + ", ".join(sel) + " FROM {S}.chunk c JOIN {S}.doc d ON d.doc_id = c.doc_id"
-
-
-def views_expected(src):
-    """뷰 이름 → (칸 이름 순서 — 판정, 정의 글자 — 알림만)."""
-    return {"v_chunk_source": (tuple(view_columns(src)), view_sql(src))}
-
-
-def view_ddl(src):
-    """SQLite 대역(pg_standin)에 줄 뷰 DDL(대역 번역기가 CREATE OR REPLACE VIEW를 DROP+CREATE로 바꿈)."""
-    return "DROP VIEW IF EXISTS {S}.v_chunk_source;\nCREATE OR REPLACE VIEW {S}.v_chunk_source AS\n" + view_sql(src)

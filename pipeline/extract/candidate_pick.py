@@ -3,7 +3,7 @@
 지원 안 하는 형식을 뺀다. 받기·미리 받기·끝 정리는 candidate_ready.
 
 열: 실 EDW `AI.FileStorageMap`의 여섯 열만 읽는다 — doc_id=id · key=s3_key · size=file_size ·
-filename=original_filename · content_version=content_version_id · source_system=source_system(원천 — 고르기·구조화·적재·게시가 이 값 하나, op-17)(열 이름이 다른 csv는 extract.connections.rdb.columns로 — 식별자 화이트리스트만).
+filename=original_filename · source_system=source_system(원천 — 고르기·구조화·적재·게시가 이 값 하나, op-17)(열 이름이 다른 csv는 extract.connections.rdb.columns로 — 식별자 화이트리스트만).
 버킷 — key가 `s3://버킷/…` 꼴이면 그 안의 버킷, 아니면 RDB_BUCKET.
 이미 처리됐는지는 (key, 증분값) 쌍으로(`_rdb_is_done` — 같은 s3_key의 새 판을 "이미 처리됨"으로 오판하지 않게). 증분값 = RDB_INCREMENT_COL 열(비우면 doc_id 열).
 문서 이름 — original_filename을 그대로(없으면 doc_id), 같은 이름이 여럿이면 doc_id 접두(`<doc_id>__<이름>`)로 구분.
@@ -34,15 +34,7 @@ def is_remote(source):
 def _rdb_cols():
     """RDB 표의 열 이름(실 EDW `AI.FileStorageMap` 기본값 — 설정 extract.connections.rdb.columns). 열 이름도 식별자이므로
     화이트리스트로 확인(독립 검토 BLOCK 3 — SQL 삽입)."""
-    c = pc.cfg().connections.rdb.columns
-    cols = {
-        "doc_id": c.doc_id,
-        "key": c.key,
-        "size": c.size,
-        "filename": c.filename,
-        "content_version": c.content_version,
-        "source_system": c.source_system,
-    }
+    cols = pc.cfg().connections.rdb.columns.model_dump()
     bad = {k: v for k, v in cols.items() if v and not COL_ID_RE.match(v)}
     if bad:
         raise ValueError(f"[source] RDB_COL_* 값이 올바르지 않음(영문·숫자·_ 만) — {bad}")
@@ -92,18 +84,15 @@ def _load_done(state):
     return done
 
 
-def _rdb_is_done(done, key, etag, ver):
-    """이미 처리됐는지 — ETag가 있으면 그 key로 처리된 기록 중 하나라도 ETag가 일치하면(바뀌면 다시 받음). 없으면
-    (FileStorageMap처럼 ETag 열이 없는 표) (key, 증분값) 쌍이 기록 중 하나와 같은지로 — 키만 보면 같은 s3_key에
+def _rdb_is_done(done, key, ver):
+    """이미 처리됐는지 — (key, 증분값) 쌍이 기록 중 하나와 같은지로(문서 위치 표에는 ETag 열이 없음) — 키만 보면 같은 s3_key에
     새 id/content_version_id가 들어온 새 판(같은 경로에 새 파일을 올리는 EDW 흐름)을 "이미 처리됨"으로 오판해
-    watermark까지 전진시켜 영영 못 받는다. etag·증분값 둘 다 없으면 식별할 수가 없으므로 늘
+    watermark까지 전진시켜 영영 못 받는다. 증분값이 없으면 식별할 수가 없으므로 늘
     '미완료'로 봐서 다시 시도(조용한 영구 누락보다 안전 — None과 None을 '같다'고 오판하는 함정은 이 단계에서도
     막는다). done은 key → 레코드 목록(`_load_done()`)."""
     recs = done.get(key)
     if not recs:
         return False
-    if etag is not None:
-        return any(r.get("etag") == etag for r in recs)
     if ver is not None:
         return any(r.get("ver") == ver for r in recs)
     return False
@@ -126,8 +115,8 @@ def _processed_path(state):
 
 
 def _rdb_rows(table):
-    """문서 위치 표(csv:<경로>)의 행을 공통 꼴로: doc_id·bucket·key·etag(늘 None — 표에 ETag 열 없음)·size·filename·content_version·
-    updated_at(증분값 — 처리 여부 판단)·created_at. csv만 받는다."""
+    """문서 위치 표(csv:<경로>)의 행을 공통 꼴로: doc_id·bucket·key·size·filename·source_system·
+    updated_at(증분값 — 처리 여부 판단). csv만 받는다."""
     if not table.startswith("csv:"):
         raise ValueError(f"[source] rdb:{table} — 원천은 rdb:csv:<경로>만(11-01 사용자: rdb:*·rdb:<이름>·표 직접 질의 지움)")
     cols = _rdb_cols()
@@ -142,13 +131,10 @@ def _rdb_rows(table):
                 "doc_id": str(r[cols["doc_id"]]),
                 "bucket": bucket,
                 "key": key,
-                "etag": None,
                 "size": int(r[cols["size"]]) if r.get(cols["size"]) not in (None, "") else None,
                 "filename": r.get(cols["filename"]) or None,
-                "content_version": r.get(cols["content_version"]) or None,
                 "source_system": src_name(r.get(cols["source_system"])),  # 원천(FileStorageMap.source_system — 대문자)
                 "updated_at": _inc_value(r, inc_col),
-                "created_at": r.get("created_at") or None,  # 원천 등록 시각 — 표에 칸이 있을 때만
             }
         )
     return mapped
@@ -168,7 +154,7 @@ def picked(system, systems):
 
 
 def _filter_unsupported_rows(rows, name_of):
-    """압축(ARCHIVE_EXT)·처리 엔진 없는 확장자(registry.engines_for)는 받기 전에 걸러낸다(name_of
+    """풀지 않는 압축(ARCHIVE_EXT)·처리 엔진 없는 확장자(registry.engines_for)는 받기 전에 걸러낸다(name_of
     계산 뒤 sample() 호출 전 — 다운로드 자체를 안 함). 사유 말은 filter_and_rotate의 skipped.jsonl과 같다
     (pipeline.extract.filter_and_rotate._unsupported_reason 재사용 — 같은 규칙 한 곳). 반환: (남은 rows, 걸러진 rows 목록)."""
     from pipeline.extract.filter_and_rotate import _unsupported_reason
@@ -184,8 +170,7 @@ def _filter_unsupported_rows(rows, name_of):
 
 
 def _record_source_skipped(state, skipped):
-    """건너뛴 행 기록(state/source_skipped.jsonl, {file,key,reason} — filter_and_rotate.py skipped.jsonl과 같은 사유 말) +
-    다시 받을 길이 없으므로(지원 안 하는 형식) 바로 처리 완료로 표시(watermark가 이 파일 때문에 영영 안 전진하는
+    """건너뛴 행 기록 — 다시 받을 길이 없으므로(지원 안 하는 형식) 바로 처리 완료로 표시(watermark가 이 파일 때문에 영영 안 전진하는
     것을 막음 — finish()가 파싱 성공분을 기록하는 것과 같은 자리 `_processed_path`) + 문서마다 extract.skip 1행(skip_event) +
     applog.except_doc_info skip(except_docs.record — 다음 대상 목록이 뺌, op-17)."""
     from pipeline.shared import except_docs
@@ -205,13 +190,10 @@ def _record_source_skipped(state, skipped):
             for s in skipped
         ]
     )
-    with (state / "source_skipped.jsonl").open("a", encoding="utf-8") as f:
-        for s in skipped:
-            f.write(json.dumps({"file": s["file"], "key": s["row"]["key"], "reason": s["reason"]}, ensure_ascii=False) + "\n")
     with _processed_path(state).open("a", encoding="utf-8") as f:
         for s in skipped:
             r = s["row"]
-            f.write(json.dumps({"key": r["key"], "etag": r.get("etag"), "ver": r.get("updated_at")}, ensure_ascii=False) + "\n")
+            f.write(json.dumps({"key": r["key"], "ver": r.get("updated_at")}, ensure_ascii=False) + "\n")
 
 
 def _hidden(p):
@@ -244,11 +226,7 @@ def _tree_files(src):
     원천 목록(extract.source.systems — required.source.source_systems)에 드는 원천 폴더의 파일만(비면 운영 5개 원천 — DEV-<n> 폴더 뺌, picked) —
     모양 판정은 모든 폴더로(다 빠지면 빈 목록)."""
     out = _publish_dirs()
-    top = [
-        p
-        for p in src.iterdir()
-        if not _hidden(p) and p.name != ".gitkeep" and not (p.is_file() and p.suffix == ".md") and p.resolve() not in out
-    ]
+    top = [p for p in src.iterdir() if not _hidden(p) and not (p.is_file() and p.suffix == ".md") and p.resolve() not in out]
     dirs = [p for p in top if p.is_dir()]
     if not dirs or len(dirs) != len(top) or not all(_known_source(d.name) for d in dirs):
         return None
@@ -299,7 +277,7 @@ def done_by_sha(shas):
 def _read_done(read, empty):
     try:
         return read()
-    except (Exception, SystemExit) as ex:  # 서버에 PG 접속 정보가 없으면 SystemExit(대역 거부)
+    except (Exception, SystemExit) as ex:  # PG 접속 정보가 없으면 SystemExit(conf)
         if C.guard_run_env() not in (None, "local"):  # pl-12 — 서버(dev·prd·모르는 값)
             print(f"[parse] gold doc을 읽지 못함 — 멈춤(종료 4, 전체 재파싱 안 함): {type(ex).__name__}", file=sys.stderr, flush=True)
             raise SystemExit(4) from None
@@ -323,7 +301,7 @@ def rdb_pick(table, state, limit=0, done=frozenset()):
     seen = _load_done(state)
     systems = pc.cfg().extract.source.systems
     every = [r for r in _rdb_rows(table) if picked(r["source_system"], systems)]  # 원천 목록 밖 행은 고르지 않음(건너뜀 기록 없음)
-    rows = [r for r in every if not _rdb_is_done(seen, r["key"], r["etag"], r["updated_at"]) and r["key"] not in done]
+    rows = [r for r in every if not _rdb_is_done(seen, r["key"], r["updated_at"]) and r["key"] not in done]
     name_of = _rdb_names(rows)  # original_filename(또는 doc_id) — 충돌하면 doc_id 접두로 구분
     rows, skipped = _filter_unsupported_rows(rows, name_of)  # 압축·엔진 없는 확장자는 받기 전에 걸러냄
     if skipped:
@@ -345,7 +323,6 @@ FSM_SQL = (
     "SELECT id, s3_key, original_filename, file_size, source_system FROM {table} "
     "WHERE ({cond}){src} AND file_size IS NOT NULL ORDER BY file_size ASC"
 )
-FAQ_PREFIX = "FAQ/"
 DOC_COLS = ("id", "s3_key", "original_filename", "file_size", "source_system")  # 목록 파일 docs 칸
 
 
@@ -442,11 +419,11 @@ def list_targets(keywords, start, limit=0, seqs=(), skip_done=False, max_docs=0,
         print(f"start-offset {start} ≥ 대상 {len(rows)}건", flush=True)
         start = len(rows)
     order = sorted(seqs) if seqs else list(range(start, len(rows) if not limit else min(len(rows), start + limit)))
-    never = None
-    if skip_done:
-        from pipeline.shared import except_docs
+    from pipeline.shared import except_docs
 
-        done, never = done_keys(), except_docs.skipped_keys()
+    never = except_docs.skipped_keys() if skip_done or use_faq else set()
+    if skip_done:
+        done = done_keys()
         before = len(order)
         order = [s for s in order if rows[s]["s3_key"] not in done]
         n_done = before - len(order)
@@ -457,10 +434,6 @@ def list_targets(keywords, start, limit=0, seqs=(), skip_done=False, max_docs=0,
             flush=True,
         )
     if use_faq:
-        if never is None:
-            from pipeline.shared import except_docs
-
-            never = except_docs.skipped_keys()
         order = faq_first(rows, order, faq_rows, never, Path(faq_seen), sync)
     elif faq_seen is not None:
         print("FAQ 교체 확인(pl-41) 건너뜀 — --seqs·--limit 실행 또는 원천 목록에 FAQ 없음", flush=True)

@@ -1,27 +1,24 @@
 """pl-02 — 파싱 전 extract `candidate_ready.stage_batch`: 받기 → 중복 제외(받은 파일 sha256 — 같은 묶음 · gold에 끝난 다른 원본 — op-17)
 → 거르기(filter_and_rotate — DRM·암호·지원 안 함). 건너뛴 문서는 문서마다 extract.skip span 1행 · 영구 뺌(중복 포함)은 except_doc_info skip.
-gold·applog는 PC 대역(임시 폴더) — 외부 접속 없음."""
+gold·applog는 실 pgvector 임시 스키마(goldseed.gold — test_*, 시험 뒤 지움)."""
 
-import contextlib
 import hashlib
 import os
-import sqlite3
 import sys
 import tempfile
 import uuid
 from pathlib import Path
 from unittest import mock
 
-from common.config.settings import COMMON
 from common.core import jsonlog, span
 from common.core.contract import jl
-from common.store import pg as PGC
 from pipeline import config as pc
 from pipeline.extract import candidate_ready as CR
 from pipeline.extract import filter_and_rotate as FR
 from pipeline.shared import except_docs as SD
 from pipeline.shared import srcsha as SRCSHA
-from tests.server.pipeline.goldseed import seed
+from tests.server.common import pgcase
+from tests.server.pipeline.goldseed import gold, seed
 from tests.server.pipeline.test_candidate import _FakeS3
 
 sha = lambda body: hashlib.sha256(body).hexdigest()
@@ -32,7 +29,7 @@ CASES = [
     ("a(1).txt", b"same", "dup_batch", "a.txt"),  # 같은 묶음 안 같은 내용
     ("old.txt", b"old", "dup_done", DONE_KEY),  # gold에 끝난 다른 원본과 같은 sha256
     ("drm.pdf", b"<## FASOO header", "drm_fasoo", None),  # DRM — 표시하고 건너뜀
-    ("z.zip", b"PK\x03\x04zip", "unsupported_archive", None),  # 지원 안 함(압축)
+    ("z.7z", b"7z\xbc\xaf\x27\x1c", "unsupported_archive", None),  # 지원 안 함(풀지 않는 압축 — zip은 pl-57)
     ("n.txt", b"normal", None, None),  # gold에 같은 원본 키(n.txt)로 끝남 — 그 문서의 재처리라 남음
 ]
 # gold doc 행 (원본 키, 내용)
@@ -54,8 +51,7 @@ def test_stage_batch_order_and_skip_log():
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         with (
-            COMMON.env(RUN_ENV="local", PG_STANDIN_DIR=str(root / "pg")),
-            mock.patch.object(PGC, "has_conn", return_value=False),
+            gold(),
             mock.patch.object(span, "_emit", lambda row, level=None: rows.append(row)),
             jsonlog.context(run_id=str(uuid.uuid4())),
         ):
@@ -106,8 +102,7 @@ def test_same_night_dup():
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         with (
-            COMMON.env(RUN_ENV="local", PG_STANDIN_DIR=str(root / "pg")),
-            mock.patch.object(PGC, "has_conn", return_value=False),
+            gold(),
             mock.patch.object(CR.CP, "done_by_sha", lambda shas: {}),
             mock.patch.object(span, "_emit", lambda row, level=None: rows.append(row)),
             jsonlog.context(run_id=str(uuid.uuid4())),
@@ -121,8 +116,11 @@ def test_same_night_dup():
                 keep = (d / "dedup" / "keep.txt").read_text(encoding="utf-8").split()
                 assert (name in keep) == (reason is None), (seq, keep)
                 assert sorted(p.name for p in (d / "dedup").iterdir()) == ["keep.txt"]  # 1건 — 지문 캐시·보고서 안 씀
-        with contextlib.closing(sqlite3.connect(root / "pg" / "applog.sqlite")) as cn:
-            got = dict(cn.execute("SELECT source_key, reason FROM except_doc_info WHERE except_type = 'skip'").fetchall())
+            db = pgcase.connect(SD._schema())
+            got = {
+                r["k"]: r["r"] for r in db.q(f"SELECT source_key AS k, reason AS r FROM {db.schema}.{SD.TABLE} WHERE except_type = 'skip'")
+            }
+            db.cn.close()
     assert got == {n: "duplicate_sha256" for _, n, _, reason, _ in RUN_DOCS if reason}, got
     skips = [(r["doc_id"], r["metrics"]["reason"], r["metrics"].get("dup_of")) for r in rows if r["stage"] == "extract.skip"]
     assert skips == [(n, reason, dup_of) for _, n, _, reason, dup_of in RUN_DOCS if reason], skips

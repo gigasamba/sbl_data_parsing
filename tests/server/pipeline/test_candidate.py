@@ -14,6 +14,7 @@ from pipeline.extract.candidate_ready import (
     finish,
     resolve,
 )
+from tests.server.common import pgcase
 
 
 def mark_done(state, done_names, is_s3):
@@ -23,7 +24,7 @@ def mark_done(state, done_names, is_s3):
     with (state / "processed.jsonl").open("a", encoding="utf-8") as f:
         for n in done_names:
             r = man[n]
-            f.write(json.dumps({"key": r["key"], "etag": r["etag"], "ver": r.get("updated_at")}, ensure_ascii=False) + "\n")
+            f.write(json.dumps({"key": r["key"], "ver": r.get("updated_at")}, ensure_ascii=False) + "\n")
 
 
 def selftest():
@@ -132,7 +133,7 @@ def _selftest_filestoragemap():
         for n in names1:
             uri = ids.make_source_uri(n, local_dir / n)
             assert uri == man1[n]["uri"] and uri == f"s3://fsm-bucket/{man1[n]['key']}", uri  # 요건 ⑤ source_uri 형식
-            assert man1[n]["original_filename"] and man1[n]["content_version_id"], man1[n]  # 요건 ⑦ — 있는 칸은 그대로
+            assert man1[n]["original_filename"], man1[n]  # 요건 ⑦ — 있는 칸은 그대로
         mark_done(state, names1, is_s3=True)
 
         # 2회차 — 전부 처리 기록됐으니 0건(ETag 없는 표라도 _rdb_is_done이 키 존재만으로 판정)
@@ -274,7 +275,12 @@ RERUN_CASES = [  # (실행마다 이번에 고르는 원본 키) — 같은 결�
 ]
 
 
-def test_rerun_keeps_source():
+def test_rerun_keeps_source():  # 용어집·고객 명부는 실 pgvector 임시 스키마의 마스터 표(e2-22)
+    with pgcase.with_master():
+        _rerun_keeps_source()
+
+
+def _rerun_keeps_source():
     """E2E 11-06 — 같은 결과 폴더로 다시 돌리면 이번 실행 목록에는 이번 문서만 있다. 앞 문서도 manifest에 남아 구조화(gold_bundle)가
     원천·원본 키를 그대로 쓴다(other로 떨어지거나 PC 절대 경로가 file_path가 되지 않음 — op-17 규칙 17). 이름이 겹치면 앞 문서를 덮지 않는다."""
     import tempfile
@@ -338,7 +344,14 @@ def test_rerun_keeps_source():
             assert ST.source_of(d["source_system"]) != "other", d  # 적재가 _other에 넣지 않음
 
 
-def test_stage_batch():
+def test_stage_batch():  # 예외 기록(applog)은 실 pgvector 임시 스키마로(goldseed.gold — 서버 applog에 안 씀)
+    from tests.server.pipeline.goldseed import gold
+
+    with gold():
+        _stage_batch()
+
+
+def _stage_batch():
     """파싱 전 extract 한 번 — gold에 끝난 문서(done)는 고를 때(받기 전) 빠지고, 같은 내용은 하나만, 거르기(filter_and_rotate)를 지난 것만
     only.txt에 남음 · pick_new는 상한·목록 안에서만."""
     import tempfile
@@ -361,10 +374,10 @@ def test_stage_batch():
                 (prepared / n).write_text("x", encoding="utf-8")
         return 0
 
-    with mock.patch.object(CP, "done_by_sha", lambda shas: {}):  # gold 읽기 없음
+    with mock.patch.object(CP, "done_by_sha", lambda shas: {}), mock.patch.object(M, "_dedup", wraps=M._dedup) as dd:  # gold 읽기 없음
         local, left, state, only = M.stage_batch(str(src), root / "out", prepared, 0, run_step, done={"c.txt"})
     assert steps == ["pipeline.extract.filter_and_rotate"] and Path(local) == src
-    assert (state / "selected.txt").read_text(encoding="utf-8").split() == ["a.txt", "b.txt", "d.zip"]  # 끝난 c.txt는 고를 때 빠짐
+    assert dd.call_args.args[1] == ["a.txt", "b.txt", "d.zip"], dd.call_args  # 끝난 c.txt는 고를 때 빠짐
     assert len(left) == 1 and left[0] in ("a.txt", "b.txt") and only.read_text(encoding="utf-8").split() == left, (
         left
     )  # zip은 거르기에서 빠짐

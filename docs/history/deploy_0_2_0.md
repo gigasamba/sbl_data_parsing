@@ -1,6 +1,6 @@
 # 0.2.0 배포 — 사람이 할 일(기록)
 
-0.1.0 운영 서버를 0.2.0으로 올릴 때 쓴 절차와 설정 변경 목록이다. 지난 기록으로만 둔다 — 지금 판을 올리는 법은 [upgrade-guide.md](../operations/upgrade-guide.md).
+0.1.0 운영 서버를 0.2.0으로 올릴 때 쓴 절차와 설정 변경 목록이다. 지난 기록으로만 둔다 — 지금 판을 올리는 법은 [server-guide.md](../operations/server-guide.md#4-운영-중인-서버를-새-판으로-올리기).
 
 **실제로 칠 명령은 8-3**, 되돌리기는 8-5. 항목별 근거·상태는 [refactor.md](../refactoring/refactor.md)의 C 표다. 값·비밀은 이 문서에 쓰지 않는다. 누가: 사용자 · 서버 운영 · DB 담당(공유 PostgreSQL) · EDW 담당(회사 DB) · devops(빌드·반입).
 
@@ -22,12 +22,12 @@
 | 1 | 판 전체 grill-me 검토 — 지문 전후(PRD [e2-02](../prd/test.md#e2-02))·DB 스키마(판 0002~0005·ParsingMeta DDL) | 사용자 | 등급 A |
 | 2 | ParsingMeta DDL 한 번 — 칸 이름 바꾸기·`loaded_at`·판 칸 등(운영 분류 스크립트가 멈추므로 운영 담당에게 알림) | DB 담당·EDW 담당 | C-76 |
 | 3 | PG — 새 `db_schema` 이름(50자 이하) · 권한(DB 수준 CREATE, 원천 스키마 5벌의 읽기·쓰기, `doc_id_seq`) | DB 담당 | C-74 |
-| 4 | 서버 settings.yaml 준비 — 필수 경로·접속([README 꼭 채울 값](../../README.md#꼭-채울-값)) · EDW 읽기·쓰기 계정 · `required.tokens.fulltext_sign_key` · 예전에 `-e`로 주던 값은 settings.yaml 칸으로([8-6](#8-6-010--020에서-바꿀-설정)) · 새벽 배치 칸은 비워 둠 | 서버 운영 | C-70·C-73·C-75·C-76 |
+| 4 | 서버 settings.yaml 준비 — 필수 경로·접속([README 꼭 채울 값](../operations/server-guide.md#꼭-채울-값)) · EDW 읽기·쓰기 계정 · `required.tokens.fulltext_sign_key` · 예전에 `-e`로 주던 값은 settings.yaml 칸으로([8-6](#8-6-010--020에서-바꿀-설정)) · 새벽 배치 칸은 비워 둠 | 서버 운영 | C-70·C-73·C-75·C-76 |
 | 5 | 노출됐던 운영 키 교체(아직 안 했으면) — 새 값은 settings.yaml에만 | 서버 운영 | C-10 |
 | 6 | 서버 `/tmp` 정리 주기·권한 600 점검(덮기 설정 임시 파일) | 사용자·서버 운영 | C-46 |
-| 7 | 폐쇄망 휠·`assets/` 채우고 빌드(release-and-patch §5-6 — `ALLOW_NO_ASSETS=1` 금지) | devops | — |
-| 8 | `server-changes.md`를 읽고 새 코드에 들어 있는지 대조(release-and-patch §2) | 서버 운영·개발자 | — |
-| 9 | EDW 표 설명 자료 폴더(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료)를 루트 아래 결과 폴더 `<루트>/output/edw_meta/`에 복사(UID 10001이 읽게)하고 settings.yaml에 `search.edw_meta.edw_meta_catalog_dir: /app/output/edw_meta`. 없으면 `edw_meta` 도구만 `not_configured`(README §5-0 4) | 서버 운영 | C-91 |
+| 7 | 폐쇄망 휠·`assets/` 채우고 빌드(server-guide §5-3-1 — `ALLOW_NO_ASSETS=1` 금지) | devops | — |
+| 8 | `server-changes.md`를 읽고 새 코드에 들어 있는지 대조(server-guide §5-6) | 서버 운영·개발자 | — |
+| 9 | EDW 표 설명 자료 폴더(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료)를 루트 아래 결과 폴더 `<루트>/output/edw_meta/`에 복사(UID 10001이 읽게)하고 settings.yaml에 `search.edw_meta.edw_meta_catalog_dir: /app/output/edw_meta`. 없으면 `edw_meta` 도구만 `not_configured`(server-guide §1-5 4) | 서버 운영 | C-91 |
 | 10 | settings.yaml 칸 정리 — 지운 칸은 지우고, `search.server.fulltext_secret` 값은 `required.tokens.fulltext_sign_key`로, 토큰은 `required.tokens.mcp_token` 하나로 옮기고, `required.edw.edw_local_sqlite_file` 줄을 지우고(가짜 EDW는 PC 전용 — 남으면 시작 거부), 칸 이름을 새 이름으로 바꾼다(대응표 refactor.md C-95 — 옛 이름·지운 칸이 남으면 시작 거부) | 서버 운영 | C-92·C-95 |
 | 11 | FAQ 교체 기록 옮기기 — 첫 `run_pipeline.py` 실행 전에 옛 `<작업 폴더>/batch_progress/faq_seen.txt`가 있으면 `<결과 폴더>/_faq_seen.txt`로 복사하고 UID 10001이 읽고 쓰게 한다(`cp -p <옛 파일> <결과 폴더>/_faq_seen.txt && chown 10001 <결과 폴더>/_faq_seen.txt`). 안 옮기면 첫 실행이 gold `faq`를 한 번 통째로 교체한다 | 서버 운영 | C-95 ⑨ |
 
@@ -69,7 +69,7 @@ cd "$ROOT" && unzip -q <코드 zip>                                         # �
 cd "$ROOT/<코드>" && bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>   # 기대: "[host_ctl init] 루트: $ROOT" · output·backup · settings.yaml·edw_chain.yaml "만듦"
 cat CODE_COMMIT                                                          # 기대: 그 커밋
 ```
-- **[prd]** 개발 서버에서 굽고(release-and-patch §1-2 — 기대: `[판정] 통과` 뒤 `/var/tmp/bake/sbl_images/`) 운영 서버의 새 루트로 옮겨:
+- **[prd]** 개발 서버에서 굽고(server-guide §5-4 — 기대: `[판정] 통과` 뒤 `/var/tmp/bake/sbl_images/`) 운영 서버의 새 루트로 옮겨:
 ```bash
 cd "$ROOT" && DOCKER=$DOCKER bash sbl_images/load.sh 0.2.0     # 기대: 조각 sha256 확인 → load → BUILD.txt
 mkdir -p "$ROOT/<코드>" && tar -xzf sbl_images/0.2.0/code-0.2.0-<커밋>.tar.gz --no-same-owner -C "$ROOT/<코드>"
@@ -84,7 +84,7 @@ unset CODE_DIR                                                # 운영은 코드
 - `required.pg.pg_schema` → `$NEW_SCHEMA`.
 - 새벽 배치 `ops.nightly.nightly_start_time`·`nightly_max_docs`·`nightly_stop_time`은 비워 둔다(8-4 3에서 켬).
 - 칸 자리 찾기: `python -m common.config.sample --where <옛 env 이름 또는 칸>`(코드 폴더에서).
-- 서버 EDW의 사슬 표·칸 이름이 기본값과 다를 때만 [release-and-patch §8](../operations/release-and-patch.md#8-edw-조인-사슬-파일-고쳐-쓰기서버).
+- 서버 EDW의 사슬 표·칸 이름이 기본값과 다를 때만 [server-guide §3-9-2](../operations/server-guide.md#3-9-2-edw-조인-사슬-파일-고쳐-쓰기).
 ```bash
 chown 10001:<운영 그룹> "$ROOT/settings.yaml" && chmod 640 "$ROOT/settings.yaml"
 bash deploy/host/scripts/load_settings.sh common.host >/dev/null && echo 설정-읽힘   # 기대: 설정-읽힘("[설정] …"이면 그 안내대로 고침)
@@ -103,7 +103,7 @@ bash deploy/host/scripts/pipe_exec.sh migrate up --target all --dim <임베딩 �
 bash deploy/host/scripts/pipe_exec.sh migrate master load                     # 기대: "[migrate] master <NEW_SCHEMA>_master: CSV로 채움 · 해시 <8자>"
 bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 종료 코드 0 — 기대: 갈래마다 "  비교: 차이 없음"
 ```
-- vector 확장이 없다고 멈추면 release-and-patch §5-5 ⓪.
+- vector 확장이 없다고 멈추면 server-guide §1-8 0번.
 - 마스터 표 행 수(git 샘플 CSV 기준, 서버 폴더 `--dir`로 넣었으면 다름): `client_master` 6 · `client_roster` 10 · `contract_master` 4 · `domain_terms` 124 · `id_patterns` 9 · `units` 23 · `master_meta` 1. 확인: `$DOCKER exec "$PG_C" psql -U "$PG_U" -d "$PG_D" -c "SELECT count(*) FROM ${NEW_SCHEMA}_master.client_roster"`.
 
 **6. 띄우기**
@@ -149,7 +149,7 @@ nohup python3 deploy/host/scripts/run_pipeline.py --start-offset 0 > "$ROOT/run_
 tail -f <작업 폴더>/batch_progress/progress.log                               # 기대: 처음에 FAQ 교체 줄, 그다음 문서마다 "doc#<seq> …" 줄
 ```
 - 이 전체 실행에는 `--skip-done`을 주지 않는다 — ParsingMeta에 `gold_version` 칸이 생기기 전(C-76)에는 0.1.0이 끝낸 문서를 "끝남"으로 보고 건너뛴다.
-- 끝나면(종료 코드 0, 실패가 있으면 1 — [server-guide §2](../operations/server-guide.md#2-일상-실행--run_pipeline문서별-흐름)) `systemctl start mcp-server-keepalive.timer`(새벽 배치는 8-4 3).
+- 끝나면(종료 코드 0, 실패가 있으면 1 — [server-guide §3-3](../operations/server-guide.md#3-3-파이프라인-실행--run_pipeline)) `systemctl start mcp-server-keepalive.timer`(새벽 배치는 8-4 3).
 
 ## 8-4. 배포 뒤
 
@@ -159,7 +159,7 @@ tail -f <작업 폴더>/batch_progress/progress.log                             
 | 2 | 적재가 지우지 않는지 · 상주 컨테이너 `/tmp` · 좀비 프로세스 | 서버 운영 | C-68 |
 | 3 | 새벽 배치 — `ops.nightly.nightly_start_time`·`nightly_max_docs`·`nightly_stop_time`을 모두 채울 때만 켬(마감은 시작보다 5분 넘게 뒤) → `systemctl start data-pipeline-nightly.timer` → `journalctl -u data-pipeline-nightly` | 서버 운영 | C-72 |
 | 4 | 2주 뒤 옛 검색 스키마·옛 `struct` 스키마를 백업한 뒤 지움 | DB 담당 | C-74 |
-| 5 | `versions.md`에 한 줄 · 되돌리기가 필요 없어진 뒤 `prune_images.sh --apply` | 서버 운영·devops | release-and-patch §6 |
+| 5 | `versions.md`에 한 줄 · 되돌리기가 필요 없어진 뒤 `prune_images.sh --apply` | 서버 운영·devops | server-guide §5-7 |
 | 6 | `query_edw` — 실제 업무 SELECT 몇 개(JOIN·`WITH`·대괄호 이름·한글 별칭·`TOP`)를 부른다. 기대: 행이 오거나 행·시간 상한 안내만. 정상 SELECT가 `rejected:*`로 거부되면 SQL과 오류 코드를 `issues.md`에 | 서버 운영 | — |
 | 7 | `edw_meta` — 서버 카탈로그(`search.edw_meta.edw_meta_catalog_dir`의 `catalog.json`)에서 이름 끝에 공백이 있는 표를, 그 이름 그대로와 공백을 뺀 이름으로 각각 부른다. 기대: 둘 다 같은 표의 칸 목록 | 서버 운영 | — |
 | 8 | 로그 DB — `search` 한 번 뒤 `applog.mcp_log`에 그 호출 한 행(`args`에 질문), `<루트>/output/logs/`가 비어 있음(있으면 DB 쓰기 실패 — 파일 안 오류 확인) | 서버 운영 | C-79 |
@@ -171,7 +171,7 @@ tail -f <작업 폴더>/batch_progress/progress.log                             
 systemctl stop data-pipeline-nightly.timer mcp-server-keepalive.timer
 cd "$ROOT/<코드>" && bash deploy/host/scripts/host_ctl.sh down                     # 0.2.0 컨테이너 셋 내림
 ```
-- 0.1.0 자리(`$OLD_CODE`·`$OLD_SF`)는 그대로 남아 있다. 0.1.0 컨테이너(`data-pipeline-parse`·`data-pipeline-structure`·`mcp-server`)와 0.1.0 타이머는 `$OLD_CODE`의 README §5-3·§5-5 방법으로 다시 띄우고, 시작 로그 첫 줄로 0.1.0인지 본다.
+- 0.1.0 자리(`$OLD_CODE`·`$OLD_SF`)는 그대로 남아 있다. 0.1.0 컨테이너(`data-pipeline-parse`·`data-pipeline-structure`·`mcp-server`)와 0.1.0 타이머는 `$OLD_CODE`의 server-guide §1-6·§5-3 방법으로 다시 띄우고, 시작 로그 첫 줄로 0.1.0인지 본다.
 - 옛 스키마를 0.2.0이 바꿨다면(새 이름을 안 썼을 때만) 백업으로: `$DOCKER exec -i "$PG_C" pg_restore -U "$PG_U" -d "$PG_D" --clean < "$BK/pg-0.1.0.dump"`(DB 담당과 같이 — downgrade 명령은 없다).
 - ParsingMeta에 0.2.0이 쓴 행·`gold_version`은 그대로 남는다(0.1.0은 그 칸을 읽지 않음).
 
@@ -185,13 +185,13 @@ cd "$ROOT/<코드>" && bash deploy/host/scripts/host_ctl.sh down                
 | `required.pg` 접속 다섯 칸 필수(자동 탐지 없음) | 모두 채운다. `pg_schema`는 비우면 `data_parsing` — 운영은 **새 이름**(판 0002가 옛 표를 지움) |
 | env로 준 값은 효과 없음(엔진·핸드오프 칸 포함) | 컨테이너에 `-e VLM_BASE_URL=…`·`OCR_DPI=…`처럼 주던 값은 settings.yaml 칸으로(`--where <이름>`으로 자리 확인) |
 | 이미지 칸 `required.deploy.pipeline_image`·`mcp_image` | dev `data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0` · prd `data-pipeline:0.2.0`·`mcp-server:0.2.0` |
-| 새 칸 `required.deploy.pg_container_name`·`required.tokens.fulltext_sign_key` · 토큰은 `required.tokens.mcp_token` 하나(작업 서비스도 같은 값) | 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)) |
+| 새 칸 `required.deploy.pg_container_name`·`required.tokens.fulltext_sign_key` · 토큰은 `required.tokens.mcp_token` 하나(작업 서비스도 같은 값) | 채운다(README [꼭 채울 값](../operations/server-guide.md#꼭-채울-값)) |
 | 새벽 배치 `ops.nightly.nightly_start_time`·`nightly_max_docs`·`nightly_stop_time` — 셋 다 있어야 돎 | 배포 때는 비워 두고 배포 뒤 켠다(§8-4 3) |
 | 거의 안 바꾸는 칸 53개가 `tuning` 절로(청크·순위 가중치·그림 고르기·로그 대기열·EDW 원천 열 이름 등) | 값을 적어 둔 칸만 `tuning.<옛 자리>`로 옮긴다(옛 자리는 시작 거부 — C-95) |
 | 합친 칸 `extract.prefetch_workers` → `extract.source.source_fetch_threads` · `tuning.ops.nightly_run.workers` → `ops.runtime.vlm_parallel_docs` | 옛 칸 값을 새 칸에 적고 옛 칸은 지운다(남으면 시작 거부) |
 | `parse_document` 크기 상한 칸이 `ops.services.data_parsing.mcp_parse_max_file_mb`(기본 100) | 옛 `ops.services.data_parsing.max_mb`가 있으면 지우고, 100이 아닌 값은 새 칸에. 리버스 프록시 본문 상한도 늘린다(C-85) |
 | `query_edw` 행 상한 기본 1000(`search.edw_query.edw_query_max_rows`) | 다른 값을 쓰려면 적는다 |
 | 용어집·고객 명부는 PG 마스터 표 | `migrate master load`(§8-3 5) · CSV를 고치면 다시 하고 검색 MCP 재시작 |
-| 사슬 파일 칸 `ops.paths.edw_chain_file`(새 — 비우면 기본 파일) | 서버 EDW 이름이 다를 때만 release-and-patch §8 |
+| 사슬 파일 칸 `ops.paths.edw_chain_file`(새 — 비우면 기본 파일) | 서버 EDW 이름이 다를 때만 server-guide §3-9-2 |
 | 지운 칸(예 `ops.paths.glossary_dir`·`client_roster`·`mcp_bundle`, `common.models.transport.transport`, `required.env.run_mode`, `search.server.warmup`, `required.tokens.data_parsing`·`parse_proxy`, `ops.mcp_host.jobs_dir` — C-95) | 지운다 — 남으면 시작 거부(칸 이름만 알림) |
 | run_pipeline이 `--set`으로 넘기던 값(VLM 동시 수·후처리 목록·CPU 문턱·임베딩 동시 수 등) → `ops.run_pipeline.*` | 비우면 지금 값 그대로 — 바꿀 때만 적는다 |

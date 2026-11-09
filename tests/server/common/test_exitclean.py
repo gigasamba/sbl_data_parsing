@@ -1,7 +1,7 @@
 """pl-27 — 프로세스가 끝날 때(정상·오류·SIGTERM) 그 프로세스가 맡은 덮기 설정 파일(child_env)·PID 기록이 지워지고, 띄운 자식이 끝나고
 회수된다(common.core.exitclean). 가운데 프로세스가 child_env로 덮기 파일을 만들고 gated_popen으로 심장박동 자식(파일에 0.1초마다 씀)을
 띄운 뒤 세 방식으로 끝난다. SIGTERM 사례는 POSIX 전용(Windows는 건너뜀 — 신호가 없음).
-지우면 안 되는 것도 본다: overrides 도구가 다른 프로세스에 넘기는 덮기 파일은 남고, settings.isolated는 블록이 끝날 때 지운다.
+settings.isolated는 블록이 끝날 때 지운다.
 외부 접속 없음, 임시 폴더만."""
 
 import os
@@ -70,19 +70,13 @@ def _case(mode):
     print(f"[시험] {mode} — 덮기 파일·PID 기록 지움, 자식 끝내고 회수")
 
 
-def _kept_files():
-    """지우면 안 되는 것 — overrides 도구의 출력 파일(다른 프로세스가 읽음)은 남고, isolated는 블록 끝에서 지움."""
-    r = subprocess.run(
-        [sys.executable, "-m", "common.config.overrides", "PIPE_PROCS=1"], env=child_env(), capture_output=True, text=True, timeout=60
-    )
-    out = Path(r.stdout.strip())
-    assert r.returncode == 0 and out.is_file(), (r.returncode, r.stderr[-300:])
-    out.unlink()
+def _isolated_cleanup():
+    """isolated는 블록 끝에서 덮기 파일을 지움."""
     with C.isolated(PIPE_PROCS="1"):
         inner = Path(os.environ["SETTINGS_FILE"])  # env 남김 — 시험: 덮기 파일 자리
         assert inner.is_file()
     assert not inner.exists(), "isolated 블록이 끝났는데 덮기 파일이 남음"
-    print("[시험] overrides 출력 파일은 남김 · isolated는 블록 끝에서 지움")
+    print("[시험] isolated는 블록 끝에서 지움")
 
 
 def _setarg_exec():
@@ -157,7 +151,7 @@ def _term_while_locked():
 
 
 def test_exit_cleanup():
-    _kept_files()
+    _isolated_cleanup()
     for mode in ("ok", "error"):
         _case(mode)
     if os.name == "nt":

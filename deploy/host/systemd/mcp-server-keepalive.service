@@ -1,6 +1,6 @@
 # 근거 MCP(컨테이너 이름 ops.containers.mcp.mcp_container_name — 기본 mcp-server) 상주 확인: 꺼졌거나 /health 응답이 없으면 다시 띄움(deploy/host/scripts/mcp_keepalive.sh).
 # 설치: 코드 폴더에서 `sudo bash deploy/host/scripts/host_ctl.sh timers`(@CODE_DIR@를 채워 쓰고 타이머를 켬 — 이 파일을 그대로 복사하지 않는다).
-# 서버 컨테이너 도구 = root podman 하나(User=root — 이미지를 sudo podman load로 넣은 저장소와 같게) — 도구 이름은 settings.yaml ops.host.container_cli(비우면 podman, 없으면 docker — load_settings.sh). docker 그룹이 있으면 User=rag.
+# 서버 컨테이너 도구 = docker 하나(User=root — 이미지를 load.sh로 넣은 docker와 같게) — 도구 이름은 settings.yaml ops.host.container_cli(비우면 docker, 없으면 podman — load_settings.sh).
 [Unit]
 Description=근거 MCP 상주 확인·기동
 Wants=network-online.target
