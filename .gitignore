@@ -38,6 +38,8 @@ output/
 
 # 설정 파일(S7a, D-015) — 값·비밀이 들어감. git에는 settings.sample.yaml만
 settings.yaml
+/settings*.yaml
+!/settings.sample.yaml
 valid_env/local/
 # PC(local) 실행이 valid_env 안에 만드는 것 둘(op-14) — 가짜 EDW 사본·게시 폴더
 valid_env/edw/edw_copy.sqlite
@@ -59,3 +61,5 @@ tessdata_best/
 /findings.md
 /edw_chain.yaml
 /home/
+# 코드 폴더 안 git worktree(server-guide §6-4)
+/.worktrees/

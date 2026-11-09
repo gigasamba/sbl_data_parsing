@@ -44,6 +44,14 @@ CASES = [
         {"EXTRA_COMPOSE": "x/a.yml,{d}/b.yml"},
         "compose",
     ),  # ops.host.extra_compose — 맨 뒤
+    (
+        "data-pipeline:0.2.0",
+        "",
+        ["a.yml", "b.yml"],
+        "code",
+        {"EXTRA_COMPOSE": "x/a.yml, {d}/b.yml"},
+        "compose",
+    ),  # 쉼표 뒤 빈칸(sample 예 꼴)도 같은 파일들
     (RT, "", CODE + DEV + ["extra.yml"], "code", {**SSH, "EXTRA_COMPOSE": "extra.yml"}, "compose"),  # 개발 작업 공간 파일보다도 뒤
     (RT, "", [], "code", {**SSH, "DEVBOX_HOME": "/nonexistent/home"}, "!option.devbox.home_dir"),  # 홈 폴더(설정 자리)가 없으면 거부
     (
@@ -84,7 +92,7 @@ def test_dc_command():
                 "RAG_ROOT": f"/{q[0].lower()}{q[2:]}" if q[1:2] == ":" else q,  # 루트(코드 폴더) — 이름 끝 -<숫자>가 벌 번호
                 **{k: v.format(d=_posix(d)) for k, v in extra.items()},
             }
-            for f in env.get("EXTRA_COMPOSE", "").split(","):  # 붙일 파일(상대 경로는 루트 기준)
+            for f in (x.strip() for x in env.get("EXTRA_COMPOSE", "").split(",")):  # 붙일 파일(상대 경로는 루트 기준)
                 if f and not f.startswith("missing"):
                     p = Path(d) / Path(f).name if f.startswith(_posix(d)) else root / f
                     p.parent.mkdir(parents=True, exist_ok=True)

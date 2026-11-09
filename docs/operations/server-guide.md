@@ -10,7 +10,68 @@
 | 매일 돌리기·점검·문제 해결 | §3 |
 | 이미 돌고 있는 서버를 새 판으로 | §4 |
 | 이미지 빌드·버전·운영 이미지 굽기 | §5 |
-| 내부망 gitea로 코드 받기 | §6 |
+| 내부망 gitea로 코드 받기·고치기·올리기(컨테이너 안 git) | §6 |
+| `<…>` 자리에 넣을 값 | [예 값 사전](#바꿔-넣을-자리--예-값-사전) |
+
+## 바꿔 넣을 자리 — 예 값 사전
+
+명령의 `<…>`는 바꿔 넣을 자리다. 줄 옆 주석에 예가 없으면 이 표를 본다. 예 값은 개발 서버 `/home/sbl` 아래 벌 둘(공용 main `-1`, 개발자 `-2`)을 기준으로 한다 — 자기 서버 값은 "확인하는 법"으로 찾는다.
+
+| 자리 | 뜻 | 예 | 확인하는 법 |
+|---|---|---|---|
+| `<루트>` · `<벌 폴더>` · `<코드 폴더>` · `<시험한 벌 폴더>` · `$B` | 벌 폴더 = 코드 폴더(zip을 푼 곳 또는 git clone한 곳 — settings.yaml·output/이 바로 아래) | `/home/sbl/sbl_data_parsing-main-1` | `ls $B` → `deploy common pipeline … VERSION` |
+| `<공용 폴더>` | 벌 폴더·이미지 폴더를 두는 부모 폴더 | `/home/sbl` | |
+| `<옛 루트>` | 0.2.0 배치 서버의 루트(설정이 코드 폴더의 부모에 있던 때) | `/srv/rag` | `ls <옛 루트>` → `settings.yaml sbl_data_parsing-0.2.0/` |
+| `<번호>` · `<벌 번호>` · `<벌>` · `-<숫자>` · `-<n>` | 벌 번호 — 벌 폴더 이름 끝 `-<숫자>`(1~99) | `1`(공용 main) · `2`(개발자) | 컨테이너 이름 끝: `data-pipeline-2` |
+| `DEV-<숫자>` · `<원천>` | 원천 시스템 이름(검색 원천 스키마 끝) | `DEV-2` · `SFDC` · `CRMS` | settings.yaml `required.source.source_systems` |
+| `<운영 그룹>` · `<그룹>` | 결과·설정 파일을 같이 볼 서버 리눅스 그룹 | `sbl` | `id -gn sbl`(사람 계정의 그룹) |
+| `<이미지 판>` · `<실행 이미지 판>` | 개발 서버 실행 이미지 판 — `BUILD.txt`의 DEPS_HASH가 코드와 같은 판 | `0.3.0` | `ls /home/sbl/sbl_images-main/` |
+| `<VERSION>` · `<버전>` · `<판>` · `<새 판>` · `<지금 판>` · `<판 번호>` | 코드 판(저장소 루트 `VERSION`) | `0.3.1` | `cat $B/VERSION` |
+| `<앞 판>` · `<끝 판>` | 비교하는 두 판 | `0.3.0` · `0.3.1` | `git tag -l 'v*'` |
+| `<태그>` · `<이미지 태그>` · `<이미지>` | 이미지 이름:판 | 개발 `data-pipeline-runtime:0.3.0` · 운영 `data-pipeline:0.3.1` | `docker image ls` |
+| `<시험 태그>` | PC 시험 빌드 태그(작업마다 새로) | `0.3.1-t1` | |
+| `<결과 폴더>` | 벌의 결과 폴더(컨테이너 `/app/output`) | `/home/sbl/sbl_data_parsing-main-1/output` | settings.yaml `ops.host.host_output_dir`(비우면 `$B/output`) |
+| `<원본 문서 폴더>` · `<있는 호스트 폴더(절대 경로)>` | 서버의 원본 문서 폴더(컨테이너 `/data/docs`) | `/data/docs` | settings.yaml `required.deploy.host_docs_dir` |
+| `<작업 폴더>` · `<run_pipeline 작업 폴더>` | 일괄 실행 임시 폴더(벌마다 다르게) | `/srv/rag/run_pipeline-1` | settings.yaml `ops.run_pipeline.run_pipeline_work_dir` |
+| `<백업 폴더>` · `<백업 폴더 — 벌 폴더 밖>` | 판을 바꾸기 전 백업을 두는 부모 폴더(벌 폴더 밖) | `/home/sbl/backup` | |
+| `<기록>` | 운영 기록 폴더(벌 폴더 밖 — `versions.md`·`issues.md`·`server-changes.md`) | `/home/sbl/ops_log` | |
+| `<컨테이너>` · `<이름>` | 컨테이너 이름 | `data-pipeline-1` · `mcp-server` | `docker ps --format '{{.Names}}'` |
+| `<단위>` | systemd 단위 이름 | `data-pipeline-nightly-1.service` | `systemctl list-timers` |
+| `<PG 컨테이너>` · `<pg 컨테이너>` · `<PG 컨테이너 이름>` · `<required.deploy.pg_container_name>` | pgvector 컨테이너 이름 | `pgvector` | `docker ps --format '{{.Names}}'` |
+| `<PG 주소>` · `<PG 포트>` | 우리 컨테이너가 붙는 PG 주소·포트(`-p`의 **앞쪽** 숫자) | `127.0.0.1` · `5433`(`-p 127.0.0.1:5433:5432`로 띄웠을 때) | `docker port pgvector` |
+| `<계정>` · `<required.pg.pg_user>` | PG 앱 계정 | `rag_app` | settings.yaml `required.pg.pg_user` |
+| `<관리자 계정>` · `<운영 계정>` | PG 관리자 계정(권한 주기용 — settings.yaml에 넣지 않음) | `postgres` | DB 담당 |
+| `<DB>` · `<DB 이름>` · `<required.pg.pg_database>` | PG 데이터베이스 | `rag` | settings.yaml `required.pg.pg_database` |
+| `<스키마>` · `<pg_schema>` · `<db_schema>` · `<기준>` · `<required.pg.pg_schema>` | 검색 기준 스키마 | `data_parsing` | settings.yaml `required.pg.pg_schema`(비우면 `data_parsing`) |
+| `<임베딩 차원>` | 임베딩 모델 출력 길이 | `1024` | 모델 담당 · 묶음 `meta.json`의 `dim` |
+| `<MCP 포트>` · `<search.server.mcp_port>` | 검색 MCP 포트(벌마다 다르게) | `18771`(벌 1) · `18772`(벌 2) | settings.yaml `search.server.mcp_port` |
+| `<벌마다 다른 포트>` · `<내 포트>` | SSH 작업 공간 포트 | `2222`(벌 1) · `2223`(벌 2) | settings.yaml `option.devbox.ssh_port` |
+| `<서버>` | 개발 서버 주소 | `10.0.0.12` | 서버 관리자 |
+| `<버킷>` · `<silver_bucket>` | 게시 버킷 | `rag-silver` | settings.yaml `required.publish.publish_bucket` |
+| `<커밋>` | git 커밋 번호(앞 7~8자) | `1281faf5` | `git log -1 --oneline` |
+| `<코드 zip>` | 코드 판 zip | `sbl_data_parsing-0.3.1.zip`(풀면 `sbl_data_parsing-0.3.1/`) | GitHub 태그 `v0.3.1` |
+| `<이미지 zip>` · `<새 이미지 저장소 zip>` | 이미지 조각 저장소 zip | `sbl_images-main.zip`(풀면 `sbl_images-main/`) | |
+| `<seq>` · `<번호,…>` · `<번호,번호,…>` | 일괄 실행의 문서 번호(여럿이면 쉼표) | `1203` · `1203,1207` | `progress.log`의 `doc#1203` |
+| `<키워드,…>` | 원본 파일 이름에 든 낱말(쉼표 — 하나라도 들면) | `계약서,견적` | |
+| `<서비스>` | compose 서비스 이름(컨테이너 이름과 다름) | `data-pipeline` · `mcp-data-parsing` · `mcp` | `host_ctl.sh ps` |
+| `<수집 서버 사내 IP>` · `<IP>` | 운영 서버 사내 주소 | `10.0.0.20` | 서버 관리자 · 서버에서 `hostname -I` |
+| `<스키마.표>` | EDW 표 이름 | `CRMS.RM_MAS_CLIENT` | DB 담당 |
+| `<묶음>` | 구조화 묶음 폴더 | `output/edw/bundle` | |
+| `<옛 이름>` | 옛 env 이름(설정 칸 자리 찾기) | `PIPE_PROCS` | 오류 글자에 나온 이름 |
+| `<타깃>` | 이미지 빌드 대상 | `pipeline-runtime` · `mcp-runtime` · `pipeline` · `mcp` | |
+| `<이름 조각>` · `<이름 일부>` | selftest 사례 이름 일부 | `test_publish` | `ls tests/server/*/` |
+| `<파일>` | 그 줄이 말하는 파일 | `migrate_search.sql`(`--sql`) · `resources/config/edw_chain.yaml`(`git checkout HEAD --`) | |
+| `<MMDD>` | 월일 4자리 | `1109` | |
+| `<질문>` · `<낱말>` · `<처리한 문서에 있는 낱말>` | 검색 시험 문구 | `계약서 보관 기간은?` · `보관 기간` | 처리한 문서 아무거나 |
+| `<모델>` · `<model id>` | 내부망 모델 이름 | 모델 담당이 준 이름(예 `qwen2.5-72b-instruct`) | 모델 담당 |
+| `<내 공개 열쇠>` | 내 PC의 SSH 공개 열쇠 파일 | `~/.ssh/id_ed25519.pub` | 없으면 PC에서 `ssh-keygen -t ed25519` |
+| `<gitea 주소>` | gitea 주소:포트 | `gitea.example.local:3000` | 브라우저 주소창 |
+| `<gitea 저장소 주소>` | 저장소 HTTP 복제 주소 | `http://gitea.example.local:3000/sbl/sbl_data_parsing.git` | gitea 저장소 화면 "HTTP" 복제 칸 |
+| `<내 gitea 아이디>` | gitea 가입 때 사용자 이름 | `jehun` | gitea 오른쪽 위 프로필 |
+| `<커밋에 남길 이름>` · `<커밋에 남길 메일>` | git 커밋 이름·메일(메일은 gitea 계정 메일과 같게) | `jehun` · `jehun@sbl.local` | |
+| `<기능명>` | 기능 브랜치 이름(영문·숫자·`-`) | `pdf-table` | |
+| `<바꾼 파일들>` | 커밋할 파일 | `pipeline/load/publish.py docs/operations/server-guide.md` | `git status --short` |
+| `<비밀>` · `<비밀번호>` · `<토큰>` · `<내 토큰>` · `<required.tokens.mcp_token>` | 비밀값 — 예를 문서에 쓰지 않는다 | (화면·문서에 쓰지 않음) | MCP 토큰·서명 키: 서버에서 `openssl rand -hex 32` · gitea 토큰: [§6-3](#6-3-개발자-한-벌-만들기) ① · PG 비밀번호: DB 담당 |
 
 ## 0. 환경별 실행 명령 — local · dev · prd
 
@@ -25,15 +86,18 @@
 **두 가지 방법** — 같은 일을 한다. 한 서버에서는 한 방법만 쓴다.
 - **직접 명령**: 아래 `docker run`·`docker exec`·`systemctl`을 한 줄씩 친다. 무엇이 어디에 붙는지 눈으로 보인다.
 - **`host_ctl.sh`**: 위 직접 명령을 모두 묶은 스크립트다. settings.yaml에서 컨테이너 이름·이미지·볼륨·자원 상한을 읽어 compose로 띄우고(`up`), 점검(`check`)과 타이머 설치(`timers`)도 한 번에 한다.
-- 섞지 않는다: `docker run`으로 띄운 컨테이너는 `host_ctl.sh ps`·`logs`·`up`이 자기 것으로 보지 않는다(compose 묶음 표시가 없음 — 같은 이름으로 `up`하면 이름이 겹쳐 멈춤). 방법을 바꾸려면 먼저 `docker rm -f <이름>`으로 지운다. 결과 폴더·DB는 그대로 남는다.
+- 섞지 않는다: `docker run`으로 띄운 컨테이너는 `host_ctl.sh ps`·`logs`·`up`이 자기 것으로 보지 않는다(compose 묶음 표시가 없음 — 같은 이름으로 `up`하면 이름이 겹쳐 멈춤). 방법을 바꾸려면 먼저 `docker rm -f <이름>`(예 `docker rm -f data-pipeline-1`)으로 지운다. 결과 폴더·DB는 그대로 남는다.
 - 직접 명령의 컨테이너 이름은 settings.yaml의 이름(기본 `data-pipeline`·`mcp-data-parsing`·`mcp-server`, 번호 벌은 끝에 `-<번호>`)과 같게 짓는다 — 새벽 배치·MCP 살리기 타이머·`pipe_exec.sh`가 그 이름으로 컨테이너를 찾는다.
 
-공통 준비: root 셸, `export DOCKER=docker`, `B=<벌 폴더>`(예 `/home/sbl/sbl_data_parsing-main-1`), `cd $B`. PG는 이미 떠 있다고 본다([서버 PG 띄우기](#서버-pg-띄우기)). 설정 파일은 `$B/settings.yaml`(설치 순서 [3~4번](#서버-설치-순서)).
+공통 준비: root 셸, `export DOCKER=docker`, `B=<벌 폴더>`(예 `B=/home/sbl/sbl_data_parsing-main-1`), `cd $B`. `$B`는 이 벌 폴더 경로를 담은 셸 변수다 — `$B/settings.yaml` = `/home/sbl/sbl_data_parsing-main-1/settings.yaml`. 새 셸을 열면 다시 적는다.
+
+읽는 법: `<…>`는 바꿔 넣을 자리(옆 주석에 예 — 없으면 [예 값 사전](#바꿔-넣을-자리--예-값-사전)), `$B`는 위 변수. `-v <서버 경로>:<컨테이너 안 경로>:<옵션>`은 서버 폴더를 컨테이너 안에 붙인다 — 바꿔 넣는 것은 맨 앞(서버 경로)뿐이고, 가운데(컨테이너 안 경로 — `/data/docs`·`/app/output` 등)는 이미지가 정한 자리라 그대로 둔다. 옵션 `ro` = 읽기만, `z` = RHEL SELinux가 컨테이너에 그 폴더를 허용. PG는 이미 떠 있다고 본다([서버 PG 띄우기](#서버-pg-띄우기)). 설정 파일은 `$B/settings.yaml`(설치 순서 [3~4번](#서버-설치-순서)).
 
 ### 0-1. local — 개발 PC
 
 ```bash
 # 시험 PG(pgvector) — 처음 한 번 띄우고, 멈췄으면 start
+# 예: <PG 컨테이너> = pgvector(settings.yaml required.deploy.pg_container_name) · <계정> = rag_app(required.pg.pg_user) · <비밀번호> = required.pg.pg_password에 적은 값
 docker run -d --name <PG 컨테이너> --restart unless-stopped -p 127.0.0.1:55433:5432 \
   -e POSTGRES_DB=rag -e POSTGRES_USER=<계정> -e POSTGRES_PASSWORD=<비밀번호> pgvector/pgvector:pg16
 docker start <PG 컨테이너>
@@ -45,7 +109,7 @@ export PYTHONPATH=$PWD
 .venv/bin/python -m pipeline.cli selftest    # 기대: [판정] 통과
 
 # 서버에 올릴 시험 이미지(필요할 때만)
-ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh
+ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh   # 예 <시험 태그> = 0.3.1-t1(작업마다 새로)
 ```
 PC 설치·문서 몇 건 돌리기·검증 페이지는 [README §4](../../README.md#4-pc에서-실행하기)에 있다.
 
@@ -54,29 +118,49 @@ PC 설치·문서 몇 건 돌리기·검증 페이지는 [README §4](../../READ
 개발자마다 벌 폴더 하나(`sbl_data_parsing-main-<번호>`)와 컨테이너 `data-pipeline-<번호>` 하나다. 기능 개발·파싱·적재·검색 기능 시험은 모두 이 컨테이너 안에서 한다 — 코드 폴더를 붙이므로 코드를 고치면 바로 반영된다. 검색 MCP 컨테이너는 따로 띄우지 않고, MCP가 필요하면 이 컨테이너 안에서 잠깐 연다(④). 전체 e2e·성능·worker 수 시험은 운영판(컨테이너 셋)으로 한다(⑦).
 
 **① 이미지 불러오기**(서버에 한 번 — 공용 폴더에서)
+`<이미지 판>`은 `sbl_images-main/` 아래 판 폴더 이름이다(실행 이미지를 만든 버전 — 예 `0.3.0`). 코드만 바뀐 판(PATCH — 예 코드 0.3.1)은 실행 이미지를 새로 만들지 않으므로 이미지 판은 그대로 `0.3.0`이다. 고를 판은 그 폴더의 `BUILD.txt` DEPS_HASH가 코드의 `deploy/docker/DEPS_HASH`와 같은 판이다.
 ```bash
-cd /home/sbl && bash sbl_images-main/load.sh <이미지 판>    # 조각 확인 → 합치기 → docker load
-docker image inspect data-pipeline-runtime:<이미지 판> --format '{{.Id}}'   # 기대: sha256:…
+cd /home/sbl
+ls sbl_images-main/                                   # 판 폴더 — 예: 0.3.0  load.sh
+cat sbl_images-main/0.3.0/BUILD.txt                   # 빌드 커밋·DEPS_HASH
+cat sbl_data_parsing-main-1/deploy/docker/DEPS_HASH   # 위 DEPS_HASH와 같아야 함
+bash sbl_images-main/load.sh 0.3.0                    # 조각 확인 → 합치기 → docker load · 서버에 판마다 한 번(벌마다 아님 — 모든 벌이 같은 이미지를 씀)
+docker image ls data-pipeline-runtime                 # 기대: TAG 칸에 0.3.0
 ```
+아래 명령의 `<이미지 판>`에도 같은 값(예 `0.3.0`)을 넣는다 — `data-pipeline-runtime:0.3.0`.
 
 **② 띄우기**
 
-직접 명령(예: 벌 1):
+먼저 서버 CPU·메모리와 이미 떠 있는 컨테이너가 쓰는 몫을 본다(`--cpus`가 서버 CPU 수보다 크면 docker가 거부 — [§1-10](#1-10-자원)):
 ```bash
+nproc                                                  # CPU 수 — 예: 16
+free -g                                                # 메모리(GiB) — total·available 칸 · 예: total 62
+docker info --format 'CPU {{.NCPU}} · 메모리 {{.MemTotal}}'   # 그대로 입력 — docker가 보는 CPU 수·메모리(바이트)
+docker ps -q | xargs -r docker inspect --format '{{.Name}} cpus={{.HostConfig.NanoCpus}} memory={{.HostConfig.Memory}}'
+#   그대로 입력 — 떠 있는 컨테이너의 상한 · cpus 5000000000 = CPU 5개, memory 25769803776 = 24g, 0 = 상한 없음
+docker stats --no-stream                               # 지금 쓰는 CPU %·메모리
+```
+- 정하는 법: 모든 벌의 `--cpus` 합 ≤ CPU 수, `--memory` 합 ≤ 메모리 total에서 운영체제·PG 몫(예 8g)을 뺀 값 — PG 몫 = `docker stats --no-stream`의 pgvector MEM USAGE에 여유를 더한 값(`--memory`는 미리 떼어 두는 값이 아니라 넘지 못하는 상한이라 PG를 낮춰 다시 띄울 필요는 없다 · PG는 상한 없이 두고 우리 컨테이너만 상한을 걸어, 넘치면 PG가 아니라 우리 컨테이너가 멈추게). `--memory-swap`은 `--memory`와 같게(스왑 안 씀 — 넘치면 그 컨테이너만 멈춤). `--cpu-shares`·`--pids-limit`·`--log-opt`는 그대로 둔다.
+- 예: CPU 16·메모리 64g 서버에 벌 2개 → 벌마다 `--cpus 6 --memory 24g --memory-swap 24g`(합 12·48g). CPU 8·메모리 32g에 벌 1개 → `--cpus 6 --memory 20g --memory-swap 20g`. 아래 명령의 `--cpus 5 --memory 24g`는 기본값([§1-10](#1-10-자원)) — 여기서 정한 값으로 바꿔 넣는다.
+- 같은 값을 그 벌 settings.yaml `ops.containers.pipeline.pipeline_cpus`·`pipeline_mem_limit`에도 적는다(`host_ctl.sh`가 쓰는 값).
+
+직접 명령(예: 벌 1 — `<원본 문서 폴더>` = `/data/docs`, `<이미지 판>` = `0.3.0`이면 끝 줄은 `data-pipeline-runtime:0.3.0 idle`):
+```bash
+B=/home/sbl/sbl_data_parsing-main-1                    # 벌 폴더
 docker run -d --name data-pipeline-1 --restart unless-stopped --network host --init \
   --memory 24g --memory-swap 24g --cpus 5 --cpu-shares 1024 --pids-limit 4096 \
   --log-opt max-size=50m --log-opt max-file=3 \
-  -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=dev \
-  -v $B/settings.yaml:/etc/rag/settings.yaml:ro,z \
-  -v $B/edw_chain.yaml:/etc/rag/edw_chain.yaml:ro,z \
-  -v <원본 문서 폴더>:/data/docs:ro,z \
-  -v $B/output:/app/output:z \
+  -e SETTINGS_FILE=/app/deploy/settings.yaml -e RUN_ENV=dev \
   -v $B:/app/deploy:ro,z \
+  -v $B/output:/app/output:z \
+  -v <원본 문서 폴더>:/data/docs:ro,z \
   data-pipeline-runtime:<이미지 판> idle
 docker ps --filter name=^data-pipeline-1$ --format '{{.Status}}'   # 기대: Up …
 ```
-- `<원본 문서 폴더>` = settings.yaml `required.deploy.host_docs_dir`. 자원 값(`--memory`·`--cpus`)은 settings.yaml `ops.containers.pipeline.*`와 같게.
-- SSH 작업 공간으로 쓸 때(코드를 컨테이너 안에서 고침): 마지막 줄을 `data-pipeline-runtime:<이미지 판> devbox`로, 코드 마운트를 `-v $B:/app/deploy:z`(쓰기 가능)로, 설정은 `-e SETTINGS_FILE=/app/deploy/settings.yaml`로 바꾸고 `-e SSH_PORT=<벌마다 다른 포트> -v $B/home:/home/rag:z`를 더한다. 열쇠 놓기는 [§2-13](#2-13-개발-작업-공간--sshopencode선택).
+- 붙이는 것은 셋뿐: 코드 폴더 `$B`(읽기만 — 설정 파일 `$B/settings.yaml`도 이 안에 있어 `SETTINGS_FILE=/app/deploy/settings.yaml`로 읽음) · 결과 폴더(쓰기) · 원본 폴더(읽기만). `edw_chain.yaml`은 붙이지 않는다 — 앱은 기본 사슬 `resources/config/edw_chain.yaml`(코드 폴더 안)을 읽고, settings.yaml `ops.paths.edw_chain_file`을 적었을 때만 다른 파일을 본다. (`host_ctl.sh`는 운영 서버와 같은 compose를 쓰므로 `/etc/rag/settings.yaml`·`/etc/rag/edw_chain.yaml`로 따로 붙인다 — 결과는 같다.)
+- 자원·기록 칸 뜻: `--memory 24g` = 이 컨테이너가 쓸 수 있는 메모리 상한(넘으면 이 컨테이너 안 프로세스가 멈춤) · `--memory-swap 24g` = 메모리+스왑 합 상한(`--memory`와 같게 = 스왑 안 씀) · `--cpus 5` = CPU 5개 몫까지(서버 CPU 수보다 크면 거부) · `--cpu-shares 1024` = CPU가 모자랄 때 나눠 갖는 비율(기본값) · `--pids-limit 4096` = 프로세스·스레드 수 상한 · `--log-opt max-size=50m --log-opt max-file=3` = `docker logs` 기록 파일을 50MB마다 새로 쓰고 3개까지만 둠(가장 오래된 것부터 지움 — 기록이 디스크를 채우지 않게, 최대 150MB).
+- `<원본 문서 폴더>` = 서버에 원본 문서가 있는 폴더(절대 경로 — 예 `/data/docs`), settings.yaml `required.deploy.host_docs_dir`과 같은 값. 컨테이너 안에서는 늘 `/data/docs`로 보인다. 자원 값(`--memory`·`--cpus`)은 settings.yaml `ops.containers.pipeline.*`와 같게.
+- SSH 작업 공간으로 쓸 때(코드를 컨테이너 안에서 고침): 마지막 줄을 `data-pipeline-runtime:<이미지 판> devbox`로, 코드 마운트를 `-v $B:/app/deploy:z`(쓰기 가능)로 바꾸고, 같은 자리에 설정 파일만 읽기 전용으로 다시 붙이는 `-v $B/settings.yaml:/app/deploy/settings.yaml:ro,z`(컨테이너·opencode가 비밀값 파일을 고치지 못하게)와 `-e SSH_PORT=<벌마다 다른 포트>`(예 벌 1 `2222`, 벌 2 `2223`) `-v $B/home:/home/rag:z`를 더한다. 코드 주인은 10001이어야 고칠 수 있다(`sudo chown -R 10001:sbl $B`). 열쇠 놓기는 [§2-13](#2-13-개발-작업-공간--sshopencode선택), SSH 없이 `docker exec`로만 쓰는 꼴은 [§6-3](#6-3-개발자-한-벌-만들기) ④.
 
 `host_ctl.sh`로:
 ```bash
@@ -94,7 +178,7 @@ docker exec data-pipeline-1 bash $E tool ping_models        # 모델 주소 연�
 docker exec data-pipeline-1 bash $E migrate check --target all   # DB 표 판이 끝 판
 bash deploy/release/selftest_gate.sh docker run --rm --network host \
   -v $B/settings.yaml:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=dev \
-  -v $B:/app/deploy:ro,z data-pipeline-runtime:<이미지 판> selftest   # 기대: [판정] 통과
+  -v $B:/app/deploy:ro,z data-pipeline-runtime:<이미지 판> selftest   # 예 <이미지 판> = 0.3.0 · 기대: [판정] 통과
 ```
 `host_ctl.sh`로: `bash deploy/host/scripts/host_ctl.sh check` — 기대 마지막 줄 `[host_ctl check] 통과 — 4개(개발 서버 — data-pipeline만)`. (`pipe_exec.sh check_env`처럼 도구 하나만도 된다.)
 
@@ -102,12 +186,13 @@ bash deploy/release/selftest_gate.sh docker run --rm --network host \
 
 검색만 볼 때(토큰·포트 없이 DB 검색):
 ```bash
-docker exec data-pipeline-1 python -m mcp_server.cli.search_ask ask --source DEV-1 --k 3 --q "<처리한 문서에 있는 낱말>"
+docker exec data-pipeline-1 python -m mcp_server.cli.search_ask ask --source DEV-1 --k 3 --q "<처리한 문서에 있는 낱말>"   # 예 --q "보관 기간"
 ```
 MCP를 열어 실제 클라이언트와 같은 길(HTTP)로 시험할 때 — 컨테이너가 호스트 네트워크를 쓰므로 `<MCP 포트>`는 벌마다 다르게 고른다:
 ```bash
+# 예: <MCP 포트> = 18771(벌 1)·18772(벌 2) · <낱말> = 보관 기간 · <토큰> = settings.yaml required.tokens.mcp_token 값 · <질문> = 계약서 보관 기간은?
 docker exec -d data-pipeline-1 sh -c 'echo $$ > /tmp/mcp.pid; exec python -m mcp_server.main --set MCP_PORT=<MCP 포트>'   # 열기(PID를 남김)
-until docker exec data-pipeline-1 python -c "import urllib.request as u; u.urlopen('http://127.0.0.1:<MCP 포트>/health', timeout=3)"; do sleep 2; done
+for i in $(seq 60); do docker exec data-pipeline-1 python -c "import urllib.request as u; u.urlopen('http://127.0.0.1:<MCP 포트>/health', timeout=3)" 2>/dev/null && break; sleep 2; done   # 최대 2분 — 그래도 안 뜨면 docker logs로 원인
 docker exec data-pipeline-1 python -m mcp_server.cli.mcp_smoke --url http://127.0.0.1:<MCP 포트>/mcp --source DEV-1 --q "<낱말>"   # 토큰을 정했으면 --token "<토큰>" · 기대 끝 줄 MCP 바깥 호출 통과
 docker exec data-pipeline-1 python -m validation.e2e.answer_gen --url http://127.0.0.1:<MCP 포트>/mcp --q "<질문>"           # 답변 생성 점검(§3-3-4)
 docker exec data-pipeline-1 sh -c 'kill $(cat /tmp/mcp.pid)'                                                              # 닫기(PID로)
@@ -136,7 +221,7 @@ systemctl list-timers 'data-pipeline-nightly*'              # 기대: 다음 실
 - 띄우기: 아래 prd ③의 직접 명령 셋(이름 끝에 `-9`, `-e RUN_ENV=dev`, 경로는 이 벌 폴더) 또는 `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp`.
 - 점검: `host_ctl.sh check`는 개발 서버라 data-pipeline 넷에서 멈추므로, 검색 MCP는 `bash deploy/host/scripts/mcp_keepalive.sh`(응답 확인)와 `mcp_smoke`로 따로 본다.
 - worker 수·자원을 바꿔 가며 잴 때는 그 벌의 settings.yaml(`ops.containers.*`·`tuning.*`)을 고치고 `host_ctl.sh up -d --force-recreate …`(직접 명령이면 `docker rm -f` 뒤 다시 `docker run`).
-- 끝나면 `host_ctl.sh down`(또는 `docker rm -f <세 이름>`)으로 내린다. 타이머는 켜지 않는다.
+- 끝나면 `host_ctl.sh down`(또는 `docker rm -f data-pipeline-9 mcp-data-parsing-9 mcp-server-9`)으로 내린다. 타이머는 켜지 않는다.
 
 ### 0-3. prd — 운영 서버, 코드를 구운 이미지
 
@@ -145,14 +230,15 @@ systemctl list-timers 'data-pipeline-nightly*'              # 기대: 다음 실
 **① 굽기**(개발 서버에서 — 개발에 쓴 실행 이미지 판 + 시험한 코드 폴더 → 코드가 든 이미지)
 ```bash
 cd <시험한 벌 폴더> && bash deploy/release/bake_prod_image.sh <실행 이미지 판>
-# 기대: 대상마다 [판정] 통과 → /var/tmp/bake/sbl_images/<VERSION>/ 아래 조각·load.sh·BUILD.txt + code-<판>-<커밋>.tar.gz
+#   예: cd /home/sbl/sbl_data_parsing-main-1 && bash deploy/release/bake_prod_image.sh 0.3.0
+# 기대: 대상마다 [판정] 통과 → /var/tmp/bake/sbl_images/<VERSION>/(<VERSION> = 코드 폴더 VERSION 파일 값 — 예 0.3.1) 아래 조각·load.sh·BUILD.txt + code-<판>-<커밋>.tar.gz
 ```
 조각 폴더와 코드 묶음을 운영 서버 공용 폴더로 옮긴다. 코드 묶음을 `sbl_data_parsing-main`으로 풀어 벌 폴더로 쓴다(호스트 스크립트·compose 파일·설정 파일 자리).
 
 **② 불러오기**(운영 서버)
 ```bash
-cd /home/sbl && bash sbl_images/load.sh <VERSION>                # 굽기가 만든 sbl_images 폴더를 옮긴 자리
-docker image inspect data-pipeline:<VERSION> mcp-server:<VERSION> --format '{{.Id}}'   # 기대: 두 줄
+cd /home/sbl && bash sbl_images/load.sh <VERSION>                # 예 <VERSION> = 0.3.1 · 굽기가 만든 sbl_images 폴더를 옮긴 자리
+docker image ls | grep -E '^(data-pipeline|mcp-server) '        # 기대: 두 줄, TAG 칸에 <VERSION>(예 0.3.1)
 ```
 
 **③ 띄우기** — `data-pipeline` → (처음이면 DB 표 만들기 — [설치 순서 6번](#서버-설치-순서)) → `mcp-data-parsing`·`mcp-server`(검색 MCP는 시작할 때 마스터 표를 읽음)
@@ -160,6 +246,7 @@ docker image inspect data-pipeline:<VERSION> mcp-server:<VERSION> --format '{{.I
 직접 명령:
 ```bash
 B=/home/sbl/sbl_data_parsing-main; cd $B
+# 예: <원본 문서 폴더> = /data/docs · <VERSION> = 0.3.1(끝 줄 data-pipeline:0.3.1 idle · mcp-server:0.3.1 mcp) · 자원 값은 dev ②의 확인 명령으로 정함
 docker run -d --name data-pipeline --restart unless-stopped --network host --init \
   --memory 24g --memory-swap 24g --cpus 5 --cpu-shares 1024 --pids-limit 4096 \
   --log-opt max-size=50m --log-opt max-file=3 \
@@ -203,7 +290,7 @@ bash deploy/host/scripts/host_ctl.sh ps                     # 기대: 세 줄 Up
 ```bash
 bash deploy/release/selftest_gate.sh docker run --rm --network host \
   -v $B/settings.yaml:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=prd \
-  mcp-server:<VERSION> selftest                             # 기대: [판정] 통과
+  mcp-server:<VERSION> selftest                             # 예 mcp-server:0.3.1 · 기대: [판정] 통과
 bash deploy/host/scripts/mcp_keepalive.sh                   # 검색 MCP /health — 응답이 없으면 다시 띄움
 ```
 `host_ctl.sh`로: `bash deploy/host/scripts/host_ctl.sh check` — 기대 마지막 줄 `[host_ctl check] 통과 — 6개`.
@@ -218,11 +305,11 @@ done
 systemctl daemon-reload && systemctl enable --now data-pipeline-nightly.timer mcp-server-keepalive.timer
 systemctl list-timers 'data-pipeline-nightly*' 'mcp-server-keepalive*'   # 기대: 두 타이머의 다음 실행 시각
 ```
-`host_ctl.sh`로: `bash deploy/host/scripts/host_ctl.sh timers` — 기대 `  씀  /etc/systemd/system/<단위>` 네 줄.
+`host_ctl.sh`로: `bash deploy/host/scripts/host_ctl.sh timers` — 기대 `  씀  /etc/systemd/system/<단위>` 네 줄(`<단위>` = data-pipeline-nightly.service 등 — 출력에 나오는 이름).
 
-MCP 살리기 타이머는 `/health`에 응답이 없으면 떠 있는 컨테이너를 `docker restart`하고, 컨테이너가 멈췄거나 없으면 `host_ctl.sh`(compose)로 다시 띄운다. 직접 명령으로 띄운 서버에서는 이 둘째 경우가 이름이 겹쳐 실패하므로 `docker start <이름>`으로 손으로 띄운다.
+MCP 살리기 타이머는 `/health`에 응답이 없으면 떠 있는 컨테이너를 `docker restart`하고, 컨테이너가 멈췄거나 없으면 `host_ctl.sh`(compose)로 다시 띄운다. 직접 명령으로 띄운 서버에서는 이 둘째 경우가 이름이 겹쳐 실패하므로 `docker start <이름>`(예 `docker start mcp-server`)으로 손으로 띄운다.
 
-**⑥ 재부팅** — 세 컨테이너는 `--restart unless-stopped`라 docker 서비스가 다시 띄운다(`systemctl is-enabled docker` — 기대 `enabled`). 손으로 멈춘 컨테이너는 다시 띄우지 않으니 `docker start <이름>`(또는 `host_ctl.sh up -d`).
+**⑥ 재부팅** — 세 컨테이너는 `--restart unless-stopped`라 docker 서비스가 다시 띄운다(`systemctl is-enabled docker` — 기대 `enabled`). 손으로 멈춘 컨테이너는 다시 띄우지 않으니 `docker start <이름>`(예 `docker start data-pipeline`)(또는 `host_ctl.sh up -d`).
 
 ---
 
@@ -313,7 +400,8 @@ until docker exec pgvector pg_isready -h 127.0.0.1 -U <계정> -d rag; do sleep 
 # ⑥ vector 확장(DB마다 한 번)
 docker exec pgvector psql -U <계정> -d rag -c 'CREATE EXTENSION IF NOT EXISTS vector'   # 기대: CREATE EXTENSION
 ```
-- 설치 순서 4번에서 settings.yaml에 같은 값을 적는다: `required.pg.pg_host: 127.0.0.1` · `pg_port: 5432` · `pg_database: rag` · `pg_user: <계정>` · `pg_password: <④의 값>` · `required.deploy.pg_container_name: pgvector`. 우리 컨테이너는 호스트 네트워크를 쓰므로 `127.0.0.1`로 붙는다.
+- 설치 순서 4번에서 settings.yaml에 같은 값을 적는다: `required.pg.pg_host: 127.0.0.1` · `pg_port: 5432` · `pg_database: rag` · `pg_user: <계정>` · `pg_password: <④의 값>`(④에서 `read`로 넣은 비밀번호) · `required.deploy.pg_container_name: pgvector`. 우리 컨테이너는 호스트 네트워크를 쓰므로 `127.0.0.1`로 붙는다.
+- `pg_port`에는 `-p`의 **앞쪽 숫자**(서버 쪽 포트)를 적는다 — 예 `-p 127.0.0.1:5433:5432`로 띄웠으면 `pg_port: 5433`(뒤 `5432`는 컨테이너 안 포트라 바뀌지 않음). `docker exec pgvector psql …`처럼 컨테이너 안에서 붙을 때만 `5432`. 비밀번호는 어느 쪽이든 그 계정의 값 하나.
 - `POSTGRES_USER`로 만든 계정은 관리자 계정이라 스키마 만들기 권한이 있다. 포트는 `127.0.0.1`에만 열었다(밖에서 붙지 못함).
 - `--restart unless-stopped`라 재부팅 뒤 docker 서비스가 다시 띄운다. 손으로 멈췄으면 `docker start pgvector`.
 - `POSTGRES_PASSWORD`는 데이터 폴더가 비어 있을 때(처음)만 걸린다. 비밀번호를 바꾸려면 `docker exec -it pgvector psql -U <계정> -d rag`에 들어가 `\password <계정>`.
@@ -335,7 +423,7 @@ docker exec pgvector psql -U <계정> -d rag -c 'CREATE EXTENSION IF NOT EXISTS 
 2. 이미지를 불러온다(공용 폴더에서 — 서버에 한 번, 이미 불러온 판이면 건너뜀). `<이미지 판>`은 `ls sbl_images-main/`에 보이는 판 폴더 이름이다: `cd /home/sbl && DOCKER=docker bash sbl_images-main/load.sh <이미지 판>` — 조각 sha256 확인 → 합치기 → load, 끝에 `<판>/BUILD.txt`(빌드 커밋·DEPS_HASH). **코드의 `deploy/docker/DEPS_HASH`가 `BUILD.txt`의 DEPS_HASH와 같은 판**을 고른다(확인 명령 — [README §1-3](../../README.md#실행-모드)).
 3. 루트 채우기: `cd <루트> && bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>` — `output/`·`output/_mcp_parse/jobs`(UID 10001, 2775)(settings.yaml에 `option.devbox.ssh_port`가 있으면 `home/`도 — 10001, 700), 코드 a+rX(`settings.yaml`·`edw_chain.yaml`·`output/`·`home/`은 빼고), `settings.sample.yaml` → `<루트>/settings.yaml`, `resources/config/edw_chain.yaml` → `<루트>/edw_chain.yaml`(둘 다 없을 때만, 10001:<운영 그룹> 640). 끝에 빈 필수 칸 **이름**을 찍는다. 여러 번 불러도 안전하다. 결과 폴더를 다른 곳에 둘 때만 `ops.host.host_output_dir`를 먼저 적는다.
 4. 설정을 채운다 — `<루트>/settings.yaml` 맨 위 `required`의 빈 값([§1-6 꼭 채울 값](#꼭-채울-값)). 이미지 칸에는 2에서 불러온 이미지 태그(개발 `data-pipeline-runtime:<이미지 판>`·`mcp-server-runtime:<이미지 판>`, 운영 `data-pipeline:<VERSION>`·`mcp-server:<VERSION>`). 자원 상한도 본다([§1-10](#1-10-자원)).
-   - **개발 서버**는 `required.source.source_systems: [DEV-<번호>]`를 적는다 — 비우면 운영 5개 원천 전부를 파싱한다.
+   - **개발 서버**는 `required.source.source_systems: DEV-<번호>`를 적는다(여러 개는 쉼표 — `DEV-1, DEV-2`) — 비우면 운영 5개 원천 전부를 파싱한다.
    - 운영 기준 결과를 내려면 `transform.represent.post_steps: all`([env-guide "서버 값으로 적는 칸"](env-guide.md)).
    - `required.deploy.host_docs_dir`는 서버에 **이미 있는 폴더**여야 한다(없으면 `mkdir -p` 후 UID 10001이 읽을 수 있게).
    - `init`이 찍는 "빈 필수 칸" 목록에는 비워도 되는 칸(`source_systems`·모델 `*_api_key` 등 — sample 주석 `[선택]`)도 섞여 있다. 무엇을 꼭 채울지는 §1-6 표로 판단한다.
@@ -532,7 +620,7 @@ selftest는 종료 코드가 아니라 `[판정]` 줄로 판정한다([§5-5](#5
 | 벌 번호가 정하지 **않는** 것 | 어떻게 정하나 |
 |---|---|
 | SSH 작업 공간 포트 | 작업 공간을 켤 때만 그 벌의 settings.yaml `option.devbox.ssh_port`에 벌마다 다르게 적는다(호스트 네트워크라 겹치면 뒤에 띄운 쪽이 못 뜸) |
-| 어떤 문서를 파싱하나 | settings.yaml `required.source.source_systems`(예 `[DEV-1]`) |
+| 어떤 문서를 파싱하나 | settings.yaml `required.source.source_systems`(쉼표 구분 — 예 `DEV-1` · `DEV-1, DEV-2`) |
 | 검색 DB 스키마 | 모든 벌이 같은 기준 스키마(`required.pg.pg_schema`, 비우면 `data_parsing`)를 함께 쓴다. 원천 `DEV-1` 문서는 그 아래 원천 스키마 `<기준>_dev_1`(기본이면 `data_parsing_dev_1`)에 들어간다 |
 
 - **벌 번호와 `DEV-<숫자>`는 서로 다른 것이다.** 벌 번호는 컨테이너 이름만, `DEV-<숫자>`는 문서와 스키마를 나눈다. 헷갈리지 않게 벌 1은 `DEV-1`, 벌 2는 `DEV-2`처럼 같은 숫자를 쓴다.
@@ -566,7 +654,7 @@ mv sbl_data_parsing-<판> sbl_data_parsing-main-1            # 이름 끝 -1 = �
 cd /home/sbl/sbl_data_parsing-main-1
 bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>
 ```
-gitea에서 clone해 쓰는 경우는 [§6-2](#6-2-개발자-한-벌-만들기).
+gitea에서 clone해 쓰는 경우는 [§6-3](#6-3-개발자-한-벌-만들기).
 
 | 칸 | 넣을 값 | 어디서 |
 |---|---|---|
@@ -603,7 +691,7 @@ required:
   env:
     run_env: dev                              # 개발 서버
   source:
-    source_systems: [DEV-1]                   # 이 벌이 파싱할 원천 — 꼭 적는다(아래 주의)
+    source_systems: DEV-1                     # 이 벌이 파싱할 원천 — 꼭 적는다(아래 주의)
   pg:
     pg_host: <PG 주소>                        # 다른 벌과 같게(DB 담당이 준 값)
     pg_port: <PG 포트>
@@ -626,7 +714,7 @@ option:
     home_dir: null                            # 비우면 <루트>/home
 ```
 
-- ⚠️ **`required.source.source_systems`가 비어 있으면 "운영 5개 원천(`SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`) 전부"라는 뜻이다** — 그 벌은 운영 문서를 모두 파싱해 모든 벌이 함께 쓰는 스키마에 적재한다. 일부러 그렇게 만든 동작이라 코드가 막지 않는다. 개발자 벌은 꼭 자기 `DEV-<숫자>`(예 `[DEV-1]`)를 적는다.
+- ⚠️ **`required.source.source_systems`가 비어 있으면 "운영 5개 원천(`SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`) 전부"라는 뜻이다** — 그 벌은 운영 문서를 모두 파싱해 모든 벌이 함께 쓰는 스키마에 적재한다. 일부러 그렇게 만든 동작이라 코드가 막지 않는다. 개발자 벌은 꼭 자기 `DEV-<숫자>`(예 `DEV-1`)를 적는다.
 - CPU 수가 적은 서버면 자원 칸도 줄인다([§1-10](#1-10-자원)) — 모든 벌의 합이 서버 CPU를 넘지 않게.
 - 권한은 그대로 둔다(init이 640, 주인 10001로 만듦). 다른 편집기로 새로 저장해 주인이 바뀌었으면 `chown 10001:<운영 그룹> settings.yaml && chmod 640 settings.yaml`.
 
@@ -730,7 +818,7 @@ python3 deploy/host/scripts/run_pipeline.py --help                  # 인자 목
 nohup python3 deploy/host/scripts/run_pipeline.py --limit 2 > run_first.out 2>&1 &
 tail -f deploy/host/scripts/test_space/batch_progress/progress.log  # Ctrl+C로 보기만 멈춤(실행은 계속)
 ```
-- 대상은 settings.yaml `source_systems`(`[DEV-1]`)의 행만이다. 문서 이름으로 더 좁히려면 `--filter <키워드,…>`.
+- 대상은 settings.yaml `source_systems`(예 `DEV-1`)의 행만이다. 문서 이름으로 더 좁히려면 `--filter <키워드,…>`.
 - 진행 줄(문서마다 셋): `doc#<번호> 파싱 OK(…)` → `doc#<번호> publish OK(…)` → `doc#<번호> 구조화+적재 OK(…)`.
 - **성공이면 끝 줄**: `=== 문서별 flow 끝: 2건(완료 2 · 건너뜀 0 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 0) · … · 종료 코드 0 ===`.
 - `처리할 문서 없음 — 종료` → EDW 목록에 `dev-1` 행이 없거나 이미 다 처리했다(2-1 — 담당에게 행 확인).
@@ -788,6 +876,7 @@ systemctl list-timers 'data-pipeline-nightly*'
 
 - 네 이미지 모두 개발 도구(sshd·git·uv·ruff·mypy·pytest·ripgrep·sqlite3·tmux·vim 등)와 opencode(이미지를 만들 때 `assets/opencode/opencode`가 있으면)를 담고 있다. 앱은 이 도구를 쓰지 않는다 — 켜지 않으면 이미지는 지금처럼 돈다.
 - 켜기: 그 벌의 `settings.yaml` 맨 아래 `option.devbox.ssh_port`에 포트를 적고(벌마다 다르게) `host_ctl.sh init --group <운영 그룹>`을 다시 불러 `<루트>/home`(10001, 700)을 만든다(없으면 `host_ctl.sh up`이 종료 2). 그러면 `host_ctl.sh`가 `data-pipeline`을 SSH 작업 공간으로 띄운다 — 명령 `devbox`(sshd, 컨테이너 사용자 UID 10001 · 열쇠 로그인만), 코드 폴더를 쓰기 가능으로, 홈 `/home/rag` = `<루트>/home`. 실행 이미지(`*-runtime`)에서만 되고, 운영(`prd`)이면 `host_ctl.sh`가 거부한다(종료 2).
+- 저장소 루트 `opencode.jsonc`는 opencode 프로젝트 설정 자리다 — 외부망에는 빈 틀(`{}`)만 있고, 내부망 gitea에서 모델 주소·이름을 채워 커밋한다(키는 적지 않음 — 아래 `INTERNAL_LLM_API_KEY`). 외부망 새 판을 들여올 때 덮지 않는다([§6-1](#6-1-저장소-처음-만들기--관리자가-한-번) ⑥ `--exclude opencode.jsonc`).
 - opencode는 내부망 모델만 쓴다(외부 모델 목록 받기·자동 업데이트 끔). 첫 시작에 홈의 `~/.config/opencode/opencode.json`에 틀이 복사되니 모델 주소(`baseURL` — OpenAI 호환 `/v1`)·이름(`<model id>` 두 곳)을 채운다. 키가 필요한 모델이면 SSH 셸에서 `export INTERNAL_LLM_API_KEY=<키>`(틀이 이 env를 읽음 — 컨테이너 env·settings.yaml에는 넣지 않는다). 연결 모듈은 opencode에 들어 있어 폐쇄망에서 따로 받지 않는다.
 - 공용 폴더에 둔 설정 파일 하나(`<공용 폴더>/opencode.json`)를 모든 벌이 같이 쓰려면 벌마다 settings.yaml `option.devbox.opencode_config`에 그 호스트 경로를 적는다(읽기 전용으로 붙고 `OPENCODE_CONFIG`가 가리킨다). 이 파일은 코드 폴더 밖이라 키를 직접 적어도 된다 — 주인 UID 10001·권한 640(settings.yaml과 같게). 파일 하나를 붙이므로 고친 뒤에는 `host_ctl.sh restart data-pipeline`(편집기가 파일을 새로 바꿔 쓰면 컨테이너는 옛 내용을 계속 본다).
 
@@ -797,12 +886,14 @@ systemctl list-timers 'data-pipeline-nightly*'
 #     devbox:
 #       ssh_port: 2222
 #       opencode_config: /home/sbl/opencode.json   # 선택 — 공용 opencode 설정
+chown -R 10001:<운영 그룹> <루트> && chmod -R g+w <루트>    # 코드 폴더를 컨테이너 사용자(10001)가 고칠 수 있게(init은 a+rX만 — 읽기) · settings.yaml·edw_chain.yaml은 작업 공간 안에서 읽기 전용으로 다시 붙음
+chmod 640 <루트>/settings.yaml <루트>/edw_chain.yaml && chmod 700 <루트>/home    # 위 g+w가 넓힌 비밀 파일·홈 권한을 되돌림
 mkdir -p <루트>/home/.ssh && cp <내 공개 열쇠>.pub <루트>/home/.ssh/authorized_keys   # init이 만든 <루트>/home(10001, 700)
 chown -R 10001 <루트>/home/.ssh && chmod 700 <루트>/home/.ssh && chmod 600 <루트>/home/.ssh/authorized_keys
 bash deploy/host/scripts/host_ctl.sh up -d data-pipeline        # data-pipeline이 sshd로 뜸(호스트 네트워크 — 포트 게시 없음)
 ssh -p 2222 rag@<서버>                                           # 접속 뒤 cd /app/deploy — 코드 폴더(쓰기 가능), 컨테이너와 같은 env
 ```
-- git 계정(선택): `option.devbox`에 `gitea_url`·`gitea_user`·`gitea_token`(비밀)을 모두 적으면 작업 공간이 시작할 때 `~/.git-credentials`의 그 호스트 줄을 쓴다 — 적는 법·토큰 만들기는 [§6-2](#6-2-개발자-한-벌-만들기).
+- git 계정(선택): `option.devbox`에 `gitea_url`·`gitea_user`·`gitea_token`(비밀)을 모두 적으면 작업 공간이 시작할 때 `~/.git-credentials`의 그 호스트 줄을 쓴다 — 적는 법·토큰 만들기는 [§6-3](#6-3-개발자-한-벌-만들기).
 - 끄기: `ssh_port`를 비우고 `host_ctl.sh up -d data-pipeline` — 다시 `idle`, 코드 폴더는 읽기 전용으로 돌아온다. 홈 폴더(열쇠·opencode 설정·작업 기록)는 남는다.
 
 ### 2-14. 컨테이너 이름·볼륨 바꾸기
@@ -813,7 +904,7 @@ ssh -p 2222 rag@<서버>                                           # 접속 뒤 
 ops:
   host:
     compose_project: rag                       # 묶음 → rag-1
-    extra_compose: [compose.extra.yml]         # 더 붙일 compose 파일(= <루트>/compose.extra.yml)
+    extra_compose: compose.extra.yml           # 더 붙일 compose 파일(= <루트>/compose.extra.yml)
   containers:
     pipeline: {pipeline_container_name: rag-pipeline}         # → rag-pipeline-1
     data_parsing: {data_parsing_container_name: rag-parsing}  # → rag-parsing-1(운영)
@@ -848,7 +939,7 @@ cp ../sbl_data_parsing-main-1/settings.yaml settings.yaml.new      # 벌 1 설�
 
 | 칸 | 벌 1 | 벌 2 |
 |---|---|---|
-| `required.source.source_systems` | `[DEV-1]` | `[DEV-2]` |
+| `required.source.source_systems` | `DEV-1` | `DEV-2` |
 | `option.devbox.ssh_port`(쓸 때만) | `2201` | `2202` |
 | `option.devbox.gitea_*`·`git_user_*` | 벌 1 개발자 계정 | 비우거나 벌 2 개발자 값 — 남의 gitea 토큰을 그대로 두지 않는다 |
 | `ops.run_pipeline.run_pipeline_work_dir` | 비움(또는 벌 1 전용 경로) | 비움 또는 벌 2 전용 경로 — 같으면 두 벌이 한 잠금·진행 기록을 나눠 써 함께 돌지 못한다 |
@@ -1751,51 +1842,224 @@ bash deploy/release/selftest_gate.sh $DOCKER run --rm --network host -v "$SETTIN
 
 ## 6. 내부망 코드 관리 — gitea
 
-내부망 코드는 내부망 gitea 저장소로 관리한다. 외부망(PC) 흐름은 그대로다(CLAUDE.md §5-1 — `main`·`develop`·`feature/*`·`release/*`). 저장소 주소·계정은 이 문서에 쓰지 않는다.
+내부망 코드는 내부망 gitea의 **비공개 저장소** 하나로 관리한다. 외부망(PC) 흐름은 그대로다(CLAUDE.md §5-1 — `main`·`develop`·`feature/*`·`release/*`). 저장소 주소·계정은 이 문서에 쓰지 않는다 — 아래 예(`gitea.example.local:3000`·조직 `sbl`·저장소 `sbl_data_parsing`·아이디 `jehun`)를 자기 값으로 바꿔 읽는다([예 값 사전](#바꿔-넣을-자리--예-값-사전)).
 
-### 6-1. 개발자마다 한 벌 + 공용 main 한 벌
+- **git은 컨테이너 안에서만 쓴다.** 서버에는 git이 없어도 된다 — 실행 이미지에 git·vim·opencode가 들어 있다. 코드 폴더(`$B`)를 컨테이너에 쓰기 가능으로 붙여, 컨테이너 안에서 고치고(opencode 포함) commit·push·pull한다. 그래서 코드 폴더 주인을 컨테이너 사용자 UID 10001로 맞춘다(아래 [git 셸](#git-셸--들어가는-두-길)).
+- **저장소 주소는 settings.yaml에 적지 않는다.** 앱은 저장소를 읽지 않고, 주소는 clone할 때 git이 그 코드 폴더의 `.git/config`에 기억한다(`git remote -v`). settings.yaml에 적는 것은 작업 공간의 git 로그인 정보뿐이다(`option.devbox.gitea_url`·`gitea_user`·`gitea_token` — 주소·포트까지, 저장소 경로 없이 — [§6-3](#6-3-개발자-한-벌-만들기)).
+- gitea 화면 이름은 판·언어 설정에 따라 조금 다르다(괄호 안 영어 이름).
+
+#### git 셸 — 들어가는 두 길
+
+| 길 | 언제 | 명령(예: 벌 2) |
+|---|---|---|
+| **(가) 떠 있는 벌 컨테이너에 들어가기** | 평소(코드 고치기·commit·push·pull) — 벌이 SSH 작업 공간([§2-13](#2-13-개발-작업-공간--sshopencode선택))이거나 코드를 쓰기 가능으로 붙여 띄웠을 때([§6-3](#6-3-개발자-한-벌-만들기) ④) | `docker exec -it -e HOME=/home/rag data-pipeline-2 bash` → `cd /app/deploy` · SSH면 `ssh -p 2223 rag@10.0.0.12` → `cd /app/deploy` |
+| **(나) git 전용 컨테이너를 잠깐 띄우기** | 처음(첫 반입·clone)이나 벌 컨테이너가 읽기 전용으로 떠 있을 때 | `docker run --rm -it --network host --entrypoint bash -v $B:/work:z -w /work data-pipeline-runtime:0.3.0` → (이미 `/work`) |
+
+- `-e HOME=/home/rag`: 파이프라인 이미지의 기본 홈은 `/tmp`라, 빼면 git 로그인 정보·`git config --global`이 `/tmp`에 써져 컨테이너를 다시 띄우면 사라진다(작업 공간이 만든 gitea 로그인 정보도 못 본다). `/home/rag`는 `$B/home`이 붙은 자리다.
+- (나)의 `--entrypoint bash`는 시작 점검을 건너뛰고 셸로 들어간다. `--rm`이라 나가면 컨테이너는 사라지고 `$B`의 파일·`.git`은 남는다. 홈이 `/tmp`라 로그인 정보는 남지 않는다(push·pull마다 아이디·토큰을 물음 — 한 번 쓰는 일에만 쓴다).
+- 안에서 `id -u`가 `10001`이어야 한다. 파일을 저장할 때 `Permission denied`면 서버 셸에서 `sudo chown -R 10001:sbl $B`(그다음 `sudo chmod 640 $B/settings.yaml $B/edw_chain.yaml && sudo chmod 700 $B/home`).
+
+### 6-1. 저장소 처음 만들기 — 관리자가 한 번
+
+**① 계정** — 사람마다 하나. 브라우저로 `http://gitea.example.local:3000` → 오른쪽 위 **가입**(Register): 사용자 이름(예 `jehun` — 로그인 아이디 = `gitea_user`)·메일(예 `jehun@sbl.local`)·비밀번호. 가입 버튼이 없으면 gitea 관리자가 사이트 관리(Site Administration) > 사용자 계정 > 새 계정으로 만든다. 메일은 실제 주소가 아니어도 된다 — 사람마다 다르게, 커밋 메일(`git_user_email`)과 같게.
+
+**② 조직과 저장소**
+1. 오른쪽 위 **+** → **새 조직**(New Organization) — 이름 `sbl`, 공개 범위 **비공개**(Private). 저장소를 개인 계정이 아니라 조직 아래에 두면 사람이 바뀌어도 주소가 그대로다.
+2. **+** → **새 저장소**(New Repository) — 소유자 `sbl`, 이름 `sbl_data_parsing`, **비공개로 만들기**(Make Repository Private) 켬, 기본 브랜치 `main`. **저장소 초기화(README·.gitignore·라이선스)는 모두 비운다** — 이미 있는 코드를 올리므로, 여기서 파일을 만들면 첫 push가 충돌한다.
+3. 만든 뒤 화면의 **HTTP 복제 주소**가 저장소 주소다 — 예 `http://gitea.example.local:3000/sbl/sbl_data_parsing.git`.
+
+**③ 권한** — 비공개 저장소는 권한을 받은 사람만 보인다.
+- 조직 `sbl` → **팀**(Teams) → **새 팀**: 이름 `developers`, 권한 **쓰기**(Write), 저장소 `sbl_data_parsing` → **팀원 추가**에 gitea 아이디(예 `jehun`). 관리자는 처음부터 있는 `Owners` 팀.
+- 읽기만 줄 사람은 권한 **읽기**(Read)인 팀(예 `readers`)을 하나 더 만든다.
+- 조직 없이 개인 저장소면: 저장소 → **설정**(Settings) → **협업자**(Collaborators) → 아이디 추가 → **쓰기**.
+
+**④ 브랜치 보호** — 첫 push(⑤) **뒤에** 건다(먼저 걸면 첫 push가 막힌다). 저장소 → **설정** → **브랜치**(Branches) → **브랜치 보호 규칙 추가**:
+- 브랜치 이름 `main`: **푸시 비활성화**(Disable Push — 직접 push 금지, PR로만), **병합 허용 목록**(Merge whitelist)에 판을 내는 사람(예 `jehun`), 필요하면 **필요한 승인 수**(Required approvals) `1`.
+- `develop`에도 같은 규칙(병합 허용 목록은 팀 `developers`).
+
+**⑤ 첫 반입** — 코드 zip을 푼 공용 main 벌 폴더(git 기록 없음)를 저장소의 첫 커밋으로 올린다.
+서버 셸(root):
+```bash
+B=/home/sbl/sbl_data_parsing-main-1
+chown -R 10001:sbl $B                                 # 컨테이너(UID 10001)가 .git을 만들고 파일을 고칠 수 있게 · sbl = 운영 그룹(id -gn sbl)
+chmod 640 $B/settings.yaml $B/edw_chain.yaml           # 비밀값 파일은 다시 좁힘(없으면 오류 — init 전이면 이 줄은 건너뜀)
+docker run --rm -it --network host --entrypoint bash -v $B:/work:z -w /work data-pipeline-runtime:0.3.0   # git 셸 (나)
+```
+git 셸 안(`/work`):
+```bash
+id -u                                                 # 기대: 10001
+echo '$Format:%H %h$' > CODE_COMMIT                    # zip이 채운 커밋 표시를 틀로 되돌림(gitea가 zip을 만들 때 다시 채움)
+git init -b main
+git config --global user.name jehun && git config --global user.email jehun@sbl.local   # 커밋·태그에 남길 이름·메일 — 이 셸에서만(홈 /tmp)
+git add .                                             # settings.yaml·edw_chain.yaml·output/·home/은 .gitignore에 있어 빠짐
+git status --short | grep -E '^.. "?(settings[^/]*\.yaml|edw_chain\.yaml|output/|home/)' | grep -v 'settings\.sample\.yaml' \
+  && echo "멈춤 — 비밀·결과 파일이 들어감" || echo "확인 — 비밀·결과 파일 없음"
+git commit -qm "Import 0.3.1 from external main"
+git remote add origin http://gitea.example.local:3000/sbl/sbl_data_parsing.git
+git push -u origin main                               # Username: jehun · Password: 토큰(또는 비밀번호)
+git push origin main:develop                          # develop을 쓰면 — main과 같은 곳에서 시작
+git tag -a v0.3.1 -m "0.3.1" && git push origin v0.3.1   # 반입한 판에 태그
+exit
+```
+- "멈춤"이 나오면 커밋하지 않는다 — 그 파일 이름을 `.gitignore`에 넣고 `git rm --cached <파일>`(예 `git rm --cached "settings copy.yaml"`) 뒤 다시.
+- 그다음 ④(브랜치 보호)를 건다.
+
+**⑥ 외부망 새 판 들여오기** — 새 판 zip(예 `sbl_data_parsing-0.3.2.zip`)을 서버 `/home/sbl/incoming/`에 놓고, 내 벌(예 `-2`)에서 `release/<버전>` 브랜치로 바꿔 커밋한다. git이 관리하는 파일만 바꾸므로 settings.yaml·edw_chain.yaml·output/·home/은 그대로다.
+```bash
+B=/home/sbl/sbl_data_parsing-main-2                   # 서버 셸 — git 셸 (나)에 zip 폴더를 읽기 전용으로 더 붙임
+docker run --rm -it --network host --entrypoint bash -v $B:/work:z -v /home/sbl/incoming:/incoming:ro,z -w /work data-pipeline-runtime:0.3.0
+```
+git 셸 안:
+```bash
+git status --short                                    # 기대: 빈 줄(고치던 것이 있으면 먼저 commit)
+git config --global user.name jehun && git config --global user.email jehun@sbl.local   # 커밋·태그에 남길 이름·메일 — 이 셸에서만(홈 /tmp)
+git fetch origin && git switch -c release/0.3.2 origin/main
+rm -rf /tmp/new && unzip -q /incoming/sbl_data_parsing-0.3.2.zip -d /tmp/new
+git ls-files -z | xargs -0 rm -f                      # git이 관리하는 파일만 지움(지운 파일이 새 판에 없으면 그대로 지워진 것으로 남음)
+cp -a /tmp/new/sbl_data_parsing-0.3.2/. .             # 새 판으로 채움
+echo '$Format:%H %h$' > CODE_COMMIT
+git ls-files --error-unmatch opencode.jsonc >/dev/null 2>&1 && git checkout HEAD -- opencode.jsonc   # 내부망에서 채운 opencode 설정은 내부망 것 그대로(아직 커밋 전이면 새 판의 빈 틀)
+git add -A && git status --short | head -30           # 바뀐 파일 확인 — 내부망에서만 고친 파일(예 resources/config/edw_chain.yaml)이 보이면
+#   외부망 판으로 덮인 것: 내부망 것을 살리려면 git checkout HEAD -- <파일> → 외부망에도 같은 고침을 넣어 다음 판부터 맞춘다
+git commit -qm "Import 0.3.2 from external main" && git push -u origin release/0.3.2   # 그다음 §6-5 ④부터(PR → 병합 → 태그)
+exit
+```
+
+### 6-2. 개발자마다 한 벌 + 공용 main 한 벌
 
 개발 서버 한 대에 여러 벌을 띄운다. 벌 폴더(코드 폴더 = gitea clone) 하나가 한 벌이고, 폴더 이름 끝 `-<숫자>`(벌 번호)로 컨테이너·compose 묶음·타이머 이름이 나뉜다([§2-1](#2-1-폴더와-벌)).
 
 | 벌 | 벌 폴더(예) | 코드 | 컨테이너 |
 |---|---|---|---|
-| 공용 main | `/home/sbl/sbl_data_parsing-main-1` | gitea `main` | `data-pipeline-1` |
-| 개발자마다 하나 | `/home/sbl/sbl_data_parsing-main-2` | 그 개발자의 gitea 브랜치 | `data-pipeline-2` |
+| 공용 main | `/home/sbl/sbl_data_parsing-main-1` | gitea `main`의 태그 판(예 `v0.3.1`) | `data-pipeline-1` |
+| 개발자마다 하나 | `/home/sbl/sbl_data_parsing-main-2` | 그 개발자의 `feature/*` 브랜치 | `data-pipeline-2` |
 
 - **pgvector는 우리 compose에 없다.** PG는 DB 담당이 주는 서버를 쓰고, 모든 벌이 같은 기준 스키마를 함께 쓴다 — 모든 벌을 같은 코드 판으로 둔다.
-- **벌마다 다른 값은 그 벌의 settings.yaml로만 준다**(코드나 compose에 사람별로 적지 않음 — 원천 `DEV-<숫자>`, 작업 공간을 켜면 `option.devbox.ssh_port`). 다른 사람의 포트·벌 번호를 쓰지 않는다.
-- `settings.yaml`·`edw_chain.yaml`·`output/`·`home/`은 clone 안에 있지만 git 제외 목록(`.gitignore`)에 있어 커밋되지 않는다.
+- **벌마다 다른 값은 그 벌의 settings.yaml로만 준다**(코드나 compose에 사람별로 적지 않음 — 원천 `DEV-<숫자>`(예 `DEV-2`), 작업 공간을 켜면 `option.devbox.ssh_port`(예 `2223`)). 다른 사람의 포트·벌 번호를 쓰지 않는다.
+- `settings.yaml`(사본 `settings copy.yaml` 등 포함)·`edw_chain.yaml`·`output/`·`home/`·`.worktrees/`는 clone 안에 있지만 git 제외 목록(`.gitignore`)에 있어 커밋되지 않는다. 저장소 루트 `opencode.jsonc`(opencode 설정 — 키 없이)는 커밋한다.
 - 이미지는 공용 폴더에 한 번 불러 두면 모든 벌이 같이 쓴다.
 - gitea 전용 코드는 두지 않는다 — git 명령과 브랜치 규칙만 쓴다.
 
-### 6-2. 개발자 한 벌 만들기
+### 6-3. 개발자 한 벌 만들기
 
-root 셸에서(`<번호>` = 다른 벌과 겹치지 않는 벌 번호):
+예: 벌 번호 `2`, 벌 폴더 `/home/sbl/sbl_data_parsing-main-2`, 원천 `DEV-2`, SSH 포트 `2223`, MCP 포트 `18772`.
+
+**① 토큰**(선택 — 비밀번호로도 된다): gitea 웹 → 프로필 사진 → **설정**(Settings) → **응용**(Applications) → **새 토큰 만들기**(Generate New Token) — 이름 `devserver-main-2`, 권한 `repository` **읽기 및 쓰기**(Read and Write, 옛 판은 `repo` 체크) → 만들기. 토큰은 만들 때 한 번만 보이므로 바로 ③의 settings.yaml에 넣는다. 잃어버리면 그 토큰을 지우고 새로 만든다. 토큰을 권하는 까닭: 컨테이너 홈의 `~/.git-credentials`에 글자 그대로 저장되는데, 토큰은 저장소 권한뿐이고 따로 지울 수 있다. 관리자가 비밀번호 로그인을 막았거나 2단계 인증을 켰으면 토큰만 된다.
+
+**② clone** — 빈 벌 폴더를 만들어 git 셸 (나)에서 받는다.
+서버 셸(root):
 ```bash
-export DOCKER=docker
-cd /home/sbl
-git clone -b <내 브랜치> <gitea 저장소 주소> sbl_data_parsing-main-<번호>    # 벌 폴더 = 코드 폴더 = 내 작업 폴더
-cd sbl_data_parsing-main-<번호> && git rev-parse --short HEAD > CODE_COMMIT   # clone은 CODE_COMMIT을 채우지 않음 — 시작 로그의 커밋 표시용
-bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>               # settings.yaml·edw_chain.yaml·output/(ssh_port를 적은 뒤 다시 부르면 home/)
+B=/home/sbl/sbl_data_parsing-main-2
+mkdir -p $B && chown 10001:sbl $B                     # 빈 폴더 — 주인 10001(sbl = 운영 그룹)
+docker run --rm -it --network host --entrypoint bash -v $B:/work:z -w /work data-pipeline-runtime:0.3.0
 ```
-그다음은 [§2-15](#2-15-두-번째-벌-만들기)와 같다 — 공용 벌의 settings.yaml을 틀로 벌마다 다른 칸을 고치고, `up -d data-pipeline` → (새 `DEV-<숫자>`면) `migrate up --target search` → `host_ctl.sh check`(기대 마지막 줄 `[host_ctl check] 통과 — 4개(개발 서버 — data-pipeline만)`). DB 표가 아직 없는 서버의 첫 벌이면 [§2-6](#2-6-db-판--검토용-sql-뽑기--migrate-up) (가).
-
-- **SSH 작업 공간(선택):** `option.devbox.ssh_port`에 자기 포트를 적고 `host_ctl.sh init`을 다시 부르면 `data-pipeline-<번호>`가 SSH로 들어가 코드 폴더를 고칠 수 있는 작업 공간으로 뜬다 — 열쇠 놓기·접속·끄기는 [§2-13](#2-13-개발-작업-공간--sshopencode선택).
-- **작업 공간의 gitea 계정(선택):** 작업 공간에서 바로 `git pull`·`push`하려면 그 벌의 settings.yaml 맨 아래 `option.devbox`에 적고 `host_ctl.sh up -d data-pipeline`으로 다시 띄운다 — 시작할 때 홈에 `~/.git-credentials`(권한 600)가 생기고 `credential.helper store`로 설정된다(토큰은 컨테이너 env로 넘기지 않고 붙인 settings.yaml에서 직접 읽음 — 화면·로그에 나오지 않음). `git_user_name`·`git_user_email`을 적으면 커밋 이름·메일도. 토큰은 gitea 웹의 내 설정 > 응용 > 새 토큰(저장소 읽기·쓰기 권한)에서 만든다. `~/.git-credentials`의 다른 줄은 그대로 두고 그 gitea 호스트 줄만 바꾼다. 셋(`gitea_url`·`gitea_user`·`gitea_token`) 중 하나라도 비우면 전에 쓴 그 호스트 줄을 지운다. 주소 꼴은 `http(s)://호스트[:포트][/경로]` — 틀리면 경고만 남기고 아무것도 쓰지 않는다.
+git 셸 안:
+```bash
+git clone -b develop http://gitea.example.local:3000/sbl/sbl_data_parsing.git .   # 끝의 . = 이 폴더에 · develop을 안 쓰면 -b main · Username: jehun · Password: 토큰
+git rev-parse --short HEAD > CODE_COMMIT && git update-index --skip-worktree CODE_COMMIT   # 시작 로그의 커밋 표시용 — 바꾼 것을 git이 무시
+exit
+```
+**③ 설정·폴더** — 서버 셸(root):
+```bash
+cd $B && bash deploy/host/scripts/host_ctl.sh init --group sbl   # settings.yaml·edw_chain.yaml·output/ 만듦(없을 때만)
+```
+공용 벌 settings.yaml을 틀로 벌마다 다른 칸을 고친다([§2-15](#2-15-두-번째-벌-만들기) 표 — 예 `required.source.source_systems: DEV-2` · `search.server.mcp_port: 18772`). 맨 아래에 작업 공간·gitea 칸:
 ```yaml
 option:
   devbox:
-    ssh_port: <내 포트>
-    gitea_url: https://<gitea 주소>:<포트>    # 예 https://gitea.example.local:3000 — http면 토큰이 암호화 없이 감
-    gitea_user: <내 gitea 계정>
-    gitea_token: <내 토큰>                   # 비밀 — settings.yaml에만
-    git_user_name: <커밋에 남길 이름>         # 선택
-    git_user_email: <커밋에 남길 메일>        # 선택
+    ssh_port: 2223                            # 이 벌의 SSH 포트(다른 벌과 다르게)
+    gitea_url: http://gitea.example.local:3000   # 주소·포트까지(저장소 경로 없이) — https면 https://
+    gitea_user: jehun                         # gitea 가입 때 사용자 이름
+    gitea_token: <내 토큰>                     # ①에서 만든 값 — 비밀, 이 파일에만
+    git_user_name: jehun                      # 커밋에 남길 이름
+    git_user_email: jehun@sbl.local           # gitea 계정 메일과 같게
 ```
+```bash
+bash deploy/host/scripts/host_ctl.sh init --group sbl   # ssh_port를 적었으니 다시 — home/(10001, 700)을 만듦
+chown -R 10001:sbl $B && chmod -R g+w $B               # 코드를 컨테이너가 고칠 수 있게(init은 읽기 권한만 엶)
+chmod 640 $B/settings.yaml $B/edw_chain.yaml && chmod 700 $B/home   # 비밀 파일·홈은 다시 좁힘
+mkdir -p $B/home/.ssh && cp /home/sbl/jehun_id_ed25519.pub $B/home/.ssh/authorized_keys   # SSH로 들어갈 때만 — 내 PC 공개 열쇠(~/.ssh/id_ed25519.pub)를 서버로 옮겨 둔 자리
+chown -R 10001 $B/home/.ssh && chmod 700 $B/home/.ssh && chmod 600 $B/home/.ssh/authorized_keys
+```
+**④ 띄우기** — 작업 공간(코드 쓰기 가능 + gitea 로그인 자동)으로:
+```bash
+bash deploy/host/scripts/host_ctl.sh up -d data-pipeline   # data-pipeline-2가 SSH 작업 공간으로 뜸
+```
+SSH 없이 `docker exec`로만 쓰려면 `host_ctl.sh` 대신 직접 `idle`로 띄워도 된다(그때는 gitea 로그인을 ⑤에서 손으로):
+```bash
+docker run -d --name data-pipeline-2 --restart unless-stopped --network host --init \
+  --memory 24g --memory-swap 24g --cpus 5 --cpu-shares 1024 --pids-limit 4096 \
+  --log-opt max-size=50m --log-opt max-file=3 \
+  -e SETTINGS_FILE=/app/deploy/settings.yaml -e RUN_ENV=dev \
+  -v $B:/app/deploy:z \
+  -v $B/settings.yaml:/app/deploy/settings.yaml:ro,z \
+  -v $B/output:/app/output:z \
+  -v /data/docs:/data/docs:ro,z \
+  -v $B/home:/home/rag:z \
+  data-pipeline-runtime:0.3.0 idle
+```
+- `-v $B:/app/deploy:z`(읽기 전용 `ro` 없음)로 코드를 고칠 수 있고, 같은 자리에 settings.yaml만 `ro`로 다시 붙여 컨테이너(opencode 포함)가 비밀값 파일을 고치지 못하게 한다.
 
-### 6-3. 매일 쓰는 법
+**⑤ 첫 확인** — git 셸 (가):
+```bash
+docker exec -it -e HOME=/home/rag data-pipeline-2 bash
+cd /app/deploy && git ls-remote origin | head -2      # 기대: 아이디를 묻지 않고 커밋 번호 줄(작업 공간이 로그인 정보를 씀)
+#   idle로 띄웠으면 처음 한 번: git config --global credential.helper store && git config --global user.name jehun && git config --global user.email jehun@sbl.local && git pull
+```
+그다음은 [§2-15](#2-15-두-번째-벌-만들기)와 같다 — (새 `DEV-<숫자>`면) `migrate up --target search` → `host_ctl.sh check`(기대 마지막 줄 `[host_ctl check] 통과 — 4개(개발 서버 — data-pipeline만)`). DB 표가 아직 없는 서버의 첫 벌이면 [§2-6](#2-6-db-판--검토용-sql-뽑기--migrate-up) (가).
 
-- 코드 바꾸기 = 그 코드 폴더에서 `git pull`(또는 작업 공간에서 고쳐 커밋·push). 개발 서버는 실행 이미지 + 코드 폴더 마운트라 컨테이너를 다시 띄우면 반영된다 — `bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline`. 의존성 지문(`deploy/docker/DEPS_HASH`)이 바뀐 커밋은 새 실행 이미지가 필요하다([§4-4](#4-4-새-실행-이미지-불러오기--의존성-지문-확인)).
-- 공용 main 벌은 gitea `main`만 받는다. 판을 바꿀 때는 [§4](#4-운영-중인-서버를-새-판으로-올리기) 순서(백업 → DB 판 → 점검) — 벌이 같은 DB를 쓰므로 모든 벌을 같은 판으로.
+- `cat ~/.git-credentials`는 하지 않는다(토큰이 찍힘).
+- 비밀번호·토큰을 바꿨으면 git 셸 (가)에서 `printf 'protocol=http\nhost=gitea.example.local:3000\n' | git credential reject` 뒤 `git pull`에서 새 값을 넣는다(작업 공간이면 settings.yaml `gitea_token`을 고치고 `host_ctl.sh up -d data-pipeline`).
+- 작업 공간의 gitea 로그인 자동 설정: 시작할 때 홈에 `~/.git-credentials`(권한 600)의 그 gitea 호스트 줄만 바꾸고(다른 줄은 그대로) `credential.helper store`·이름·메일을 설정한다(토큰은 컨테이너 env로 넘기지 않고 붙인 settings.yaml에서 직접 읽음 — 화면·로그에 나오지 않음). 셋(`gitea_url`·`gitea_user`·`gitea_token`) 중 하나라도 비우면 전에 쓴 그 호스트 줄을 지운다. 주소 꼴은 `http(s)://호스트[:포트][/경로]` — 틀리면 경고만 남기고 아무것도 쓰지 않는다.
+- `https`인데 `SSL certificate problem`이면 서버 관리자에게 사내 인증서를 받아 등록한다(검사 끄기 `sslVerify=false`는 쓰지 않는다).
+
+### 6-4. 매일 쓰는 법 — 브랜치 따기·push·PR
+
+모두 git 셸 (가)에서(`docker exec -it -e HOME=/home/rag data-pipeline-2 bash` → `cd /app/deploy`):
+```bash
+git fetch origin
+git switch -c feature/pdf-table origin/develop        # ① 브랜치 따기 — 기능 하나에 하나(develop을 안 쓰면 origin/main)
+opencode                                              #    고치기(opencode·vim) → 시험: python -m pipeline.cli selftest --only <이름 일부>(예 --only test_publish)
+git status --short                                    # ② 바뀐 파일 확인 — settings.yaml·output/이 없어야 함
+git add pipeline/load/publish.py && git commit -m "Retry publish on timeout"   # 바꾼 파일만
+git push -u origin feature/pdf-table                  # ③ 올리기(처음엔 -u, 다음부터 git push)
+```
+④ **PR** — gitea 웹: 저장소 → **풀 리퀘스트**(Pull Requests) → **새 풀 리퀘스트** → 병합 대상 `develop` ← `feature/pdf-table` → 제목·내용(무엇을 왜, 서버 영향 '코드 폴더만 교체' 또는 '새 이미지 버전 필요') → 만들기. 다른 사람이 **파일 변경**(Files Changed) 탭에서 보고 **검토**(Review) → 승인.
+⑤ **병합** — 승인 뒤 PR 화면 아래 **병합**(Merge) 버튼(병합 허용 목록에 있는 사람). 병합 뒤 "브랜치 삭제"를 누르면 gitea의 그 `feature/*`가 지워진다(`release/*`·`main`·`develop`은 지우지 않는다).
+```bash
+git switch develop && git pull                        # ⑥ 병합된 develop 받기
+git branch -d feature/pdf-table                       #    다 쓴 브랜치 정리
+git fetch --prune                                     #    gitea에서 지운 브랜치 표시 정리
+```
+- PR 하나는 기능 하나. 다른 사람 PR과 같은 파일을 고쳐 충돌하면 내 브랜치에서 `git pull origin develop` → 충돌 파일을 고쳐 커밋 → `git push`.
+- 동시에 여러 기능을 고치려면 `git worktree add .worktrees/ocr-fix -b feature/ocr-fix origin/develop`(git 셸 (가)에서만 — worktree는 `/app/deploy` 절대 경로를 기억해 (나)의 `/work`에서는 깨진다 · 코드 폴더 안이라 컨테이너에서 보임 · `.gitignore`에 있음). 그 폴더 코드로는 시험 명령만 돈다(`cd .worktrees/ocr-fix && PYTHONPATH=$PWD python -m pipeline.cli selftest --only test_publish`) — 파이프라인 전체는 늘 `/app/deploy` 코드로 돈다.
+- 고친 코드는 data-pipeline 컨테이너 안에서 **다음 명령부터** 쓰인다. 같은 벌의 MCP 컨테이너는 다시 띄워야 반영된다(`host_ctl.sh up -d --force-recreate mcp-data-parsing mcp`). 의존성 지문(`deploy/docker/DEPS_HASH`)이 바뀐 커밋은 새 실행 이미지가 필요하다([§4-4](#4-4-새-실행-이미지-불러오기--의존성-지문-확인)).
+- 공용 main 벌은 gitea `main`에 붙인 태그 판(`v<버전>`, 예 `v0.3.2`)만 받는다([§6-5](#6-5-판-내기--release-브랜치와-태그)). 판을 바꿀 때는 [§4](#4-운영-중인-서버를-새-판으로-올리기) 순서(백업 → DB 판 → 점검) — 벌이 같은 DB를 쓰므로 모든 벌을 같은 판으로.
 - **`server-changes.md`·`issues.md`·`versions.md`** — [§3-11](#3-11-개발자에게-보고하는-법) 형식.
-- gitea 저장소·권한·외부망 `main`을 옮기는 방법, 개발자별 벌 목록을 둘 곳은 [refactor.md](../refactoring/refactor.md)의 열린 항목에서 정한다.
+- 외부망 `main`과 내부망 gitea를 오가는 때(판마다·정기)와 개발자별 벌 목록을 둘 곳은 [refactor.md](../refactoring/refactor.md)의 열린 항목에서 정한다.
+
+### 6-5. 판 내기 — release 브랜치와 태그
+
+외부망 새 판을 들여오는 경우는 [§6-1](#6-1-저장소-처음-만들기--관리자가-한-번) ⑥으로 `release/<버전>`을 만든 뒤 ④부터. 판 번호 규칙은 [§5-2](#5-2-버전)(코드 폴더만 바뀌면 PATCH `0.3.1 → 0.3.2`, 새 실행 이미지면 MINOR `0.3.x → 0.4.0`). 브랜치는 외부망과 같다 — `feature/<기능명>` → PR → `develop` → `release/<버전>` → PR → `main` → 태그 `v<버전>`. `develop`을 쓰지 않으면 아래 `origin/develop`을 `origin/main`으로 읽는다. 아래 예는 `0.3.1 → 0.3.2`, 모두 git 셸 (가)(`docker exec -it -e HOME=/home/rag data-pipeline-2 bash` → `cd /app/deploy`).
+
+```bash
+git fetch origin
+git switch -c release/0.3.2 origin/develop            # ① release 브랜치 — 합칠 기능이 다 들어간 develop에서
+cat VERSION                                           #    기대: 0.3.1
+echo 0.3.2 > VERSION                                  # ② 판 올리기(이 브랜치에서만 — feature에서는 안 고침)
+git commit -am "Release 0.3.2: VERSION 0.3.1 -> 0.3.2"
+git push -u origin release/0.3.2                      # ③ 올리기 — 이 브랜치로 벌을 띄워 시험(§0)하고, 고칠 것은 이 브랜치에 커밋
+```
+④ gitea 웹: 저장소 → **풀 리퀘스트** → **새 풀 리퀘스트** → 병합 대상 `main` ← `release/0.3.2` → 만들기 → 검토 뒤 **병합**.
+```bash
+git switch main && git pull                           # ⑤ 병합된 main 받기
+git log -1 --oneline                                  #    기대: 병합 커밋(release/0.3.2)
+git tag -a v0.3.2 -m "0.3.2"                          # ⑥ 태그 — 병합 커밋에, annotated(-a), 이름은 v + VERSION
+git push origin v0.3.2                                #    태그는 따로 올려야 gitea에 보인다
+git tag -l 'v*'                                       #    기대: … v0.3.1 v0.3.2
+```
+⑦ (`develop`을 쓰면) release에서 고친 것을 `develop`에도 — gitea 웹에서 PR `develop` ← `main` → 병합.
+- gitea 웹 **릴리스**(저장소 → 태그 → `v0.3.2` → 새 릴리스)에 바뀐 것을 적어 두면 판마다 기록이 남는다(선택).
+- 공용 main 벌을 이 판으로 올릴 때는 [§4](#4-운영-중인-서버를-새-판으로-올리기) 순서 — 코드 받기는 공용 벌의 git 셸에서(공용 벌 컨테이너는 코드를 읽기 전용으로 붙이므로 (나) — `B=/home/sbl/sbl_data_parsing-main-1`) `git fetch origin --tags && git switch --detach v0.3.2 && git rev-parse --short HEAD > CODE_COMMIT && git update-index --skip-worktree CODE_COMMIT`(판에 고정 — 다음 판도 태그로 옮긴다).
+- 태그는 한 번 올리면 옮기지 않는다. 잘못 붙였으면 다음 판 번호로 새로 낸다(남이 이미 받았을 수 있다).
+- `release/*` 브랜치는 병합 뒤에도 지우지 않는다(그 판을 고칠 때 다시 씀).

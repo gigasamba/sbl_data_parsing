@@ -6,7 +6,6 @@
       python -m common.config.sample --where PG_HOST [이름…]   # 옛 env 이름 → 파일 자리·모델 경로·내부 표시(판정 꼴 등 — sample에서 뺀 것)
 """
 
-import re
 import sys
 from typing import Literal, get_args, get_origin
 
@@ -88,7 +87,7 @@ NOTE_COL = 46  # 칸 주석이 시작하는 열(값 자리와 주석을 떼어 �
 NOTES = {
     # required
     "common.run_env": "실행 환경 · local(PC)·dev(개발 서버)·prd(운영 서버)",
-    "pipeline.extract.source.systems": "파싱할 원천 목록(FileStorageMap.source_system, 대소문자 무관) · SFDC·CRMS·LAS·FAQ·Other·DEV-<1~99> · 예 [DEV-1] (null = 운영 5개 원천 SFDC·CRMS·LAS·FAQ·Other — DEV-<n> 행은 뺌)",
+    "pipeline.extract.source.systems": "파싱할 원천 목록(FileStorageMap.source_system, 대소문자 무관) · SFDC·CRMS·LAS·FAQ·Other·DEV-<1~99> · 쉼표 구분 · 예 DEV-1 또는 DEV-1, DEV-2 또는 SFDC, CRMS (null = 운영 5개 원천 SFDC·CRMS·LAS·FAQ·Other — DEV-<n> 행은 뺌)",
     "common.connections.pg.host": "PG 주소 · 예 127.0.0.1",
     "common.connections.pg.port": "PG 포트 · 예 55433",
     "common.connections.pg.db": "PG 데이터베이스 이름 · 예 rag",
@@ -97,53 +96,53 @@ NOTES = {
     "common.connections.pg.db_schema": "검색 스키마(소문자·숫자·_)",
     "common.models.embed.base_url": "임베딩 주소(OpenAI 호환) · 예 http://10.0.0.5:8000/v1",
     "common.models.embed.model": "임베딩 모델 이름(색인과 같게) · 예 bge-m3",
-    "common.models.embed.api_key": "임베딩 API 키 (null = 키 안 보냄)",
+    "common.models.embed.api_key": "임베딩 API 키 · 예 모델 담당이 준 키(sk-로 시작하는 글자 등) (null = 키 안 보냄)",
     "common.connections.rdb.host": "EDW(SQL Server) 주소 · 예 edw.corp.local",
     "common.connections.rdb.port": "EDW 포트 · 1~65535",
     "common.connections.rdb.database": "EDW 데이터베이스 이름 · 예 EDW",
     "common.connections.rdb.read.user": "EDW 읽기 계정(원천 목록·메타 사슬·query_edw) · 예 svc_parse_r",
     "common.connections.rdb.read.password": "EDW 읽기 비밀번호 · 예 DB 담당이 준 값",
-    "common.connections.rdb.sqlite": "가짜 EDW sqlite 파일(저장소 기준 상대 가능) (null = valid_env/edw/edw_copy.sqlite — 없으면 edw.sqlite를 복사)",
+    "common.connections.rdb.sqlite": "가짜 EDW sqlite 파일(저장소 기준 상대 가능) · 예 valid_env/edw/edw_copy.sqlite (null = valid_env/edw/edw_copy.sqlite — 없으면 edw.sqlite를 복사)",
     "pipeline.load.publish.local_dir": "게시 폴더(저장소 기준 상대 가능 — 처음 게시할 때 만듦) · 서버 publish_bucket 대신",
     "pipeline.extract.local_source": "파싱 원본 폴더(저장소 기준 상대 가능 — 게시 폴더는 원본에서 뺌) · source_input_location·--source가 없을 때",
     "pipeline.extract.local_max_new": "한 번에 새로 파싱할 문서 수 상한 · 0 = 제한 없음 · max_new_docs_per_run을 안 적었을 때",
-    "pipeline.load.publish.bucket": "게시 버킷(원본 버킷과 다르게) · 예 rag-silver",
+    "pipeline.load.publish.bucket": "게시 버킷 — 파싱 결과(silver)를 올릴 Object Storage 버킷 이름(스토리지 담당이 만들어 줌 · 원본 버킷과 다르게 · 개발 벌끼리는 같은 버킷이어도 됨 — 키에 원천 DEV-<n>이 들어감) · 예 rag-silver",
     "pipeline.load.publish.prefix": "버킷 안 경로 접두 · 예 parse (null = 버킷 맨 위)",
     "common.connections.object_storage.endpoint": "S3 호환 주소 · 예 https://os.corp.local:9000",
     "common.connections.object_storage.access_key": "S3 액세스 키 · 예 스토리지 담당이 준 값",
     "common.connections.object_storage.secret_key": "S3 시크릿 키 · 예 스토리지 담당이 준 값",
     "common.models.llm.base_url": "LLM 주소(OpenAI 호환) · 예 http://10.0.0.6:8000/v1 — 적재 분류(doc_classify)가 씀",
     "common.models.llm.model": "LLM 모델 이름 · 예 qwen3-32b",
-    "common.models.llm.api_key": "LLM API 키 (null = 키 안 보냄)",
+    "common.models.llm.api_key": "LLM API 키 · 예 모델 담당이 준 키(sk-로 시작하는 글자 등) (null = 키 안 보냄)",
     "common.models.vlm.base_url": "VLM 주소(OpenAI 호환) · 예 http://10.0.0.7:8000/v1 — 그림·쪽 VLM·스캔 PDF가 씀",
     "common.models.vlm.model": "VLM 모델 이름 · 예 qwen2.5-vl-7b",
-    "common.models.vlm.api_key": "VLM API 키 (null = 키 안 보냄)",
-    "common.tokens.mcp": "MCP 토큰(Authorization: Bearer — 검색·parse MCP 공용) · 예 openssl rand -hex 32",
-    "mcp.server.fulltext_secret": "원문 도구 sfid 서명 키(바꾸면 준 sfid 무효) · 8자 이상 · 예 openssl rand -hex 32",
+    "common.models.vlm.api_key": "VLM API 키 · 예 모델 담당이 준 키(sk-로 시작하는 글자 등) (null = 키 안 보냄)",
+    "common.tokens.mcp": "MCP 토큰(Authorization: Bearer — 검색·parse MCP 공용 · MCP를 띄우기 전에 정함 · 부르는 쪽도 같은 값) · 서버에서 openssl rand -hex 32를 실행해 나온 64자를 그대로 · 예 9f2c…(64자 16진수)",
+    "mcp.server.fulltext_secret": "원문 도구 sfid 서명 키 — 원문 도구가 내주는 문서 번호(sfid)에 붙이는 서명용 비밀(바꾸면 이미 준 sfid 무효 · mcp_token과 다른 값) · 8자 이상 · 서버에서 openssl rand -hex 32를 실행해 나온 64자를 그대로 · 예 4be1…(64자 16진수)",
     "pipeline.host.image": "data-pipeline 이미지:태그 · 예 data-pipeline-runtime:0.2.0(dev)",
     "mcp.host.image": "mcp-server 이미지:태그 · 예 mcp-server-runtime:0.2.0(dev)",
-    "common.host.doc_src": "호스트 원본 문서 폴더(절대 경로 — 컨테이너 /data/docs로 붙음) · 예 /data/docs",
+    "common.host.doc_src": "호스트 원본 문서 폴더 — 서버에 이미 있는 폴더(절대 경로 · UID 10001이 읽을 수 있게 — 컨테이너 /data/docs로 붙음 · 벌끼리 같아도 됨) · 예 /data/docs",
     "common.host.pg_container": "호스트 PG(pgvector) 컨테이너 이름(run_pipeline 문서 수·백업) · 예 pgvector",
     # common
-    "common.connections.object_storage.region": "S3 리전 이름",
+    "common.connections.object_storage.region": "S3 리전 이름 · 예 us-east-1(스토리지 담당이 다른 값을 주면 그 값)",
     "common.connections.object_storage.verify_tls": "TLS 검증 · 1 검증·0 끔·사내 CA 파일 경로(예 /etc/pki/ca-trust/source/anchors/corp-ca.pem)",
     "common.connections.rdb.connect_kwargs": 'EDW pymssql 추가 인자 JSON · 예 {"login_timeout": 10} (null = 추가 인자 없음)',
     "common.models.embed.query_prefix": "질의 앞에 붙이는 지시문 · 예 'Query: ' (null = 질의 그대로)",
-    "common.models.llm.cache_dir": "LLM 응답 캐시 폴더 (null = output/eval/llm_cache)",
+    "common.models.llm.cache_dir": "LLM 응답 캐시 폴더 · 예 /app/output/eval/llm_cache (null = output/eval/llm_cache)",
     "common.models.llm.extra_body": 'LLM 요청 본문에 합칠 JSON · 예 {"reasoning": {"enabled": false}} (null = 더하지 않음)',
     "common.models.llm.rpm": "LLM 분당 호출 상한 · 0 = 무제한",
     "common.models.vlm.concurrency": "문서 하나의 VLM 동시 요청 수",
     "common.models.vlm.extra_body": 'VLM 요청 본문에 합칠 JSON · 예 {"chat_template_kwargs": {"enable_thinking": false}} (null = 더하지 않음)',
     "common.models.vlm.max_concurrency": "프로세스 전체 VLM 동시 요청 상한",
     "common.models.vlm.timeout": "VLM 호출 1건 제한(초)",
-    "common.models.guard.internal_host_suffixes": "내부망으로 볼 사내 도메인 접미사(이름이 사설 IP로 풀릴 때만) · 예 [.mycorp.co.kr] — 모델 주소가 '외부 주소'로 막힐 때만",
-    "common.models.guard.internal_ip_ranges": "내부망으로 볼 사설 대역 밖 사내 IP 대역(CIDR) · 예 [100.64.0.0/10] — 모델 주소가 '외부 주소'로 막힐 때만",
+    "common.models.guard.internal_host_suffixes": "내부망으로 볼 사내 도메인 접미사(이름이 사설 IP로 풀릴 때만) · 쉼표 구분 · 예 .mycorp.co.kr, .corp.local — 모델 주소가 '외부 주소'로 막힐 때만",
+    "common.models.guard.internal_ip_ranges": "내부망으로 볼 사설 대역 밖 사내 IP 대역(CIDR) · 쉼표 구분 · 예 100.64.0.0/10, 10.200.0.0/16 — 모델 주소가 '외부 주소'로 막힐 때만",
     # extract
     "pipeline.extract.input_source": "파싱할 원본 · 폴더(예 /data/docs) 또는 rdb:csv:<목록 csv> (null = 준비 폴더)",
     "pipeline.connections.rdb.bucket": "원본 버킷 — 목록 key가 s3://버킷/… 꼴이 아닐 때 · 예 sfdc-files",
     "common.text.source_uri_prefix": "원본 주소 접두 · 예 s3://sfdc-files/docs (null = file://<docs_dir>)",
     "pipeline.extract.source.fetch_workers": "원본 받기 스레드 수",
-    "pipeline.extract.source.staging": "미리 받기 폴더 (null = 미리 받기 끔 — rdb:csv 원본을 못 받음)",
+    "pipeline.extract.source.staging": "미리 받기 폴더 · 예 /app/output/staging (null = 미리 받기 끔 — rdb:csv 원본을 못 받음)",
     "pipeline.extract.max_new": "이번 실행에서 새로 파싱할 문서 수 상한 · 0 = 제한 없음 (null = 제한 없음 · local은 local_max_new_docs_per_run)",
     "pipeline.extract.max_file_mb": "이 크기(MB)를 넘는 문서는 건너뜀 · 0 = 제한 없음",
     "pipeline.extract.prepare.rotate": "이미지·스캔 쪽 방향 바로잡기",
@@ -166,8 +165,8 @@ NOTES = {
     # search
     "mcp.server.host": "바인드 주소 · 127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부",
     "mcp.server.port": "검색 MCP 포트(운영 서버 — 개발자 벌은 검색 MCP를 띄우지 않음)",
-    "mcp.server.allowed_hosts": "더 허용할 Host 이름(리버스 프록시) · 예 [rag.corp.local]",
-    "mcp.server.manifest": "수집 manifest (null = output/parse/_source/manifest.jsonl)",
+    "mcp.server.allowed_hosts": "더 허용할 Host 이름(리버스 프록시) · 쉼표 구분 · 예 rag.corp.local, rag2.corp.local",
+    "mcp.server.manifest": "수집 manifest · 예 /app/output/parse/_source/manifest.jsonl (null = output/parse/_source/manifest.jsonl)",
     "mcp.server.max_concurrency": "도구 동시 실행 상한",
     "mcp.edw_meta.dir": "edw_meta 도구 카탈로그 폴더 · 예 /app/output/edw_meta (null = /app/config/edw_meta)",
     "mcp.edw_query.max_rows": "query_edw 행 상한",
@@ -178,28 +177,28 @@ NOTES = {
     "common.log.level": "DEBUG·INFO·WARNING·ERROR·CRITICAL",
     "common.log.dir": "JSON 로그 폴더 (null = PC output/logs · 서버 stdout)",
     "common.log.db_enabled": "DB 로그 켬/끔 (null = 이미지 켬 · PC 끔)",
-    "common.log.fallback_dir": "DB 기록 실패 때 jsonl 폴더 (null = output/logs)",
+    "common.log.fallback_dir": "DB 기록 실패 때 jsonl 폴더 · 예 /app/output/logs (null = output/logs)",
     "common.log.retention_days": "월 파티션 보존 일수",
     "common.paths.doc_dir": "원본 문서 폴더(PC는 저장소 기준 상대 가능) (null = 이미지 /data/docs · PC는 --src)",
-    "common.paths.doc_dir_prepared": "준비 끝난 문서 폴더 (null = output/prepared)",
-    "common.paths.draft_terms_out": "용어 초안 CSV (null = output/glossary_draft/domain_terms_draft_auto.csv)",
+    "common.paths.doc_dir_prepared": "준비 끝난 문서 폴더 · 예 /app/output/prepared (null = output/prepared)",
+    "common.paths.draft_terms_out": "용어 초안 CSV · 예 /app/output/glossary_draft/terms.csv (null = output/glossary_draft/domain_terms_draft_auto.csv)",
     "common.paths.edw_chain": "EDW 사슬 파일 · 서버 예 /etc/rag/edw_chain.yaml (null = resources/config/edw_chain.yaml)",
-    "common.paths.source_manifest": "원본 manifest.jsonl (null = docs_dir 기준 file://)",
-    "pipeline.paths.images_root": "그림 PNG 폴더 (null = output/parse/_images)",
-    "pipeline.paths.out_root": "파이프라인 결과 폴더(컨테이너 안) (null = <루트>/output)",
-    "pipeline.paths.parse_tmp": "파싱 임시 폴더(output 아래 2단 이상) (null = output/_tmp_parse/stream)",
+    "common.paths.source_manifest": "원본 manifest.jsonl · 예 /data/docs/manifest.jsonl (null = docs_dir 기준 file://)",
+    "pipeline.paths.images_root": "그림 PNG 폴더 · 예 /app/output/parse/_images (null = output/parse/_images)",
+    "pipeline.paths.out_root": "파이프라인 결과 폴더(컨테이너 안) · 예 /app/output (null = <루트>/output)",
+    "pipeline.paths.parse_tmp": "파싱 임시 폴더(output 아래 2단 이상) · 예 /app/output/_tmp_parse/stream (null = output/_tmp_parse/stream)",
     "pipeline.paths.raw_root": "raw·VLM 캐시 폴더 (null = 원본 층 캐시 안 씀)",
     "pipeline.paths.soffice_bin": "soffice 실행 파일 (null = PATH · 이미지 /usr/bin/soffice)",
     "common.host.output_root": "호스트 결과 폴더(절대 경로) · 예 /srv/rag/output (null = <루트>/output)",
     "common.host.docker": "컨테이너 명령 · docker·podman (null = podman, 없으면 docker)",
     "common.host.image_stage_dir": "prune_images.sh가 정리할 조각·tar 폴더 (null = 정리 안 함)",
     "common.host.prune_keep": "남길 이미지 판 수",
-    "common.host.compose_project": "compose 묶음 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>)",
-    "common.host.extra_compose": "더 붙일 compose 파일(루트 기준 상대 또는 절대 경로 — 없는 파일이면 host_ctl.sh 종료 2) · 예 [compose.extra.yml] = <루트>/compose.extra.yml (null = 없음)",
+    "common.host.compose_project": "compose 묶음 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>) · 예 compose(벌 1이면 compose-1로 붙음)",
+    "common.host.extra_compose": "더 붙일 compose 파일(루트 기준 상대 또는 절대 경로 — 없는 파일이면 host_ctl.sh 종료 2) · 쉼표 구분 · 예 compose.extra.yml 또는 compose.extra.yml, /srv/rag/compose.gpu.yml (null = 없음)",
     "common.host.edw_chain_src": "호스트 EDW 사슬 사본 파일(루트 기준 상대 또는 절대 경로) · 예 /srv/rag/edw_chain.yaml (null = <루트>/edw_chain.yaml)",
-    "common.host.pipeline_container": "일괄 data-pipeline 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>)",
-    "common.host.data_parsing_container": "parse MCP 서비스 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>)",
-    "common.host.mcp_container": "검색 MCP 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>)",
+    "common.host.pipeline_container": "일괄 data-pipeline 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>) · 예 data-pipeline(벌 1이면 data-pipeline-1)",
+    "common.host.data_parsing_container": "parse MCP 서비스 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>) · 예 mcp-data-parsing(벌 1이면 mcp-data-parsing-1)",
+    "common.host.mcp_container": "검색 MCP 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>) · 예 mcp-server(벌 1이면 mcp-server-1)",
     "common.host.devbox.home_dir": "개발 작업 공간 홈 폴더(루트 기준 상대 또는 절대 경로) · 예 /srv/rag/home-hong (null = <루트>/home)",
     "common.host.devbox.ssh_port": "개발 작업 공간 SSH 포트(dev만 — 개발자마다 다르게) · 예 2222 (null = 끔)",
     "common.host.devbox.opencode_config": "opencode 설정 파일(호스트 절대 경로) · 예 /home/sbl/opencode.json (null = 이미지의 틀)",
@@ -217,11 +216,11 @@ NOTES = {
     "mcp.host.mem_limit": "mcp-server 메모리 · 예 4g",
     "common.runtime.data_parsing_port": "parse MCP 서비스 포트(운영 서버 — 개발자 벌은 띄우지 않음)",
     "common.runtime.parse_max_mb": "parse_document 파일 상한(MB)",
-    "pipeline.service.data_parsing.roots": "parse 서비스가 읽어도 되는 폴더 목록 (null = <서비스 폴더>/inbox)",
+    "pipeline.service.data_parsing.roots": "parse 서비스가 읽어도 되는 폴더 목록 · 쉼표 구분 · 예 /data/inbox, /data/shared (null = <서비스 폴더>/inbox)",
     "pipeline.host.nightly.time": "새벽 배치 시작 · HH:MM · 예 01:30 (null = 새벽 배치 없음 — 세 칸 다 적어야 켜짐)",
     "pipeline.host.nightly.max_docs": "새벽 배치 문서 수 · 1 이상 (null = 새벽 배치 없음)",
     "pipeline.host.nightly.deadline": "새벽 배치 멈춤 · HH:MM · 예 06:00 (null = 새벽 배치 없음)",
-    "pipeline.host.run_pipeline_dir": "진행 기록 폴더(호스트) (null = run_pipeline.py 옆 test_space/)",
+    "pipeline.host.run_pipeline_dir": "진행 기록 폴더(호스트) · 예 /srv/rag/run_pipeline-1(벌마다 다르게) (null = run_pipeline.py 옆 test_space/)",
     "pipeline.host.run_pipeline.staging": "미리 받아 둘 문서 수 · 1 이상",
     "pipeline.host.run_pipeline.staging_workers": "동시에 받는 문서 수 · 1 이상",
     "pipeline.host.run_pipeline.fetch_workers": "문서 하나 받기 스레드",
@@ -264,7 +263,7 @@ NOTES = {
     "common.text.search_en_stem": "검색 글자 영어 복수 → 단수",
     "common.text.token_num_norm": "검색 글자 숫자·단위 정규화",
     "pipeline.connections.rdb.file_table": "파싱 대상 파일 목록 EDW 표(<스키마>.<표> — 영문·숫자·_만) · 예 AI.FileStorageMap",
-    "pipeline.connections.rdb.increment_col": "원천 목록 증분 판정 열 (null = 문서 ID 열)",
+    "pipeline.connections.rdb.increment_col": "원천 목록 증분 판정 열 · 예 modified_at(원천 목록의 수정 시각 열) (null = 문서 ID 열)",
     "pipeline.connections.rdb.columns.doc_id": "원천 목록 열 이름 — 문서 ID · 예 id",
     "pipeline.connections.rdb.columns.filename": "원천 목록 열 이름 — 원래 파일 이름 · 예 original_filename",
     "pipeline.connections.rdb.columns.key": "원천 목록 열 이름 — Object Storage key · 예 s3_key",
@@ -307,7 +306,7 @@ NOTES = {
     "pipeline.transform.structure.embed_batch": "임베딩 호출당 청크 수",
     "pipeline.transform.structure.embed_max_chars": "임베딩할 글자 상한(넘으면 자름)",
     "pipeline.transform.structure.embed_retry": "임베딩 실패 재시도 횟수",
-    "pipeline.load.publish.upload_statuses": "게시할 결과 상태 · ok·partial·failed 목록",
+    "pipeline.load.publish.upload_statuses": "게시할 결과 상태 · ok·partial·failed 중 쉼표 구분 · 예 ok, partial, failed",
     "mcp.audit.max_queue_bytes": "감사 기록 대기 상한(바이트)",
     "mcp.audit.max_input_bytes": "감사 기록 입력 원문 상한(바이트)",
     "mcp.audit.max_output_bytes": "감사 기록 출력 원문 상한(바이트)",
@@ -315,7 +314,7 @@ NOTES = {
     "mcp.edw_query.max_bytes": "query_edw 응답 크기 상한(바이트)",
     "mcp.edw_query.timeout_sec": "query_edw 질의 제한(초)",
     "mcp.output.max_chars": "search 응답 크기 상한(바이트)",
-    "mcp.search.methods": "기본 검색 방법 · vector·bm25·id 목록",
+    "mcp.search.methods": "기본 검색 방법 · vector·bm25·id 중 쉼표 구분 · 예 vector, bm25",
     "mcp.search.pg.filter_exact_max": "걸러진 청크가 이 이하면 정확 검색",
     "mcp.search.weights.bm25": "순위 합치기(RRF) 가중치 — BM25",
     "mcp.search.weights.bm25_table": "집계 질문의 BM25 가중치",
@@ -355,13 +354,13 @@ NOTES = {
     "common.models.llm.price_in": "입력 단가($/백만 토큰) (null = 내장 가격표 — 표에 없으면 외부 호출 거부)",
     "common.models.llm.price_out": "출력 단가($/백만 토큰) (null = 내장 가격표)",
     "common.models.guard.budget_usd": "하루 외부 모델 지출 상한($)",
-    "common.models.guard.spend_file": "지출 장부 (null = output/_llm_spend/<날짜>.txt)",
+    "common.models.guard.spend_file": "지출 장부 · 예 output/_llm_spend/today.txt (null = output/_llm_spend/<날짜>.txt)",
     "common.dev.llm_fake": "가짜 LLM 응답(서버면 시작 거부)",
     "mcp.dev.mcp_url": "검증 페이지가 붙을 검색 MCP 주소 · 예 http://127.0.0.1:8765/mcp",
     "mcp.dev.ui_port": "검증 페이지 포트",
     "common.dev.docker.pg_image": "시험 PG 이미지 · 예 pgvector/pgvector:pg16",
     "common.dev.docker.mcp_publish_port": "시험 검색 MCP를 호스트에 게시할 포트",
-    "common.dev.docker.smoke_settings": "스모크 시험용 settings.yaml — 스모크 시험 때 필수 (null = 스모크 시작 안 함)",
+    "common.dev.docker.smoke_settings": "스모크 시험용 settings.yaml — 스모크 시험 때 필수 · 예 /home/me/smoke/settings.yaml (null = 스모크 시작 안 함)",
     "common.dev.docker.smoke_pg_password": "스모크 시험 PG 비밀번호(스모크 시험 때 필수) · 예 아무 글자",
     "common.dev.docker.smoke_keep": "스모크 시험이 끝나도 PG를 남김",
     "common.dev.docker.smoke_limit": "스모크 시험 문서 수 · 0 = 제한 없음",
@@ -474,6 +473,13 @@ def _value(p, f):
         return "null"
     if isinstance(d, str) and str(S.REPO_ROOT) in d:
         return "null"
+    if d == []:  # 빈 목록 = null(비우면 코드 기본값 [])
+        return "null"
+    # 글자 목록은 쉼표 구분(사람이 적기 쉽게 — CsvList가 읽음)
+    if S.field_kind(f.annotation) == "list" and all(isinstance(x, str) for x in d):
+        s = ", ".join(d)
+        if yaml.safe_load(s) == s:
+            return s
     return yaml.safe_dump(d, default_flow_style=True, allow_unicode=True, width=10**9).removesuffix("\n").removesuffix("\n...")
 
 
@@ -481,27 +487,30 @@ def _note(p, f):
     """칸 주석 한 줄 — [필수·선택](required) + NOTES + [비밀]. 옛 env 이름·판정 꼴은 --where·docs/operations/env-guide.md에."""
     need = f"[{L.NEED[p]}] " if p in L.NEED else ""
     note = NOTES[p]
-    if not _HINT.search(note):  # 허용값·예가 없는 설명이면 칸 꼴을 붙임
-        note += _allowed(f.annotation)
+    hint = _allowed(f)
+    if hint and hint not in note:  # 입력 후보(켜기·고른 글자·정수·숫자 + 범위)가 설명에 없으면 붙임
+        note += f" · {hint}"
     return f"{need}{note}" + (" [비밀]" if S.is_secret(f) else "")
 
 
-_HINT = re.compile(r"예 |·|~|\d|=|true|false")
-
-
-def _allowed(annotation):
-    """칸 꼴 → " · 허용값"(켜기·고른 글자·정수·숫자). 그 밖(글자)은 NOTES에 예를 적는다."""
-    args = S._args(annotation)
+def _allowed(f):
+    """칸 꼴 → 입력 후보 글자(켜기·고른 글자·정수·숫자 + 범위). 글자 칸은 ""(NOTES에 예를 적는다)."""
+    args = S._args(f.annotation)
     if bool in args:
-        return " · true·false"
+        return "true(켬)·false(끔)"
     lits = [x for a in args if get_origin(a) is Literal for x in get_args(a)]
     if lits:
-        return " · " + "·".join(str(x) for x in lits)
+        return "·".join(str(x) for x in lits)
     if any(a is float for a in args):
-        return " · 숫자"
-    if any(a is int or get_args(a)[:1] == (int,) for a in args):  # Port = Annotated[int, …]
-        return " · 정수"
-    return ""
+        kind = "숫자"
+    elif any(a is int or get_args(a)[:1] == (int,) for a in args):  # Port = Annotated[int, …]
+        kind = "정수"
+    else:
+        return ""
+    lo = [f"{m.ge} 이상" for m in f.metadata if getattr(m, "ge", None) is not None]
+    lo += [f"{m.gt} 초과" for m in f.metadata if getattr(m, "gt", None) is not None]
+    hi = [f"{m.le} 이하" for m in f.metadata if getattr(m, "le", None) is not None]
+    return " ".join([kind, *lo, *hi])
 
 
 def marks(f):
