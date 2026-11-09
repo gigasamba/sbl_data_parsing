@@ -9,7 +9,7 @@ from pathlib import Path
 import yaml
 
 from common.config import layout, sample
-from common.config.settings import CommonAppSettings, _is_set, app_classes, env_map, load, walk
+from common.config.settings import CommonAppSettings, _csv, _is_set, app_classes, env_map, load, walk
 from common.core.paths import DEPLOY_ROOT
 
 _SET_READ = re.compile(r"\b(?:given|_given|_f|own|setting)\(\s*[\"']([A-Z][A-Z0-9_]+)[\"']")
@@ -46,7 +46,9 @@ def test_copied_sample_starts_with_defaults():
                 for p in (p for p, _, _ in walk(cls) if p.split(".")[0] == top):
                     v = _get(tree, layout.to_yaml(p))
                     if v is not None and p != "common.run_env":
-                        assert _get(st, p) == v, (p, _get(st, p), v)
+                        got = _get(st, p)
+                        want = _csv(v) if isinstance(got, list) else v  # 쉼표 목록 칸(CsvList와 같은 분리)
+                        assert got == want, (p, got, v)
             em = env_map(cls)
             for name, p in em.items():
                 if name in sample.SET_MATTERS:
@@ -54,3 +56,31 @@ def test_copied_sample_starts_with_defaults():
             for name, lit in fallbacks:  # 적은 기본값 = 안 적었을 때 대체값이어야 sample 복사가 동작을 안 바꿈
                 if name in em and name not in sample.SET_MATTERS and _is_set(st, em[name]):
                     assert float(_get(st, em[name])) == float(lit), (name, lit, "대체값 ≠ 모델 기본값 — SET_MATTERS에 더하거나 맞춤")
+
+
+# 목록 칸 — sample 주석의 예시를 값 자리에 그대로 적으면(쉼표 구분 글자) 목록으로 읽힌다. (칸 이름, 적는 글자, 읽힌 목록)
+_LIST_EXAMPLES = [
+    ("source_systems", "DEV-1", ["DEV-1"]),
+    ("source_systems", "DEV-1, DEV-2", ["DEV-1", "DEV-2"]),
+    ("source_systems", "SFDC, CRMS", ["SFDC", "CRMS"]),
+    ("source_systems", "dev-3,sfdc", ["DEV-3", "SFDC"]),
+    ("source_systems", "[DEV-1, DEV-2]", ["DEV-1", "DEV-2"]),  # YAML 목록도 그대로 됨
+    ("mcp_allowed_hosts", "rag.corp.local, rag2.corp.local", ["rag.corp.local", "rag2.corp.local"]),
+    ("search_default_methods", "vector, bm25", ["vector", "bm25"]),
+    ("publish_upload_statuses", "ok, partial, failed", ["ok", "partial", "failed"]),
+]
+
+
+def test_list_examples_read_as_lists():
+    text = sample.build().replace("\n    run_env:  ", "\n    run_env: dev", 1)
+    paths = {layout.to_yaml(p).rsplit(".", 1)[-1]: p for cls in (CommonAppSettings, *app_classes().values()) for p, _, _ in walk(cls)}
+    with tempfile.TemporaryDirectory() as d:
+        y = Path(d) / "settings.yaml"
+        for key, val, want in _LIST_EXAMPLES:
+            edited, n = re.subn(rf"^(\s*{key}:) [^#\n]*?(\s+#)", rf"\g<1> {val}\g<2>", text, count=1, flags=re.M)
+            assert n == 1, key
+            y.write_text(edited, encoding="utf-8")
+            p = paths[key]
+            app = p.split(".")[0]
+            got = _get(load(CommonAppSettings if app == "common" else app_classes()[app], file=y, environ={}), p)
+            assert got == want, (key, val, got)

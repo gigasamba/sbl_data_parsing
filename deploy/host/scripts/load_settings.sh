@@ -81,6 +81,7 @@ EOF
     local f fs abs=
     IFS=, read -r -a fs <<< "$EXTRA_COMPOSE"
     for f in ${fs[@]+"${fs[@]}"}; do
+      f=${f#"${f%%[! ]*}"}; f=${f%"${f##*[! ]}"}   # 앞뒤 빈칸 — "a.yml, b.yml"(쉼표 뒤 빈칸)도 받음(앱 CsvList와 같게)
       case "$f" in "") continue ;; /*) ;; *) f=$RAG_ROOT/$f ;; esac
       abs="${abs:+$abs,}$f"
     done
