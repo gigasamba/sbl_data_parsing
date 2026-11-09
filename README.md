@@ -147,7 +147,7 @@ pgvector의 표는 코드가 실행 중에 만들지 않는다. 모두 Alembic �
 | 구조 | 맨 위 `required`(필수 접속·입력) → 역할 절 `common`·`extract`·`transform`·`load`·`search`·`ops`·`dev` → 맨 아래 `tuning`. 같은 절·칸을 두 번 쓰면 시작 거부. 칸 자리 찾기: `python -m common.config.sample --where <옛 env 이름>`. 칸 설명·기본값은 [settings.sample.yaml](settings.sample.yaml) |
 | 쓰는 법 | **기본값과 다르게 쓸 칸만** 적는다. 비운 칸은 코드 기본값 |
 | 필수 | `required.env.run_env` — `local`(PC) · `dev` · `prd`(서버 — 외부 모델 호출과 가짜 LLM을 거부하고, 설정 파일을 못 읽으면 시작하지 않는다) |
-| 파싱할 원천 | `required.source.source_systems` — 원천 목록(예 `[DEV-1]`, 대소문자 무관). 값은 `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`·`DEV-<1~99>`이고, 비우면 운영 5개 원천(`SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`)을 파싱한다(`DEV-<숫자>` 행은 뺌). 원천은 EDW `AI.FileStorageMap.source_system` 칸 값이다. `DEV-…`는 dev·local에서만 쓰며, prd에 적혀 있으면 시작하지 않는다. `DEV-<숫자>` 문서는 검색 스키마 `<기준>_dev_<숫자>`에 적재된다 — 목록에 새로 넣으면 먼저 `migrate up --target search`(없으면 적재가 멈춤). PC 폴더 원천은 맨 위 `DEV-<숫자>/` 폴더도 원천 폴더이고, 같은 목록으로 거른다 |
+| 파싱할 원천 | `required.source.source_systems` — 원천 목록(쉼표 구분 — 예 `DEV-1` · `DEV-1, DEV-2` · `SFDC, CRMS`, 대소문자 무관). 값은 `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`·`DEV-<1~99>`이고, 비우면 운영 5개 원천(`SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`)을 파싱한다(`DEV-<숫자>` 행은 뺌). 원천은 EDW `AI.FileStorageMap.source_system` 칸 값이다. `DEV-…`는 dev·local에서만 쓰며, prd에 적혀 있으면 시작하지 않는다. `DEV-<숫자>` 문서는 검색 스키마 `<기준>_dev_<숫자>`에 적재된다 — 목록에 새로 넣으면 먼저 `migrate up --target search`(없으면 적재가 멈춤). PC 폴더 원천은 맨 위 `DEV-<숫자>/` 폴더도 원천 폴더이고, 같은 목록으로 거른다 |
 | 칸별 안내 | [docs/operations/env-guide.md](docs/operations/env-guide.md) |
 | 서버용 파일 | git에 올리지 않는다. `settings.sample.yaml`을 복사해 `required`를 채운다(server-guide §1-6 "꼭 채울 값"). **PC 파일을 그대로 복사하지 않는다** — PC의 `run_env: local`·`allow_external: true`가 서버에서 외부 모델 호출을 연다 |
 
