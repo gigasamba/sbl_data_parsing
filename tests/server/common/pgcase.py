@@ -82,7 +82,9 @@ def _start_local_pg(c):
     for _ in range(60):
         if (
             ok
-            and subprocess.run(["docker", "exec", name, "pg_isready", "-U", c["PG_USER"], "-d", c["PG_DB"]], capture_output=True).returncode
+            and subprocess.run(  # -h: TCP로 물음 — 처음 만들 때의 초기화용 서버(소켓만)는 준비됨으로 보지 않음
+                ["docker", "exec", name, "pg_isready", "-h", "127.0.0.1", "-U", c["PG_USER"], "-d", c["PG_DB"]], capture_output=True
+            ).returncode
             == 0
         ):
             return True

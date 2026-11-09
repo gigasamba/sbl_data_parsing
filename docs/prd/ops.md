@@ -43,7 +43,7 @@
 ## pl-54 · 전체 e2e — local·dev·prd, prd 전체 문서 실행은 새 `PG_SCHEMA`로
 - 이유: 판 0002가 기준 스키마의 옛 표를 지우고 0.2.0은 전체 다시 적재다.
 - 할 일: 전체 e2e를 local·dev·prd에서 돌린다. 전체 문서 실행은 prd에서만, 새 기준 스키마 이름(`required.pg.pg_schema`)으로. 옛 gold·`struct` 스키마는 2주 뒤 DB 담당자가 백업하고 지운다.
-- 절차: [upgrade-guide.md](../operations/upgrade-guide.md) §7 (나)(새 스키마에 전부 다시) · 0.2.0 때 절차 [history/deploy_0_2_0.md](../history/deploy_0_2_0.md) · 서버 확인 refactor.md C-74.
+- 절차: [server-guide §4-8](../operations/server-guide.md#4-8-pgvector가-바뀔-때--두-경우) (나)(새 스키마에 전부 다시) · 0.2.0 때 절차 [history/deploy_0_2_0.md](../history/deploy_0_2_0.md) · 서버 확인 refactor.md C-74.
 - Status: todo
 
 <a id="pl-24"></a>
@@ -235,7 +235,7 @@
   4. `run_id`가 없으면(MCP 검색·시험) span은 아무것도 하지 않는다. 계측 안의 예외는 삼키고 업무 결과를 바꾸지 않는다(프로세스당 stderr 경고 한 번).
   5. `cpu_ms`·`rss_peak_mb`는 Linux에서 프로세스에 하나만 도는 span만 채우고, 겹치거나 측정 못 하면 NULL.
   6. 분석: `python -m pipeline.tools.perf_report [<run_id>] [--since <시간>] [--top N] [--compare <run_id>…] [--runs] [--file output/logs/*.jsonl]` — 읽기 전용.
-     다운로드(`extract.download`)는 `--since` 요약에 ■ 다운로드 표(크기 구간별 순수 전송 mbps·head·잠금 대기)로 나온다. 서버에서는 `podman exec data-pipeline python -m pipeline.tools.perf_report --since <시간>`으로 본다.
+     다운로드(`extract.download`)는 `--since` 요약에 ■ 다운로드 표(크기 구간별 순수 전송 mbps·head·잠금 대기)로 나온다. 서버에서는 `docker exec data-pipeline python -m pipeline.tools.perf_report --since <시간>`으로 본다.
 - 파일: `common/core/{jsonlog,span,exitclean}.py`, `common/store/logsink.py`, `mcp_server/services/call_log.py`, `pipeline/shared/runtrace.py`, `pipeline/tools/perf_report.py`, `pipeline/extract/{doc_lane_group,candidate_ready}.py`.
 - QA: `tests/server/common/test_{jsonlog,logsink,span,span_soft,call_event}.py`·`tests/server/mcp/test_call_log.py`·`tests/server/pipeline/test_{runtrace,perf,span_stages,doc_group}.py`·`tests/general/common/test_applog_pg.py`(PC 임시 PG 스키마) · 통과. 서버 적용 refactor.md C-79·C-80.
 - Status: done

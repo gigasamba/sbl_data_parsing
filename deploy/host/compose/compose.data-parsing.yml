@@ -9,7 +9,7 @@ services:
   # MCP parse_document 작업 서비스 전용: 사람이 기다리는 요청이라 일괄 컨테이너와 떼고 CPU 나눔 비율을 높게 준다.
   #   작업 서비스(pipeline.run_mcp_parsing — 127.0.0.1:8766, 토큰 settings.yaml)가 이 컨테이너의 주 프로세스라 죽으면 restart가 다시 띄운다
   #   작업 폴더는 결과 폴더 _mcp_parse/jobs(run_pipeline.py가 보고 medium 레인 양보).
-  #   8766을 쓰는 다른 프로세스가 없어야 뜬다(upgrade-guide §10).
+  #   8766을 쓰는 다른 프로세스가 없어야 뜬다(server-guide §1-6).
   #   자원 칸: settings.yaml ops.containers.data_parsing.data_parsing_cpus·data_parsing_mem_limit·data_parsing_cpu_shares(DATA_PARSING_* — 비우면 아래 기본값과 같은 값).
   mcp-data-parsing:
     image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}

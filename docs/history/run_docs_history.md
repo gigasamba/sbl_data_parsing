@@ -13,7 +13,7 @@
 | 10-23 10:20 | probe stdout 경고 오염 | pymupdf fitz deprecated 경고가 stdout에 → 분류기 항상 heavy 폴백 | docflow_probe.py: pymupdf 직접 import + 마지막 줄만 판독 |
 | 10-23 10:30 | light 슬롯 대기 오폭 | executor while 안에 shutdown 라인 (IndentationError) | for/shutdown을 while 밖으로 |
 | 10-23 10:45 | dedup 36s | 게이트 0.9가 기본값 (env 미주입 세대) | --cpu-gate 노브 추가, 1.15→1.5→1.3 |
-| 10-23 (I2) | 이미지 배치가 `data_etl/`로 바뀜 | 리팩토링 I2(`data_parsing`·`data_structure` → `data_etl`) | `docker exec … python -m data_etl.…`로 명령 이름만 바꿈 — 새 이미지 판과 같은 때에 교체([`docs/operations/release-and-patch.md`](../operations/release-and-patch.md) §5-2) |
+| 10-23 (I2) | 이미지 배치가 `data_etl/`로 바뀜 | 리팩토링 I2(`data_parsing`·`data_structure` → `data_etl`) | `docker exec … python -m data_etl.…`로 명령 이름만 바꿈 — 새 이미지 판과 같은 때에 교체([`docs/operations/server-guide.md`](../operations/server-guide.md#5-릴리스--실행-이미지--코드-폴더) §5-2) |
 | 10-26 (I3) | 옛 이미지·코드 폴더로 돌면 중간에 실패 | 이미지·코드 폴더·러너 판이 어긋날 수 있음 | 시작할 때(EDW 접속 전) 코드 폴더·컨테이너 배치 확인 → 어긋나면 종료 코드 2 |
 | 10-26 (I4) | 코드 폴더 확인이 쓰이지 않던 `patch_code/app/deploy`를 봄 · MCP 작업 폴더가 서버 절대 경로로 박힘 | `DEPLOY`·`IMAGE`는 처음부터 미사용 상수 · 경로 하드코딩 | 확인은 env `PATCH_CODE`(기본 `/srv/rag/code/live`, compose와 같음) — 호스트에서 안 보이면 건너뛰고 컨테이너 확인만 · `DEPLOY`·`IMAGE` 지움 · env `MCP_JOBS_DIR`(기본 `test_space/rfp_all_output/mcp_parse/jobs`, 이 파일 기준) |
 | 10-26 (I4b) | 코드 폴더가 없어도 컨테이너 확인이 통과할 수 있음(V4 R2) | docker는 bind 마운트 원본이 없으면 빈 폴더를 만들어 붙여 `test -d /app/deploy/data_etl`이 통과 | 확인을 파일로 — 컨테이너 `test -f /app/deploy/data_etl/extract/run_all.py`, 코드 폴더도 같은 파일(`CODE_MARKER`) · 빈 폴더면 종료 코드 2 |

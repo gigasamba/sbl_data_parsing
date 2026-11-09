@@ -78,7 +78,7 @@
 | 문서 묶음 하나를 한 트랜잭션으로 적재한다(`pgvector_load load`) — 하나라도 실패하면 전부 되돌림 | 반쯤 들어간 문서가 검색에 보이지 않게 | done | [pl-07](prd/load.md#pl-07) |  |
 | 이미 있는 문서는 `doc.file_path`가 같으면 건너뛴다. 바뀐 내용은 `--replace`로 | 내용 지문(sha) 칸이 없어 같은 경로에서 내용이 바뀌어도 건너뛴다(알려진 한계) | done | [pl-07](prd/load.md#pl-07) |  |
 | 적재 전에 DB 판을 확인 — 판 기록이 없으면 경고 후 계속, 낮거나 모르는 판이면 종료 2. `--replace`는 판 표(`alembic_version`)가 있는 우리 스키마에서만 | 남의 스키마나 옛 판 DB를 망가뜨리지 않게 | done | [pl-07](prd/load.md#pl-07) |  |
-| 처음 쓰는 PG에는 `vector` 확장을 관리자가 한 번 만든다(`CREATE EXTENSION vector`) — 없으면 적재가 멈춘다 | 서버 계정은 보통 우리 스키마 권한만 있다. 절차는 release-and-patch §5-5 ⓪ | done | [pl-07](prd/load.md#pl-07) |  |
+| 처음 쓰는 PG에는 `vector` 확장을 관리자가 한 번 만든다(`CREATE EXTENSION vector`) — 없으면 적재가 멈춘다 | 서버 계정은 보통 우리 스키마 권한만 있다. 절차는 server-guide §1-8 0번 | done | [pl-07](prd/load.md#pl-07) |  |
 | 적재는 더하고 고치기만 하고 지우지 않는다. 원천에서 지워진 문서·실패 문서는 로그에만. 원본 경로는 원천 스키마 5벌을 통틀어 하나 — `--replace` 없이 이미 있으면 건너뛰고, `--replace`면 다른 원천 스키마의 옛 사본을 지우고 옮긴다 | 건너뛴 문서가 지워지면 안 된다. 경로가 바뀐 옛 행은 사람이 지운다 | done | [pl-13](prd/load.md#pl-13) |  |
 | 임베딩 없음(`embed` `none` 또는 청크가 있는데 차원 0)이면 적재를 시작할 때 거부한다 — 판 확인·배포·적재 전에 종료 2 | 검색에는 벡터가 필수 | done | [pl-16](prd/load.md#pl-16) |  |
 | 묶음의 임베딩 모델(`meta.json` `embed_model`)이 검색 스키마(원천 5벌)에 이미 있는 문서의 모델(`doc.embed_model`)과 다르면 그 묶음 적재를 거부한다 — 아무것도 쓰지 않고 종료 2, 거부는 `applog.pipe_event`에(`stage` `load.embed_guard`) | 모델이 섞이면 검색이 그 원천의 벡터 검색을 거부한다(질의 모델이 하나라서) | done | [pl-51](prd/load.md#pl-51) |  |
@@ -177,7 +177,7 @@
 | run_pipeline 명령은 아무도 안 읽는 env(`FIG_OCR_BUDGET`·`SERVICE_MASTER_CSV`·`DIVISION_MASTER_CSV`·`PROD_MASTER_CSV`)를 넘기지 않는다 | C-51 | done | [pl-30](prd/ops-settings.md#pl-30) |  |
 | 서버 러너의 컨테이너 명령은 한 도우미가 만든다(`docker exec` · `PYTHONPATH` · 라이브러리 env 같게) · 게시·구조화가 시간 초과면 그 문서의 컨테이너 안 프로세스도 끈다 · 벌 번호 규칙은 한 곳 · 스캔 회전 정책은 설정 칸 하나를 컨테이너가 직접 읽는다 · 레인 분류는 받기 단계 안에서(문서마다 따로 `docker exec` 없음) · 분류 캐시는 덧붙여 쓴다 | 명령마다 env가 다르면 같은 코드가 다르게 돈다. 끄지 않은 프로세스는 다음 문서와 CPU·메모리를 다툰다 | todo | [rn-09](prd/ops.md#rn-09) | 한 도우미·시간 초과 정리는 반영. 스캔 회전 값이 run_pipeline → `stage --no-scan-rotate` → `stage_batch(scan_rotate)` → `filter_and_rotate --no-scan-rotate` 네 겹으로 전달. 분류는 문서마다 `docker exec`, 캐시는 문서마다 파일 전체를 다시 씀 |
 | 문서 1건의 반복 비용을 줄인다 — 원본 sha256은 한 번만 구하고 넘겨 씀 · 적재의 스키마 확인 질의는 하나(UNION) · 설정 파일은 프로세스마다 한 번 읽음 · `--set` 처리(`setarg.apply`)는 무거운 import 전에 | 문서 수천 건에서 같은 일을 되풀이하지 않는다 | todo | [rn-10](prd/ops.md#rn-10) | sha256은 받기가 한 번 구해 manifest로 넘기고 중복 제외·거르기·파싱·구조화·게시가 씀 — 대표 결과(`contract.source_record`, 핸드오프 파일)만 다시 구함. `pgvector_load`가 원천 스키마마다 따로 묻는다. 측정 전 — 줄일 크기는 `perf_report`로 먼저 잰다 |
-| 코드가 읽지 않는 설정 칸은 없다 — 지운 칸은 판 올리기 안내(upgrade-guide)에 적고 서버 `settings.yaml`에서도 지운다. PC 덮어쓰기 설정 파일 도구는 없다 — 한 번만 다른 값은 모든 진입점(`mcp_server.main`·`ask` 포함)의 `--set` | 사용자 11-08 | done | [op-18](prd/ops-settings.md#op-18) |  |
+| 코드가 읽지 않는 설정 칸은 없다 — 지운 칸은 판 올리기 안내(server-guide)에 적고 서버 `settings.yaml`에서도 지운다. PC 덮어쓰기 설정 파일 도구는 없다 — 한 번만 다른 값은 모든 진입점(`mcp_server.main`·`ask` 포함)의 `--set` | 사용자 11-08 | done | [op-18](prd/ops-settings.md#op-18) |  |
 
 ## 테스트·평가 (test) — 변경을 어떻게 증명하나
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -217,8 +217,9 @@
 | 시작 검사 `runtime_entry.sh` — 코드 폴더가 없거나 의존성 지문(`DEPS_HASH`)이 다르면 종료 2, 이미지 판·코드 커밋을 한 줄 기록 | 의존성 어긋남이 나중에 조용한 오류로 터지지 않게 | done | [op-06](prd/doc.md#op-06) |  |
 | 개발 → 운영 굽기 `bake_prod_image.sh` — 개발에서 쓴 실행 이미지 + 시험한 코드 폴더로 `Dockerfile.bake`(네트워크 없이), 반입 판정 뒤 저장·분할 | 운영에는 개발에서 시험한 그대로 올라간다 | done | [op-07](prd/doc.md#op-07) |  |
 | 운영(prd) 이미지에 settings.yaml(비밀 포함)도 굽는다 — 🔒 검토 등급 A(비밀 처리) | 이미지 파일 = 비밀(반입 경로만), 키를 바꿀 때마다 다시 굽기. 사용자 11-02 | todo | [op-12](prd/doc.md#op-12) |  |
-| 서버 설치 길은 하나(README §5-0·§5-3). 컨테이너 도구는 셸 env > `ops.host.container_cli` > podman > docker. 이미지는 `load.sh`로(45 MB 조각) | 문서마다 절차가 달랐다. 서버 기본 도구는 podman | done | [op-10](prd/doc.md#op-10) |  |
-| 판 올리기·되돌리기는 upgrade-guide 하나 — 밤 타이머 멈춤 → DB·벌 폴더 백업 → 새 코드 덮어쓰기 → `migrate up` → 점검, 되돌릴 땐 백업 복원 | DB·EDW·전체 재처리가 함께 바뀐다 | done | [op-10](prd/doc.md#op-10) |  |
+| 서버 설치 길은 하나(server-guide §1-5). 컨테이너 도구는 셸 env > `ops.host.container_cli` > docker > podman(재부팅 때 docker 서비스가 다시 띄움). 이미지는 `load.sh`로(45 MB 조각) | 문서마다 절차가 달랐다. 서버 기본 도구는 podman | done | [op-10](prd/doc.md#op-10) |  |
+| 판 올리기·되돌리기는 server-guide 하나 — 밤 타이머 멈춤 → DB·벌 폴더 백업 → 새 코드 덮어쓰기 → `migrate up` → 점검, 되돌릴 땐 백업 복원 | DB·EDW·전체 재처리가 함께 바뀐다 | done | [op-10](prd/doc.md#op-10) |  |
 | 일회성 작업 컨테이너 없음 — 운영 작업·`dbtool`·`migrate`는 상주 `data-pipeline`에 `exec`, 이미지 점검(`docker run --rm … selftest`)만 일회성 | 사용자 11-02 | done | [op-10](prd/doc.md#op-10) |  |
 | 사람 정답 폴더 칸(`GOLD_DIR`·이미지 `gold_mount`) 없음 — 점검기 정답 폴더 점검도 없음 | 사용자 11-04 — 상주 컨테이너에 붙지 않아 점검이 늘 건너뛰어짐 | done | [op-11](prd/doc.md#op-11) |  |
 | 서버 루트 = 코드 폴더(예 `/home/sbl/sbl_data_parsing-main-1/`) — `settings.yaml`·`edw_chain.yaml`·`output/`가 그 안, 새 판은 덮어쓰기(검색 PG는 공유), `/srv/rag`·`env/`·`code/live` 없음 | 사용자 11-04 | done | [op-13](prd/doc.md#op-13) |  |
+| 서버 문서는 절차마다 명령 원본이 한 곳(나머지는 링크) — 블록마다 쓰는 변수를 그 블록에서 정함, 단계마다 기대 출력, 낱말(벌·판·갈래·원천)은 용어집 한 곳, 지난 판 메모는 `docs/history/` | 같은 절차가 여러 곳에 있으면 한쪽만 고쳐져 어긋난다 | todo | [op-19](prd/doc.md#op-19) | server-guide §4에 0.1.0·0.2.0 갈래가 공통 단계 사이에 섞임 · `host_ctl.sh init`이 비워도 되는 칸(`[선택]`)까지 빈 필수 칸으로 찍음 · sample이 `publish_prefix`·`source_default_bucket`을 `[선택]`으로 적지만 `run_pipeline`은 필수(설정 모델 설명 — 레이어 코드 지문이 바뀌어 다음 판에서) · 임베딩 차원을 아는 명령 없음 |

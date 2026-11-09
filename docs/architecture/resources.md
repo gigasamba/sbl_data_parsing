@@ -24,7 +24,7 @@
 
 | 할 일 | 방법 |
 |---|---|
-| 바꾸기 | 저장소의 파일을 고쳐 커밋 → 서버에는 **코드 폴더 바꾸기**로 보낸다([release-and-patch.md](../operations/release-and-patch.md) §1) |
+| 바꾸기 | 저장소의 파일을 고쳐 커밋 → 서버에는 **코드 폴더 바꾸기**로 보낸다([server-guide §4-5](../operations/server-guide.md#4-5-벌-폴더에-새-코드-덮어쓰기)) |
 | 되돌리기 | git으로 이전 파일로 되돌려 다시 코드 폴더를 바꾼다 |
 | 보기 | `show-stack`(PC `python -m pipeline.cli show-stack` · 이미지 `data-pipeline` 컨테이너) — 이름·sha·파일 경로와 내용 요약 |
 

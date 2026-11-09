@@ -165,7 +165,7 @@ NOTES = {
     "pipeline.load.bm25_threads": "BM25 계산 스레드",
     # search
     "mcp.server.host": "바인드 주소 · 127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부",
-    "mcp.server.port": "검색 MCP 포트 · 여러 벌이면 벌마다 다르게(기본값 그대로면 시작 거부)",
+    "mcp.server.port": "검색 MCP 포트(운영 서버 — 개발자 벌은 검색 MCP를 띄우지 않음)",
     "mcp.server.allowed_hosts": "더 허용할 Host 이름(리버스 프록시) · 예 [rag.corp.local]",
     "mcp.server.manifest": "수집 manifest (null = output/parse/_source/manifest.jsonl)",
     "mcp.server.max_concurrency": "도구 동시 실행 상한",
@@ -215,7 +215,7 @@ NOTES = {
     "pipeline.host.data_parsing_cpu_shares": "parse MCP 서비스 CPU 나눔 비율(일괄 작업 1024)",
     "mcp.host.cpus": "mcp-server 컨테이너 CPU",
     "mcp.host.mem_limit": "mcp-server 메모리 · 예 4g",
-    "common.runtime.data_parsing_port": "parse MCP 서비스 포트 · 여러 벌이면 개발자(벌)마다 다르게(기본값 그대로면 시작 거부)",
+    "common.runtime.data_parsing_port": "parse MCP 서비스 포트(운영 서버 — 개발자 벌은 띄우지 않음)",
     "common.runtime.parse_max_mb": "parse_document 파일 상한(MB)",
     "pipeline.service.data_parsing.roots": "parse 서비스가 읽어도 되는 폴더 목록 (null = <서비스 폴더>/inbox)",
     "pipeline.host.nightly.time": "새벽 배치 시작 · HH:MM · 예 01:30 (null = 새벽 배치 없음 — 세 칸 다 적어야 켜짐)",

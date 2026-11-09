@@ -142,7 +142,7 @@ search:
     mcp_bind_host: 127.0.0.1                  # 바인드 주소 · 127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부
     mcp_manifest_file: null                   # 수집 manifest (null = output/parse/_source/manifest.jsonl)
     mcp_max_concurrent_tools: 8               # 도구 동시 실행 상한 · 정수
-    mcp_port: 8765                            # 검색 MCP 포트 · 여러 벌이면 벌마다 다르게(기본값 그대로면 시작 거부)
+    mcp_port: 8765                            # 검색 MCP 포트(운영 서버 — 개발자 벌은 검색 MCP를 띄우지 않음) · 정수
   # ---- EDW 도구 ----
   edw_meta:
     edw_meta_catalog_dir: null                # edw_meta 도구 카탈로그 폴더 · 예 /app/output/edw_meta (null = /app/config/edw_meta)
@@ -202,7 +202,7 @@ ops:
   services:
     data_parsing:
       mcp_parse_max_file_mb: 100.0            # parse_document 파일 상한(MB) · 숫자
-      data_parsing_port: 8766                 # parse MCP 서비스 포트 · 여러 벌이면 개발자(벌)마다 다르게(기본값 그대로면 시작 거부)
+      data_parsing_port: 8766                 # parse MCP 서비스 포트(운영 서버 — 개발자 벌은 띄우지 않음) · 정수
       mcp_parse_allowed_roots: null           # parse 서비스가 읽어도 되는 폴더 목록 (null = <서비스 폴더>/inbox)
   # ---- 새벽 배치 ----
   nightly:

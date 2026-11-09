@@ -1,6 +1,6 @@
 # 릴리스 이력 — 10-16 버전 설치 순서 · 10-21 오버레이 패치 번들
 
-10-30(do-04)에 [release-and-patch.md](../operations/release-and-patch.md)의 §8·§9에서 옮긴 기록이다. 내용은 그때 기준 그대로 두었다(이미지 3개·`docker/` 경로·옛 env 이름 — 지금 절차는 release-and-patch.md). 이 파일 안의 §3-3·§4·§5·§5-1·§5-2·§7은 release-and-patch.md의 절이다. 링크만 이 폴더 기준으로 고쳤다.
+10-30(do-04)에 [server-guide.md](../operations/server-guide.md#5-릴리스--실행-이미지--코드-폴더)의 §8·§9에서 옮긴 기록이다. 내용은 그때 기준 그대로 두었다(이미지 3개·`docker/` 경로·옛 env 이름 — 지금 절차는 server-guide.md). 이 파일 안의 §3-3·§4·§5·§5-1·§5-2·§7은 server-guide.md의 절이다. 링크만 이 폴더 기준으로 고쳤다.
 
 ## 8. 10-16 판 설치 순서(1회 — 폴더 분리·output·3이미지)
 

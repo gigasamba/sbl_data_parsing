@@ -1,6 +1,6 @@
 """개발 작업 공간(option.devbox — op-17): 이미지 ENTRYPOINT dev_entry.sh는 `devbox`만 sshd로, 그 밖의 명령은 인자 그대로 APP_ENTRY(이미지의 시작
 스크립트)로 넘기고, compose.dev.yml은 data-pipeline을 `devbox`로 띄우며 코드 폴더를 compose.code.yml과 같은 자리에 쓰기 가능으로·홈을 <루트>/home에 붙인다.
-host_ctl.sh가 파일을 더하는 조건(포트·prd·코드가 든 이미지)은 test_dc.py 표. sshd가 실제로 뜨는지는 이미지 시험(README §5) — 여기는 bash만(PC 전용)."""
+host_ctl.sh가 파일을 더하는 조건(포트·prd·코드가 든 이미지)은 test_dc.py 표. sshd가 실제로 뜨는지는 이미지 시험(server-guide §2-13) — 여기는 bash만(PC 전용)."""
 
 import os
 import subprocess
