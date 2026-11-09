@@ -473,12 +473,13 @@ def _value(p, f):
         return "null"
     if isinstance(d, str) and str(S.REPO_ROOT) in d:
         return "null"
-    if isinstance(d, list) and d and all(isinstance(x, str) for x in d):  # 글자 목록은 쉼표 구분(사람이 적기 쉽게 — CsvList가 읽음)
+    if d == []:  # 빈 목록 = null(비우면 코드 기본값 [])
+        return "null"
+    # 글자 목록은 쉼표 구분(사람이 적기 쉽게 — CsvList가 읽음)
+    if S.field_kind(f.annotation) == "list" and all(isinstance(x, str) for x in d):
         s = ", ".join(d)
         if yaml.safe_load(s) == s:
             return s
-    if d == []:  # 빈 목록 = null(비우면 코드 기본값 [])
-        return "null"
     return yaml.safe_dump(d, default_flow_style=True, allow_unicode=True, width=10**9).removesuffix("\n").removesuffix("\n...")
 
 

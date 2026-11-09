@@ -9,7 +9,7 @@ from pathlib import Path
 import yaml
 
 from common.config import layout, sample
-from common.config.settings import CommonAppSettings, _is_set, app_classes, env_map, load, walk
+from common.config.settings import CommonAppSettings, _csv, _is_set, app_classes, env_map, load, walk
 from common.core.paths import DEPLOY_ROOT
 
 _SET_READ = re.compile(r"\b(?:given|_given|_f|own|setting)\(\s*[\"']([A-Z][A-Z0-9_]+)[\"']")
@@ -47,7 +47,7 @@ def test_copied_sample_starts_with_defaults():
                     v = _get(tree, layout.to_yaml(p))
                     if v is not None and p != "common.run_env":
                         got = _get(st, p)
-                        want = [x.strip() for x in v.split(",")] if isinstance(got, list) and isinstance(v, str) else v  # 쉼표 목록 칸
+                        want = _csv(v) if isinstance(got, list) else v  # 쉼표 목록 칸(CsvList와 같은 분리)
                         assert got == want, (p, got, v)
             em = env_map(cls)
             for name, p in em.items():
