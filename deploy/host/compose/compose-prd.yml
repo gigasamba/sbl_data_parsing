@@ -1,5 +1,5 @@
 # 운영 서버 묶음: 0번 data-pipeline + 검색 MCP mcp-server + parse_document 작업 컨테이너 mcp-data-parsing을 한 파일로 띄운다. 포트는 compose-dev.yml과 같다.
-#   PG(compose-pgvector.yml)·Redis(compose-redis.yml)는 따로 한 번 띄운다(host_ctl.sh secrets 먼저). 준비·접속 순서: docs/operations/server-guide.md §6-6
+#   PG(compose-pgvector.yml)·Redis(compose-redis.yml)는 따로 한 번 띄운다(코드 폴더 맨 위 .env의 비밀번호로). 준비·접속 순서: docs/operations/server-guide.md §6-6
 #   띄우기: bash deploy/host/scripts/host_ctl.sh up -d [서비스…](운영 폴더 settings.yaml required.env.run_env = prd면 이 파일)     내리기: … down
 #   이미지 = 개발 서버에서 구운 코드가 든 이미지(data-pipeline:<판> · mcp-server:<판> — server-guide §0-3, edw_chain.yaml 포함) — 코드 폴더를 붙이지 않는다.
 #   컨테이너는 모두 root로 뜬다. SSH 컨테이너(data-pipeline-0·mcp-server-0)는 root 비밀번호 SSH를 연다(비밀번호 = 이미지에 넣은 값).

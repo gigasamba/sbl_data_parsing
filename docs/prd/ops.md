@@ -103,7 +103,7 @@
 - 규칙: `parse_document` 작업 서비스는 전용 컨테이너 `mcp-data-parsing`(같은 이미지, entrypoint `run-mcp-parsing` = `pipeline.run_mcp_parsing`, Redis Streams 소비자). 자원 = compose 파일 `mcp-data-parsing-0` 칸 `cpus` 4·`mem_limit` 12g·`cpu_shares` 4096(일괄 `data-pipeline`은 1024). worker마다 엔진 기본 수는 max(1, min(2, CPU − 1))라 worker 2 × 엔진 2 = 총 4개다(사용자 결정 2026-11-09). 4 CPU 미만 호스트는 컨테이너 CPU 상한을 낮추고 worker마다 엔진 수를 1로 적는다. cpus는 예약이 아니라 상한이며, 4 vCPU 개발 서버에서 일괄 파싱·검색 MCP와 나눌 때 cpu_shares가 우선순위를 정한다. 결과 폴더를 붙인다. 검색 MCP는 `<결과 폴더>/_mcp_parse/jobs`에 업로드 파일·job.json을 쓰고 Redis HASH+active SET+STREAM에 한 트랜잭션으로 등록한다(#113). worker는 XREADGROUP(COUNT 1)으로 가져가 파싱하고 result-<attempts>.json을 쓴 뒤 완료 HASH+LIST+TTL+active 해제+XACK+XDEL을 한 트랜잭션으로 기록한다. 프록시는 BLPOP으로 즉시 깨어나며 1초 HTTP 폴링은 없다. `mcp_parse_workers`(기본 2, 허용 1~2)만큼 spawn 프로세스를 띄우고 죽은 자식은 주 프로세스가 재시작한다. heartbeat 없음 연속 30초 + idle 60초를 확인한 유실 소비자는 XCLAIM, 살아 있으나 멈춘 소비자는 (job_timeout+60)초 뒤 XAUTOCLAIM, 최대 3회 전달 뒤 포기한다. heartbeat(10초 갱신, TTL 30초)와 Redis PING으로 건강 상태를 확인한다. health는 컨테이너 로컬 supervisor 토큰에 해당하는 소비자만 확인한다. 미등록이 확실한 업로드만 정리하고, 수정 시간 기준 최근 10분 폴더는 active 등록 전에도 purge에서 보호한다. 죽으면 `restart`, 꺼지면 `mcp_keepalive.sh`(keepalive 타이머)가 띄운다. 일괄 엔진 자식은 nice +10.
 - 측정: 작업마다 새 `pipe_run(command=mcp_parse, args에 job_id)` 1건과 `pipe_event(stage=mcp_parse.job)` 1행을 남긴다. 파일 이름·확장자·바이트·동시 실행 수, `metrics.job_id`·`queue_wait_ms`·제출 때 앞 작업 수(`queue_position`)·mode·scan·빈 결과 note를 기록하고 자식 단계는 같은 run_id를 잇는다. 실패·시간 초과도 기록하며 worker는 다음 작업을 계속한다. `perf_report --mcp [--since 시간]`과 `mcp_log.result_keys.job_id` 조인으로 응답·대기·파싱 시간을 비교한다([서버 가이드 §3-4-1](../operations/server-guide.md#3-4-1-mcp-파싱-작업-성능)).- parse_document 회수 보강(#177): 종료 확인·running 소유권 변경은 WATCH로 묶고, 시도별 `a<n>/`에서 파싱한 뒤 HASH의 `result_file` 이름으로 결과를 읽는다. heartbeat 없음 연속 30초 + idle 60초를 모두 확인한 소비자는 한 건씩 회수하며, 살아 있지만 멈춘 소비자는 기존 (job_timeout+60)초 XAUTOCLAIM으로 회수한다. 손상된 HASH는 failed로 끝내고 일반 worker 오류는 traceback으로 기록한다.
 - parse_document 빠른 거절·제출 복구(#177): worker가 확장자·허용 루트(설정 경로의 normpath와 resolve된 실제 경로 모두)·크기 정책을 시작 때와 10초 heartbeat마다 Redis에 TTL 120초로 공개한다. proxy는 정책이 있으면 확장자와 정규화한 절대경로를 폴더 생성 전에 검사한다(존재·실제 크기·심볼릭 링크는 worker가 검사). 정책이 없으면 제출한다. 제출 EXEC 응답이 유실되면 새 EXISTS로 등록 여부를 확인해 등록된 작업은 계속 기다리고, 미등록이 확실할 때만 폴더를 지운다. 확인도 실패하면 폴더를 보존하고 job_id와 연결 오류 끝에 “— 제출 여부 확인 불가(job_id로 수집 서버 담당자 확인)”를 반환한다. 제출 전 연결 실패에는 job_id를 붙이지 않는다.
-- Redis 보호 설정(#177·op-20): 데이터 /data와 보호 설정 /conf(`<SBL_ROOT>/secrets/redis/` — `host_ctl.sh secrets`가 settings.yaml 비밀번호로 씀)를 나눈다. 같은 설정은 다시 쓰지 않으며, 바뀌면 Redis를 다시 만들고 두 앱을 다시 시작하라고 알린다. 보호 파일 권한 오류는 경로·소유자 확인 안내로 보고한다. 인증 사람 검토는 C-117.
+- Redis 비밀번호(#177·op-20): 코드 폴더 맨 위 `.env`의 `REDIS_PASSWORD`(settings.yaml과 같은 값 — 사람이 적음)로 `redis-server --requirepass`를 띄운다. 데이터는 /data(`REDIS_DATA`)에만 둔다. 비밀번호를 바꾸면 Redis를 다시 만들고 두 앱을 다시 시작한다. 인증 사람 검토는 C-117.
 
 
 - 파일: `common/store/redisq.py`, `mcp_server/services/parse_proxy.py`, `pipeline/run_mcp_parsing.py`, `deploy/host/compose/compose-{local,dev,prd,redis}.yml`, 호스트 `host_ctl.sh`·`mcp_keepalive.sh`·`settings_to_env.py`. Redis는 AOF everysec. 기동은 Redis → worker → MCP.
@@ -381,12 +381,12 @@ parse_document 작업 큐(Redis Streams)를 서버마다 Redis 하나로 띄운�
 ### 규칙
 1. 이미지는 공식 `redis:7.4.8-alpine` 그대로(패키지 설치 없음). 반입은 다른 이미지와 같은 배치(`stage_images.sh redis` → `sbl_images/<판>/redis/` 조각 + sha256 — `load.sh`가 함께 불러옴).
 2. `deploy/host/compose/compose-redis.yml`: 서비스·컨테이너 `redis`, 서버 `0.0.0.0:8010` → 컨테이너 6379, 데이터 `REDIS_DATA`(기본 `/data/redis`, AOF everysec), 재시작 `always`. 사람이 한 번 따로 띄운다(`compose-<환경>.yml`보다 먼저).
-3. 비밀번호는 settings.yaml `common.connections.redis.redis_password` 하나(필수 — sample은 비움, 서버마다 채움). `host_ctl.sh secrets`가 `<SBL_ROOT>/secrets/redis/`(700)에 `redis.conf`(protected-mode yes · bind 0.0.0.0 · requirepass)·`start.sh`·`health.sh`(600)를 쓰고, 컨테이너는 그 폴더를 `/conf`에 읽기 전용으로 붙인다. env·명령 인자에 두지 않는다(inspect·ps에 안 보임).
+3. 비밀번호는 settings.yaml `common.connections.redis.redis_password` 하나(필수 — sample은 비움, 서버마다 채움). Redis 컨테이너는 settings.yaml을 읽지 않으므로 사람이 같은 값을 코드 폴더 맨 위 `.env`(git 제외, 600)의 `REDIS_PASSWORD`에 적고, compose가 `redis-server --requirepass … --protected-mode yes --bind 0.0.0.0`(AOF)로 띄운다(`--env-file .env` — 값이 비면 멈춤). 비밀번호는 명령 인자로 `docker inspect`에 보인다(서버 root·docker 권한자만 — 사용자 결정). 상태 검사는 비밀번호 없이 `redis-cli ping`의 PONG·NOAUTH.
 4. 앱 컨테이너는 `host.docker.internal:8010`으로 붙는다(`redis_host`·`redis_port` 코드 기본값).
 5. 클러스터는 두지 않는다.
 
 ### QA
-- `tests/general/deploy/test_compose.py`(이미지·포트·재시작·`/conf` 마운트·env 없음) · `test_redis_host.py`(보호 파일 권한·내용·값 미출력·같은 값이면 안 바꿈·비밀번호 없으면 종료 2) · 서버 시험(띄우기 → 앱 컨테이너에서 PING → 틀린 비밀번호 거부 → 다시 시작 뒤 값 유지).
+- `tests/general/deploy/test_compose.py`(이미지·포트·재시작·`--requirepass ${REDIS_PASSWORD:?…}`·데이터 마운트만·비밀번호 없는 상태 검사) · 서버 시험(띄우기 → 앱 컨테이너에서 PING → 틀린 비밀번호 거부 → 다시 시작 뒤 값 유지).
 - Status: dev
 
 ### 사람 검토
@@ -404,7 +404,7 @@ parse_document 작업 큐(Redis Streams)를 서버마다 Redis 하나로 띄운�
 3. 컨테이너 이름·이미지·CPU·메모리·포트는 compose 파일에 직접 적는다. settings.yaml에는 컨테이너 칸이 없다.
 4. 모든 앱 컨테이너는 root(파싱 worker 포함). SSH 컨테이너의 root 비밀번호는 이미지에 넣은 값(예외 승인 — 이미지 빌드 때 BuildKit 비밀값).
 5. `host_ctl.sh`는 얇다: `up`·`down` 등은 settings.yaml `run_env`(부른 폴더)에 맞는 `compose-<환경>.yml` 하나로 `docker compose`를 부른다. `init`·`secrets`·`timers`·`check`는 하위 명령. 덧붙임 파일·벌 번호 계산은 없다.
-6. PG(`compose-pgvector.yml`)·Redis(`compose-redis.yml`)는 사람이 따로 한 번 띄우고 늘 `always`. 비밀번호는 settings.yaml 하나(`required.pg.pg_password`·`common.connections.redis.redis_password`) — 띄우기 전에 `host_ctl.sh secrets`가 권한 600 파일(PG 비밀번호 파일·Redis 설정)을 만든다. 손으로 만드는 비밀번호 파일은 없다.
+6. PG(`compose-pgvector.yml`)·Redis(`compose-redis.yml`)는 사람이 따로 한 번 띄우고 늘 `always`. 비밀번호는 settings.yaml 하나(`required.pg.pg_password`·`common.connections.redis.redis_password`) — PG·Redis 컨테이너에는 같은 값을 코드 폴더 맨 위 `.env`(`REDIS_PASSWORD`·`PG_USER`·`PG_DB`·`PG_PASSWORD`, 600, git 제외)에 사람이 적어 `docker compose --env-file .env`로 넘긴다. 다른 비밀번호 파일은 없다.
 7. Redis는 공식 `redis:7.4.8-alpine` 하나, 포트 8010, 모든 주소에서 받고 비밀번호 필수. 클러스터는 없다(나중에).
 8. 밤 배치·MCP 살리기는 0번만 본다(`data-pipeline-0`, `mcp-server-0`, `mcp-data-parsing-0`, Redis). MCP 살리기는 서버에서 `http://127.0.0.1:8051/health`로 확인한다.
 9. EDW 사슬 파일 `edw_chain.yaml`은 저장소 맨 위(git)에 있고 이미지에도 들어간다 — 서버 사본·복사 단계는 없다.
@@ -416,7 +416,7 @@ parse_document 작업 큐(Redis Streams)를 서버마다 Redis 하나로 띄운�
 - 남은 것: 서버·PC에서 실제로 띄워 보는 시험(QA의 PC·서버 항목).
 
 ### QA
-- 시험: `tests/general/deploy/test_compose.py`(compose 파일마다 서비스·이미지·포트·재시작 정책) · `test_dc.py`(`host_ctl.sh`가 환경에 맞는 파일 하나만 부름 · 모르는 run_env 종료 2 · MCP 살리기 0번만) · `test_dc_init.py`(init·timers·check) · `test_redis_host.py`(`secrets`가 600 파일을 만들고 값을 출력하지 않음) · keyscan(지운 설정 칸 없음) — 통과. PC: compose-local로 0번 띄워 MCP·`parse_document` 큐 동작, PG·Redis 접속. 서버: compose-dev·prd로 띄워 SSH·MCP.
+- 시험: `tests/general/deploy/test_compose.py`(compose 파일마다 서비스·이미지·포트·재시작 정책) · `test_dc.py`(`host_ctl.sh`가 환경에 맞는 파일 하나만 부름 · 모르는 run_env 종료 2 · MCP 살리기 0번만) · `test_dc_init.py`(init·timers·check) · keyscan(지운 설정 칸 없음) — 통과. PC: compose-local로 0번 띄워 MCP·`parse_document` 큐 동작, PG·Redis 접속. 서버: compose-dev·prd로 띄워 SSH·MCP.
 - Status: dev
 
 ### 사람 검토

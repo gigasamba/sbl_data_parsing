@@ -2,11 +2,10 @@
 # 서버 컨테이너 입구 — 환경마다 compose 파일 하나(deploy/host/compose/compose-<환경>.yml — 환경 = 이 코드 폴더 settings.yaml required.env.run_env).
 #   bash deploy/host/scripts/host_ctl.sh up -d [서비스…]          compose 하위 명령 그대로(up·down·ps·logs·restart …) — 예 up -d mcp-server-0
 #   bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>   서버 루트(이 코드 폴더 자체) 채우기(root — 여러 번 불러도 안전)
-#   bash deploy/host/scripts/host_ctl.sh secrets                     settings.yaml의 PG·Redis 비밀번호 → <SBL_ROOT>/secrets/(700 · 파일 600, 값은 찍지 않음)
 #   bash deploy/host/scripts/host_ctl.sh timers                      systemd 타이머(새벽 배치·MCP 살리기)를 이 코드 폴더 기준으로 설치·켬(root — 0번 벌 폴더에서)
 #   bash deploy/host/scripts/host_ctl.sh check                       배포 뒤 점검을 차례로 — 처음 실패에서 멈추고 마지막 한 줄로 판정
 # 컨테이너 이름·이미지·CPU·메모리·포트는 compose 파일에 직접 적혀 있다(설정 칸 없음). PG(compose-pgvector.yml)·Redis(compose-redis.yml)는
-#   사람이 한 번 따로 띄운다(늘 always — secrets 먼저). 종료 코드: compose 그대로 · 설정을 못 읽으면 2 · init/secrets/timers/check는 아래 설명.
+#   사람이 한 번 따로 띄운다(늘 always — 비밀번호는 코드 폴더 맨 위 .env). 종료 코드: compose 그대로 · 설정을 못 읽으면 2 · init/timers/check는 아래 설명.
 set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트
 if [ -n "${DC_ROOT:-}" ]; then RAG_ROOT=$DC_ROOT; fi   # 시험 루트(init) — load_settings.sh는 이미 있는 RAG_ROOT를 씀
@@ -75,21 +74,6 @@ PY
   return 0
 }
 
-# secrets — settings.yaml 하나에 둔 PG 비밀번호(required.pg.pg_password)·Redis 비밀번호(common.connections.redis.redis_password)를
-#   <SBL_ROOT>/secrets/(SBL_ROOT = 셸 env, 없으면 이 코드 폴더의 위 폴더 — compose-pgvector.yml·compose-redis.yml이 붙이는 자리)에 쓴다:
-#   pg_pw(POSTGRES_PASSWORD_FILE) · redis/redis.conf·start.sh·health.sh(requirepass — Redis 컨테이너 /conf). 폴더 700 · 파일 600 · 값은 찍지 않는다.
-#   PG·Redis를 띄우기 전에 한 번(비밀번호를 바꾸면 다시 — 바뀐 파일이 있으면 다시 띄울 것을 알림). 종료 코드: 0 · 2 비밀번호 없음·설정·권한 문제.
-dc_secrets() {
-  local dir out
-  dir=$SBL_ROOT/secrets
-  out=$("${PY:-python3}" deploy/host/scripts/settings_to_env.py --file "$SETTINGS_FILE" --secrets-dir "$dir") || return 2
-  echo "[host_ctl secrets] $dir — pg_pw · redis/(redis.conf·start.sh·health.sh) 권한 600(값은 찍지 않음)"
-  if [ "$out" = changed ]; then
-    echo "  바뀜 — Redis: SBL_ROOT=$SBL_ROOT docker compose -f deploy/host/compose/compose-redis.yml up -d --force-recreate"
-    echo "         PG: 비밀번호 파일은 데이터 폴더가 비었을 때(처음)만 쓰임 — 이미 띄운 PG는 psql ALTER USER로 같게"
-  fi
-}
-
 # check — 이미 있는 점검을 차례로(새 점검 없음). 처음 실패에서 멈추고 마지막 한 줄 "[host_ctl check] 통과 — N개" 또는 "[host_ctl check] 실패 — <단계>: <안내>".
 #   ① check_env ② ping_models ③ migrate check --target all(pipe_exec.sh — data-pipeline-0 안) ④⑤ selftest_gate.sh(두 컨테이너의 이미지 — "[판정] 통과" 줄로 판정)
 #   ⑥ mcp_keepalive.sh(/health). 검색 근거가 필요한 MCP 호출(mcp_smoke)은 넣지 않음 — 첫 적재 전에는 근거가 없음.
@@ -152,9 +136,8 @@ case "${1:-}" in
   init) shift; dc_init "$@"; exit $? ;;
 esac
 load_settings || exit $?
-export SBL_ROOT=${SBL_ROOT:-$(dirname "$RAG_ROOT")}   # 벌 폴더들의 위 폴더 — secrets/·compose 파일의 폴더 자리
+export SBL_ROOT=${SBL_ROOT:-$(dirname "$RAG_ROOT")}   # 벌 폴더들의 위 폴더 — compose-dev.yml의 폴더 자리
 case "${1:-}" in
-  secrets) dc_secrets; exit $? ;;
   timers) dc_timers; exit $? ;;
   check) dc_check; exit $? ;;
 esac

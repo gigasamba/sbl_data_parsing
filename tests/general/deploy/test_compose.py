@@ -49,7 +49,7 @@ FILES = {
         },
     ),
     "compose-pgvector.yml": ("sbl-pgvector", "always", {"pgvector": ("pgvector/pgvector:pg16", None, ["0.0.0.0:5433:5432"])}),
-    "compose-redis.yml": ("sbl-redis", "always", {"redis": ("redis:7.4.8-alpine", ["sh", "/conf/start.sh"], ["0.0.0.0:8010:6379"])}),
+    "compose-redis.yml": ("sbl-redis", "always", {"redis": ("redis:7.4.8-alpine", None, ["0.0.0.0:8010:6379"])}),
 }
 
 
@@ -81,23 +81,17 @@ def test_compose_files():
                 assert not any(":/app/deploy" in v for v in vols), (name, vols)  # 코드는 이미지 안
 
 
-def test_secret_mounts():
-    """PG·Redis 비밀번호는 host_ctl.sh secrets가 <SBL_ROOT>/secrets/에 쓴 파일로만 붙는다(env·명령 인자에 값 없음)."""
+def test_secret_env():
+    """PG·Redis 비밀번호는 코드 폴더 맨 위 .env(사람이 적음)에서만 — 비어 있으면 compose가 멈춤(:?), 파일 붙임 없음."""
     pg = _load("compose-pgvector.yml")["services"]["pgvector"]
-    assert pg["environment"]["POSTGRES_PASSWORD_FILE"] == "/run/secrets/pg_pw" and "POSTGRES_PASSWORD" not in pg["environment"]
-    pw = [v for v in pg["volumes"] if isinstance(v, dict)]
-    assert pw == [
-        {
-            "type": "bind",
-            "source": "${SBL_ROOT:-/home/sbl}/secrets/pg_pw",
-            "target": "/run/secrets/pg_pw",
-            "read_only": True,
-            "bind": {"create_host_path": False, "selinux": "z"},
-        }
-    ], pw
+    env = pg["environment"]
+    assert env["POSTGRES_PASSWORD"] == "${PG_PASSWORD:?.env에 PG_PASSWORD 필요}" and "POSTGRES_PASSWORD_FILE" not in env, env
+    assert env["POSTGRES_USER"].startswith("${PG_USER:?") and env["POSTGRES_DB"].startswith("${PG_DB:?"), env
+    assert not any(isinstance(v, dict) or "secrets" in str(v) for v in pg["volumes"]), pg["volumes"]
     redis = _load("compose-redis.yml")["services"]["redis"]
-    assert "${SBL_ROOT:-/home/sbl}/secrets/redis:/conf:ro,z" in redis["volumes"] and "environment" not in redis, redis
-    assert redis["healthcheck"]["test"] == ["CMD", "sh", "/conf/health.sh"]
+    assert redis["command"][:3] == ["redis-server", "--requirepass", "${REDIS_PASSWORD:?.env에 REDIS_PASSWORD 필요}"], redis["command"]
+    assert redis["volumes"] == ["${REDIS_DATA:-/data/redis}:/data:z"] and "environment" not in redis, redis
+    assert "PONG|NOAUTH" in redis["healthcheck"]["test"][1] and "REDIS_PASSWORD" not in redis["healthcheck"]["test"][1]
 
 
 def test_entry_commands():

@@ -1323,7 +1323,7 @@ class CommonConnectionsRedis(Section):
     redis_password: SecretStr | None = F(
         None,
         "REDIS_PASSWORD",
-        "Redis 비밀번호(필수 — 서버마다 채움) — host_ctl.sh secrets가 Redis 설정 파일(600)에 씀. 로그·셸 env에 내보내지 않음",
+        "Redis 비밀번호(필수 — 서버마다 채움) — 코드 폴더 맨 위 .env의 REDIS_PASSWORD(compose-redis.yml)와 같은 값. 로그·셸 env에 내보내지 않음",
     )
     redis_db: int = F(0, "REDIS_DB", "Redis 데이터베이스 번호", ge=0)
     redis_key_prefix: str = F("mcp_parse", "REDIS_KEY_PREFIX", "Redis 큐 키 접두 — 설정값 그대로(서버당 한 벌)", min_length=1)

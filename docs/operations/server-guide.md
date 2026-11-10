@@ -216,9 +216,9 @@ docker image ls | grep -E '^(data-pipeline|mcp-server) '        # 기대: 두 �
 **③ 띄우기** — PG·Redis → `data-pipeline-0` → (처음이면 DB 표 만들기 — [설치 순서 6번](#서버-설치-순서)) → 나머지(검색 MCP는 시작할 때 마스터 표를 읽음)
 ```bash
 B=/home/sbl/sbl_data_parsing-main; cd $B
-bash deploy/host/scripts/host_ctl.sh secrets                        # PG·Redis 비밀 파일 → /home/sbl/secrets(처음·비밀번호를 바꾼 뒤 — 값은 안 찍음)
-docker compose -f deploy/host/compose/compose-pgvector.yml up -d    # 검색 DB(이미 떠 있으면 그대로) — DB 담당이 따로 둔 PG면 건너뜀
-docker compose -f deploy/host/compose/compose-redis.yml up -d       # Redis
+#   먼저 .env(코드 폴더 맨 위 — git 제외, chmod 600)에 REDIS_PASSWORD·PG_USER·PG_DB·PG_PASSWORD를 적는다(settings.yaml과 같은 값 — §6-6 ①)
+docker compose --env-file .env -f deploy/host/compose/compose-pgvector.yml up -d    # 검색 DB(이미 떠 있으면 그대로) — DB 담당이 따로 둔 PG면 건너뜀
+docker compose --env-file .env -f deploy/host/compose/compose-redis.yml up -d       # Redis
 bash deploy/host/scripts/host_ctl.sh up -d data-pipeline-0
 bash deploy/host/scripts/host_ctl.sh up -d                          # 나머지 둘
 bash deploy/host/scripts/host_ctl.sh ps                             # 기대: 세 줄 Up(mcp-data-parsing-0은 healthy)
@@ -257,14 +257,14 @@ MCP 살리기 타이머(`mcp_keepalive.sh`)는 2분마다 `redis`(꺼졌으면 `
 
 ### 1-2. 폴더 배치
 
-서버는 **공용 폴더 하나**(예 `/home/sbl/` — compose 파일의 `SBL_ROOT`) 아래에서 동작한다. 공용 폴더 바로 아래에 **이미지 폴더**(`sbl_images-main/` — 서버에 한 번 불러오면 모든 벌이 같이 씀), **비밀 파일 폴더**(`secrets/`)와 **벌 폴더**(한 벌 = 코드 zip을 푼 코드 폴더 하나)가 있다. 루트 = 코드 폴더 자체이고, 호스트 스크립트는 자기 자리에서 루트를 구한다. 코드 폴더 바로 아래에 코드와 함께 **설정 파일**(`settings.yaml`) **· 결과 폴더**(`output/`) **· root 홈**(`home/`)이 있다 — 셋은 git·코드 zip에 없는 것이라 새 판을 덮어써도 남는다(§4-5). EDW 조인 사슬 `edw_chain.yaml`은 코드다(코드 폴더 맨 위 — git으로 고침).
+서버는 **공용 폴더 하나**(예 `/home/sbl/` — compose 파일의 `SBL_ROOT`) 아래에서 동작한다. 공용 폴더 바로 아래에 **이미지 폴더**(`sbl_images-main/` — 서버에 한 번 불러오면 모든 벌이 같이 씀)와 **벌 폴더**(한 벌 = 코드 zip을 푼 코드 폴더 하나)가 있다. 루트 = 코드 폴더 자체이고, 호스트 스크립트는 자기 자리에서 루트를 구한다. 코드 폴더 바로 아래에 코드와 함께 **설정 파일**(`settings.yaml`) **· PG·Redis 비밀번호**(`.env`) **· 결과 폴더**(`output/`) **· root 홈**(`home/`)이 있다 — 셋은 git·코드 zip에 없는 것이라 새 판을 덮어써도 남는다(§4-5). EDW 조인 사슬 `edw_chain.yaml`은 코드다(코드 폴더 맨 위 — git으로 고침).
 
 ```
 <공용 폴더>/                                  ← 예 /home/sbl/
 ├── sbl_images-main/                         ← 공용 — load.sh · readme.md · <판>/BUILD.txt · <판>/<이미지>/*.tar.gz.part* + *.sha256(서버에 한 번 load)
-├── secrets/                                 ← host_ctl.sh secrets가 만듦(700) — pg_pw · redis/(redis.conf·start.sh·health.sh), 파일 600 · 값은 settings.yaml에서
 ├── sbl_data_parsing-main/                   ← 한 벌(운영 서버) = 코드 폴더 = 루트(코드 · edw_chain.yaml · VERSION · CODE_COMMIT · deploy/docker/DEPS_HASH)
 │   ├── settings.yaml                        ← settings.sample.yaml을 host_ctl.sh init이 없을 때만 복사(비밀값 — 640)
+│   ├── .env                                 ← PG·Redis 비밀번호(사람이 적음 — 600, git 제외 · compose-pgvector.yml·compose-redis.yml이 읽음)
 │   ├── output/                              ← 결과 폴더(host_ctl.sh init이 만듦 — 컨테이너 안 /app/output · 파싱 캐시가 있어 잃으면 전부 다시 처리 · 아래 _ 붙은 폴더는 임시 자리)
 │   │   ├── _docflow/<번호>/  _staging/  _faq_seen.txt  _mcp_parse/jobs/  _llm_spend/
 │   │   └── logs/                            ← DB 로그를 못 쓸 때의 예비 파일만
@@ -309,16 +309,14 @@ docker는 서버 CPU 수보다 큰 `cpus`를 거부한다. 4 CPU 미만이면 co
 
 ```bash
 bash deploy/host/scripts/host_ctl.sh ps                                       # mcp-data-parsing-0 … (healthy)
-$DOCKER exec redis sh /conf/health.sh                                          # PONG(보호 파일에서 인증)
 $DOCKER exec mcp-data-parsing-0 python -m pipeline.run_mcp_parsing --health
-$DOCKER exec redis sh -c 'eval "$(grep ^export /conf/health.sh)"; redis-cli --no-auth-warning SCARD mcp_parse:active'
-$DOCKER exec redis sh -c 'eval "$(grep ^export /conf/health.sh)"; redis-cli --no-auth-warning XPENDING mcp_parse:queue mcp_parse:workers'
-$DOCKER exec redis sh -c 'eval "$(grep ^export /conf/health.sh)"; redis-cli --no-auth-warning HGETALL mcp_parse:job:<job_id>'
+$DOCKER exec -it redis redis-cli                                              # 들어가서 AUTH <비밀번호>(손으로) → 아래 명령
+#   SCARD mcp_parse:active · XPENDING mcp_parse:queue mcp_parse:workers · HGETALL mcp_parse:job:<job_id>
 ```
 
-비밀번호는 명령 인자·로그에 적지 않는다 — 위처럼 컨테이너 셸 안에서 `/conf/health.sh`의 인증 줄을 읽는다. 접두는 설정값 그대로 사용한다(자동 접미사 없음). `KEYS *`·FLUSHALL 대신 해당 접두의 SCAN을 쓴다.
+비밀번호는 셸 명령 인자·로그에 적지 않는다 — 위처럼 `redis-cli` 안에서 `AUTH`로 친다. 접두는 설정값 그대로 사용한다(자동 접미사 없음). `KEYS *`·FLUSHALL 대신 해당 접두의 SCAN을 쓴다.
 
-AOF 데이터는 `REDIS_DATA`(기본 `/data/redis`)에 남는다. `host_ctl.sh secrets`가 settings.yaml의 `redis_password`로 `<공용 폴더>/secrets/redis/`(700)에 redis.conf(`protected-mode yes` · `bind 0.0.0.0` · `port 6379` · AOF · `requirepass`)·health.sh·start.sh(600)를 만들고, `compose-redis.yml`이 `/conf:ro,z`로 붙인다. 데이터 폴더는 Redis 전용이며 운영 계정이 쓰지 않는다. start.sh는 설정을 /data/redis.conf에 복사·chmod 600한 뒤 공식 entrypoint를 redis-server 인자로 실행해 Redis 계정으로 내린다. `secrets`는 같은 내용이면 파일을 다시 쓰지 않고, 바뀌면 다시 띄울 명령을 알린다(Redis `up -d --force-recreate` 뒤 두 앱도 `host_ctl.sh restart mcp-server-0 mcp-data-parsing-0` — 새 비밀번호를 읽게). 비밀 폴더·파일 읽기/쓰기 권한 오류는 값이나 traceback 대신 해당 경로와 소유자·권한 확인 안내를 출력한다. AOF everysec는 장애 시 최근 약 1초 쓰기를 잃을 수 있다. 완료 STREAM 항목은 XACK+XDEL로 제거하고, AOF는 Redis 기본 auto-rewrite(100% 증가·최소 64MB)를 사용하므로 디스크 여유를 살핀다. 완료 HASH·LIST는 기본 하루 TTL, 폴더는 수정 시간순 최근 30개를 남기되 active와 최근 10분 폴더는 등록 전 업로드까지 보호한다. 미완료 작업은 pending에서 회수되며 최대 전달 횟수를 넘으면 failed 알림을 준다.
+AOF 데이터는 `REDIS_DATA`(기본 `/data/redis`)에 남는다. `compose-redis.yml`이 코드 폴더 맨 위 `.env`의 `REDIS_PASSWORD`로 `redis-server --requirepass …`(`protected-mode yes` · `bind 0.0.0.0` · AOF)를 띄운다 — 공식 entrypoint가 Redis 계정으로 내린다. 데이터 폴더는 Redis 전용이며 운영 계정이 쓰지 않는다. 비밀번호를 바꾸면 `.env`·settings.yaml을 같이 고치고 Redis `up -d --force-recreate` 뒤 두 앱도 `host_ctl.sh restart mcp-server-0 mcp-data-parsing-0`(새 비밀번호를 읽게). AOF everysec는 장애 시 최근 약 1초 쓰기를 잃을 수 있다. 완료 STREAM 항목은 XACK+XDEL로 제거하고, AOF는 Redis 기본 auto-rewrite(100% 증가·최소 64MB)를 사용하므로 디스크 여유를 살핀다. 완료 HASH·LIST는 기본 하루 TTL, 폴더는 수정 시간순 최근 30개를 남기되 active와 최근 10분 폴더는 등록 전 업로드까지 보호한다. 미완료 작업은 pending에서 회수되며 최대 전달 횟수를 넘으면 failed 알림을 준다.
 
 MCP 살리기(`mcp_keepalive.sh`)는 Redis·작업 컨테이너 기동이 실패해도 검색 MCP 확인과 재기동을 계속한다. parse health는 컨테이너 로컬 임시 폴더의 supervisor 식별자를 읽고 그 소비자의 heartbeat만 확인하므로 다른 컨테이너를 정상으로 오인하지 않는다.
 
@@ -328,7 +326,7 @@ parse_document 회수 보강(#177): 종료 확인·running 소유권 변경은 W
 
 parse_document 빠른 거절·제출 복구(#177): worker가 확장자·허용 루트(설정 경로의 normpath와 resolve된 실제 경로 모두)·크기 정책을 시작 때와 10초 heartbeat마다 Redis에 TTL 120초로 공개한다. proxy는 정책이 있으면 확장자와 정규화한 절대경로를 폴더 생성 전에 검사한다(존재·실제 크기·심볼릭 링크는 worker가 검사). 정책이 없으면 제출한다. 제출 EXEC 응답이 유실되면 새 EXISTS로 등록 여부를 확인해 등록된 작업은 계속 기다리고, 미등록이 확실할 때만 폴더를 지운다. 확인도 실패하면 폴더를 보존하고 job_id와 연결 오류 끝에 “— 제출 여부 확인 불가(job_id로 수집 서버 담당자 확인)”를 반환한다. 제출 전 연결 실패에는 job_id를 붙이지 않는다.
 
-Redis 인증(#177): `common.connections.redis.redis_password`는 모든 서버에 반드시 채운다(기본값 없음 — 서버마다 새로 만든 값). 비움·공백은 `host_ctl.sh secrets`와 앱 client가 거부하며 worker 시작은 종료 코드 2다. Redis는 서버의 모든 주소(`0.0.0.0:8010`)에 열리므로 `protected-mode yes`와 비밀번호를 함께 쓴다. 비밀값 처리 변경은 검토 등급 A로 다른 사람의 승인이 필요하다(C-117).
+Redis 인증(#177): `common.connections.redis.redis_password`는 모든 서버에 반드시 채운다(기본값 없음 — 서버마다 새로 만든 값). 비움·공백은 앱 client가 거부하며(`.env`의 `REDIS_PASSWORD`가 비면 compose가 멈춤) worker 시작은 종료 코드 2다. Redis는 서버의 모든 주소(`0.0.0.0:8010`)에 열리므로 `protected-mode yes`와 비밀번호를 함께 쓴다. 비밀값 처리 변경은 검토 등급 A로 다른 사람의 승인이 필요하다(C-117).
 <a id="서버-pg-띄우기"></a>
 ### 1-4. 서버 PG(pgvector) 띄우기
 
@@ -343,21 +341,22 @@ docker load -i pgvector_pg16.tar                               # 기대: Loaded 
 # ③ 데이터 폴더(컨테이너를 지워도 DB는 여기 남음 — 비어 있으면 처음 시작 때 DB를 만든다)
 mkdir -p /data/pg/pipeline
 
-# ④ 비밀번호 파일 — settings.yaml 값으로 <공용 폴더>/secrets/pg_pw(600)를 만든다(값은 안 찍음)
-cd <루트> && bash deploy/host/scripts/host_ctl.sh secrets      # 기대: [host_ctl secrets] /home/sbl/secrets — pg_pw · redis/(…) 권한 600(값은 찍지 않음)
+# ④ 계정 — 코드 폴더 맨 위 .env(git 제외)에 settings.yaml과 같은 값을 손으로 적는다(값에 $·따옴표·줄바꿈 없음)
+cd <루트> && vi .env && chmod 600 .env                        # PG_USER=rag · PG_DB=rag · PG_PASSWORD=<pg_password> · REDIS_PASSWORD=<redis_password>
 
 # ⑤ 띄우기·기다리기
-docker compose -f deploy/host/compose/compose-pgvector.yml up -d
+docker compose --env-file .env -f deploy/host/compose/compose-pgvector.yml up -d
 until docker exec pgvector pg_isready -h 127.0.0.1 -U rag -d rag; do sleep 1; done   # 기대: 127.0.0.1:5432 - accepting connections
 #   -h 127.0.0.1을 꼭 준다 — 처음 띄울 때 PG가 초기화용 서버를 잠깐 띄우는데, -h 없이 물으면 그때도 "준비됨"이 나와 ⑥이 "database does not exist"로 실패한다
 
 # ⑥ vector 확장(DB마다 한 번)
 docker exec pgvector psql -U rag -d rag -c 'CREATE EXTENSION IF NOT EXISTS vector'   # 기대: CREATE EXTENSION
 ```
-- settings.yaml에 같은 값을 적는다: `required.pg.pg_host: host.docker.internal`(컨테이너에서 서버 자신) · `pg_port: 5433`(서버 쪽 포트) · `pg_database: rag` · `pg_user: rag`(compose `PG_DB`·`PG_USER` — 기본 `rag`) · `pg_password`(④가 읽은 값) · `required.deploy.pg_container_name: pgvector`. 서버 바깥(DB 도구)에서는 `<서버 IP>:5433`.
+- settings.yaml에 같은 값을 적는다: `required.pg.pg_host: host.docker.internal`(컨테이너에서 서버 자신) · `pg_port: 5433`(서버 쪽 포트) · `pg_database: rag` · `pg_user: rag` · `pg_password`(④의 `.env`와 같은 값) · `required.deploy.pg_container_name: pgvector`. 서버 바깥(DB 도구)에서는 `<서버 IP>:5433`.
 - `POSTGRES_USER`로 만든 계정은 관리자 계정이라 스키마 만들기 권한이 있다.
 - 메모리 값(`shared_buffers` 등)·`shm_size`·`cpus`·`mem_limit`은 파일 안 주석대로 서버 메모리에 맞춰 고친다.
-- 비밀번호 파일은 데이터 폴더가 비어 있을 때(처음)만 쓰인다. 비밀번호를 바꾸려면 `docker exec -it pgvector psql -U rag -d rag`에 들어가 `\password rag` 뒤 settings.yaml 값을 같게 고치고 `host_ctl.sh secrets`.
+- `.env`의 계정·비밀번호는 데이터 폴더가 비어 있을 때(처음)만 쓰인다. 비밀번호를 바꾸려면 `docker exec -it pgvector psql -U rag -d rag`에 들어가 `\password rag` 뒤 `.env`·settings.yaml 값을 같게 고친다.
+- `.env`의 비밀번호는 환경 변수로 넘어가 `docker inspect`에 보인다 — 서버 root·docker 권한자만 볼 수 있다.
 - 데이터를 다른 폴더에 두려면 셸에서 `PG_DATA=<폴더>`를 주고 띄운다(내릴 때도 같은 값).
 
 <a id="서버-설치-순서"></a>
@@ -376,7 +375,7 @@ docker exec pgvector psql -U rag -d rag -c 'CREATE EXTENSION IF NOT EXISTS vecto
    개발 서버는 벌 폴더 이름 끝에 번호를 붙인다 — 공용 main `sbl_data_parsing-main-0`, 개발자 `-1`(`compose-dev.yml`이 이 이름으로 붙인다 — §2-1).
 2. 이미지를 불러온다(공용 폴더에서 — 서버에 한 번, 이미 불러온 판이면 건너뜀). `<이미지 판>`은 `ls sbl_images-main/`에 보이는 판 폴더 이름이다: `cd /home/sbl && DOCKER=docker bash sbl_images-main/load.sh <이미지 판>` — 조각 sha256 확인 → 합치기 → load, 끝에 `<판>/BUILD.txt`(빌드 커밋·DEPS_HASH). **코드의 `deploy/docker/DEPS_HASH`가 `BUILD.txt`의 DEPS_HASH와 같은 판**을 고른다(확인 명령 — [README §1-3](../../README.md#실행-모드)).
 3. 루트 채우기: `cd <루트> && bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>` — `output/`·`output/_mcp_parse/jobs`(UID 10001, 2775), 코드 a+rX(`settings.yaml`·`output/`·`home/`은 빼고), `settings.sample.yaml` → `<루트>/settings.yaml`(없을 때만, 10001:<운영 그룹> 640). 끝에 빈 필수 칸 **이름**을 찍는다. 여러 번 불러도 안전하다.
-4. 설정을 채운다 — `<루트>/settings.yaml` 맨 위 `required`의 빈 값([§1-6 꼭 채울 값](#꼭-채울-값)). 띄울 이미지 판은 compose 파일의 `IMAGE_TAG`(기본값 — 다르면 파일 옆 `.env`에 `IMAGE_TAG=<판>`)가 정한다. 자원 상한은 compose 파일에 있다([§1-10](#1-10-자원)). 다 채우면 `bash deploy/host/scripts/host_ctl.sh secrets`로 PG·Redis 비밀 파일을 만들고 PG·Redis를 띄운다([§6-6](#6-6-서버-묶음--compose-파일과-root-ssh) ①).
+4. 설정을 채운다 — `<루트>/settings.yaml` 맨 위 `required`의 빈 값([§1-6 꼭 채울 값](#꼭-채울-값)). 띄울 이미지 판은 compose 파일의 `IMAGE_TAG`(기본값 — 다르면 파일 옆 `.env`에 `IMAGE_TAG=<판>`)가 정한다. 자원 상한은 compose 파일에 있다([§1-10](#1-10-자원)). 다 채우면 같은 PG·Redis 비밀번호를 코드 폴더 맨 위 `.env`(`REDIS_PASSWORD`·`PG_USER`·`PG_DB`·`PG_PASSWORD`, 600)에 적고 PG·Redis를 띄운다([§6-6](#6-6-서버-묶음--compose-파일과-root-ssh) ①).
    - **개발 서버**는 `required.source.source_systems: DEV-<번호>`를 적는다(여러 개는 쉼표 — `DEV-1, DEV-2`) — 비우면 운영 5개 원천 전부를 파싱한다.
    - 운영 기준 결과를 내려면 `transform.represent.post_steps: all`([env-guide "서버 값으로 적는 칸"](env-guide.md)).
    - `required.deploy.host_docs_dir`는 서버에 **이미 있는 폴더**여야 한다(없으면 `mkdir -p` 후 UID 10001이 읽을 수 있게).
@@ -414,7 +413,7 @@ docker exec pgvector psql -U rag -d rag -c 'CREATE EXTENSION IF NOT EXISTS vecto
 | `extract.source.source_input_location`·`source_default_bucket`·`source_uri_prefix` | 원본 위치 — `source_default_bucket`은 서버에서 **필수**(`run_pipeline`이 비면 멈춤) | 운영 담당 | `rdb:csv:<루트>/list.csv` · `<버킷>` · `s3://<버킷>/<접두>` | dev·prd | 첫 `run_pipeline` |
 | `required.tokens.mcp_token` | MCP 토큰 하나 — 검색 MCP 외부 호출 인증에 씀(내부 전달은 Redis 권한) | `openssl rand -hex 32` | 64자 16진수 | dev·prd | `host_ctl.sh check` ⑥ `/health` · `parse_document` 호출이 토큰 오류 |
 | `required.tokens.fulltext_sign_key` | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키 — 비우면 두 도구가 `not_configured`, 바꾸면 이미 발급한 sfid가 모두 무효 | 같은 명령 | 64자 16진수 | dev·prd | 원문 도구 호출이 `not_configured` |
-| `common.connections.redis.redis_password` | `parse_document` 작업 큐(Redis) 비밀번호 — `host_ctl.sh secrets`가 Redis 설정 파일에 넣음. `redis_host`·`redis_port`는 비움(기본 `host.docker.internal`·`8010`) | `openssl rand -hex 32` | 64자 16진수 | dev·prd | `redis` 컨테이너 상태 검사 · `parse_document` 호출 |
+| `common.connections.redis.redis_password` | `parse_document` 작업 큐(Redis) 비밀번호 — 코드 폴더 맨 위 `.env`의 `REDIS_PASSWORD`와 같은 값(compose-redis.yml이 읽음). `redis_host`·`redis_port`는 비움(기본 `host.docker.internal`·`8010`) | `openssl rand -hex 32` | 64자 16진수 | dev·prd | `redis` 컨테이너 상태 검사 · `parse_document` 호출 |
 | `search.server.mcp_bind_host` · `mcp_port` · `mcp_allowed_hosts` | 검색 MCP 바인드·컨테이너 안 포트·허용 Host(벌 0 — 운영은 그 한 벌) | 정해진 값 · 서버 관리자 | `auto` · `8051` · `<서버 IP>:8051` | dev·prd | `host_ctl.sh check` ⑥ `/health` |
 | `required.deploy.host_docs_dir` | 원본 문서 폴더(서버에 이미 있는 폴더 — compose 파일의 `DOC_SRC`로 넘어감) | 서버 관리자 | `/data/docs` | dev·prd | `host_ctl.sh up`이 `:?` 안내로 멈춤 |
 | `required.deploy.pg_container_name` | `pg_dump`·`psql`을 exec할 PG 컨테이너 이름 | DB 담당 | `<컨테이너>` | dev·prd | 백업 명령([§4-3](#4-3-백업)) |
@@ -454,7 +453,7 @@ docker exec pgvector psql -U rag -d rag -c 'CREATE EXTENSION IF NOT EXISTS vecto
 |---|---|---|---|
 | 이미지 불러오기(서버에 한 번) | 공용 폴더(`/home/sbl`) | `bash sbl_images-main/load.sh <이미지 판>` | `== <이미지> — load` 줄들 → `BUILD.txt` 내용 → `== 끝 — compose 파일(…)의 IMAGE_TAG가 위 판인지 확인…` |
 | 벌 폴더 처음 채우기 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>` | `[host_ctl init] 루트: …` → `만듦 …settings.yaml` 등 → 빈 필수 칸 **이름** 목록 |
-| PG·Redis 비밀 파일 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh secrets` | `[host_ctl secrets] <공용 폴더>/secrets — pg_pw · redis/(…) 권한 600(값은 찍지 않음)` |
+| PG·Redis 비밀번호 | `<루트>` | `vi .env && chmod 600 .env`(`REDIS_PASSWORD`·`PG_USER`·`PG_DB`·`PG_PASSWORD` — settings.yaml과 같은 값) | `ls -l .env` → `-rw-------` |
 | 설정·compose 확인(값은 안 찍음) | `<루트>` | `bash deploy/host/scripts/host_ctl.sh config --quiet && echo 설정 OK` | `설정 OK` |
 | 띄우기 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh up -d` | 아래 `ps`에 앱 컨테이너(운영 셋 · 개발 넷) `Up` |
 | 상태 · 로그 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh ps` · `… logs --tail 100 data-pipeline-0` | 그 compose 파일의 컨테이너만 · 그 컨테이너 로그 |
@@ -558,9 +557,9 @@ selftest는 종료 코드가 아니라 `[판정]` 줄로 판정한다([§5-5](#5
 ```
 /home/sbl/                                   ← 공용 폴더
 ├── sbl_images-main/                         ← 이미지 폴더(서버에 한 번 불러오면 모든 벌이 같이 씀)
-├── secrets/                                 ← PG·Redis 비밀 파일(host_ctl.sh secrets — 700)
 ├── sbl_data_parsing-main-0/                 ← 벌 0 = 코드 폴더 = <루트> — 검색 MCP·작업 컨테이너·새벽 배치도 이 벌
 │   ├── settings.yaml                        ← 이 벌의 설정(init이 없을 때만 만듦 — 비밀값이 들어감, 권한 640)
+│   ├── .env                                 ← 벌 0만 — PG·Redis 비밀번호(사람이 적음, 600 — compose-pgvector.yml·compose-redis.yml)
 │   ├── output/                              ← 이 벌의 결과 폴더(컨테이너 안 /app/output)
 │   ├── home/                                ← root 홈(컨테이너 /root — home/mcp = mcp-server-0 홈)
 │   └── deploy/host/scripts/test_space/      ← run_pipeline 진행 기록(batch_progress/)
@@ -661,7 +660,7 @@ required:
 common:
   connections:
     redis:
-      redis_password: <비밀>                  # 서버에 하나 — 모든 벌이 같게(host_ctl.sh secrets가 읽음 · redis_host·redis_port는 비움 = host.docker.internal:8010)
+      redis_password: <비밀>                  # 서버에 하나 — 모든 벌이 같게(벌 0 .env의 REDIS_PASSWORD와 같은 값 · redis_host·redis_port는 비움 = host.docker.internal:8010)
 search:
   server:                                     # 벌 0만(검색 MCP 컨테이너가 이 설정을 읽음)
     mcp_bind_host: auto
@@ -917,7 +916,7 @@ cd /home/sbl && rm -rf /home/sbl/sbl_data_parsing-main-2                   # 설
 | `[오류] 상주 컨테이너 …가 떠 있지 않음` | `pipe_exec.sh`가 붙을 컨테이너가 꺼짐 | `host_ctl.sh up -d data-pipeline-0` |
 | `docker logs <이름>`의 `[devbox] run_env is …` | SSH 컨테이너는 dev·prd에서만 뜸 | 그 벌 settings.yaml `required.env.run_env` |
 | `[devbox] the image has no root password …` | 이미지에 root 비밀번호가 없음 | 비밀번호를 넣어 이미지를 다시 빌드([§6-6](#6-6-서버-묶음--compose-파일과-root-ssh)) |
-| `[host_ctl secrets] …`가 아니라 `[settings_to_env] … 비밀번호 없음 — settings.yaml … 필수` | PG·Redis 비밀번호 칸이 빔 | `required.pg.pg_password`·`common.connections.redis.redis_password` |
+| PG·Redis `compose up`이 `… .env에 REDIS_PASSWORD 필요`(PG_USER·PG_DB·PG_PASSWORD도 같은 꼴)로 멈춤 | 코드 폴더 맨 위 `.env`가 없거나 그 칸이 빔(또는 `--env-file .env`를 빼고 부름) | `.env`에 settings.yaml과 같은 값을 적고 `--env-file .env`로 다시 부름 |
 | `… DEV 원천 스키마가 코드의 끝 판 …이 아님: 적재 전에 \`migrate up --target search\`` | `_dev_*` 스키마 판이 낮음 | 2-6 (나) |
 | `…: 차원을 모름 — --dim N` | 새 스키마인데 차원을 안 줌 | `--dim <임베딩 차원>` |
 | `[host_ctl check] 실패 — <단계>: …` | 그 단계 실패 | 2-7 표 |
@@ -1098,12 +1097,12 @@ WHERE stage = 'load.embed_guard' AND ts_start > now() - interval '7 days' ORDER 
 
 ### 3-7. 서버에 생기는 파일
 
-서버마다 값이 다른 파일은 **루트(코드 폴더) 바로 아래 `settings.yaml`** 하나다 — git·코드 zip에 없는 파일이라 새 판을 덮어써도 남는다. `host_ctl.sh init`이 **없을 때만** `settings.sample.yaml`을 복사한다(있으면 덮지 않음). PG·Redis 비밀 파일은 그 값으로 `host_ctl.sh secrets`가 만든다. EDW 조인 사슬 `edw_chain.yaml`은 서버 파일이 아니라 코드다(코드 폴더 맨 위 — git으로 고치고 운영 이미지에도 들어감, [§3-9-2](#3-9-2-edw-조인-사슬-파일-고쳐-쓰기)).
+서버마다 값이 다른 파일은 **루트(코드 폴더) 바로 아래 `settings.yaml`** 하나다 — git·코드 zip에 없는 파일이라 새 판을 덮어써도 남는다. `host_ctl.sh init`이 **없을 때만** `settings.sample.yaml`을 복사한다(있으면 덮지 않음). PG·Redis 비밀번호는 같은 값을 코드 폴더 맨 위 `.env`에 사람이 적는다. EDW 조인 사슬 `edw_chain.yaml`은 서버 파일이 아니라 코드다(코드 폴더 맨 위 — git으로 고치고 운영 이미지에도 들어감, [§3-9-2](#3-9-2-edw-조인-사슬-파일-고쳐-쓰기)).
 
 | 파일 | 자리(호스트 → 컨테이너) | 만드는 것 | 읽는 곳 | 권한 |
 |---|---|---|---|---|
 | `settings.yaml` | `<루트>/settings.yaml` → 개발 `/app/deploy/settings.yaml` · 운영 `/etc/rag/settings.yaml`(읽기 전용 — 모든 앱 컨테이너) | `host_ctl.sh init`(`settings.sample.yaml`에서) | 모든 앱·호스트 스크립트 | 640 — **비밀값이 들어 있다**, 벌 폴더를 지울 때 함께 지운다 |
-| `secrets/pg_pw` · `secrets/redis/`(redis.conf·start.sh·health.sh) | `<공용 폴더>/secrets/…` → PG `/run/secrets/pg_pw` · Redis `/conf`(읽기 전용) | `host_ctl.sh secrets`(settings.yaml `required.pg.pg_password`·`common.connections.redis.redis_password`) | `pgvector`·`redis` 컨테이너 | 폴더 700 · 파일 600 — 비밀번호가 들어 있다(값은 화면에 안 찍힘) |
+| `.env` | `<루트>/.env`(벌 0 — compose가 읽어 PG·Redis 컨테이너 설정으로) | 사람(`REDIS_PASSWORD`·`PG_USER`·`PG_DB`·`PG_PASSWORD` — settings.yaml과 같은 값) | `pgvector`·`redis` 컨테이너(compose `--env-file .env`) | 600 — 비밀번호가 들어 있다(git 제외) |
 
 실행하면서 생기는 파일:
 
@@ -1443,7 +1442,7 @@ GROUP BY except_type, reason, source_system ORDER BY docs DESC;
 | 무엇 | 서버에 미치는 것 | 이 문서의 절 |
 |---|---|---|
 | 환경마다 compose 파일 하나(`compose-dev.yml`·`compose-prd.yml`·`compose-local.yml`) — 컨테이너 이름(`data-pipeline-0`·`mcp-server-0`·`mcp-data-parsing-0` …)·이미지·포트·자원이 파일에 직접 | 옛 컨테이너를 내리고 새 이름으로 띄움 · 이미지·자원·컨테이너 칸을 settings.yaml에서 지움 | §4-6 · [§6-6](#6-6-서버-묶음--compose-파일과-root-ssh) |
-| PG(`compose-pgvector.yml` — 서버 5433)·Redis(`compose-redis.yml` — 공식 `redis:7.4.8-alpine`, 서버 8010)를 서버마다 하나, 손으로 한 번 띄움 · 비밀 파일은 `host_ctl.sh secrets` | `mcp-redis`를 내리고 `redis`를 띄움 · `redis_password` 채움 | §4-6 · [§6-7](#6-7-redis--compose-redisyml) |
+| PG(`compose-pgvector.yml` — 서버 5433)·Redis(`compose-redis.yml` — 공식 `redis:7.4.8-alpine`, 서버 8010)를 서버마다 하나, 손으로 한 번 띄움 · 비밀번호는 코드 폴더 맨 위 `.env` | `mcp-redis`를 내리고 `redis`를 띄움 · `redis_password` 채움 | §4-6 · [§6-7](#6-7-redis--compose-redisyml) |
 | 앱이 PG·Redis에 `host.docker.internal`로 붙음 · 검색 MCP는 컨테이너 안팎 8051 | settings.yaml `required.pg.pg_host`·`pg_port`, `search.server` 고침 | §4-6 · [§1-11](#1-11-밖에서-붙기다른-서버의-ai-클라이언트) |
 | `edw_chain.yaml`이 코드 폴더 맨 위(git — 운영 이미지에 들어감) | 서버에서 고친 사본은 git 파일로 옮김 | §4-6 · [§3-9-2](#3-9-2-edw-조인-사슬-파일-고쳐-쓰기) |
 | 타이머·keepalive·새벽 배치는 벌 0만(단위 이름 끝 번호 없음) | 옛 `-<번호>` 단위를 지우고 `host_ctl.sh timers` | §4-6 · §3-1 |
@@ -1475,7 +1474,7 @@ $DOCKER exec "$PG_C" pg_dump -U "$PG_U" -d "$PG_D" -Fc -n "$S" -n "${S}_*" -n ap
 $DOCKER exec -i "$PG_C" pg_restore -l < "$BK/pg.dump" | grep -c ' TABLE '     # 기대: 0보다 큰 수 — 0이면 덤프 실패
 ```
 - 0.2.0 서버는 설정이 코드 폴더의 부모에 있으므로 `B=<옛 루트>`로 루트째 묶는다(같은 명령).
-- 벌마다 `code.tar.gz`, DB(`pg_dump`)는 모든 벌이 같이 쓰므로 한 번. PG·Redis 비밀 파일(`<공용 폴더>/secrets/`)은 settings.yaml에서 `host_ctl.sh secrets`로 다시 만들 수 있어 따로 백업하지 않는다.
+- 벌마다 `code.tar.gz`, DB(`pg_dump`)는 모든 벌이 같이 쓰므로 한 번. PG·Redis 비밀번호 `.env`는 settings.yaml과 같은 값이라 settings.yaml과 함께 백업한다.
 - 우리 스키마만 뜬다(공유 DB). `pg_dump`가 암호를 물으면 DB 담당과 함께 한다. applog는 MCP 호출 원문이 있어 클 수 있다 — 디스크를 먼저 본다(`df -h <백업 폴더>`).
 - 백업 폴더에는 비밀값·DB 내용이 있다 — 권한 700 그대로, 밖으로 옮기지 않는다.
 
@@ -1592,9 +1591,9 @@ chown 10001:<운영 그룹> settings.yaml && chmod 640 settings.yaml
    - `required.pg.pg_host: host.docker.internal` · `pg_port: 5433`(`compose-pgvector.yml`로 띄울 때 — DB 담당이 따로 둔 PG면 그 값 그대로).
    - 벌 0(운영은 그 한 벌) `search.server`: `mcp_bind_host: auto` · `mcp_port: 8051` · `mcp_allowed_hosts: <서버 IP>:8051`.
    - `ops.paths.edw_chain_file`에 `/etc/rag/edw_chain.yaml`을 적었으면 지운다(비움 = 코드 폴더 맨 위 `edw_chain.yaml`).
-3. 비밀 파일: `bash deploy/host/scripts/host_ctl.sh secrets` → `<공용 폴더>/secrets/`(700 · 파일 600). 손으로 만든 옛 비밀번호 파일(`<공용 폴더>/pg_pw`·`redis_pw`·`root_pw`)과 옛 Redis 설정 폴더(`<루트>/redis-conf`)는 더 쓰지 않으니 지운다. root SSH 비밀번호는 이미지에 들어간다([§6-6](#6-6-서버-묶음--compose-파일과-root-ssh)).
-4. PG: 옛 `pgvector` 컨테이너를 멈추고 지운 뒤(`docker stop pgvector && docker rm pgvector` — 데이터 폴더는 그대로) `docker compose -f deploy/host/compose/compose-pgvector.yml up -d`(같은 데이터 폴더 `PG_DATA` — 기본 `/data/pg/pipeline`). 비밀번호 파일은 빈 데이터 폴더에서만 쓰이므로 settings.yaml `pg_password`가 기존 DB 비밀번호와 같아야 한다. docker 볼륨이었으면 멈춘 뒤 `docker volume inspect <볼륨> --format '{{.Mountpoint}}'` 폴더의 내용을 데이터 폴더로 복사한다.
-5. Redis: `docker compose -f deploy/host/compose/compose-redis.yml up -d` → `docker exec redis sh /conf/health.sh`(기대 `PONG`). 옛 `mcp-redis`의 데이터는 옮기지 않는다(작업 큐 — 1에서 작업이 끝난 뒤라 비어 있음).
+3. 비밀번호: 벌 0 코드 폴더 맨 위에 `.env`를 만들어 `REDIS_PASSWORD`·`PG_USER`·`PG_DB`·`PG_PASSWORD`를 settings.yaml과 같은 값으로 적고 `chmod 600 .env`. 손으로 만든 옛 비밀번호 파일(`<공용 폴더>/pg_pw`·`redis_pw`·`root_pw`), 앞 판의 `<공용 폴더>/secrets/`, 옛 Redis 설정 폴더(`<루트>/redis-conf`)는 더 쓰지 않으니 지운다. root SSH 비밀번호는 이미지에 들어간다([§6-6](#6-6-서버-묶음--compose-파일과-root-ssh)).
+4. PG: 옛 `pgvector` 컨테이너를 멈추고 지운 뒤(`docker stop pgvector && docker rm pgvector` — 데이터 폴더는 그대로) `docker compose --env-file .env -f deploy/host/compose/compose-pgvector.yml up -d`(같은 데이터 폴더 `PG_DATA` — 기본 `/data/pg/pipeline`). `.env`의 계정·비밀번호는 빈 데이터 폴더에서만 쓰이므로 `.env`·settings.yaml의 값이 기존 DB 계정·비밀번호와 같아야 한다. docker 볼륨이었으면 멈춘 뒤 `docker volume inspect <볼륨> --format '{{.Mountpoint}}'` 폴더의 내용을 데이터 폴더로 복사한다.
+5. Redis: `docker compose --env-file .env -f deploy/host/compose/compose-redis.yml up -d` → `docker ps --filter name=^redis$`(기대 `healthy`). 옛 `mcp-redis`의 데이터는 옮기지 않는다(작업 큐 — 1에서 작업이 끝난 뒤라 비어 있음).
 6. EDW 사슬: 서버에서 고친 `<루트>/edw_chain.yaml` 사본이 있었으면 §4-5 전에 밖으로 복사해 두고, 그 내용을 새 코드 폴더 맨 위 `edw_chain.yaml`에 얹어 git으로 커밋한다([§3-9-2](#3-9-2-edw-조인-사슬-파일-고쳐-쓰기)) — 새 판은 사본을 따로 붙이지 않는다.
 7. 덧붙임 compose 파일(`ops.host.extra_compose`로 붙이던 `compose.extra.yml` 등)이 있었으면 그 볼륨·env를 `compose-<환경>.yml`의 칸에 옮겨 적고(git 커밋) 지운다. 컨테이너 자원을 settings.yaml에 적어 두었으면 그 값을 compose 파일의 `cpus`·`mem_limit`에 옮긴다.
 8. 앱: `bash deploy/host/scripts/host_ctl.sh up -d` → 벌 0 폴더(운영은 그 한 벌)에서 `host_ctl.sh timers`(이름 끝 번호 없는 단위 4개) → §4-10 점검.
@@ -2060,14 +2059,14 @@ git tag -l 'v*'                                       #    기대: … v0.3.1 v0
 ```bash
 cd /home/sbl/sbl_data_parsing-main-0                         # 운영은 /home/sbl/sbl_data_parsing-main
 #   먼저 settings.yaml에 required.pg.pg_password · common.connections.redis.redis_password를 채운다(설치 순서 4번)
-bash deploy/host/scripts/host_ctl.sh secrets                  # → /home/sbl/secrets/(700): pg_pw · redis/(redis.conf·start.sh·health.sh) 600 — 값은 안 찍음
-sudo mkdir -p /data/pg/pipeline /data/redis                   # 데이터 폴더 — PG는 비어 있으면 처음 시작 때 DB를 만든다(이 때만 pg_pw를 씀)
-docker compose -f deploy/host/compose/compose-pgvector.yml up -d
-docker compose -f deploy/host/compose/compose-redis.yml up -d
-docker exec redis sh /conf/health.sh                          # 기대: PONG
+vi .env && chmod 600 .env                                    # 같은 값을 손으로: REDIS_PASSWORD= · PG_USER= · PG_DB= · PG_PASSWORD=($·따옴표·줄바꿈 없이)
+sudo mkdir -p /data/pg/pipeline /data/redis                   # 데이터 폴더 — PG는 비어 있으면 처음 시작 때 DB를 만든다(이 때만 .env 계정을 씀)
+docker compose --env-file .env -f deploy/host/compose/compose-pgvector.yml up -d
+docker compose --env-file .env -f deploy/host/compose/compose-redis.yml up -d
+docker ps --filter name=^redis$ --format '{{.Status}}'      # 기대: Up … (healthy)
 ```
-- 비밀 파일 자리는 `<공용 폴더>/secrets`(셸 `SBL_ROOT`가 있으면 `$SBL_ROOT/secrets`, 없으면 코드 폴더의 위 폴더) — PG·Redis compose 파일도 `${SBL_ROOT:-/home/sbl}/secrets`를 붙인다. 공용 폴더가 `/home/sbl`이 아니면 두 명령 모두 앞에 `SBL_ROOT=<공용 폴더>`를 준다.
-- `secrets`는 같은 값이면 파일을 다시 쓰지 않는다. 비밀번호를 바꾸면 다시 부르고 안내대로 Redis를 `up -d --force-recreate`(두 앱 컨테이너도 `host_ctl.sh restart mcp-server-0 mcp-data-parsing-0`). PG는 이미 만든 DB에 비밀번호 파일을 다시 쓰지 않는다 — `psql`의 `\password`로 같게 바꾼다([§1-4](#서버-pg-띄우기)).
+- `.env`는 벌 0 코드 폴더(운영은 그 한 벌) 맨 위 하나다 — git 제외(`.gitignore`)라 새 판을 덮어써도 남는다. 값이 비어 있으면 compose가 `.env에 … 필요`로 멈춘다. 비밀번호는 Redis는 명령 인자, PG는 환경 변수로 넘어가 `docker inspect`에 보인다(서버 root·docker 권한자만).
+- 비밀번호를 바꾸면 `.env`·settings.yaml을 같이 고치고 Redis를 `up -d --force-recreate`(두 앱 컨테이너도 `host_ctl.sh restart mcp-server-0 mcp-data-parsing-0`). PG는 이미 만든 DB에 `.env` 값을 다시 쓰지 않는다 — `psql`의 `\password`로 같게 바꾼다([§1-4](#서버-pg-띄우기)).
 - 벌마다 settings.yaml `required.env.run_env`: `dev` · `required.pg`: `pg_host` `host.docker.internal` · `pg_port` `5433` · `pg_database`·`pg_user` = `rag`(compose `PG_DB`·`PG_USER`와 같게) · `pg_password`.
 
 **② 띄우기·확인**
@@ -2118,27 +2117,25 @@ docker inspect -f '{{.Name}} {{.HostConfig.RestartPolicy.Name}}' data-pipeline-0
 | 무엇 | 값 |
 |---|---|
 | 포트 | 서버 `0.0.0.0:8010` → 컨테이너 6379 |
-| 보호 | `protected-mode yes` + `requirepass`(settings.yaml `common.connections.redis.redis_password` — 필수, 기본값 없음) |
-| 설정 | `<공용 폴더>/secrets/redis/`(`host_ctl.sh secrets`가 만듦 — redis.conf·start.sh·health.sh, 600) → 컨테이너 `/conf`(읽기 전용) |
+| 보호 | `protected-mode yes` + `--requirepass`(코드 폴더 맨 위 `.env`의 `REDIS_PASSWORD` = settings.yaml `common.connections.redis.redis_password` — 필수, 기본값 없음) |
 | 데이터 | `REDIS_DATA`(기본 `/data/redis`) → `/data`(AOF) |
-| 상태 검사 | `sh /conf/health.sh`(PING — 비밀번호는 그 파일에서) |
+| 상태 검사 | `redis-cli ping`이 `PONG` 또는 `NOAUTH`(떠 있음 — 비밀번호 없이) |
 | 재시작 | `always` · MCP 살리기 타이머가 꺼졌으면 이 파일로 다시 띄움 |
 
 **① 이미지 반입** — 인터넷 PC에서 `docker pull redis:7.4.8-alpine`으로 받은 뒤 `bash deploy/release/stage_images.sh`가 판 폴더에 조각(`redis/`)을 함께 만든다 → 서버에서 `bash sbl_images/load.sh <판>`이 다른 이미지와 함께 불러온다.
 
 **② 준비·띄우기(서버)**
 ```bash
-cd <루트>                                                     # settings.yaml에 redis_password를 채운 코드 폴더
-bash deploy/host/scripts/host_ctl.sh secrets                  # secrets/redis/ — 값은 안 찍음
+cd <루트>                                                     # 벌 0 코드 폴더 — .env에 REDIS_PASSWORD(settings.yaml redis_password와 같은 값)
 mkdir -p /data/redis
-docker compose -f deploy/host/compose/compose-redis.yml up -d
-docker exec redis sh /conf/health.sh                          # 기대: PONG
+docker compose --env-file .env -f deploy/host/compose/compose-redis.yml up -d
+docker ps --filter name=^redis$ --format '{{.Status}}'      # 기대: Up … (healthy)
 ```
 
 **③ 확인(서버 바깥 PC에서)**
 ```bash
 redis-cli -h <서버 IP> -p 8010 --askpass ping                  # 기대: PONG(비밀번호를 물으면 settings.yaml의 값)
 ```
-- 비밀번호는 보호 파일로만 넘긴다 — env·명령 인자·`docker inspect`에 나오지 않는다.
-- 비밀번호를 바꾸면: settings.yaml을 고치고 `host_ctl.sh secrets` → `docker compose -f deploy/host/compose/compose-redis.yml up -d --force-recreate` → `host_ctl.sh restart mcp-server-0 mcp-data-parsing-0`.
+- 비밀번호는 `redis-server` 명령 인자로 넘어가 `docker inspect`(Args)에 보인다 — 서버 root·docker 권한자만 볼 수 있다. 셸 명령·로그에는 적지 않는다.
+- 비밀번호를 바꾸면: `.env`·settings.yaml을 같이 고치고 `docker compose --env-file .env -f deploy/host/compose/compose-redis.yml up -d --force-recreate` → `host_ctl.sh restart mcp-server-0 mcp-data-parsing-0`.
 - 키 보기·작업 추적은 [§1-3-1](#1-3-1-parse_document-redis-큐113).

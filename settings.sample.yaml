@@ -76,7 +76,7 @@ common:
     redis:
       redis_host: host.docker.internal        # parse_document Redis 주소 · 컨테이너에서 서버 자신(compose-redis.yml)
       redis_port: 8010                        # Redis 포트 · 서버마다 하나(compose-redis.yml이 8010에 연다) · 정수
-      redis_password: null                    # Redis 비밀번호(필수 — 서버마다 채움 · 비면 host_ctl.sh secrets가 거부) · 예 서버에서 openssl rand -hex 32를 실행해 나온 64자 [비밀]
+      redis_password: null                    # Redis 비밀번호(필수 — 서버마다 채움 · .env의 REDIS_PASSWORD와 같은 값) · 예 서버에서 openssl rand -hex 32를 실행해 나온 64자 [비밀]
       redis_db: 0                             # Redis 데이터베이스 번호 · 정수 0 이상
       redis_key_prefix: mcp_parse             # Redis 키 접두 · 설정값 그대로(서버당 한 벌)
   # ---- 모델 호출 — 임베딩·LLM·VLM ----

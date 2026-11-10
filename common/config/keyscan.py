@@ -42,7 +42,7 @@ NOT_SETTINGS = {
     **{
         n: ("인자", f"서버 compose 파일 변수 — {what}(셸 env나 compose 파일 옆 .env, settings.yaml 칸 없음 — op-20)")
         for n, what in (
-            ("SBL_ROOT", "벌 폴더·secrets/의 위 폴더(기본 /home/sbl — host_ctl.sh secrets도 이 자리)"),
+            ("SBL_ROOT", "벌 폴더들의 위 폴더(기본 /home/sbl)"),
             ("IMAGE_TAG", "이미지 판"),
             ("PRD_DIR", "운영 폴더(compose-prd.yml)"),
             ("PG_DATA", "PG 데이터 폴더(compose-pgvector.yml)"),
@@ -53,7 +53,6 @@ NOT_SETTINGS = {
         n: ("인자", "PC 시험 Docker compose 변수(valid_env/docker/compose.test.yml — smoke_test.sh 인자)")
         for n in ("DATA_PIPELINE_IMAGE", "MCP_SERVER_IMAGE", "RAG_OUT")
     },
-    "REDISCLI_AUTH": ("env로 남김", "Redis CLI 라이브러리 인증 — 보호 파일에서만 전달, 설정 칸은 redis_password"),
     "APPLOG_CONTEXT": ("env로 남김", "내부 신호 — 부모 → 자식 request/run/span ID(JSON), 설정 아님"),
     "SETTINGS_FILE": ("env로 남김", "설정 파일 위치(새 — D-015)"),
     "SETTINGS_LENIENT": (

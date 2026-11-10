@@ -50,7 +50,7 @@
 | YAML 자리 | 기본 | 뜻 |
 |---|---|---|
 | `common.connections.redis.redis_host` · `redis_port` | host.docker.internal · 8010 | 두 앱의 Redis 접속. Redis는 서버마다 하나(`compose-redis.yml` — 공식 이미지 `redis:7.4.8-alpine`, 서버 8010 → 컨테이너 6379)이고 앱 컨테이너는 서버 자신을 `host.docker.internal`로 부른다. PC에서 Redis를 직접(컨테이너 밖) 부르면 `127.0.0.1` |
-| 같은 절 `redis_password` · `redis_db` | 비움 · 0 | 비밀번호는 서버마다 채운다(sample은 비움 — 기본 비밀번호 없음). 비면 `host_ctl.sh secrets`가 거부하고, 서버(dev·prd)의 앱 client도 거부한다(local만 무인증 허용). 비밀값은 settings.yaml에만 — 호스트가 Redis용 보호 파일(600)로만 전달하고 셸 export·argv·compose env에 싣지 않는다 |
+| 같은 절 `redis_password` · `redis_db` | 비움 · 0 | 비밀번호는 서버마다 채운다(sample은 비움 — 기본 비밀번호 없음). 비면 서버(dev·prd)의 앱 client가 거부한다(local만 무인증 허용). Redis 컨테이너는 코드 폴더 맨 위 `.env`의 `REDIS_PASSWORD`(같은 값)로 뜬다 — 셸 export·로그에 싣지 않는다 |
 | 같은 절 `redis_key_prefix` | mcp_parse | 설정값 그대로 사용(자동 접미사 없음) |
 | `ops.services.data_parsing.mcp_parse_workers` | 2 | spawn 소비자 프로세스 수, 현재 1~2만 허용(사용자 결정 2026-11-09). 늘리려면 상한·CPU·메모리·엔진 수를 함께 조정 |
 | `tuning.ops.services.data_parsing.mcp_parse_engine_processes` | 비움 | worker마다 max(1, min(2, CPU − 1)), 보통 2 workers × 2 engines = 총 4개 |
@@ -59,9 +59,9 @@
 | `tuning.ops.services.data_parsing.mcp_parse_max_queued_jobs` | 8 | 대기+실행 작업 상한. YAML 경로·alias DATA_PARSING_QUEUE_MAX·기본값은 그대로, 모델만 common으로 이동 |
 | `ops.services.data_parsing.data_parsing_port` | 8766 | 더 쓰지 않음(#113 Redis 큐로 대체) — 다음 판 삭제 여부는 C-116 |
 
-Redis 인증(#177): 서버(dev·prd)의 `settings.yaml`에는 `common.connections.redis.redis_password`를 반드시 채운다. 비움·공백은 `host_ctl.sh secrets`와 앱 client가 거부하며 worker 시작은 종료 코드 2다. Redis는 서버의 모든 주소(0.0.0.0)에 열리므로 `protected-mode yes`와 비밀번호를 함께 쓴다. 비밀값 처리 변경은 검토 등급 A로 다른 사람의 승인이 필요하다(C-117).
+Redis 인증(#177): 서버(dev·prd)의 `settings.yaml`에는 `common.connections.redis.redis_password`를 반드시 채운다. 비움·공백은 앱 client가 거부하며 worker 시작은 종료 코드 2다. Redis는 서버의 모든 주소(0.0.0.0)에 열리므로 `protected-mode yes`와 비밀번호를 함께 쓴다. 비밀값 처리 변경은 검토 등급 A로 다른 사람의 승인이 필요하다(C-117).
 
-비밀 파일: `bash deploy/host/scripts/host_ctl.sh secrets`가 settings.yaml의 PG 비밀번호(`required.pg.pg_password`)와 Redis 비밀번호를 `<SBL_ROOT>/secrets/`(SBL_ROOT = 셸 env, 없으면 코드 폴더의 위 폴더 — 폴더 700, 파일 600)에 쓴다: `pg_pw`(`compose-pgvector.yml`의 `POSTGRES_PASSWORD_FILE`)와 `redis/redis.conf`·`start.sh`·`health.sh`(`compose-redis.yml`의 `/conf:ro,z`). 값은 찍지 않는다. 내용이 같으면 다시 쓰지 않고, 바뀌면 Redis를 `--force-recreate`로 다시 띄우라고 알린다(앱 컨테이너도 다시 시작해 새 비밀번호를 읽게). `/data`는 Redis AOF 데이터 폴더(`REDIS_DATA` — 기본 `/data/redis`)다. 보호 파일의 읽기·쓰기 실패는 값이나 traceback 없이 경로와 소유자·권한 확인 안내로 보고한다.
+PG·Redis 비밀번호(`.env`): PG·Redis 컨테이너는 settings.yaml을 읽지 않는다. 코드 폴더 맨 위 `.env`(settings.yaml 옆 — git 제외, 600)에 사람이 `REDIS_PASSWORD`·`PG_USER`·`PG_DB`·`PG_PASSWORD`를 settings.yaml(`redis_password`·`pg_user`·`pg_database`·`pg_password`)과 같은 값으로 적고, `docker compose --env-file .env -f deploy/host/compose/compose-redis.yml up -d`(pgvector도 같게)로 띄운다. 값에는 `$`·따옴표·줄바꿈을 쓰지 않는다. 값이 비면 compose가 `.env에 … 필요`로 멈춘다. 비밀번호는 Redis는 명령 인자, PG는 환경 변수로 넘어가 `docker inspect`에 보인다(서버 root·docker 권한자만). PG 계정·비밀번호는 데이터 폴더가 비어 있을 때(처음)만 쓰인다. `/data`는 Redis AOF 데이터 폴더(`REDIS_DATA` — 기본 `/data/redis`)다.
 
 기동·건강 확인·키 조회는 [server-guide §1-3-1](server-guide.md#1-3-1-parse_document-redis-큐113). 외부 MCP Bearer 토큰은 계속 필요하며 내부 parse HTTP 토큰 검사는 없어졌다.
 
@@ -150,7 +150,7 @@ Redis 인증(#177): 서버(dev·prd)의 `settings.yaml`에는 `common.connection
 | 이름 | 메모 |
 |---|---|
 | `DOC_SRC`(`required.deploy.host_docs_dir`) | 원본 문서 폴더(컨테이너 `/data/docs:ro`) — `load_settings`가 셸 env로 내 compose가 치환 |
-| `IMAGE_TAG`·`SBL_ROOT`·`PRD_DIR`·`PG_DATA`·`REDIS_DATA` | compose 파일 변수(설정 칸 아님) — 셸 env나 compose 파일 옆 `.env`. 이미지 판 · 벌 폴더들의 위 폴더(기본 `/home/sbl` — `secrets/`도 그 아래) · 운영 폴더 · PG·Redis 데이터 폴더 |
+| `IMAGE_TAG`·`SBL_ROOT`·`PRD_DIR`·`PG_DATA`·`REDIS_DATA` | compose 파일 변수(설정 칸 아님) — 셸 env나 compose 파일 옆 `.env`(PG·Redis는 `--env-file`로 준 코드 폴더 맨 위 `.env`). 이미지 판 · 벌 폴더들의 위 폴더(기본 `/home/sbl`) · 운영 폴더 · PG·Redis 데이터 폴더 |
 
 ### 원천·경로 묶음
 코드 주석의 "env-guide 1-2"가 이 절이다.

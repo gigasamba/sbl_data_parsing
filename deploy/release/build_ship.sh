@@ -134,6 +134,6 @@ cat <<EOF
 다음(수집 서버):
   1) 공용 폴더(예 /home/sbl/)에 코드 zip을 풀어 벌 폴더(sbl_data_parsing-main-<번호>)로 두고 그 안에서 sudo bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>(op-13)
   2) <벌 폴더>/settings.yaml의 맨 위 required 빈 값을 채움(새 판 덮어쓰기면 settings.yaml·output/은 그대로 둠 — edw_chain.yaml은 코드와 함께 바뀜)
-  3) 띄우기·점검: server-guide §1-5(host_ctl.sh secrets → PG·Redis → host_ctl.sh up -d → host_ctl.sh check)
+  3) 띄우기·점검: server-guide §1-5(.env 비밀번호 → PG·Redis → host_ctl.sh up -d → host_ctl.sh check)
   압축본 $REMOTE_DIR/$(basename "$OUT") 은 적재 확인 뒤 지워도 됨
 EOF

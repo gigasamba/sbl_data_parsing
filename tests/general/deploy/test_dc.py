@@ -99,7 +99,7 @@ KEEP_CASES = [
         "false",
         "none",
         [
-            ["compose", "-f", "compose-redis.yml", "up", "-d"],
+            ["compose", "--env-file", ".env", "-f", "compose-redis.yml", "up", "-d"],
             ["compose", "-f", "compose-dev.yml", "up", "-d", "mcp-data-parsing-0"],
             ["compose", "-f", "compose-dev.yml", "up", "-d", "mcp-server-0"],
         ],

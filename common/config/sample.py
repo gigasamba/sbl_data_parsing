@@ -86,7 +86,7 @@ NOTE_COL = 46  # 칸 주석이 시작하는 열(값 자리와 주석을 떼어 �
 NOTES = {
     "common.connections.redis.redis_host": "parse_document Redis 주소 · 컨테이너에서 서버 자신(compose-redis.yml)",
     "common.connections.redis.redis_port": "Redis 포트 · 서버마다 하나(compose-redis.yml이 8010에 연다)",
-    "common.connections.redis.redis_password": "Redis 비밀번호(필수 — 서버마다 채움 · 비면 host_ctl.sh secrets가 거부) · 예 서버에서 openssl rand -hex 32를 실행해 나온 64자",
+    "common.connections.redis.redis_password": "Redis 비밀번호(필수 — 서버마다 채움 · .env의 REDIS_PASSWORD와 같은 값) · 예 서버에서 openssl rand -hex 32를 실행해 나온 64자",
     "common.connections.redis.redis_db": "Redis 데이터베이스 번호",
     "common.connections.redis.redis_key_prefix": "Redis 키 접두 · 설정값 그대로(서버당 한 벌)",
     "common.parse_queue.mcp_parse_workers": "Redis 소비자 프로세스 수 · 1~2(현재 최대 2), 늘리려면 CPU·메모리·엔진 수도 조정",
