@@ -127,7 +127,7 @@ SETS = {  # 시험 묶음 compose-dev.yml(op-18) 서비스 → (명령, 포트, 
 
 def test_compose_sets():
     svcs = yaml.safe_load((COMPOSE / "compose-dev.yml").read_text(encoding="utf-8"))["services"]
-    assert set(svcs) == {*SETS, "pgvector"}
+    assert set(svcs) == set(SETS)
     for name, (cmd, ports, folder, home) in SETS.items():
         s = svcs[name]
         assert s["command"] == cmd and s["ports"] == ports and s["user"] == "0", name
@@ -143,8 +143,17 @@ def test_compose_sets():
             "bind": {"create_host_path": False, "selinux": "z"},
         }
         assert f"{b}/{home}:/root:z" in v and pw in v, (name, v)
-    pg = svcs["pgvector"]  # 검색 DB — 바깥 5433, 데이터 폴더, 비밀번호는 파일(env에 값 없음)
-    assert pg["ports"] == ["0.0.0.0:5433:5432"] and pg["environment"]["POSTGRES_PASSWORD_FILE"] == "/run/secrets/pg_pw", pg
+
+
+def test_compose_pgvector():
+    pg = yaml.safe_load((COMPOSE / "compose-pgvector.yml").read_text(encoding="utf-8"))["services"]["pgvector"]
+    # 검색 DB(따로 띄움) — 바깥 5433, 데이터 폴더, 비밀번호는 파일(env에 값 없음)
+    assert (
+        pg["container_name"] == "pgvector"
+        and pg["restart"] == "always"
+        and pg["ports"] == ["0.0.0.0:5433:5432"]
+        and pg["environment"]["POSTGRES_PASSWORD_FILE"] == "/run/secrets/pg_pw"
+    ), pg
     assert "POSTGRES_PASSWORD" not in pg["environment"] and pg["volumes"][0] == "${PG_DATA:-/data/pg/pipeline}:/var/lib/postgresql/data:z"
 
 
@@ -159,7 +168,7 @@ def test_compose_prd():
         return yaml.safe_load((COMPOSE / name).read_text(encoding="utf-8"))["services"]
 
     svcs, dev = load("compose-prd.yml"), load("compose-dev.yml")
-    assert set(svcs) == {*PRD, "pgvector"} and all(s["restart"] == "always" for s in svcs.values()), svcs
+    assert set(svcs) == set(PRD) and all(s["restart"] == "always" for s in svcs.values()), svcs
     d = "${PRD_DIR:-/home/sbl/sbl_data_parsing-main}"
     for name, (image, cmd, ports, home) in PRD.items():
         s = svcs[name]
@@ -169,19 +178,12 @@ def test_compose_prd():
         v = s["volumes"]
         assert f"{d}/settings.yaml:/etc/rag/settings.yaml:ro,z" in v and f"{d}/{home}:/root:z" in v, (name, v)
         assert not any(isinstance(x, str) and ":/app/deploy" in x for x in v), (name, v)  # 코드는 이미지 안
-    pg = svcs["pgvector"]
-    assert {k: pg[k] for k in ("ports", "environment", "volumes")} == {k: dev["pgvector"][k] for k in ("ports", "environment", "volumes")}
 
 
 def test_compose_redis():
     svcs = yaml.safe_load((COMPOSE / "compose-redis.yml").read_text(encoding="utf-8"))["services"]
-    ports = [7001 + i for i in range(6)]
-    assert set(svcs) == {f"redis-{p}" for p in ports} | {"redis-init"}
-    pw = "${SBL_ROOT:-/home/sbl}/root_pw".replace("root_pw", "redis_pw")
-    for p in ports:
-        s = svcs[f"redis-{p}"]
-        assert s["ports"] == [f"0.0.0.0:{p}:{p}", f"0.0.0.0:{p + 10000}:{p + 10000}"] and s["restart"] == "always", p
-        assert s["environment"]["REDIS_PORT"] == str(p) and "REDIS_IP" in s["environment"]["REDIS_IP"], p
-        assert any(isinstance(v, dict) and v["source"] == pw and v["read_only"] for v in s["volumes"]), p
-    init = svcs["redis-init"]
-    assert init["command"] == ["init"] and init["restart"] == "no" and init["environment"]["REDIS_NODES"].count(":70") == 6
+    assert set(svcs) == {"redis"}  # 서버마다 1개
+    s = svcs["redis"]
+    assert s["ports"] == ["0.0.0.0:${REDIS_PORT:-8010}:${REDIS_PORT:-8010}"] and s["restart"] == "always", s
+    pw = "${SBL_ROOT:-/home/sbl}/redis_pw"
+    assert any(isinstance(v, dict) and v["source"] == pw and v["read_only"] for v in s["volumes"]), s["volumes"]

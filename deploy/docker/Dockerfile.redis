@@ -1,4 +1,4 @@
-# Redis 클러스터 노드 이미지(sbl-redis:<판> — op-19): 공식 redis 이미지 + 노드 설정·시작 스크립트. 패키지 설치 없음.
+# Redis 이미지(sbl-redis:<판> — op-19, 서버마다 1개): 공식 redis 이미지 + 노드 설정·시작 스크립트. 패키지 설치 없음.
 #   빌드(저장소 루트에서): docker build -f deploy/docker/Dockerfile.redis -t sbl-redis:$(cat VERSION) deploy/docker/redis   반입: bash deploy/release/stage_images.sh <판> redis
 ARG REDIS_BASE=redis:7.4.8-alpine
 FROM ${REDIS_BASE}
@@ -6,4 +6,3 @@ COPY node.conf /etc/redis/node.conf
 COPY redis_entry.sh /usr/local/bin/redis_entry.sh
 RUN sed -i 's/\r$//' /etc/redis/node.conf /usr/local/bin/redis_entry.sh && chmod 755 /usr/local/bin/redis_entry.sh
 ENTRYPOINT ["/usr/local/bin/redis_entry.sh"]
-CMD ["node"]
