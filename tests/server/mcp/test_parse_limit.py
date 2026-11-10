@@ -6,6 +6,7 @@ import base64
 import json
 import tempfile
 from pathlib import Path
+from unittest import TestCase
 from unittest.mock import patch
 
 import httpx
@@ -251,8 +252,6 @@ def test_redis_errors_without_redis_import():
 def test_policy_rejects_before_files_and_submit():
     from unittest.mock import Mock
 
-    import pytest
-
     for available in (True, False):
         for source in (
             {"content_b64": "eA==", "filename": "a.exe"},
@@ -267,7 +266,7 @@ def test_policy_rejects_before_files_and_submit():
                 submit = Mock(wraps=redisq.submit)
                 with patch.object(redisq, "submit", submit):
                     if available:
-                        with pytest.raises(ValueError, match="지원하지 않는 확장자|허용 경로 아님"):
+                        with TestCase().assertRaisesRegex(ValueError, "지원하지 않는 확장자|허용 경로 아님"):
                             parse_proxy._submit(source, r)
                         assert not list(Path(d).iterdir())
                         submit.assert_not_called()
@@ -284,7 +283,6 @@ def test_policy_rejects_before_files_and_submit():
 
 
 def test_submit_response_lost():
-    import pytest
 
     for committed, verify_fails in ((True, False), (False, False), (False, True)):
         r = FakeRedis()
@@ -317,7 +315,7 @@ def test_submit_response_lost():
                 out = parse_proxy.do_parse_document(content_b64="eA==", filename="a.txt")
                 assert "연결 실패" in out["error"] and out["job_id"]
                 assert (Path(d) / out["job_id"]).exists() == verify_fails
-            with pytest.raises(ValueError):
+            with TestCase().assertRaises(ValueError):
                 parse_proxy._submit({}, r)
 
 

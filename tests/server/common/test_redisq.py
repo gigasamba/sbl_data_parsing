@@ -1,7 +1,7 @@
 """Redis 작업 전달 계약 — redis-py·외부 서비스 없이 쓰는 명령만 메모리 대역으로 검증."""
 
 import json
-from unittest import mock
+from unittest import TestCase, mock
 
 from common.config import settings
 from common.store import redisq
@@ -225,13 +225,12 @@ def test_worker_count_limit_and_default():
 
 
 def test_server_requires_redis_password():
-    import pytest
 
     for run in ("local", "dev", "prd"):
         for password in (None, "   ", "test-secret"):
             with settings.isolated(REDIS_PASSWORD=password), mock.patch.object(redisq, "resolve_run_env", return_value=run):
                 if run != "local" and not (password or "").strip():
-                    with pytest.raises(RuntimeError, match="common.connections.redis.redis_password"):
+                    with TestCase().assertRaisesRegex(RuntimeError, "common.connections.redis.redis_password"):
                         redisq.client()
                 else:
                     redisq.require_password()
