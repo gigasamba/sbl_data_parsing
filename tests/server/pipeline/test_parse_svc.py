@@ -2,10 +2,12 @@
 
 import base64
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import time
+import unittest
 from pathlib import Path
 from unittest import mock
 
@@ -531,6 +533,8 @@ def test_main_missing_password_exit_two():
 
 
 def test_policy_accepts_unresolved_symlink_root():
+    if os.name == "nt":
+        raise unittest.SkipTest("POSIX paths/symlinks — Linux server only")
     from common.store import redisq
     from pipeline import run_mcp_parsing as S
     from tests.server.common.test_redisq import FakeRedis
