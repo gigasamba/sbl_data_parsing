@@ -1,34 +1,33 @@
 #!/usr/bin/env python3
-"""텍스트 파싱 작업 서비스 — mcp-data-parsing 컨테이너의 주 프로세스(compose.data-parsing.yml — 죽으면 restart가 다시 띄움).
-검색 MCP(mcp-server)의 parse_document 도구가 localhost HTTP로 부른다(비정형 파일 → 텍스트 파싱 대표 결과).
-범위 — 준비 → parse_engines(문서의 엔진들 동시에) → 채점 → 대표 결과까지. 구조화·임베딩·적재 없음 · 이미지 파일은 받지 않음 ·
-스캔 PDF는 내부망 VLM(qwen_vlm). 토큰은 settings.yaml required.tokens.mcp_token(검색 MCP와 같은 칸, 없으면 시작 거부).
-API(127.0.0.1:8766 · Bearer):  POST /jobs {content_b64+filename | path} → 202 {job_id, queue_position}
-  GET /health  → {ok, ready, running, queued} · GET /jobs/<id> → {status, result, elapsed_ms}"""
+"""parse_document Redis Streams worker — 공유 파일에서 파싱, 완료 LIST로 즉시 알림.
+엔진 구성·파싱 사슬은 일괄 파싱과 같고, 각 소비자는 별도 spawn 프로세스에서 실행한다.
+"""
 
-import base64
+import hashlib
 import json
+import multiprocessing
 import os
-import queue
-import re
 import shutil
-import sys
+import signal
+import socket
+import tempfile
 import threading
 import time
+import traceback
 import uuid
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from common.config.settings import cfg as common_cfg
-from common.config.settings import checked, reveal
 from common.config.settings import child_env as settings_env
-from common.core import exitclean, parse_limit
-from common.core.paths import APP_ROOT
+from common.core import exitclean, jsonlog, parse_limit
+from common.core import span as SP
+from common.store import redisq
+from common.store.redisq import JOBS_DIR, SERVICE_DIR
 from pipeline import config as pc
 from pipeline import parse_steps
+from pipeline.shared import runtrace
 from pipeline.transform.parse.engine_check import allowed_exts
 
-SERVICE_DIR = APP_ROOT / "output" / "_mcp_parse"  # 이미지 안 /app/output/_mcp_parse(op-13 — 임시 자리는 _ 접두)
 _JOB_ENVS: dict = {}  # (PARSE_POST, SETTINGS_FILE) → 작업 자식 env에 얹을 몫(덮기 파일 SETTINGS_FILE + 엔진·인계 칸 — VS7e2 R-4)
 _JOB_KEYS = (
     "SETTINGS_FILE",
@@ -53,30 +52,23 @@ def _job_env(post):
             PARSE_WARMUP_SEC=str(pm.warmup_sec),
             PARSE_LOW_PRIORITY="0",
         )
-        # 덮기 파일이 얹은 몫만 — 넘긴 칸(SETTINGS_FILE·영구 다리로 env에 든 칸)은 지금 env와 같아도 늘 넣음(뒤에 env가 바뀌어도 자식 env와
-        # 덮기 파일이 어긋나지 않게 — VS8a R-5)
-        extra = _JOB_ENVS[key] = {k: v for k, v in made.items() if k in _JOB_KEYS or os.environ.get(k) != v}  # env 남김 — 하위 프로세스
-    return {**os.environ, **extra}  # env 남김 — 하위 프로세스
+        # 덮기 파일·인계 칸만 캐시 — settings_env가 실은 작업 컨텍스트까지 캐시하면 다음 작업이 앞 실행에 붙는다.
+        extra = _JOB_ENVS[key] = {k: v for k, v in made.items() if k in _JOB_KEYS}
+    env = {**os.environ, **extra}  # env 남김 — 하위 프로세스
+    return SP.with_context({"env": env})["env"]  # 컨텍스트는 캐시 밖에서 작업마다 새로 얹음
 
 
 _PM = pc.cfg().service.data_parsing  # S7c — 설정 객체(모듈 상수 — 옛처럼 import 때 한 번)
-checked("DATA_PARSING_PORT")  # 형식 틀린 포트는 import 때 실패(조용히 기본 포트로 뜨지 않게)
-PORT = common_cfg().runtime.data_parsing_port
-_TOK = reveal(common_cfg().tokens.mcp) or ""
-TOKEN = _TOK if _TOK.strip() else None  # D-028 ⑨ — 코드 기본 토큰 삭제, 설정 필수(없거나 비거나 공백만이면 아래 __main__이 시작 거부 — R-2)
 PROCS = str(
-    max(1, _PM.procs if _PM.procs is not None else min(3, (os.cpu_count() or 2) - 1))
-)  # 엔진 묶음 병렬(2026-10-21) — 30쪽 PDF 순차 시 120초+ 걸리던 것 대폭 단축
-ROOTS = [Path(p).resolve() for p in (_PM.roots or [str(SERVICE_DIR / "inbox")])]  # 쉼표 목록은 객체가 strip·빈 것 버림
+    max(1, _PM.procs if _PM.procs is not None else min(2, (os.cpu_count() or 2) - 1))
+)  # worker마다 엔진 병렬 — 기본 worker 2 × 엔진 2 = 4(사용자 결정 2026-11-09)
+ROOT_PATHS = [Path(os.path.normpath(p)) for p in (_PM.roots or [str(SERVICE_DIR / "inbox")])]  # resolve 전 설정 경로도 정책에 보존
+ROOTS = [p.resolve() for p in ROOT_PATHS]  # 실제 파일 접근 검사는 resolve된 경로로
 JOB_TIMEOUT = _PM.job_timeout_sec
-QUEUE_MAX = _PM.queue_max
-JOBS_DIR = SERVICE_DIR / "jobs"  # 호스트 <결과 폴더>/_mcp_parse/jobs — run_pipeline.py가 같은 자리를 봄
+QUEUE_MAX = common_cfg().parse_queue.queue_max
 
 
 MAX_JOBS_KEPT = 30
-_lock = threading.Lock()
-JOBS: dict = {}
-Q: queue.Queue = queue.Queue()
 
 
 def _log(msg):
@@ -86,7 +78,7 @@ def _log(msg):
 def _jail(path_str):
     """허용 루트 하위 경로만 — 벗어나면 ValueError(디렉터리 탈출·시스템 파일 차단)."""
     p = Path(path_str).resolve()
-    if not any(str(p).startswith(str(r) + "/") or str(p).startswith(str(r) + os.sep) or p == r for r in ROOTS):
+    if not any(p.is_relative_to(root) for root in ROOTS):
         raise ValueError(f"허용 경로 아님({', '.join(str(r) for r in ROOTS)} 하위만)")
     if not p.is_file():
         raise ValueError(f"파일 없음: {path_str}")
@@ -140,92 +132,197 @@ def _check_size(n):
         raise ValueError(msg)
 
 
-def _submit(source):
-    """작업 등록 — source: {"path": 컨테이너 경로} 또는 {"content_b64": ..., "filename": ...}."""
-    with _lock:
-        running_or_queued = sum(1 for j in JOBS.values() if j["status"] in ("queued", "running"))
-        if running_or_queued >= QUEUE_MAX:
-            raise queue.Full
-    path = source.get("path")
-    b64 = source.get("content_b64")
-    if b64:
-        fname = re.sub(r'[\\/:*?"<>|\r\n\t]', "_", str(source.get("filename") or ""))
-        if not fname or fname.startswith("."):
-            raise ValueError("content_b64와 함께 filename 필요")
-        try:
-            raw = base64.b64decode(b64, validate=False)
-        except Exception as e:
-            raise ValueError(f"base64 디코딩 실패: {e}") from e
-        _check_size(len(raw))
-    else:
-        p = _jail(path)
-        fname = p.name
-        _check_size(p.stat().st_size)
-    if Path(fname).suffix.lower() not in (ok := allowed_exts()):
-        raise ValueError(f"지원하지 않는 확장자({Path(fname).suffix or '없음'}) — {sorted(ok)}")
-    job_id = time.strftime("%Y%m%d") + "-" + uuid.uuid4().hex[:12]
-    ws = JOBS_DIR / job_id
-    (ws / "in").mkdir(parents=True, exist_ok=True)
-    if b64:
-        (ws / "in" / fname).write_bytes(raw)
-        meta = {"filename": fname, "mode": "base64", "bytes": len(raw)}
-    else:
-        meta = {"filename": fname, "mode": "path", "bytes": p.stat().st_size, "path": str(p)}
-    meta["scan"] = _is_scan(ws / "in" / fname if b64 else p)
-    open(ws / "job.json", "w", encoding="utf-8").write(json.dumps({"job_id": job_id, **meta}, ensure_ascii=False))
-    with _lock:
-        JOBS[job_id] = {"job_id": job_id, **meta, "status": "queued", "submitted": time.time()}
-    Q.put(job_id)
-    _purge_old(keep_job_id=job_id)
-    with _lock:
-        # 대기 순번 — 자신 제외한 앞의 작업 수(경합으로 자신이 이미 running이 됐으면 0)
-        ahead = max(0, sum(1 for j in JOBS.values() if j["status"] in ("queued", "running")) - 1)
-        _log(f"제출 {job_id} · 파일: {fname:40s} {meta.get('bytes', 0)}B · 대기 {ahead}건")
-    return job_id, ahead
-
-
-def _purge_old(keep_job_id=None):
-    """오래된 작업 폴더 정리(최근 MAX_JOBS_KEPT개만 보관). keep_job_id(방금 만든 작업)는 이름(UUID) 정렬 위치와 상관없이 남긴다."""
+def _purge_old(r, keep_job_id=None):
+    """mtime 순으로 최근 MAX_JOBS_KEPT개 보관. active·최근 10분 폴더는 등록 전 업로드까지 보호."""
     try:
-        done = sorted([p for p in JOBS_DIR.iterdir() if p.is_dir()], key=lambda p: p.name)
+        done = sorted([p for p in JOBS_DIR.iterdir() if p.is_dir()], key=lambda p: p.stat().st_mtime)
         victim = done[:-MAX_JOBS_KEPT] if len(done) > MAX_JOBS_KEPT else []
         for p in victim:
-            if p.name != keep_job_id:
+            if p.name != keep_job_id and p.stat().st_mtime < time.time() - 600 and not r.sismember(redisq.key("active"), p.name):
                 shutil.rmtree(p, ignore_errors=True)
     except Exception:
         pass
 
 
-def _worker():
-    """작업자 스레드(서비스당 1개) — 큐에서 꺼내 파싱 사슬을 돌린다. 큐 대기 시간을 남겨 지연 원인(대기·파싱)을 가른다."""
-    while True:
-        job_id = Q.get()
-        j = JOBS.get(job_id)
-        if j is None:
-            continue
-        j["picked_at"] = time.time()
-        j["queue_wait_s"] = round(j["picked_at"] - j.get("submitted", j["picked_at"]), 1)
-        if j["queue_wait_s"] > 5:
-            _log(f"{job_id} 픽업 · 큐 대기 {j['queue_wait_s']}초(앞 작업이 오래 걸린 것 — 파싱 자체 지연 아님)")
-        j["status"], t0 = "running", time.time()
-        ws = JOBS_DIR / job_id
+def _validate(j, ws):
+    """worker 컨테이너에서 경로·크기·확장자를 검사하고 입력을 준비."""
+    if j["mode"] == "path":
+        source = _jail(j["path"])
+        j["filename"] = source.name
+    else:
+        source = ws / "in" / redisq.filename(j["filename"])
+    _check_size(source.stat().st_size)
+    j["bytes"] = source.stat().st_size
+    fname = j["filename"]
+    if Path(fname).suffix.lower() not in (ok := allowed_exts()):
+        raise ValueError(f"지원하지 않는 확장자({Path(fname).suffix or '없음'}) — {sorted(ok)}")
+    j["scan"] = _is_scan(source)
+    if j["mode"] == "path":
+        (ws / "in").mkdir(parents=True, exist_ok=True)
+        fd, temporary = tempfile.mkstemp(dir=ws / "in", suffix=".tmp")
+        os.close(fd)
+        tmp = Path(temporary)
         try:
-            fname = j["filename"]
-            (ws / "in").mkdir(parents=True, exist_ok=True)
-            if j.get("mode") == "path":  # 허용 루트의 원본을 작업 폴더로 복사
-                shutil.copy2(Path(j["path"]), ws / "in" / fname)
-            note = skip_note(j.get("scan"))
-            if note:  # VLM 주소가 없는 스캔 PDF — 파이프라인 없이 빈 결과 즉시
-                j["result"] = _result(job_id, fname, note=note)
-            else:
-                j["result"] = _run_job(job_id, j, ws, fname, t0)
-            j["status"] = "done"
-        except Exception as e:
-            j["status"] = "failed"
-            j["error"] = f"{type(e).__name__}: {e}"
+            shutil.copy2(source, tmp)
+            tmp.replace(ws / "in" / fname)
         finally:
-            j["elapsed_ms"] = round((time.time() - t0) * 1000, 1)
-        _log(f"{job_id} → {j['status']} ({j.get('elapsed_ms')}ms)")
+            tmp.unlink(missing_ok=True)
+
+
+def _process(r, message_id, job_id, consumer, attempts=1):
+    """작업 1건 = pipe_run 1건 + mcp_parse.job span. 프로세스마다 runtrace 전역을 따로 가짐."""
+    picked = time.time()
+    # claim이 반환한 HASH만 사용 — 완료와 경쟁해도 종료 상태를 running으로 덮지 않음.
+    raw = r.hgetall(redisq.key("job", job_id))
+    try:
+        wait_s = round(max(0, picked - float(raw.get("submitted_at", picked))), 1)
+    except (TypeError, ValueError):
+        wait_s = 0
+    j = redisq.claim(r, job_id, consumer, attempts, picked, wait_s)
+    if j is None:
+        with r.pipeline(transaction=True) as tx:
+            tx.multi()
+            tx.xack(redisq.key("queue"), redisq.group(), message_id)
+            tx.xdel(redisq.key("queue"), message_id)
+            tx.execute()
+        return
+    queue_wait_ms = wait_s * 1000
+    t0, status, error = time.time(), "done", ""
+    ws = JOBS_DIR / job_id
+    result_file = ""
+    abandoned = attempts > common_cfg().parse_queue.mcp_parse_max_attempts
+    try:
+        j = redisq.decode_job(j)
+        attempt_ws = ws / f"a{attempts}"
+        attempt_ws.mkdir(parents=True, exist_ok=True)
+        with (
+            jsonlog.context(run_id=None, span_id=None),
+            runtrace.run("mcp_parse", ["--job-id", job_id]),
+            SP.span("mcp_parse.job", doc_id=j["filename"], ext=Path(j["filename"]).suffix.lower(), file_bytes=j.get("bytes")) as sp,
+        ):
+            sp.add(job_id=job_id, queue_wait_ms=queue_wait_ms, queue_position=j.get("queue_position", 0), mode=j.get("mode"))
+            if abandoned:
+                raise RuntimeError(f"worker가 {attempts - 1}번 중단됨 — 작업 포기")
+            try:
+                _validate(j, ws)
+            except (ValueError, FileNotFoundError) as exc:
+                status = "rejected"
+                raise ValueError(str(exc)) from exc
+            sp.add(scan=bool(j.get("scan")))
+            sp.set(file_bytes=j["bytes"])
+            fname = j["filename"]
+            note = skip_note(j.get("scan"))
+            result = _result(job_id, fname, note=note) if note else _run_job(job_id, j, attempt_ws, fname, t0)
+            if result.get("note"):
+                sp.add(note=result["note"])
+            # 각 시도 파일 → 최종 파일은 종료 직전에. 완료 알림보다 파일 기록이 먼저다.
+            result_path = ws / f"result-{attempts}.json"
+            temp_path = ws / f"result-{os.getpid()}.tmp"
+            temp_path.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
+            temp_path.replace(result_path)
+            result_file = result_path.name
+    except Exception as exc:
+        if status != "rejected":
+            status = "failed"
+        error = str(exc) if status == "rejected" or abandoned else f"{type(exc).__name__}: {exc}"
+    elapsed = round((time.time() - t0) * 1000, 1)
+    redisq.finish(
+        r,
+        message_id,
+        job_id,
+        status,
+        worker=consumer,
+        attempts=attempts,
+        filename=j.get("filename", ""),
+        bytes=j.get("bytes", 0),
+        result_file=result_file,
+        elapsed_ms=elapsed,
+        finished_at=time.time(),
+        error=error,
+    )
+    _log(f"{job_id} → {status} ({elapsed}ms) · 큐 대기 {j['queue_wait_s']}초")
+    _purge_old(r, keep_job_id=job_id)
+
+
+_CLAIM_CURSORS: dict[str, str] = {}
+_MISSING_HEARTBEATS: dict[str, float] = {}  # spawn worker 프로세스마다 독립적인 부재 관찰 기록
+
+
+def _receive(r, consumer, min_idle_ms=None):
+    """유실 작업부터 회수, 없으면 새 STREAM 메시지 하나를 기다림."""
+    idle = int((JOB_TIMEOUT + 60) * 1000) if min_idle_ms is None else min_idle_ms
+    dead = redisq.reclaim_dead(r, consumer, _MISSING_HEARTBEATS)
+    rows = [dead] if dead else []
+    if not rows:
+        claimed = r.xautoclaim(
+            redisq.key("queue"), redisq.group(), consumer, min_idle_time=idle, start_id=_CLAIM_CURSORS.get(consumer, "0-0"), count=1
+        )
+        _CLAIM_CURSORS[consumer] = claimed[0]
+        rows = claimed[1]
+    if rows:
+        message_id, fields = rows[0]
+        pending = r.xpending_range(redisq.key("queue"), redisq.group(), message_id, message_id, 1)
+        attempts = pending[0]["times_delivered"] if pending else 1
+        return message_id, fields["job_id"], consumer, attempts
+    messages = r.xreadgroup(redisq.group(), consumer, {redisq.key("queue"): ">"}, count=1, block=5000)
+    if messages:
+        message_id, fields = messages[0][1][0]
+        return message_id, fields["job_id"], consumer, 1
+    return None
+
+
+def _publish_policy(r):
+    try:
+        redisq.publish_policy(r, allowed_exts(), list(dict.fromkeys([*ROOT_PATHS, *ROOTS])), common_cfg().runtime.parse_max_mb)
+    except (Exception, SystemExit) as exc:
+        _log(redisq.redact(f"정책 갱신 실패: {type(exc).__name__}: {exc}"))
+
+
+def _heartbeat(stop, consumer):
+    r = redisq.client()
+    try:
+        while not stop.is_set():
+            try:
+                r.set(redisq.key("worker", consumer), "1", ex=30)
+                _publish_policy(r)
+            except Exception as exc:
+                _log(redisq.connection_error(exc))
+            stop.wait(10)
+    finally:
+        r.close()
+
+
+def _worker(supervisor_token):
+    consumer = f"{supervisor_token}-{os.getpid()}"
+    stop = threading.Event()
+    signal.signal(signal.SIGTERM, exitclean._on_term)
+    signal.signal(signal.SIGINT, exitclean._on_term)
+    pulse = threading.Thread(target=_heartbeat, args=(stop, consumer), daemon=True)
+    pulse.start()
+    r = redisq.client()
+    try:
+        redisq.ensure_group(r)
+        while not stop.is_set():
+            try:
+                item = _receive(r, consumer)
+                if item:
+                    _process(r, *item)
+            except Exception as exc:
+                if redisq.is_redis_error(exc):
+                    _log(redisq.connection_error(exc))
+                else:
+                    _log(redisq.redact(f"worker 오류: {type(exc).__name__}: {exc}\n{traceback.format_exc()}"))
+                if "NOGROUP" in str(exc):
+                    redisq.ensure_group(r)
+                stop.wait(2)
+    finally:
+        stop.set()
+        pulse.join(timeout=6)
+        try:
+            r.delete(redisq.key("worker", consumer))
+        except Exception:
+            pass
+        r.close()
 
 
 def _run_job(job_id, j, ws, fname, t0):
@@ -233,7 +330,7 @@ def _run_job(job_id, j, ws, fname, t0):
     제한 시간은 작업 하나(JOB_TIMEOUT)에 걸고 단계마다 남은 시간만 준다. 단계가 실패하면 RuntimeError(작업 실패)."""
     try:
         parse_steps.stack(refresh=True)  # 작업마다 엔진 구성 파일을 다시 검사
-    except SystemExit as e:  # 그 작업만 실패(서비스 스레드는 계속)
+    except SystemExit as e:  # 그 작업만 실패(소비자 프로세스는 계속)
         raise RuntimeError(f"엔진 구성 파일을 쓰지 못함 — 종료 코드 {e.code}") from None
     post = pc.cfg().transform.represent.post or "supsub"
     job_env = _job_env(post)
@@ -248,7 +345,7 @@ def _run_job(job_id, j, ws, fname, t0):
             return 0
 
         (ws / "only.txt").write_text(fname + "\n", encoding="utf-8")
-        step(["pipeline.extract.filter_and_rotate", "--src", ws / "in", "--out", ws / "prep", "--only", ws / "only.txt"])
+        step(["pipeline.extract.filter_and_rotate", "--src", ws.parent / "in", "--out", ws / "prep", "--only", ws / "only.txt"])
         empty = parse_steps.parse_chain(step, ws / "prep", ws / "parse", ws / "truth.json", ["--limit", "1", "--procs", PROCS])
     ms = round((time.time() - t0) * 1000, 1)
     rep_path = ws / "parse" / "_rep" / (fname + ".json")
@@ -260,87 +357,60 @@ def _run_job(job_id, j, ws, fname, t0):
     return _result(job_id, fname, rep, rep_path=str(rep_path), workspace=str(ws), ms=ms)
 
 
-class Handler(BaseHTTPRequestHandler):
-    def _json(self, code, obj):
-        body = json.dumps(obj, ensure_ascii=False).encode()
-        self.send_response(code)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def _auth(self):
-        return TOKEN and self.headers.get("Authorization") == f"Bearer {TOKEN}"
-
-    def do_GET(self):
-        if self.path == "/health":
-            with _lock:
-                r = {
-                    "running": sum(1 for j in JOBS.values() if j["status"] == "running"),
-                    "queued": sum(1 for j in JOBS.values() if j["status"] == "queued"),
-                }
-            return self._json(200, {"ok": True, "ready": True, **r})
-        if not self._auth():
-            return self._json(401, {"error": "unauthorized"})
-        if self.path.startswith("/jobs/"):
-            j = JOBS.get(self.path[len("/jobs/") :])
-            if not j:
-                return self._json(404, {"error": "job 없음"})
-            with _lock:
-                out = {
-                    k: v
-                    for k, v in j.items()
-                    if k in ("job_id", "filename", "status", "error", "result", "elapsed_ms", "mode", "bytes", "path", "queue_wait_s")
-                }
-            return self._json(200, out)
-        return self._json(404, {"error": "not found"})
-
-    def do_POST(self):
-        if not self._auth():
-            return self._json(401, {"error": "unauthorized"})
-        if self.path != "/jobs":
-            return self._json(404, {"error": "not found"})
-        try:
-            n = int(self.headers.get("Content-Length") or 0)
-            if n > parse_limit.body_cap():  # 상한 안 파일이면 크기 판정은 _submit의 _check_size가 함
-                raise ValueError(
-                    f"요청 본문이 크기 상한보다 큼 — 파일 상한 {common_cfg().runtime.parse_max_mb:g}MB(ops.services.data_parsing.mcp_parse_max_file_mb)"
-                )
-            source = json.loads(self.rfile.read(n) or b"{}")
-            job_id, ahead = _submit(source)
-            return self._json(202, {"job_id": job_id, "queue_position": ahead})
-        except queue.Full:
-            return self._json(429, {"error": "작업 대기열 가득 — 잠시 뒤 재시도"})
-        except ValueError as e:
-            return self._json(400, {"error": str(e)})
-        except Exception as e:
-            return self._json(500, {"error": f"{type(e).__name__}: {e}"})
-
-    def log_message(self, *_):
-        pass
+def _token_file():
+    """컨테이너 로컬 임시 폴더. PC에서 다른 큐를 시험해도 서로 덮지 않도록 접두별 파일."""
+    ident = hashlib.sha256(redisq.prefix().encode()).hexdigest()[:8]
+    return Path(tempfile.gettempdir()) / f"mcp_{ident}.id"
 
 
-if __name__ == "__main__":
+def health():
+    r = None
+    try:
+        token = _token_file().read_text(encoding="utf-8").strip()
+        if not token or any(char in token for char in "*?[]"):
+            return False
+        r = redisq.client()
+        return bool(r.ping() and next(r.scan_iter(match=redisq.key("worker", token + "-*")), None))
+    except Exception:
+        return False
+    finally:
+        if r is not None:
+            r.close()
+
+
+def main():
+    from common.config import setarg
     from common.config.settings import require_run_env
+    from common.core.console import utf8_stdout
 
-    require_run_env(
-        "run_mcp_parsing", sections=("pipeline",)
-    )  # S7a(D-028 ②) — 실행 환경 없으면 시작 거부(서버면 설정 검증 실패도 — S7e2 U-1)
-    if not TOKEN:  # D-028 ⑨(S7c) — 옛 코드 기본 토큰 없앰: 설정에 없으면 시작 거부(값은 찍지 않음)
-        print(
-            "[설정] run_mcp_parsing: 토큰 없음 — settings.yaml required.tokens.mcp_token를 적음(검색 MCP와 같은 칸)",
-            file=sys.stderr,
-        )
-        raise SystemExit(2)
-    SERVICE_DIR.mkdir(parents=True, exist_ok=True)  # service.json 자리 — ROOTS·JOBS_DIR를 env로 다른 곳에 둬도
-    parse_steps.stack()  # 엔진 구성 파일을 못 읽거나 없는 엔진이면 시작 거부(종료 2)
+    utf8_stdout()
+    setarg.apply()
+    import sys
+
+    if "--health" in sys.argv:
+        return 0 if health() else 1
+    require_run_env("run_mcp_parsing", sections=("pipeline",))
+    try:
+        redisq.require_password()
+    except redisq.RedisConfigError as exc:
+        _log(str(exc))
+        return 2
+    parse_steps.stack()
+    SERVICE_DIR.mkdir(parents=True, exist_ok=True)
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
-    for r in ROOTS:
-        Path(r).mkdir(parents=True, exist_ok=True)
-    # 2026-10-22 패치: docker exec -d 기동이라 표준출력이 안 남는다 → PID·환경을 파일로 남긴다(지연 원인 추적용 — txt 3분 대기 이슈)
-    svc = exitclean.remove_at_exit(SERVICE_DIR / "service.json")  # pl-27 — PID 기록은 서비스가 끝나면 지움
-    with open(svc, "w", encoding="utf-8") as f:
-        json.dump(
+    for root in ROOTS:
+        root.mkdir(parents=True, exist_ok=True)
+    r = redisq.client()
+    try:
+        redisq.ensure_group(r)
+        _publish_policy(r)
+    finally:
+        r.close()
+    workers = common_cfg().parse_queue.mcp_parse_workers
+    addr = common_cfg().connections.redis
+    svc = exitclean.remove_at_exit(SERVICE_DIR / "service.json")
+    svc.write_text(
+        json.dumps(
             {
                 "pid": os.getpid(),
                 "started": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -348,10 +418,46 @@ if __name__ == "__main__":
                 "max_mb": common_cfg().runtime.parse_max_mb,
                 "job_timeout": JOB_TIMEOUT,
                 "queue_max": QUEUE_MAX,
+                "redis": f"{addr.redis_host}:{addr.redis_port}",
+                "workers": workers,
             },
-            f,
             indent=2,
-        )
-    threading.Thread(target=_worker, daemon=True).start()
-    _log(f"준비 — http://127.0.0.1:{PORT}/health · roots={[str(r) for r in ROOTS]} · jobs={JOBS_DIR} · pid={os.getpid()}")
-    ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+        ),
+        encoding="utf-8",
+    )
+    _log(f"준비 — Redis {addr.redis_host}:{addr.redis_port} · workers={workers} · jobs={JOBS_DIR} · pid={os.getpid()}")
+    stop = threading.Event()
+    signal.signal(signal.SIGTERM, lambda *_: stop.set())
+    signal.signal(signal.SIGINT, lambda *_: stop.set())
+    supervisor_token = f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    token_file = exitclean.remove_at_exit(_token_file())
+    token_file.write_text(supervisor_token, encoding="utf-8")
+    context = multiprocessing.get_context("spawn")
+    children = []
+    try:
+        while not stop.is_set():
+            children = [child for child in children if child.is_alive() or not _joined(child)]
+            while len(children) < workers:
+                child = context.Process(target=_worker, args=(supervisor_token,))
+                child.start()
+                children.append(child)
+            stop.wait(1)
+    finally:
+        for child in children:
+            child.terminate()
+        for child in children:
+            child.join(timeout=20)
+            if child.is_alive():
+                child.kill()
+                child.join()
+    return 0
+
+
+def _joined(child):
+    child.join()
+    _log(f"worker 종료({child.pid}, code={child.exitcode}) — 다시 띄움")
+    return True
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

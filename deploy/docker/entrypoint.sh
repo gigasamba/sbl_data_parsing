@@ -101,7 +101,7 @@ case "$cmd" in
     python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec(sys.argv[1].rsplit('.', 1)[0]) else 2)" "$1" 2>/dev/null \
       || { echo "[tool] 이 이미지에 없는 도구: $name ($1)" >&2; exit 2; }
     exec python -m "$@";;
-  mcp)        exec python -m mcp_server.main "$@";;        # 검색 MCP(deploy/host/compose/compose.mcp-server.yml) — 잠금 없음(읽기 전용)
+  mcp)        exec python -m mcp_server.main "$@";;        # 검색 MCP(deploy/host/compose/compose-<환경>.yml mcp-server-0) — 잠금 없음(읽기 전용)
   # 모듈(트리거 1회 실행). 종료 코드: 0 끝남·건너뜀 · 3 앞 모듈 결과 없음 · 4 PostgreSQL 없음 · 75 실행 중·마감
   parse)
     preflight
@@ -130,8 +130,8 @@ case "$cmd" in
   show-stack|selftest)   # pipeline.cli 점검 명령 — 두 이미지 모두(mcp-server에도 pipeline/cli.py가 있음 — selftest_gate.sh가 이미지마다 부름)
     preflight; exec python -m pipeline.cli "$cmd" "$@";;
   # idle — 상주 컨테이너 data-pipeline은 일을 하지 않고 떠 있기만 한다.
-  # run_pipeline.py가 그 안에서 docker exec로 문서별 작업을 돌린다. MCP parse_document 작업 서비스는 위 run-mcp-parsing(전용 컨테이너 mcp-data-parsing — 여기에 띄우지 않음, 8766 겹침).
-  run-mcp-parsing)   # MCP parse_document 작업 서비스(127.0.0.1:8766), 전용 상주 컨테이너 mcp-data-parsing의 주 프로세스
+  # run_pipeline.py가 그 안에서 docker exec로 문서별 작업을 돌린다. MCP parse_document 작업 서비스는 위 run-mcp-parsing(전용 컨테이너 mcp-data-parsing-0 — 여기에 띄우지 않음, Redis 소비자).
+  run-mcp-parsing)   # MCP parse_document Redis Streams 작업 소비자, 전용 상주 컨테이너 mcp-data-parsing-0의 주 프로세스
     preflight; exec python -u -m pipeline.run_mcp_parsing;;
   idle)
     preflight

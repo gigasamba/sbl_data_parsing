@@ -659,7 +659,10 @@ def selftest():
     )
     envs = [env_name(f) for p, f, _ in walk(CommonSettings) if not is_host("common." + p)]
     check("common 칸마다 옛 env 이름 있음·(호스트 절 빼고) 겹침 없음", all(envs) and len(envs) == len(set(envs)))
-    check("호스트 절 판정: 절 이름 host만(잎 칸 host는 아님)", is_host("pipeline.host.image") and not is_host("common.connections.pg.host"))
+    check(
+        "호스트 절 판정: 절 이름 host만(잎 칸 host는 아님)",
+        is_host("pipeline.host.run_pipeline_dir") and not is_host("common.connections.pg.host"),
+    )
 
     class _TW(Section):
         mods: WordList | None = F(["a", "b"], "X_MODS", "시험")
@@ -684,8 +687,8 @@ def selftest():
             f = d / "s.yaml"
             f.write_text(
                 _new(
-                    "common:\n  run_env: dev\npipeline:\n  host:\n    image: 'p:1'\n"
-                    "mcp:\n  host:\n    image: 'm:$x'\n  server:\n    host: 10.2.2.2\n    max_concurrency: abc\n    token: dummy-s7e1\n"
+                    "common:\n  run_env: dev\n  host:\n    doc_src: '/d$x'\npipeline:\n  host:\n    nightly:\n      time: '01:00'\n"
+                    "mcp:\n  server:\n    host: 10.2.2.2\n    max_concurrency: abc\n    token: dummy-s7e1\n"
                 ),
                 encoding="utf-8",
             )
@@ -708,7 +711,7 @@ def selftest():
                 "--section",
                 "common.run_env",
             )
-            rc2, o2, e2 = run("--section", "mcp.host")
+            rc2, o2, e2 = run("--section", "common.host")
             rc3, _, e3 = run("--section", "mcp.server")
             check(
                 "export(S7e1): 잎 칸 이름이 host인 앱 칸(MCP_HOST)도 냄 · 고른 칸만 검증(mcp 절 오타가 다른 칸을 막지 않음) · "
@@ -717,7 +720,7 @@ def selftest():
                 and "export MCP_HOST='10.2.2.2'" in o1
                 and "export RUN_ENV='dev'" in o1
                 and rc2 == 2
-                and "MCP_SERVER_IMAGE" in e2
+                and "DOC_SRC" in e2
                 and "$x" not in e2
                 and rc3 == 2
                 and "dummy" not in o1 + o2 + e2 + e3,

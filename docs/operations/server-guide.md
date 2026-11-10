@@ -15,14 +15,14 @@
 
 ## 바꿔 넣을 자리 — 예 값 사전
 
-명령의 `<…>`는 바꿔 넣을 자리다. 줄 옆 주석에 예가 없으면 이 표를 본다. 예 값은 개발 서버 `/home/sbl` 아래 벌 둘(공용 main `-1`, 개발자 `-2`)을 기준으로 한다 — 자기 서버 값은 "확인하는 법"으로 찾는다.
+명령의 `<…>`는 바꿔 넣을 자리다. 줄 옆 주석에 예가 없으면 이 표를 본다. 예 값은 개발 서버 `/home/sbl` 아래 벌 둘(공용 main `-0`, 개발자 `-1`)을 기준으로 한다 — 자기 서버 값은 "확인하는 법"으로 찾는다.
 
 | 자리 | 뜻 | 예 | 확인하는 법 |
 |---|---|---|---|
-| `<루트>` · `<벌 폴더>` · `<코드 폴더>` · `<시험한 벌 폴더>` · `$B` | 벌 폴더 = 코드 폴더(zip을 푼 곳 또는 git clone한 곳 — settings.yaml·output/이 바로 아래) | `/home/sbl/sbl_data_parsing-main-1` | `ls $B` → `deploy common pipeline … VERSION` |
+| `<루트>` · `<벌 폴더>` · `<코드 폴더>` · `<시험한 벌 폴더>` · `$B` | 벌 폴더 = 코드 폴더(zip을 푼 곳 또는 git clone한 곳 — settings.yaml·output/이 바로 아래) | `/home/sbl/sbl_data_parsing-main-0` | `ls $B` → `deploy common pipeline … VERSION` |
 | `<공용 폴더>` | 벌 폴더·이미지 폴더를 두는 부모 폴더 | `/home/sbl` | |
 | `<옛 루트>` | 0.2.0 배치 서버의 루트(설정이 코드 폴더의 부모에 있던 때) | `/srv/rag` | `ls <옛 루트>` → `settings.yaml sbl_data_parsing-0.2.0/` |
-| `<번호>` · `<벌 번호>` · `<벌>` · `-<숫자>` · `-<n>` | 벌 번호 — 벌 폴더 이름 끝 `-<숫자>`(1~99) | `1`(공용 main) · `2`(개발자) | 컨테이너 이름 끝: `data-pipeline-2` |
+| `<번호>` · `<벌 번호>` · `<벌>` · `-<숫자>` · `-<n>` | 벌 번호 — 벌 폴더 이름 끝 `-<숫자>` | `0`(공용 main) · `1`(개발자) | 컨테이너 이름 끝: `data-pipeline-1` |
 | `DEV-<숫자>` · `<원천>` | 원천 시스템 이름(검색 원천 스키마 끝) | `DEV-2` · `SFDC` · `CRMS` | settings.yaml `required.source.source_systems` |
 | `<운영 그룹>` · `<그룹>` | 결과·설정 파일을 같이 볼 서버 리눅스 그룹 | `sbl` | `id -gn sbl`(사람 계정의 그룹) |
 | `<이미지 판>` · `<실행 이미지 판>` | 개발 서버 실행 이미지 판 — `BUILD.txt`의 DEPS_HASH가 코드와 같은 판 | `0.3.0` | `ls /home/sbl/sbl_images-main/` |
@@ -30,22 +30,22 @@
 | `<앞 판>` · `<끝 판>` | 비교하는 두 판 | `0.3.0` · `0.3.1` | `git tag -l 'v*'` |
 | `<태그>` · `<이미지 태그>` · `<이미지>` | 이미지 이름:판 | 개발 `data-pipeline-runtime:0.3.0` · 운영 `data-pipeline:0.3.1` | `docker image ls` |
 | `<시험 태그>` | PC 시험 빌드 태그(작업마다 새로) | `0.3.1-t1` | |
-| `<결과 폴더>` | 벌의 결과 폴더(컨테이너 `/app/output`) | `/home/sbl/sbl_data_parsing-main-1/output` | settings.yaml `ops.host.host_output_dir`(비우면 `$B/output`) |
+| `<결과 폴더>` | 벌의 결과 폴더(컨테이너 `/app/output`) | `/home/sbl/sbl_data_parsing-main-0/output` | `$B/output` |
 | `<원본 문서 폴더>` · `<있는 호스트 폴더(절대 경로)>` | 서버의 원본 문서 폴더(컨테이너 `/data/docs`) | `/data/docs` | settings.yaml `required.deploy.host_docs_dir` |
-| `<작업 폴더>` · `<run_pipeline 작업 폴더>` | 일괄 실행 임시 폴더(벌마다 다르게) | `/srv/rag/run_pipeline-1` | settings.yaml `ops.run_pipeline.run_pipeline_work_dir` |
+| `<작업 폴더>` · `<run_pipeline 작업 폴더>` | 일괄 실행 임시 폴더(벌마다 다르게) | `/srv/rag/run_pipeline-0` | settings.yaml `ops.run_pipeline.run_pipeline_work_dir` |
 | `<백업 폴더>` · `<백업 폴더 — 벌 폴더 밖>` | 판을 바꾸기 전 백업을 두는 부모 폴더(벌 폴더 밖) | `/home/sbl/backup` | |
 | `<기록>` | 운영 기록 폴더(벌 폴더 밖 — `versions.md`·`issues.md`·`server-changes.md`) | `/home/sbl/ops_log` | |
-| `<컨테이너>` · `<이름>` | 컨테이너 이름 | `data-pipeline-1` · `mcp-server` | `docker ps --format '{{.Names}}'` |
-| `<단위>` | systemd 단위 이름 | `data-pipeline-nightly-1.service` | `systemctl list-timers` |
+| `<컨테이너>` · `<이름>` | 컨테이너 이름 | `data-pipeline-1` · `mcp-server-0` | `docker ps --format '{{.Names}}'` |
+| `<단위>` | systemd 단위 이름 | `data-pipeline-nightly.service` | `systemctl list-timers` |
 | `<PG 컨테이너>` · `<pg 컨테이너>` · `<PG 컨테이너 이름>` · `<required.deploy.pg_container_name>` | pgvector 컨테이너 이름 | `pgvector` | `docker ps --format '{{.Names}}'` |
-| `<PG 주소>` · `<PG 포트>` | 우리 컨테이너가 붙는 PG 주소·포트(`-p`의 **앞쪽** 숫자) | `127.0.0.1` · `5433`(`-p 127.0.0.1:5433:5432`로 띄웠을 때) | `docker port pgvector` |
+| `<PG 주소>` · `<PG 포트>` | 우리 컨테이너가 붙는 PG 주소·포트(서버 쪽 포트) | `<서버 IP>` · `5433`(`compose-pgvector.yml`로 띄웠을 때) | `docker port pgvector` |
 | `<계정>` · `<required.pg.pg_user>` | PG 앱 계정 | `rag_app` | settings.yaml `required.pg.pg_user` |
 | `<관리자 계정>` · `<운영 계정>` | PG 관리자 계정(권한 주기용 — settings.yaml에 넣지 않음) | `postgres` | DB 담당 |
 | `<DB>` · `<DB 이름>` · `<required.pg.pg_database>` | PG 데이터베이스 | `rag` | settings.yaml `required.pg.pg_database` |
 | `<스키마>` · `<pg_schema>` · `<db_schema>` · `<기준>` · `<required.pg.pg_schema>` | 검색 기준 스키마 | `data_parsing` | settings.yaml `required.pg.pg_schema`(비우면 `data_parsing`) |
 | `<임베딩 차원>` | 임베딩 모델 출력 길이 | `1024` | 모델 담당 · 묶음 `meta.json`의 `dim` |
-| `<MCP 포트>` · `<search.server.mcp_port>` | 검색 MCP 포트(벌마다 다르게) | `18771`(벌 1) · `18772`(벌 2) | settings.yaml `search.server.mcp_port` |
-| `<벌마다 다른 포트>` · `<내 포트>` | SSH 작업 공간 포트 | `2222`(벌 1) · `2223`(벌 2) | settings.yaml `option.devbox.ssh_port` |
+| `<MCP 포트>` · `<search.server.mcp_port>` | 검색 MCP 컨테이너 안 포트(서버 포트는 8051) | `8051` | settings.yaml `search.server.mcp_port` |
+| `<벌마다 다른 포트>` · `<내 포트>` | SSH 작업 공간 포트(서버 쪽) | `8020`~`8024`(벌 0~4) · `8050`(`mcp-server-0`) | `compose-<환경>.yml`의 `SSH_PORT` |
 | `<서버>` | 개발 서버 주소 | `10.0.0.12` | 서버 관리자 |
 | `<버킷>` · `<silver_bucket>` | 게시 버킷 | `rag-silver` | settings.yaml `required.publish.publish_bucket` |
 | `<커밋>` | git 커밋 번호(앞 7~8자) | `1281faf5` | `git log -1 --oneline` |
@@ -53,14 +53,14 @@
 | `<이미지 zip>` · `<새 이미지 저장소 zip>` | 이미지 조각 저장소 zip | `sbl_images-main.zip`(풀면 `sbl_images-main/`) | |
 | `<seq>` · `<번호,…>` · `<번호,번호,…>` | 일괄 실행의 문서 번호(여럿이면 쉼표) | `1203` · `1203,1207` | `progress.log`의 `doc#1203` |
 | `<키워드,…>` | 원본 파일 이름에 든 낱말(쉼표 — 하나라도 들면) | `계약서,견적` | |
-| `<서비스>` | compose 서비스 이름(컨테이너 이름과 다름) | `data-pipeline` · `mcp-data-parsing` · `mcp` | `host_ctl.sh ps` |
+| `<서비스>` | compose 서비스 이름(컨테이너 이름과 같음) | `data-pipeline-0` · `mcp-data-parsing-0` · `mcp-server-0` | `host_ctl.sh ps` |
 | `<수집 서버 사내 IP>` · `<IP>` | 운영 서버 사내 주소 | `10.0.0.20` | 서버 관리자 · 서버에서 `hostname -I` |
 | `<스키마.표>` | EDW 표 이름 | `CRMS.RM_MAS_CLIENT` | DB 담당 |
 | `<묶음>` | 구조화 묶음 폴더 | `output/edw/bundle` | |
 | `<옛 이름>` | 옛 env 이름(설정 칸 자리 찾기) | `PIPE_PROCS` | 오류 글자에 나온 이름 |
 | `<타깃>` | 이미지 빌드 대상 | `pipeline-runtime` · `mcp-runtime` · `pipeline` · `mcp` | |
 | `<이름 조각>` · `<이름 일부>` | selftest 사례 이름 일부 | `test_publish` | `ls tests/server/*/` |
-| `<파일>` | 그 줄이 말하는 파일 | `migrate_search.sql`(`--sql`) · `resources/config/edw_chain.yaml`(`git checkout HEAD --`) | |
+| `<파일>` | 그 줄이 말하는 파일 | `migrate_search.sql`(`--sql`) · `edw_chain.yaml`(`git checkout HEAD --`) | |
 | `<MMDD>` | 월일 4자리 | `1109` | |
 | `<질문>` · `<낱말>` · `<처리한 문서에 있는 낱말>` | 검색 시험 문구 | `계약서 보관 기간은?` · `보관 기간` | 처리한 문서 아무거나 |
 | `<모델>` · `<model id>` | 내부망 모델 이름 | 모델 담당이 준 이름(예 `qwen2.5-72b-instruct`) | 모델 담당 |
@@ -75,23 +75,25 @@
 
 ## 0. 환경별 실행 명령 — local · dev · prd
 
-실행하는 곳은 셋이고, 이미지·코드·띄우는 컨테이너가 다르다.
+실행하는 곳은 셋이고, 이미지·코드·띄우는 컨테이너가 다르다. 환경마다 compose 파일이 하나다(`deploy/host/compose/compose-<환경>.yml`).
 
-| 환경 | 어디서 | 이미지 | 코드 | 띄우는 컨테이너 |
+| 환경 | 어디서 | 이미지 | 코드 | 띄우는 컨테이너(compose 파일) |
 |---|---|---|---|---|
-| local | 개발 PC | (보통 이미지 없이 `.venv`) · 시험 이미지 | 저장소 그대로 | 시험 PG(pgvector) 하나 |
-| dev | 개발 서버 — 개발자마다 벌 하나 | 실행 이미지 `data-pipeline-runtime:<이미지 판>`(코드 없음) | 벌 폴더(코드 폴더)를 `/app/deploy`에 붙임 | 벌마다 `data-pipeline-<번호>` **하나만** |
-| prd | 운영 서버 — 한 벌 | 코드가 든 이미지 `data-pipeline:<VERSION>` · `mcp-server:<VERSION>` | 이미지 안(붙이지 않음) | `data-pipeline` · `mcp-data-parsing` · `mcp-server` 셋 |
+| local | 개발 PC | (보통 이미지 없이 `.venv`) · 시험 이미지 | 저장소 그대로 | 시험 PG 하나 · 이미지로 시험할 때 `compose-local.yml`(0번 한 벌 셋) |
+| dev | 개발 서버 — 개발자마다 벌 하나 | 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime:<이미지 판>`(코드 없음) | 벌 폴더를 `/app/deploy`에 붙임(쓰기 가능) | `compose-dev.yml` — `data-pipeline-0`·`data-pipeline-1` · `mcp-server-0` · `mcp-data-parsing-0` |
+| prd | 운영 서버 — 한 벌 | 코드가 든 이미지 `data-pipeline:<VERSION>` · `mcp-server:<VERSION>` | 이미지 안(붙이지 않음) | `compose-prd.yml` — `data-pipeline-0` · `mcp-server-0` · `mcp-data-parsing-0` |
 
-**두 가지 방법** — 같은 일을 한다. 한 서버에서는 한 방법만 쓴다.
-- **직접 명령**: 아래 `docker run`·`docker exec`·`systemctl`을 한 줄씩 친다. 무엇이 어디에 붙는지 눈으로 보인다.
-- **`host_ctl.sh`**: 위 직접 명령을 모두 묶은 스크립트다. settings.yaml에서 컨테이너 이름·이미지·볼륨·자원 상한을 읽어 compose로 띄우고(`up`), 점검(`check`)과 타이머 설치(`timers`)도 한 번에 한다.
-- 섞지 않는다: `docker run`으로 띄운 컨테이너는 `host_ctl.sh ps`·`logs`·`up`이 자기 것으로 보지 않는다(compose 묶음 표시가 없음 — 같은 이름으로 `up`하면 이름이 겹쳐 멈춤). 방법을 바꾸려면 먼저 `docker rm -f <이름>`(예 `docker rm -f data-pipeline-1`)으로 지운다. 결과 폴더·DB는 그대로 남는다.
-- 직접 명령의 컨테이너 이름은 settings.yaml의 이름(기본 `data-pipeline`·`mcp-data-parsing`·`mcp-server`, 번호 벌은 끝에 `-<번호>`)과 같게 짓는다 — 새벽 배치·MCP 살리기 타이머·`pipe_exec.sh`가 그 이름으로 컨테이너를 찾는다.
+검색 DB `pgvector`(`compose-pgvector.yml`)와 Redis `redis`(`compose-redis.yml`)는 dev·prd 모두 서버마다 하나를 따로 한 번 띄운다(재시작 정책 `always` — [§6-6](#6-6-서버-묶음--compose-파일과-root-ssh)).
 
-공통 준비: root 셸, `export DOCKER=docker`, `B=<벌 폴더>`(예 `B=/home/sbl/sbl_data_parsing-main-1`), `cd $B`. `$B`는 이 벌 폴더 경로를 담은 셸 변수다 — `$B/settings.yaml` = `/home/sbl/sbl_data_parsing-main-1/settings.yaml`. 새 셸을 열면 다시 적는다.
+**앱 컨테이너를 띄우는 길은 하나 — `deploy/host/scripts/host_ctl.sh`.**
+- settings.yaml `required.env.run_env`로 compose 파일을 골라 `docker compose -f deploy/host/compose/compose-<run_env>.yml <인자…>`를 그대로 부른다(`up -d`·`ps`·`logs`·`stop`·`down`·`restart`·`config`).
+- 컨테이너 이름·이미지·포트·CPU·메모리·볼륨은 그 compose 파일에 직접 적혀 있다(settings.yaml 칸 없음 — 바꾸는 법 [§2-14](#2-14-컨테이너-이름볼륨-바꾸기)). 서비스 이름 = 컨테이너 이름.
+- `docker run`으로 따로 띄우지 않는다 — 이름이 겹쳐 compose가 멈춘다. 그런 컨테이너가 있으면 `docker rm -f <이름>`(예 `docker rm -f data-pipeline-1`) 뒤 `host_ctl.sh up -d`. 결과 폴더·DB는 그대로 남는다.
+- 새벽 배치·MCP 살리기 타이머·`pipe_exec.sh`·`run_pipeline.py`는 0번 벌 컨테이너(`data-pipeline-0`·`mcp-server-0`·`mcp-data-parsing-0`)만 본다.
 
-읽는 법: `<…>`는 바꿔 넣을 자리(옆 주석에 예 — 없으면 [예 값 사전](#바꿔-넣을-자리--예-값-사전)), `$B`는 위 변수. `-v <서버 경로>:<컨테이너 안 경로>:<옵션>`은 서버 폴더를 컨테이너 안에 붙인다 — 바꿔 넣는 것은 맨 앞(서버 경로)뿐이고, 가운데(컨테이너 안 경로 — `/data/docs`·`/app/output` 등)는 이미지가 정한 자리라 그대로 둔다. 옵션 `ro` = 읽기만, `z` = RHEL SELinux가 컨테이너에 그 폴더를 허용. PG는 이미 떠 있다고 본다([서버 PG 띄우기](#서버-pg-띄우기)). 설정 파일은 `$B/settings.yaml`(설치 순서 [3~4번](#서버-설치-순서)).
+공통 준비: root 셸, `export DOCKER=docker`, `B=<벌 폴더>`(예 `B=/home/sbl/sbl_data_parsing-main-0`), `cd $B`. `$B`는 이 벌 폴더 경로를 담은 셸 변수다 — `$B/settings.yaml` = `/home/sbl/sbl_data_parsing-main-0/settings.yaml`. 새 셸을 열면 다시 적는다.
+
+읽는 법: `<…>`는 바꿔 넣을 자리(옆 주석에 예 — 없으면 [예 값 사전](#바꿔-넣을-자리--예-값-사전)), `$B`는 위 변수. compose 파일의 볼륨 줄 `<서버 경로>:<컨테이너 안 경로>:<옵션>`은 서버 폴더를 컨테이너 안에 붙인다 — 가운데(컨테이너 안 경로 — `/data/docs`·`/app/output` 등)는 이미지가 정한 자리라 그대로 둔다. 옵션 `ro` = 읽기만, `z` = RHEL SELinux가 컨테이너에 그 폴더를 허용. PG·Redis는 이미 떠 있다고 본다([서버 PG 띄우기](#서버-pg-띄우기)·[§6-7](#6-7-redis--compose-redisyml)). 설정 파일은 `$B/settings.yaml`(설치 순서 [3~4번](#서버-설치-순서)).
 
 ### 0-1. local — 개발 PC
 
@@ -115,201 +117,121 @@ PC 설치·문서 몇 건 돌리기·검증 페이지는 [README §4](../../READ
 
 ### 0-2. dev — 개발 서버, 개발자별 벌
 
-개발자마다 벌 폴더 하나(`sbl_data_parsing-main-<번호>`)와 컨테이너 `data-pipeline-<번호>` 하나다. 기능 개발·파싱·적재·검색 기능 시험은 모두 이 컨테이너 안에서 한다 — 코드 폴더를 붙이므로 코드를 고치면 바로 반영된다. 검색 MCP 컨테이너는 따로 띄우지 않고, MCP가 필요하면 이 컨테이너 안에서 잠깐 연다(④). 전체 e2e·성능·worker 수 시험은 운영판(컨테이너 셋)으로 한다(⑦).
+개발자마다 벌 폴더 하나(`/home/sbl/sbl_data_parsing-main-<번호>`)와 컨테이너 `data-pipeline-<번호>` 하나다. 컨테이너는 root로 뜨고, 서버 바깥에서 root 비밀번호(이미지에 넣은 값)로 SSH 접속해 벌 폴더(`/app/deploy` — 쓰기 가능)에서 코드를 고치고 시험한다. 벌 0은 검색 MCP `mcp-server-0`과 parse_document 작업 컨테이너 `mcp-data-parsing-0`도 맡는다(벌 0과 같은 코드·설정·결과 폴더). 모두 `compose-dev.yml` 한 파일이다(묶음 이름 `docker-dev`). 벌은 0~4 다섯 개(`data-pipeline-0`~`4`, SSH 8020~8024).
 
 **① 이미지 불러오기**(서버에 한 번 — 공용 폴더에서)
-`<이미지 판>`은 `sbl_images-main/` 아래 판 폴더 이름이다(실행 이미지를 만든 버전 — 예 `0.3.0`). 코드만 바뀐 판(PATCH — 예 코드 0.3.1)은 실행 이미지를 새로 만들지 않으므로 이미지 판은 그대로 `0.3.0`이다. 고를 판은 그 폴더의 `BUILD.txt` DEPS_HASH가 코드의 `deploy/docker/DEPS_HASH`와 같은 판이다.
+`<이미지 판>`은 `sbl_images-main/` 아래 판 폴더 이름이다(실행 이미지를 만든 버전 — 예 `0.3.0`). 코드만 바뀐 판(PATCH — 예 코드 0.3.1)은 실행 이미지를 새로 만들지 않으므로 이미지 판은 그대로다. 고를 판은 그 폴더의 `BUILD.txt` DEPS_HASH가 코드의 `deploy/docker/DEPS_HASH`와 같은 판이다.
 ```bash
 cd /home/sbl
 ls sbl_images-main/                                   # 판 폴더 — 예: 0.3.0  load.sh
 cat sbl_images-main/0.3.0/BUILD.txt                   # 빌드 커밋·DEPS_HASH
-cat sbl_data_parsing-main-1/deploy/docker/DEPS_HASH   # 위 DEPS_HASH와 같아야 함
+cat sbl_data_parsing-main-0/deploy/docker/DEPS_HASH   # 위 DEPS_HASH와 같아야 함
 bash sbl_images-main/load.sh 0.3.0                    # 조각 확인 → 합치기 → docker load · 서버에 판마다 한 번(벌마다 아님 — 모든 벌이 같은 이미지를 씀)
 docker image ls data-pipeline-runtime                 # 기대: TAG 칸에 0.3.0
 ```
-아래 명령의 `<이미지 판>`에도 같은 값(예 `0.3.0`)을 넣는다 — `data-pipeline-runtime:0.3.0`.
+- compose 파일의 이미지 판은 `${IMAGE_TAG:-<판>}`의 기본값이다. 불러온 판과 다르면 compose 파일 옆 `deploy/host/compose/.env`에 `IMAGE_TAG=<이미지 판>` 한 줄을 둔다(compose가 그 파일 옆 `.env`를 읽음 — MCP 살리기 타이머가 다시 띄울 때도 같은 판).
 
 **② 띄우기**
 
-먼저 서버 CPU·메모리와 이미 떠 있는 컨테이너가 쓰는 몫을 본다(`--cpus`가 서버 CPU 수보다 크면 docker가 거부 — [§1-10](#1-10-자원)):
+먼저 서버 CPU·메모리와 이미 떠 있는 컨테이너가 쓰는 몫을 본다(`cpus`가 서버 CPU 수보다 크면 docker가 거부 — [§1-10](#1-10-자원)):
 ```bash
 nproc                                                  # CPU 수 — 예: 16
 free -g                                                # 메모리(GiB) — total·available 칸 · 예: total 62
 docker info --format 'CPU {{.NCPU}} · 메모리 {{.MemTotal}}'   # 그대로 입력 — docker가 보는 CPU 수·메모리(바이트)
 docker ps -q | xargs -r docker inspect --format '{{.Name}} cpus={{.HostConfig.NanoCpus}} memory={{.HostConfig.Memory}}'
-#   그대로 입력 — 떠 있는 컨테이너의 상한 · cpus 5000000000 = CPU 5개, memory 25769803776 = 24g, 0 = 상한 없음
+#   그대로 입력 — 떠 있는 컨테이너의 상한 · cpus 4000000000 = CPU 4개, memory 12884901888 = 12g, 0 = 상한 없음
 docker stats --no-stream                               # 지금 쓰는 CPU %·메모리
 ```
-- 정하는 법: 모든 벌의 `--cpus` 합 ≤ CPU 수, `--memory` 합 ≤ 메모리 total에서 운영체제·PG 몫(예 8g)을 뺀 값 — PG 몫 = `docker stats --no-stream`의 pgvector MEM USAGE에 여유를 더한 값(`--memory`는 미리 떼어 두는 값이 아니라 넘지 못하는 상한이라 PG를 낮춰 다시 띄울 필요는 없다 · PG는 상한 없이 두고 우리 컨테이너만 상한을 걸어, 넘치면 PG가 아니라 우리 컨테이너가 멈추게). `--memory-swap`은 `--memory`와 같게(스왑 안 씀 — 넘치면 그 컨테이너만 멈춤). `--cpu-shares`·`--pids-limit`·`--log-opt`는 그대로 둔다.
-- 예: CPU 16·메모리 64g 서버에 벌 2개 → 벌마다 `--cpus 6 --memory 24g --memory-swap 24g`(합 12·48g). CPU 8·메모리 32g에 벌 1개 → `--cpus 6 --memory 20g --memory-swap 20g`. 아래 명령의 `--cpus 5 --memory 24g`는 기본값([§1-10](#1-10-자원)) — 여기서 정한 값으로 바꿔 넣는다.
-- 같은 값을 그 벌 settings.yaml `ops.containers.pipeline.pipeline_cpus`·`pipeline_mem_limit`에도 적는다(`host_ctl.sh`가 쓰는 값).
+- 정하는 법: 모든 컨테이너의 `cpus` 합 ≤ CPU 수, `mem_limit` 합 ≤ 메모리 total에서 운영체제 몫(예 4g)을 뺀 값. 값은 `compose-dev.yml`의 컨테이너 칸(`cpus`·`mem_limit`·`memswap_limit`)에 직접 적는다 — 기본값 표는 [§1-10](#1-10-자원).
+- 칸 뜻: `mem_limit` = 이 컨테이너가 쓸 수 있는 메모리 상한(넘으면 이 컨테이너 안 프로세스가 멈춤 — 미리 떼어 두는 값이 아님) · `memswap_limit` = 메모리+스왑 합 상한(`mem_limit`과 같으면 스왑 안 씀) · `cpus` = CPU 몇 개 몫까지(서버 CPU 수보다 크면 거부) · `cpu_shares` = CPU가 모자랄 때 나눠 갖는 비율(기본 1024 — 작업 컨테이너만 4096) · `pids_limit` = 프로세스·스레드 수 상한 · `logging` = `docker logs` 기록 파일을 50MB마다 새로 쓰고 3개까지만 둠.
 
-직접 명령(예: 벌 1 — `<원본 문서 폴더>` = `/data/docs`, `<이미지 판>` = `0.3.0`이면 끝 줄은 `data-pipeline-runtime:0.3.0 idle`):
+PG·Redis를 먼저 띄운다([§6-6](#6-6-서버-묶음--compose-파일과-root-ssh) ①·[§6-7](#6-7-redis--compose-redisyml)). 그다음 벌 폴더에서:
 ```bash
-B=/home/sbl/sbl_data_parsing-main-1                    # 벌 폴더
-docker run -d --name data-pipeline-1 --restart unless-stopped --network host --init \
-  --memory 24g --memory-swap 24g --cpus 5 --cpu-shares 1024 --pids-limit 4096 \
-  --log-opt max-size=50m --log-opt max-file=3 \
-  -e SETTINGS_FILE=/app/deploy/settings.yaml -e RUN_ENV=dev \
-  -v $B:/app/deploy:ro,z \
-  -v $B/output:/app/output:z \
-  -v <원본 문서 폴더>:/data/docs:ro,z \
-  data-pipeline-runtime:<이미지 판> idle
-docker ps --filter name=^data-pipeline-1$ --format '{{.Status}}'   # 기대: Up …
+cd /home/sbl/sbl_data_parsing-main-0
+bash deploy/host/scripts/host_ctl.sh up -d            # settings.yaml run_env: dev → compose-dev.yml의 앱 컨테이너 모두 — 벌 폴더 main-0~4가 다 있어야 함(없는 벌은 빼고 서비스 이름을 적는다)
+bash deploy/host/scripts/host_ctl.sh ps               # 기대: data-pipeline-0~4 · mcp-server-0 · mcp-data-parsing-0 Up
 ```
-- 붙이는 것은 셋뿐: 코드 폴더 `$B`(읽기만 — 설정 파일 `$B/settings.yaml`도 이 안에 있어 `SETTINGS_FILE=/app/deploy/settings.yaml`로 읽음) · 결과 폴더(쓰기) · 원본 폴더(읽기만). `edw_chain.yaml`은 붙이지 않는다 — 앱은 기본 사슬 `resources/config/edw_chain.yaml`(코드 폴더 안)을 읽고, settings.yaml `ops.paths.edw_chain_file`을 적었을 때만 다른 파일을 본다. (`host_ctl.sh`는 운영 서버와 같은 compose를 쓰므로 `/etc/rag/settings.yaml`·`/etc/rag/edw_chain.yaml`로 따로 붙인다 — 결과는 같다.)
-- 자원·기록 칸 뜻: `--memory 24g` = 이 컨테이너가 쓸 수 있는 메모리 상한(넘으면 이 컨테이너 안 프로세스가 멈춤) · `--memory-swap 24g` = 메모리+스왑 합 상한(`--memory`와 같게 = 스왑 안 씀) · `--cpus 5` = CPU 5개 몫까지(서버 CPU 수보다 크면 거부) · `--cpu-shares 1024` = CPU가 모자랄 때 나눠 갖는 비율(기본값) · `--pids-limit 4096` = 프로세스·스레드 수 상한 · `--log-opt max-size=50m --log-opt max-file=3` = `docker logs` 기록 파일을 50MB마다 새로 쓰고 3개까지만 둠(가장 오래된 것부터 지움 — 기록이 디스크를 채우지 않게, 최대 150MB).
-- `<원본 문서 폴더>` = 서버에 원본 문서가 있는 폴더(절대 경로 — 예 `/data/docs`), settings.yaml `required.deploy.host_docs_dir`과 같은 값. 컨테이너 안에서는 늘 `/data/docs`로 보인다. 자원 값(`--memory`·`--cpus`)은 settings.yaml `ops.containers.pipeline.*`와 같게.
-- SSH 작업 공간으로 쓸 때(코드를 컨테이너 안에서 고침): 마지막 줄을 `data-pipeline-runtime:<이미지 판> devbox`로, 코드 마운트를 `-v $B:/app/deploy:z`(쓰기 가능)로 바꾸고, 같은 자리에 설정 파일만 읽기 전용으로 다시 붙이는 `-v $B/settings.yaml:/app/deploy/settings.yaml:ro,z`(컨테이너·opencode가 비밀값 파일을 고치지 못하게)와 `-e SSH_PORT=<벌마다 다른 포트>`(예 벌 1 `2222`, 벌 2 `2223`) `-v $B/home:/home/rag:z`를 더한다. 코드 주인은 10001이어야 고칠 수 있다(`sudo chown -R 10001:sbl $B`). 열쇠 놓기는 [§2-13](#2-13-개발-작업-공간--sshopencode선택), SSH 없이 `docker exec`로만 쓰는 꼴은 [§6-3](#6-3-개발자-한-벌-만들기) ④.
-
-`host_ctl.sh`로:
-```bash
-bash deploy/host/scripts/host_ctl.sh up -d data-pipeline   # 위 docker run과 같음(SSH 작업 공간을 켰으면 devbox로)
-bash deploy/host/scripts/host_ctl.sh ps                    # 기대: data-pipeline-1 한 줄 Up
-```
+- 하나만 띄울 때는 서비스 이름을 적는다(예 `host_ctl.sh up -d data-pipeline-1`). 어느 벌 폴더에서 불러도 같은 `compose-dev.yml`이다(벌 폴더 자리는 `SBL_ROOT` — 기본 `/home/sbl`).
+- 붙는 것: 벌 폴더 전체 → `/app/deploy`(쓰기 가능 — 코드·`edw_chain.yaml`), 그 안 `settings.yaml`만 다시 읽기 전용, `output/` → `/app/output`, `home/` → `/root`(root 홈), 원본 문서 폴더 → `/data/docs`(읽기만 — `DOC_SRC`, `host_ctl.sh`가 settings.yaml `required.deploy.host_docs_dir`에서 냄). 검색 MCP는 `output/`을 읽기 전용으로, `output/_mcp_parse/jobs`만 쓰기 가능으로 붙인다.
+- 컨테이너는 서버 네트워크를 그대로 쓴다 — 서버의 PG(5433)·Redis(8010)·모델은 settings.yaml에 적은 `<서버 IP>`로 붙는다.
 
 **③ 점검**
 
-직접 명령(`host_ctl.sh check`가 차례로 부르는 넷 — 처음 실패에서 멈춘다):
+`host_ctl.sh`로: `bash deploy/host/scripts/host_ctl.sh check` — 기대 마지막 줄 `[host_ctl check] 통과 — 7개`(단계 뜻 [§2-7](#2-7-전체-점검--host_ctlsh-check)). 하나씩 볼 때(처음 실패에서 멈추는 앞 넷):
 ```bash
 E=/app/docker/runtime_entry.sh                              # 실행 이미지의 시작 스크립트(운영 이미지는 /app/docker/entrypoint.sh)
-docker exec data-pipeline-1 bash $E tool check_env          # FAIL 줄이 없어야 함
-docker exec data-pipeline-1 bash $E tool ping_models        # 모델 주소 연결
-docker exec data-pipeline-1 bash $E migrate check --target all   # DB 표 판이 끝 판
+docker exec data-pipeline-0 bash $E tool check_env          # FAIL 줄이 없어야 함
+docker exec data-pipeline-0 bash $E tool ping_models        # 모델 주소 연결
+docker exec data-pipeline-0 bash $E migrate check --target all   # DB 표 판이 끝 판
 bash deploy/release/selftest_gate.sh docker run --rm --network host \
   -v $B/settings.yaml:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=dev \
   -v $B:/app/deploy:ro,z data-pipeline-runtime:<이미지 판> selftest   # 예 <이미지 판> = 0.3.0 · 기대: [판정] 통과
 ```
-`host_ctl.sh`로: `bash deploy/host/scripts/host_ctl.sh check` — 기대 마지막 줄 `[host_ctl check] 통과 — 4개(개발 서버 — data-pipeline만)`. (`pipe_exec.sh check_env`처럼 도구 하나만도 된다.)
 
-**④ 검색·MCP 기능 시험**(data-pipeline 안에서)
+**④ 검색·MCP 기능 시험**
 
 검색만 볼 때(토큰·포트 없이 DB 검색):
 ```bash
-docker exec data-pipeline-1 python -m mcp_server.cli.search_ask ask --source DEV-1 --k 3 --q "<처리한 문서에 있는 낱말>"   # 예 --q "보관 기간"
+docker exec data-pipeline-0 python -m mcp_server.cli.search_ask ask --source DEV-1 --k 3 --q "<처리한 문서에 있는 낱말>"   # 예 --q "보관 기간"
 ```
-MCP를 열어 실제 클라이언트와 같은 길(HTTP)로 시험할 때 — 컨테이너가 호스트 네트워크를 쓰므로 `<MCP 포트>`는 벌마다 다르게 고른다:
+실제 클라이언트와 같은 길(HTTP — 벌 0의 `mcp-server-0`, 서버 8051):
 ```bash
-# 예: <MCP 포트> = 18771(벌 1)·18772(벌 2) · <낱말> = 보관 기간 · <토큰> = settings.yaml required.tokens.mcp_token 값 · <질문> = 계약서 보관 기간은?
-docker exec -d data-pipeline-1 sh -c 'echo $$ > /tmp/mcp.pid; exec python -m mcp_server.main --set MCP_PORT=<MCP 포트>'   # 열기(PID를 남김)
-for i in $(seq 60); do docker exec data-pipeline-1 python -c "import urllib.request as u; u.urlopen('http://127.0.0.1:<MCP 포트>/health', timeout=3)" 2>/dev/null && break; sleep 2; done   # 최대 2분 — 그래도 안 뜨면 docker logs로 원인
-docker exec data-pipeline-1 python -m mcp_server.cli.mcp_smoke --url http://127.0.0.1:<MCP 포트>/mcp --source DEV-1 --q "<낱말>"   # 토큰을 정했으면 --token "<토큰>" · 기대 끝 줄 MCP 바깥 호출 통과
-docker exec data-pipeline-1 python -m validation.e2e.answer_gen --url http://127.0.0.1:<MCP 포트>/mcp --q "<질문>"           # 답변 생성 점검(§3-3-4)
-docker exec data-pipeline-1 sh -c 'kill $(cat /tmp/mcp.pid)'                                                              # 닫기(PID로)
+curl -s http://<서버 IP>:8051/health                                 # 기대: {"ok":true,"ready":true,…}
+docker exec data-pipeline-0 python -m mcp_server.cli.mcp_smoke --url http://<서버 IP>:8051/mcp --token "<토큰>" --source DEV-1 --q "<낱말>"   # 기대 끝 줄 MCP 바깥 호출 통과
+docker exec data-pipeline-0 python -m validation.e2e.answer_gen --url http://<서버 IP>:8051/mcp --q "<질문>"                            # 답변 생성 점검(§3-3-4)
 ```
-- 이렇게 연 MCP는 컨테이너를 다시 띄우면 사라진다. `parse_document`는 작업 서비스(`mcp-data-parsing`)가 없어 연결 실패를 돌려준다 — 이 도구는 ⑦의 운영판으로 시험한다.
-- `host_ctl.sh`에는 이 단계가 없다(직접 명령만).
+- `<토큰>` = settings.yaml `required.tokens.mcp_token` 값. 주소는 `search.server.mcp_allowed_hosts`에 적은 `<서버 IP>:8051`로 부른다(다른 Host는 거부).
+- 벌 1이 자기 코드로 MCP를 시험할 때는 SSH 셸(`ssh -p 8021 root@<서버>`) 안에서 잠깐 연다 — `python -m mcp_server.main --set MCP_PORT=18771 --set MCP_HOST=127.0.0.1 & echo $! > /tmp/mcp.pid` → 같은 셸에서 `mcp_smoke --url http://127.0.0.1:18771/mcp …` → `kill $(cat /tmp/mcp.pid)`. 컨테이너 안에서만 보이고, 컨테이너를 다시 띄우면 사라진다.
 
-**⑤ 새벽 배치 타이머**(선택 — 개발 서버는 이것 하나)
-
-직접 명령(벌 1 — 번호 없는 벌이면 `-1`을 뺀다):
+**⑤ 타이머**(벌 0 폴더에서 — 새벽 배치 + MCP 살리기)
 ```bash
-for u in data-pipeline-nightly.service data-pipeline-nightly.timer; do
-  sed "s#@CODE_DIR@#$B#g" deploy/host/systemd/$u > /etc/systemd/system/${u%.*}-1.${u##*.}
-done
-systemctl daemon-reload && systemctl enable --now data-pipeline-nightly-1.timer
-systemctl list-timers 'data-pipeline-nightly*'              # 기대: 다음 실행 시각
+cd /home/sbl/sbl_data_parsing-main-0
+bash deploy/host/scripts/host_ctl.sh timers                 # 기대: "  씀  /etc/systemd/system/<단위>" 네 줄
+systemctl list-timers 'data-pipeline-nightly*' 'mcp-server-keepalive*'   # 기대: 두 타이머의 다음 실행 시각
 ```
-`host_ctl.sh`로: `bash deploy/host/scripts/host_ctl.sh timers` — 기대 `  씀  /etc/systemd/system/data-pipeline-nightly-1.service`·`.timer` 두 줄.
 
 **⑥ 개발을 마치면** — 시험한 코드 폴더를 운영 이미지로 굽는다(아래 prd ①).
 
-**⑦ 운영판으로 전체 시험**(개발 서버 — 전체 e2e·성능·worker 수)
-
-구운 이미지(`data-pipeline:<VERSION>`·`mcp-server:<VERSION>`)를 개발 서버에서 운영과 같은 컨테이너 셋으로 띄워 본다. 자기 개발 벌과 이름이 겹치지 않게 **시험용 벌 폴더를 따로** 만든다(예 `sbl_data_parsing-main-9` — 굽기가 만든 코드 묶음 `code-<판>-<커밋>.tar.gz`를 푼 폴더).
-- 그 벌의 settings.yaml: 이미지 칸에 구운 이미지 태그, `required.env.run_env: dev` 그대로, `search.server.mcp_port`·`ops.services.data_parsing.data_parsing_port`는 다른 벌이 연 MCP 포트와 겹치지 않게.
-- 띄우기: 아래 prd ③의 직접 명령 셋(이름 끝에 `-9`, `-e RUN_ENV=dev`, 경로는 이 벌 폴더) 또는 `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp`.
-- 점검: `host_ctl.sh check`는 개발 서버라 data-pipeline 넷에서 멈추므로, 검색 MCP는 `bash deploy/host/scripts/mcp_keepalive.sh`(응답 확인)와 `mcp_smoke`로 따로 본다.
-- worker 수·자원을 바꿔 가며 잴 때는 그 벌의 settings.yaml(`ops.containers.*`·`tuning.*`)을 고치고 `host_ctl.sh up -d --force-recreate …`(직접 명령이면 `docker rm -f` 뒤 다시 `docker run`).
-- 끝나면 `host_ctl.sh down`(또는 `docker rm -f data-pipeline-9 mcp-data-parsing-9 mcp-server-9`)으로 내린다. 타이머는 켜지 않는다.
+**⑦ 전체 e2e·성능·worker 수 시험** — 벌 0의 네 컨테이너가 운영과 같은 구성(검색 MCP·작업 컨테이너·Redis)이다. 전체 시험은 벌 0에서 한다. Redis 포트와 키 접두를 벌마다 나누지 않는다. worker·엔진·자원 설정은 [§1-3-1](#1-3-1-parse_document-redis-큐113).
 
 ### 0-3. prd — 운영 서버, 코드를 구운 이미지
 
-운영 서버는 번호 없는 한 벌(`sbl_data_parsing-main`)이고 코드 폴더를 붙이지 않는다 — 코드는 이미지 안에 있다. 컨테이너는 셋이다.
+운영 서버는 번호 없는 한 벌 폴더(`/home/sbl/sbl_data_parsing-main` — compose 파일의 `PRD_DIR`)이고 코드 폴더를 붙이지 않는다 — 코드(`edw_chain.yaml` 포함)는 이미지 안에 있다. `compose-prd.yml`이 `data-pipeline-0`·`mcp-server-0`·`mcp-data-parsing-0`을 띄운다(묶음 이름 `sbl-prd`, 재시작 정책 `always`).
 
 **① 굽기**(개발 서버에서 — 개발에 쓴 실행 이미지 판 + 시험한 코드 폴더 → 코드가 든 이미지)
 ```bash
 cd <시험한 벌 폴더> && bash deploy/release/bake_prod_image.sh <실행 이미지 판>
-#   예: cd /home/sbl/sbl_data_parsing-main-1 && bash deploy/release/bake_prod_image.sh 0.3.0
+#   예: cd /home/sbl/sbl_data_parsing-main-0 && bash deploy/release/bake_prod_image.sh 0.3.0
 # 기대: 대상마다 [판정] 통과 → /var/tmp/bake/sbl_images/<VERSION>/(<VERSION> = 코드 폴더 VERSION 파일 값 — 예 0.3.1) 아래 조각·load.sh·BUILD.txt + code-<판>-<커밋>.tar.gz
 ```
-조각 폴더와 코드 묶음을 운영 서버 공용 폴더로 옮긴다. 코드 묶음을 `sbl_data_parsing-main`으로 풀어 벌 폴더로 쓴다(호스트 스크립트·compose 파일·설정 파일 자리).
+조각 폴더와 코드 묶음을 운영 서버 공용 폴더로 옮긴다. 코드 묶음을 `sbl_data_parsing-main`에 풀어 쓴다(호스트 스크립트·compose 파일 자리 — 그 안의 `settings.yaml`·`output/`·`home/`을 compose가 붙인다).
 
 **② 불러오기**(운영 서버)
 ```bash
 cd /home/sbl && bash sbl_images/load.sh <VERSION>                # 예 <VERSION> = 0.3.1 · 굽기가 만든 sbl_images 폴더를 옮긴 자리
 docker image ls | grep -E '^(data-pipeline|mcp-server) '        # 기대: 두 줄, TAG 칸에 <VERSION>(예 0.3.1)
 ```
+- 이미지 판은 `compose-prd.yml`의 `${IMAGE_TAG:-<판>}` — 같은 판의 코드 묶음이면 기본값이 구운 판이다. 다르면 `deploy/host/compose/.env`에 `IMAGE_TAG=<VERSION>`.
 
-**③ 띄우기** — `data-pipeline` → (처음이면 DB 표 만들기 — [설치 순서 6번](#서버-설치-순서)) → `mcp-data-parsing`·`mcp-server`(검색 MCP는 시작할 때 마스터 표를 읽음)
-
-직접 명령:
+**③ 띄우기** — PG·Redis → `data-pipeline-0` → (처음이면 DB 표 만들기 — [설치 순서 6번](#서버-설치-순서)) → 나머지(검색 MCP는 시작할 때 마스터 표를 읽음)
 ```bash
 B=/home/sbl/sbl_data_parsing-main; cd $B
-# 예: <원본 문서 폴더> = /data/docs · <VERSION> = 0.3.1(끝 줄 data-pipeline:0.3.1 idle · mcp-server:0.3.1 mcp) · 자원 값은 dev ②의 확인 명령으로 정함
-docker run -d --name data-pipeline --restart unless-stopped --network host --init \
-  --memory 24g --memory-swap 24g --cpus 5 --cpu-shares 1024 --pids-limit 4096 \
-  --log-opt max-size=50m --log-opt max-file=3 \
-  -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=prd \
-  -v $B/settings.yaml:/etc/rag/settings.yaml:ro,z \
-  -v $B/edw_chain.yaml:/etc/rag/edw_chain.yaml:ro,z \
-  -v <원본 문서 폴더>:/data/docs:ro,z \
-  -v $B/output:/app/output:z \
-  data-pipeline:<VERSION> idle
-
-docker run -d --name mcp-data-parsing --restart unless-stopped --network host --init \
-  --memory 8g --memory-swap 8g --cpus 3 --cpu-shares 4096 --pids-limit 1024 \
-  --log-opt max-size=50m --log-opt max-file=3 \
-  -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=prd \
-  -v $B/settings.yaml:/etc/rag/settings.yaml:ro,z \
-  -v <원본 문서 폴더>:/data/docs:ro,z \
-  -v $B/output:/app/output:z \
-  data-pipeline:<VERSION> run-mcp-parsing
-
-docker run -d --name mcp-server --restart unless-stopped --network host --init \
-  --memory 4g --cpus 1 --pids-limit 512 \
-  --log-opt max-size=20m --log-opt max-file=3 \
-  -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=prd \
-  -v $B/settings.yaml:/etc/rag/settings.yaml:ro,z \
-  -v $B/edw_chain.yaml:/etc/rag/edw_chain.yaml:ro,z \
-  -v $B/output:/app/output:ro,z \
-  mcp-server:<VERSION> mcp
-docker ps --format '{{.Names}} {{.Status}}'                 # 기대: 세 줄 Up
+#   먼저 .env(코드 폴더 맨 위 — git 제외, chmod 600)에 REDIS_PASSWORD·PG_USER·PG_DB·PG_PASSWORD를 적는다(settings.yaml과 같은 값 — §6-6 ①)
+docker compose --env-file .env -f deploy/host/compose/compose-pgvector.yml up -d    # 검색 DB(이미 떠 있으면 그대로) — DB 담당이 따로 둔 PG면 건너뜀
+docker compose --env-file .env -f deploy/host/compose/compose-redis.yml up -d       # Redis
+bash deploy/host/scripts/host_ctl.sh up -d data-pipeline-0
+bash deploy/host/scripts/host_ctl.sh up -d                          # 나머지 둘
+bash deploy/host/scripts/host_ctl.sh ps                             # 기대: 세 줄 Up(mcp-data-parsing-0은 healthy)
 ```
-- `mcp-data-parsing`은 `data-pipeline` 이미지로 작업 서비스(`run-mcp-parsing`)를 띄운다. 자원 값은 settings.yaml `ops.containers.<pipeline|data_parsing|mcp>.*`와 같게.
-- `host_ctl.sh`는 여기에 상태 검사(`/health`)도 붙인다. 직접 명령으로 띄웠으면 `bash deploy/host/scripts/mcp_keepalive.sh`로 검색 MCP 응답을 본다.
+- 컨테이너는 root로 뜬다. SSH: `ssh -p 8020 root@<서버 IP>`(data-pipeline-0) · `ssh -p 8050 root@<서버 IP>`(mcp-server-0) — [§6-6](#6-6-서버-묶음--compose-파일과-root-ssh).
 
-`host_ctl.sh`로:
-```bash
-bash deploy/host/scripts/host_ctl.sh up -d data-pipeline
-bash deploy/host/scripts/host_ctl.sh up -d mcp-data-parsing mcp
-bash deploy/host/scripts/host_ctl.sh ps                     # 기대: 세 줄 Up
-```
+**④ 점검** — `bash deploy/host/scripts/host_ctl.sh check` — 기대 마지막 줄 `[host_ctl check] 통과 — 7개`(운영 이미지는 코드 마운트 없이 selftest).
 
-**④ 점검** — dev ③의 넷(시작 스크립트는 `E=/app/docker/entrypoint.sh`, selftest는 코드 마운트 없이 `-e RUN_ENV=prd`와 `data-pipeline:<VERSION>`)에 둘을 더한다:
-```bash
-bash deploy/release/selftest_gate.sh docker run --rm --network host \
-  -v $B/settings.yaml:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=prd \
-  mcp-server:<VERSION> selftest                             # 예 mcp-server:0.3.1 · 기대: [판정] 통과
-bash deploy/host/scripts/mcp_keepalive.sh                   # 검색 MCP /health — 응답이 없으면 다시 띄움
-```
-`host_ctl.sh`로: `bash deploy/host/scripts/host_ctl.sh check` — 기대 마지막 줄 `[host_ctl check] 통과 — 6개`.
+**⑤ 타이머 둘**(새벽 배치 + MCP 살리기) — `bash deploy/host/scripts/host_ctl.sh timers` — 기대 `  씀  /etc/systemd/system/<단위>` 네 줄(`<단위>` = data-pipeline-nightly.service 등 — 출력에 나오는 이름).
 
-**⑤ 타이머 둘**(새벽 배치 + MCP 살리기)
+MCP 살리기 타이머(`mcp_keepalive.sh`)는 2분마다 `redis`(꺼졌으면 `compose-redis.yml`로 띄움 · 건강하지 않으면 restart) · `mcp-data-parsing-0`(꺼졌으면 `host_ctl.sh up -d`) · `mcp-server-0`(`http://<서버 IP>:8051/health`가 응답하지 않으면 떠 있는 컨테이너는 restart, 없으면 `host_ctl.sh up -d`)을 본다.
 
-직접 명령:
-```bash
-for u in data-pipeline-nightly.service data-pipeline-nightly.timer mcp-server-keepalive.service mcp-server-keepalive.timer; do
-  sed "s#@CODE_DIR@#$B#g" deploy/host/systemd/$u > /etc/systemd/system/$u
-done
-systemctl daemon-reload && systemctl enable --now data-pipeline-nightly.timer mcp-server-keepalive.timer
-systemctl list-timers 'data-pipeline-nightly*' 'mcp-server-keepalive*'   # 기대: 두 타이머의 다음 실행 시각
-```
-`host_ctl.sh`로: `bash deploy/host/scripts/host_ctl.sh timers` — 기대 `  씀  /etc/systemd/system/<단위>` 네 줄(`<단위>` = data-pipeline-nightly.service 등 — 출력에 나오는 이름).
-
-MCP 살리기 타이머는 `/health`에 응답이 없으면 떠 있는 컨테이너를 `docker restart`하고, 컨테이너가 멈췄거나 없으면 `host_ctl.sh`(compose)로 다시 띄운다. 직접 명령으로 띄운 서버에서는 이 둘째 경우가 이름이 겹쳐 실패하므로 `docker start <이름>`(예 `docker start mcp-server`)으로 손으로 띄운다.
-
-**⑥ 재부팅** — 세 컨테이너는 `--restart unless-stopped`라 docker 서비스가 다시 띄운다(`systemctl is-enabled docker` — 기대 `enabled`). 손으로 멈춘 컨테이너는 다시 띄우지 않으니 `docker start <이름>`(예 `docker start data-pipeline`)(또는 `host_ctl.sh up -d`).
+**⑥ 재부팅** — 운영의 앱 컨테이너와 PG·Redis는 `restart: always`라 docker 서비스가 다시 띄운다(`systemctl is-enabled docker` — 기대 `enabled`). 개발 서버의 앱 컨테이너는 `unless-stopped`(손으로 멈춘 것은 그대로 — `host_ctl.sh up -d`).
 
 ---
 
@@ -324,35 +246,35 @@ MCP 살리기 타이머는 `/health`에 응답이 없으면 떠 있는 컨테이
 | 단계 | 어디서 | 하는 일 | 확인 |
 |---|---|---|---|
 | ① 개발 이미지 만들기 | PC(`local`) | 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`을 빌드 → 이 커밋 코드를 붙여 selftest → 통과하면 `stage_images.sh`로 조각을 만들어 개인 이미지 저장소 `jehunlee302/sbl_images`에 push(사람) — [§5-3](#5-3-pc에서--실행-이미지-만들기와-이미지-저장소에-올리기) | `build_ship.sh`의 `[판정] 통과` |
-| ② 개발 서버에 띄우기 | 개발 서버(`dev`) | 이미지 저장소 zip을 받아 `load.sh <이미지 판>` → 코드 git zip을 공용 폴더에 풀어 벌 폴더 이름으로 바꾸고 그 코드 폴더를 `/app/deploy`에 읽기 전용으로 붙여 띄움(`host_ctl.sh`가 붙임 — [§1-5](#서버-설치-순서)). 코드만 바뀌면 새 코드 zip을 벌 폴더에 덮어씀([§4-5](#4-5-벌-폴더에-새-코드-덮어쓰기)) | `host_ctl.sh check` · e2e |
-| ③ 운영 이미지 굽기·옮기기 | 개발 서버 → 운영 서버(`prd`) | 개발 서버에서 불러온 실행 이미지 위에 시험한 코드 폴더를 넣어 앱마다 코드가 든 이미지 `data-pipeline:<VERSION>`·`mcp-server:<VERSION>`를 다시 빌드(`bake_prod_image.sh`) → 조각을 운영 서버로 옮겨 `load.sh <VERSION>` → `host_ctl.sh up`(마운트 없음, `CODE_DIR` 두지 않음) — [§5-4](#5-4-개발--운영--시험한-그대로-굽기) | 굽기의 `[판정] 통과` · 운영 `host_ctl.sh check` |
+| ② 개발 서버에 띄우기 | 개발 서버(`dev`) | 이미지 저장소 zip을 받아 `load.sh <이미지 판>` → 코드 git zip을 공용 폴더에 풀어 벌 폴더 이름으로 바꾸고 `compose-dev.yml`이 그 벌 폴더를 `/app/deploy`에 붙여 띄움(`host_ctl.sh up -d` — [§1-5](#서버-설치-순서)). 코드만 바뀌면 새 코드 zip을 벌 폴더에 덮어씀([§4-5](#4-5-벌-폴더에-새-코드-덮어쓰기)) | `host_ctl.sh check` · e2e |
+| ③ 운영 이미지 굽기·옮기기 | 개발 서버 → 운영 서버(`prd`) | 개발 서버에서 불러온 실행 이미지 위에 시험한 코드 폴더를 넣어 앱마다 코드가 든 이미지 `data-pipeline:<VERSION>`·`mcp-server:<VERSION>`를 다시 빌드(`bake_prod_image.sh`) → 조각을 운영 서버로 옮겨 `load.sh <VERSION>` → `host_ctl.sh up -d`(`compose-prd.yml` — 코드 폴더 마운트 없음) — [§5-4](#5-4-개발--운영--시험한-그대로-굽기) | 굽기의 `[판정] 통과` · 운영 `host_ctl.sh check` |
 
 반입은 git 저장소 두 개를 **zip으로 받아** 공용 폴더에 푼다:
 - 코드: `gigasamba/sbl_data_parsing`의 받을 판(태그·커밋). zip을 푼 폴더(`sbl_data_parsing-<판>`)를 벌 폴더 이름으로 바꾼 것이 코드 폴더다. zip은 `CODE_COMMIT`을 채운다(git clone은 안 채움 — 시작 로그의 커밋이 틀 그대로).
 - 이미지: 비공개 `jehunlee302/sbl_images`. 판 폴더마다 실행 이미지를 분할한 조각과 `load.sh`가 있다.
 
-운영 서버(`prd`)는 한 벌이고 세 컨테이너(`data-pipeline`·`mcp-data-parsing`·`mcp-server`)를 띄운다. 개발 서버(`dev`)는 개발자마다 벌을 하나씩 두고, 벌마다 `data-pipeline` 하나만 띄운다(§2).
+운영 서버(`prd`)는 한 벌이고 세 컨테이너(`data-pipeline-0`·`mcp-data-parsing-0`·`mcp-server-0`)를 띄운다. 개발 서버(`dev`)는 개발자마다 벌을 하나씩 두고(벌마다 `data-pipeline-<번호>`), 공용 main 벌 0이 `mcp-server-0`·`mcp-data-parsing-0`도 띄운다(§2). 모두 `compose-<환경>.yml` 한 파일이 띄운다([§6-6](#6-6-서버-묶음--compose-파일과-root-ssh)).
 
 ### 1-2. 폴더 배치
 
-서버는 **공용 폴더 하나**(예 `/home/sbl/`) 아래에서 동작한다. 공용 폴더 바로 아래에 **이미지 폴더**(`sbl_images-main/` — 서버에 한 번 불러오면 모든 벌이 같이 씀)와 **벌 폴더**(한 벌 = 코드 zip을 푼 코드 폴더 하나)가 있다. 루트 = 코드 폴더 자체이고, 호스트 스크립트는 자기 자리에서 루트를 구한다. 코드 폴더 바로 아래에 코드와 함께 **설정 파일**(`settings.yaml`·`edw_chain.yaml`) **· 결과 폴더**(`output/`)(+ SSH 작업 공간을 켜면 `home/`)이 있다 — 모두 git·코드 zip에 없는 것이라 새 판을 덮어써도 남는다(§4-5).
+서버는 **공용 폴더 하나**(예 `/home/sbl/` — compose 파일의 `SBL_ROOT`) 아래에서 동작한다. 공용 폴더 바로 아래에 **이미지 폴더**(`sbl_images-main/` — 서버에 한 번 불러오면 모든 벌이 같이 씀)와 **벌 폴더**(한 벌 = 코드 zip을 푼 코드 폴더 하나)가 있다. 루트 = 코드 폴더 자체이고, 호스트 스크립트는 자기 자리에서 루트를 구한다. 코드 폴더 바로 아래에 코드와 함께 **설정 파일**(`settings.yaml`) **· PG·Redis 비밀번호**(`.env`) **· 결과 폴더**(`output/`) **· root 홈**(`home/`)이 있다 — 넷은 git·코드 zip에 없는 것이라 새 판을 덮어써도 남는다(§4-5). EDW 조인 사슬 `edw_chain.yaml`은 코드다(코드 폴더 맨 위 — git으로 고침).
 
 ```
 <공용 폴더>/                                  ← 예 /home/sbl/
 ├── sbl_images-main/                         ← 공용 — load.sh · readme.md · <판>/BUILD.txt · <판>/<이미지>/*.tar.gz.part* + *.sha256(서버에 한 번 load)
-├── opencode.json                            ← 공용 — 개발 작업 공간의 opencode 접속 설정(선택 — UID 10001, 640 · §2-13)
-├── sbl_data_parsing-main/                   ← 한 벌(운영 서버) = 코드 폴더 = 루트(코드 · VERSION · CODE_COMMIT · deploy/docker/DEPS_HASH)
-│   ├── settings.yaml  edw_chain.yaml        ← settings.sample.yaml·기본 사슬을 host_ctl.sh init이 없을 때만 복사(비밀값 — 640)
+├── sbl_data_parsing-main/                   ← 한 벌(운영 서버) = 코드 폴더 = 루트(코드 · edw_chain.yaml · VERSION · CODE_COMMIT · deploy/docker/DEPS_HASH)
+│   ├── settings.yaml                        ← settings.sample.yaml을 host_ctl.sh init이 없을 때만 복사(비밀값 — 640)
+│   ├── .env                                 ← PG·Redis 비밀번호(사람이 적음 — 600, git 제외 · compose-pgvector.yml·compose-redis.yml이 읽음)
 │   ├── output/                              ← 결과 폴더(host_ctl.sh init이 만듦 — 컨테이너 안 /app/output · 파싱 캐시가 있어 잃으면 전부 다시 처리 · 아래 _ 붙은 폴더는 임시 자리)
 │   │   ├── _docflow/<번호>/  _staging/  _faq_seen.txt  _mcp_parse/jobs/  _llm_spend/
 │   │   └── logs/                            ← DB 로그를 못 쓸 때의 예비 파일만
-│   ├── home/                                ← 개발 작업 공간 홈(option.devbox.ssh_port를 적었을 때만 init이 만듦)
+│   ├── home/                                ← root 홈(컨테이너 /root — SSH 호스트 열쇠·git 계정·작업 기록 · home/mcp = mcp-server-0 홈 · 처음 띄울 때 생김)
 │   └── deploy/host/scripts/test_space/      ← run_pipeline 진행 기록(batch_progress/)
-├── sbl_data_parsing-main-1/                 ← (개발 서버) 벌 1 — 폴더 이름 끝 번호 = 벌 번호(§2-1)
-└── sbl_data_parsing-main-2/                 ← (개발 서버) 벌 2
+├── sbl_data_parsing-main-0/                 ← (개발 서버) 벌 0 — 검색 MCP·작업 컨테이너도 이 벌(§2-1)
+└── sbl_data_parsing-main-1/ … main-4/      ← (개발 서버) 벌 1~4
 ```
 
-검색 DB(pgvector — 따로 떠 있는 PG 컨테이너)는 벌 폴더 밖이라 판이 바뀌어도 같은 DB를 보고, 모든 벌이 같은 기준 스키마(`required.pg.pg_schema`)를 함께 쓴다.
+검색 DB 데이터(`/data/pg/pipeline` — `PG_DATA`)와 Redis 데이터(`/data/redis` — `REDIS_DATA`)는 벌 폴더 밖이라 판이 바뀌어도 그대로이고, 모든 벌이 같은 기준 스키마(`required.pg.pg_schema`)를 함께 쓴다.
 
 ### 1-3. 미리 있어야 하는 것
 
@@ -369,10 +291,46 @@ MCP 살리기 타이머는 `/health`에 응답이 없으면 떠 있는 컨테이
 
 **컨테이너 도구는 docker 하나로 쓴다.** 셸을 열면 먼저 `export DOCKER=docker`(운영 계정 `~/.bashrc`에 두어도 됨), settings.yaml에 `ops.host.container_cli: docker`. 일반 사용자 셸이면 `DOCKER="sudo docker"`. 같은 서버에 podman도 있으면 이미지를 podman에 불러오지 않는다(두 도구는 이미지를 따로 보관 — docker로 띄우면 podman에 넣은 이미지는 안 보임).
 
+### 1-3-1. parse_document Redis 큐(#113)
+
+앱 이미지 2개 외에 Redis(`compose-redis.yml` — 공식 `redis:7.4.8-alpine`, 컨테이너 `redis`, 서버마다 하나, 서버 8010)를 우리가 운영한다 — 띄우는 법·비밀번호는 [§6-7](#6-7-redis--compose-redisyml). 작업 폴더 `<결과 폴더>/_mcp_parse/jobs`는 `host_ctl.sh init --group <운영 그룹>`이 만든다(2775). 검색 MCP(`mcp-server-0`)는 결과 폴더를 읽기 전용으로, jobs만 쓰기 가능으로 붙인다. 작업 컨테이너는 0번 벌의 `mcp-data-parsing-0` 하나다.
+
+현재 worker는 기본 2개이며 허용 범위는 1~2다. 상한을 늘릴 때는 CPU·메모리·worker마다 엔진 수를 함께 조정한다.
+
+| 자원 칸 | 기본 | 산정·확인 |
+|---|---|---|
+| `ops.services.data_parsing.mcp_parse_workers` | 2(최대 2) | 독립 spawn 소비자 |
+| `tuning.ops.services.data_parsing.mcp_parse_engine_processes` | 비움 | worker마다 max(1, min(2, CPU − 1)), 보통 2 × 2 = 총 엔진 4개 |
+| compose 파일 `mcp-data-parsing-0`의 `cpus` | 4 | CPU 상한이며 예약이 아님 |
+| 같은 칸 `mem_limit` | 12g(PC `compose-local.yml` 8g) | worker 2개와 엔진 자식에 필요한 메모리 여유 확인 |
+| 같은 칸 `cpu_shares` | 4096 | 일괄 `data-pipeline-0`(1024)보다 CPU 우선순위가 높음 |
+
+docker는 서버 CPU 수보다 큰 `cpus`를 거부한다. 4 CPU 미만이면 compose 파일의 `cpus`를 서버 이하로 낮추고 `mcp_parse_engine_processes`를 1로 적는다. `cpus=4`는 CPU 예약이 아니며 경합 때 `cpu_shares`가 우선순위를 정한다. 메모리는 컨테이너 상한 12g 외에 두 앱·Redis·호스트 여유까지 합산한다.
+
+```bash
+bash deploy/host/scripts/host_ctl.sh ps                                       # mcp-data-parsing-0 … (healthy)
+$DOCKER exec mcp-data-parsing-0 python -m pipeline.run_mcp_parsing --health
+$DOCKER exec -it redis redis-cli                                              # 들어가서 AUTH <비밀번호>(손으로) → 아래 명령
+#   SCARD mcp_parse:active · XPENDING mcp_parse:queue mcp_parse:workers · HGETALL mcp_parse:job:<job_id>
+```
+
+비밀번호는 셸 명령 인자·로그에 적지 않는다 — 위처럼 `redis-cli` 안에서 `AUTH`로 친다. 접두는 설정값 그대로 사용한다(자동 접미사 없음). `KEYS *`·FLUSHALL 대신 해당 접두의 SCAN을 쓴다.
+
+AOF 데이터는 `REDIS_DATA`(기본 `/data/redis`)에 남는다. `compose-redis.yml`이 코드 폴더 맨 위 `.env`의 `REDIS_PASSWORD`로 `redis-server --requirepass …`(`protected-mode yes` · `bind 0.0.0.0` · AOF)를 띄운다 — 공식 entrypoint가 Redis 계정으로 내린다. 데이터 폴더는 Redis 전용이며 운영 계정이 쓰지 않는다. 비밀번호를 바꾸면 `.env`·settings.yaml을 같이 고치고 Redis `up -d --force-recreate` 뒤 두 앱도 `host_ctl.sh restart mcp-server-0 mcp-data-parsing-0`(새 비밀번호를 읽게). AOF everysec는 장애 시 최근 약 1초 쓰기를 잃을 수 있다. 완료 STREAM 항목은 XACK+XDEL로 제거하고, AOF는 Redis 기본 auto-rewrite(100% 증가·최소 64MB)를 사용하므로 디스크 여유를 살핀다. 완료 HASH·LIST는 기본 하루 TTL, 폴더는 수정 시간순 최근 30개를 남기되 active와 최근 10분 폴더는 등록 전 업로드까지 보호한다. 미완료 작업은 pending에서 회수되며 최대 전달 횟수를 넘으면 failed 알림을 준다.
+
+MCP 살리기(`mcp_keepalive.sh`)는 Redis·작업 컨테이너 기동이 실패해도 검색 MCP 확인과 재기동을 계속한다. parse health는 컨테이너 로컬 임시 폴더의 supervisor 식별자를 읽고 그 소비자의 heartbeat만 확인하므로 다른 컨테이너를 정상으로 오인하지 않는다.
+
+상태 흐름: queued → running → done/failed/rejected. 완료 알림 전에 result-<attempts>.json을 쓴다. 제한 시간 응답을 받아도 worker는 작업을 계속한다. `service.json`에는 supervisor PID·Redis host:port·worker 수만 적고 비밀번호는 넣지 않는다. 작업·대기·파싱 추적과 `perf_report --mcp`는 §3-4-1을 따른다.
+
+parse_document 회수 보강(#177): 종료 확인·running 소유권 변경은 WATCH로 묶고, 시도별 `a<n>/`에서 파싱한 뒤 HASH의 `result_file` 이름으로 결과를 읽는다. 배포 전환 중 옛 전체 경로의 마지막 요소가 result.json이면 받은 경로를 열지 않고 자기 job 폴더의 result.json만 읽는다(다음 판 제거, C-118). heartbeat 없음 연속 30초 + idle 60초를 모두 확인한 소비자는 한 건씩 회수하며, 살아 있지만 멈춘 소비자는 기존 (job_timeout+60)초 XAUTOCLAIM으로 회수한다. 손상된 HASH는 failed로 끝내고 일반 worker 오류는 traceback으로 기록한다.
+
+parse_document 빠른 거절·제출 복구(#177): worker가 확장자·허용 루트(설정 경로의 normpath와 resolve된 실제 경로 모두)·크기 정책을 시작 때와 10초 heartbeat마다 Redis에 TTL 120초로 공개한다. proxy는 정책이 있으면 확장자와 정규화한 절대경로를 폴더 생성 전에 검사한다(존재·실제 크기·심볼릭 링크는 worker가 검사). 정책이 없으면 제출한다. 제출 EXEC 응답이 유실되면 새 EXISTS로 등록 여부를 확인해 등록된 작업은 계속 기다리고, 미등록이 확실할 때만 폴더를 지운다. 확인도 실패하면 폴더를 보존하고 job_id와 연결 오류 끝에 “— 제출 여부 확인 불가(job_id로 수집 서버 담당자 확인)”를 반환한다. 제출 전 연결 실패에는 job_id를 붙이지 않는다.
+
+Redis 인증(#177): `common.connections.redis.redis_password`는 모든 서버에 반드시 채운다(기본값 없음 — 서버마다 새로 만든 값). 비움·공백은 앱 client가 거부하며(`.env`의 `REDIS_PASSWORD`가 비면 compose가 멈춤) worker 시작은 종료 코드 2다. Redis는 서버의 모든 주소(`0.0.0.0:8010`)에 열리므로 `protected-mode yes`와 비밀번호를 함께 쓴다. 비밀값 처리 변경은 검토 등급 A로 다른 사람의 승인이 필요하다(C-117).
 <a id="서버-pg-띄우기"></a>
 ### 1-4. 서버 PG(pgvector) 띄우기
 
-이 서버에 PG를 직접 띄울 때만 한다(DB 담당이 이미 띄웠으면 건너뛰고 접속 정보만 받는다). root 셸에서 차례로 친다.
+이 서버에 PG를 직접 띄울 때만 한다(DB 담당이 이미 띄웠으면 건너뛰고 접속 정보만 받는다). `compose-pgvector.yml` 한 파일이다(컨테이너 `pgvector`, 서버 `0.0.0.0:5433` → 컨테이너 5432, 재시작 정책 `always`). root 셸에서 차례로 친다 — 코드 폴더(`<루트>`)의 settings.yaml에 `required.pg.pg_password`·`common.connections.redis.redis_password`를 먼저 채운다(설치 순서 4번).
 ```bash
 # ① (인터넷 PC에서) 이미지를 파일로 만든다 → 서버로 옮긴다
 docker pull pgvector/pgvector:pg16 && docker save pgvector/pgvector:pg16 -o pgvector_pg16.tar
@@ -380,31 +338,26 @@ docker pull pgvector/pgvector:pg16 && docker save pgvector/pgvector:pg16 -o pgve
 # ② (서버) 이미지 불러오기
 docker load -i pgvector_pg16.tar                               # 기대: Loaded image: pgvector/pgvector:pg16
 
-# ③ 데이터 폴더(컨테이너를 지워도 DB는 여기 남음)
+# ③ 데이터 폴더(컨테이너를 지워도 DB는 여기 남음 — 비어 있으면 처음 시작 때 DB를 만든다)
 mkdir -p /data/pg/pipeline
 
-# ④ 띄우기 — 비밀번호는 화면·셸 기록에 남지 않게 read로 받는다
-read -rsp 'PG 비밀번호: ' PGPW; echo
-docker run -d --name pgvector --restart unless-stopped \
-  -p 127.0.0.1:5432:5432 \
-  -e POSTGRES_DB=rag -e POSTGRES_USER=<계정> -e POSTGRES_PASSWORD="$PGPW" \
-  -v /data/pg/pipeline:/var/lib/postgresql/data:z \
-  pgvector/pgvector:pg16
-unset PGPW
-docker ps --filter name=^pgvector$ --format '{{.Status}}'      # 기대: Up …
+# ④ 계정 — 코드 폴더 맨 위 .env(git 제외)에 settings.yaml과 같은 값을 손으로 적는다(값에 $·따옴표·줄바꿈 없음)
+cd <루트> && vi .env && chmod 600 .env                        # PG_USER=rag · PG_DB=rag · PG_PASSWORD=<pg_password> · REDIS_PASSWORD=<redis_password>
 
-# ⑤ 받을 준비가 될 때까지 기다린다
-until docker exec pgvector pg_isready -h 127.0.0.1 -U <계정> -d rag; do sleep 1; done   # 기대: 127.0.0.1:5432 - accepting connections
+# ⑤ 띄우기·기다리기
+docker compose --env-file .env -f deploy/host/compose/compose-pgvector.yml up -d
+until docker exec pgvector pg_isready -h 127.0.0.1 -U rag -d rag; do sleep 1; done   # 기대: 127.0.0.1:5432 - accepting connections
 #   -h 127.0.0.1을 꼭 준다 — 처음 띄울 때 PG가 초기화용 서버를 잠깐 띄우는데, -h 없이 물으면 그때도 "준비됨"이 나와 ⑥이 "database does not exist"로 실패한다
 
 # ⑥ vector 확장(DB마다 한 번)
-docker exec pgvector psql -U <계정> -d rag -c 'CREATE EXTENSION IF NOT EXISTS vector'   # 기대: CREATE EXTENSION
+docker exec pgvector psql -U rag -d rag -c 'CREATE EXTENSION IF NOT EXISTS vector'   # 기대: CREATE EXTENSION
 ```
-- 설치 순서 4번에서 settings.yaml에 같은 값을 적는다: `required.pg.pg_host: 127.0.0.1` · `pg_port: 5432` · `pg_database: rag` · `pg_user: <계정>` · `pg_password: <④의 값>`(④에서 `read`로 넣은 비밀번호) · `required.deploy.pg_container_name: pgvector`. 우리 컨테이너는 호스트 네트워크를 쓰므로 `127.0.0.1`로 붙는다.
-- `pg_port`에는 `-p`의 **앞쪽 숫자**(서버 쪽 포트)를 적는다 — 예 `-p 127.0.0.1:5433:5432`로 띄웠으면 `pg_port: 5433`(뒤 `5432`는 컨테이너 안 포트라 바뀌지 않음). `docker exec pgvector psql …`처럼 컨테이너 안에서 붙을 때만 `5432`. 비밀번호는 어느 쪽이든 그 계정의 값 하나.
-- `POSTGRES_USER`로 만든 계정은 관리자 계정이라 스키마 만들기 권한이 있다. 포트는 `127.0.0.1`에만 열었다(밖에서 붙지 못함).
-- `--restart unless-stopped`라 재부팅 뒤 docker 서비스가 다시 띄운다. 손으로 멈췄으면 `docker start pgvector`.
-- `POSTGRES_PASSWORD`는 데이터 폴더가 비어 있을 때(처음)만 걸린다. 비밀번호를 바꾸려면 `docker exec -it pgvector psql -U <계정> -d rag`에 들어가 `\password <계정>`.
+- settings.yaml에 같은 값을 적는다: `required.pg.pg_host: <서버 IP>`(이 서버의 사내 IP) · `pg_port: 5433`(서버 쪽 포트) · `pg_database: rag` · `pg_user: rag` · `pg_password`(④의 `.env`와 같은 값) · `required.deploy.pg_container_name: pgvector`. 서버 바깥(DB 도구)에서는 `<서버 IP>:5433`.
+- `POSTGRES_USER`로 만든 계정은 관리자 계정이라 스키마 만들기 권한이 있다.
+- 메모리 값(`shared_buffers` 등)·`shm_size`·`cpus`·`mem_limit`은 파일 안 주석대로 서버 메모리에 맞춰 고친다.
+- `.env`의 계정·비밀번호는 데이터 폴더가 비어 있을 때(처음)만 쓰인다. 비밀번호를 바꾸려면 `docker exec -it pgvector psql -U rag -d rag`에 들어가 `\password rag` 뒤 `.env`·settings.yaml 값을 같게 고친다.
+- `.env`의 비밀번호는 환경 변수로 넘어가 `docker inspect`에 보인다 — 서버 root·docker 권한자만 볼 수 있다.
+- 데이터를 다른 폴더에 두려면 셸에서 `PG_DATA=<폴더>`를 주고 띄운다(내릴 때도 같은 값).
 
 <a id="서버-설치-순서"></a>
 ### 1-5. 서버 설치 순서
@@ -416,28 +369,28 @@ docker exec pgvector psql -U <계정> -d rag -c 'CREATE EXTENSION IF NOT EXISTS 
    ```bash
    mkdir -p /home/sbl && cd /home/sbl                # 공용 폴더(자리는 아무 곳)
    unzip -q <이미지 zip> && unzip -q <코드 zip>       # 기대: sbl_images-main/ · sbl_data_parsing-<판>/
-   mv sbl_data_parsing-<판> sbl_data_parsing-main    # 한 벌 — 번호 없음(운영 서버는 늘 이것)
+   mv sbl_data_parsing-<판> sbl_data_parsing-main    # 운영 서버 — 한 벌, 번호 없음(compose-prd.yml의 PRD_DIR 기본값)
    B=/home/sbl/sbl_data_parsing-main                  # 아래 <루트> — 새 셸을 열면 다시 적는다
    ```
-   개발자마다 벌을 나누는 개발 서버만 `sbl_data_parsing-main-1`처럼 끝에 번호를 붙인다(§2-1).
+   개발 서버는 벌 폴더 이름 끝에 번호를 붙인다 — 공용 main `sbl_data_parsing-main-0`, 개발자 `-1`(`compose-dev.yml`이 이 이름으로 붙인다 — §2-1).
 2. 이미지를 불러온다(공용 폴더에서 — 서버에 한 번, 이미 불러온 판이면 건너뜀). `<이미지 판>`은 `ls sbl_images-main/`에 보이는 판 폴더 이름이다: `cd /home/sbl && DOCKER=docker bash sbl_images-main/load.sh <이미지 판>` — 조각 sha256 확인 → 합치기 → load, 끝에 `<판>/BUILD.txt`(빌드 커밋·DEPS_HASH). **코드의 `deploy/docker/DEPS_HASH`가 `BUILD.txt`의 DEPS_HASH와 같은 판**을 고른다(확인 명령 — [README §1-3](../../README.md#실행-모드)).
-3. 루트 채우기: `cd <루트> && bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>` — `output/`·`output/_mcp_parse/jobs`(UID 10001, 2775)(settings.yaml에 `option.devbox.ssh_port`가 있으면 `home/`도 — 10001, 700), 코드 a+rX(`settings.yaml`·`edw_chain.yaml`·`output/`·`home/`은 빼고), `settings.sample.yaml` → `<루트>/settings.yaml`, `resources/config/edw_chain.yaml` → `<루트>/edw_chain.yaml`(둘 다 없을 때만, 10001:<운영 그룹> 640). 끝에 빈 필수 칸 **이름**을 찍는다. 여러 번 불러도 안전하다. 결과 폴더를 다른 곳에 둘 때만 `ops.host.host_output_dir`를 먼저 적는다.
-4. 설정을 채운다 — `<루트>/settings.yaml` 맨 위 `required`의 빈 값([§1-6 꼭 채울 값](#꼭-채울-값)). 이미지 칸에는 2에서 불러온 이미지 태그(개발 `data-pipeline-runtime:<이미지 판>`·`mcp-server-runtime:<이미지 판>`, 운영 `data-pipeline:<VERSION>`·`mcp-server:<VERSION>`). 자원 상한도 본다([§1-10](#1-10-자원)).
+3. 루트 채우기: `cd <루트> && bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>` — `output/`·`output/_mcp_parse/jobs`(UID 10001, 2775), 코드 a+rX(`settings.yaml`·`output/`·`home/`은 빼고), `settings.sample.yaml` → `<루트>/settings.yaml`(없을 때만, 10001:<운영 그룹> 640). 끝에 빈 필수 칸 **이름**을 찍는다. 여러 번 불러도 안전하다.
+4. 설정을 채운다 — `<루트>/settings.yaml` 맨 위 `required`의 빈 값([§1-6 꼭 채울 값](#꼭-채울-값)). 띄울 이미지 판은 compose 파일의 `IMAGE_TAG`(기본값 — 다르면 파일 옆 `.env`에 `IMAGE_TAG=<판>`)가 정한다. 자원 상한은 compose 파일에 있다([§1-10](#1-10-자원)). 다 채우면 같은 PG·Redis 비밀번호를 코드 폴더 맨 위 `.env`(`REDIS_PASSWORD`·`PG_USER`·`PG_DB`·`PG_PASSWORD`, 600)에 적고 PG·Redis를 띄운다([§6-6](#6-6-서버-묶음--compose-파일과-root-ssh) ①).
    - **개발 서버**는 `required.source.source_systems: DEV-<번호>`를 적는다(여러 개는 쉼표 — `DEV-1, DEV-2`) — 비우면 운영 5개 원천 전부를 파싱한다.
    - 운영 기준 결과를 내려면 `transform.represent.post_steps: all`([env-guide "서버 값으로 적는 칸"](env-guide.md)).
    - `required.deploy.host_docs_dir`는 서버에 **이미 있는 폴더**여야 한다(없으면 `mkdir -p` 후 UID 10001이 읽을 수 있게).
    - `init`이 찍는 "빈 필수 칸" 목록에는 비워도 되는 칸(`source_systems`·모델 `*_api_key` 등 — sample 주석 `[선택]`)도 섞여 있다. 무엇을 꼭 채울지는 §1-6 표로 판단한다.
    - 다 적은 뒤 칸 이름이 맞는지 한 번 읽어 본다 — [env-guide §4 "칸 이름 확인"](env-guide.md#4-확인)(기대 `설정-읽힘`). 틀린 칸이 있으면 5번에서 모든 컨테이너가 시작을 거부한다. 빠른 확인은 `bash deploy/host/scripts/host_ctl.sh config --quiet && echo 설정 OK`.
    - EDW 표 설명 자료(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료, 받는 곳은 refactor.md C-91)를 루트 아래 결과 폴더에 복사하고(`<루트>/output/edw_meta/`, UID 10001이 읽을 수 있게) `search.edw_meta.edw_meta_catalog_dir: /app/output/edw_meta`를 적는다. 없으면 `edw_meta` 도구만 `not_configured`로 답한다(나머지 도구는 그대로 — [§3-8-1](#3-8-1-edw-쿼리-도구-설정--edw_metaquery_edw)).
-5. `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline`(코드 폴더에서 — DB 도구가 그 안에서 돈다).
+5. `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline-0`(코드 폴더에서 — DB 도구가 그 안에서 돈다).
 6. DB 표를 만든다 — [§1-8](#1-8-db-표-만들기--migrate)의 명령(검토용 SQL → `migrate up` → `migrate master load` → `migrate check`).
-7. (운영 서버만) `bash deploy/host/scripts/host_ctl.sh up -d mcp-data-parsing mcp`(검색 MCP는 시작할 때 마스터 표를 읽으므로 6 뒤). 개발 서버는 `data-pipeline`만 띄운다.
-8. `bash deploy/host/scripts/host_ctl.sh check` — check_env → ping_models → migrate check → 이미지 selftest → (운영) 검색 MCP `/health`, 처음 실패에서 멈춘다. 기대 마지막 줄: 운영 `[host_ctl check] 통과 — 6개` · 개발 `[host_ctl check] 통과 — 4개(개발 서버 — data-pipeline만)`. 실행 이미지(`*-runtime`)면 스크립트가 자기 코드 폴더를 `/app/deploy`에 붙인다(셸·systemd에 `CODE_DIR`가 있으면 그 값). 단계별 뜻은 [§2-7](#2-7-전체-점검--host_ctlsh-check).
+7. `bash deploy/host/scripts/host_ctl.sh up -d`(나머지 앱 컨테이너 — 검색 MCP는 시작할 때 마스터 표를 읽으므로 6 뒤).
+8. `bash deploy/host/scripts/host_ctl.sh check` — .env 일치(`.env` = settings.yaml, 다른 이름만) → check_env → ping_models → migrate check → 이미지 selftest 둘 → 검색 MCP `/health`, 처음 실패에서 멈춘다. 기대 마지막 줄: `[host_ctl check] 통과 — 7개`. 단계별 뜻은 [§2-7](#2-7-전체-점검--host_ctlsh-check).
 9. 첫 실행을 확인한다.
-   - 판: `bash deploy/host/scripts/host_ctl.sh logs data-pipeline 2>&1 | grep -m1 '^\[image\]'` — 기대 `[image] 이미지 … · 코드 <커밋> · 의존성 …`.
+   - 판: `bash deploy/host/scripts/host_ctl.sh logs data-pipeline-0 2>&1 | grep -m1 '^\[image\]'` — 기대 `[image] 이미지 … · 코드 <커밋> · 의존성 …`.
    - 게시 미리보기: `bash deploy/host/scripts/pipe_exec.sh publish --dry-run`(쓰기 0 — [§1-9](#1-9-연결이미지-점검)).
    - 문서 2건: [핵심 명령](#핵심-명령) "파이프라인 한 번(시험 2건)" — 기대 `progress.log` 끝 줄 `… 종료 코드 0 ===`.
-   - 검색: 운영은 `mcp_smoke`([§3-8](#3-8-검색-mcp-사용)) — 기대 끝 줄 `MCP 바깥 호출 통과`. 개발은 `data-pipeline` 안 `search_ask`([§2-10](#2-10-검색-확인)).
+   - 검색: `mcp_smoke`([§3-8](#3-8-검색-mcp-사용)) — 기대 끝 줄 `MCP 바깥 호출 통과`. 개발자 벌은 `data-pipeline-<번호>` 안 `search_ask`([§2-10](#2-10-검색-확인)).
 10. 자동 실행을 켠다 — `bash deploy/host/scripts/host_ctl.sh timers`([§3-1](#3-1-상주-컨테이너와-자동-실행)). 다른 서버의 AI 클라이언트가 붙어야 하면 [§1-11](#1-11-밖에서-붙기다른-서버의-ai-클라이언트).
 
 <a id="꼭-채울-값"></a>
@@ -448,7 +401,7 @@ docker exec pgvector psql -U <계정> -d rag -c 'CREATE EXTENSION IF NOT EXISTS 
 | 칸 | 무엇 | 어디서 받나 | 형식 예(가짜) | 환경 | 틀리면 어디서 잡나 |
 |---|---|---|---|---|---|
 | `required.env.run_env` | 실행 환경 | 정해진 값 | `dev` · `prd` | PC·dev·prd | 모든 명령이 시작 거부 |
-| `required.pg.pg_host`·`pg_port`·`pg_database`·`pg_user`·`pg_password`·`pg_schema` | 검색 DB(pgvector) — `pg_schema`는 비우면 `data_parsing` | DB 담당 | `pg.example.local` · `5432` · `rag` · `rag_app` · `<비밀>` · (비움) | PC·dev·prd | `host_ctl.sh check` ① check_env · ③ migrate check |
+| `required.pg.pg_host`·`pg_port`·`pg_database`·`pg_user`·`pg_password`·`pg_schema` | 검색 DB(pgvector) — `pg_schema`는 비우면 `data_parsing` | DB 담당 · 이 서버에 띄우면 [§1-4](#서버-pg-띄우기) | `<서버 IP>` · `5433` · `rag` · `rag` · `<비밀>` · (비움) | PC·dev·prd | `host_ctl.sh check` ① check_env · ③ migrate check |
 | `required.models.embed_base_url`·`embed_model`·`embed_api_key` | 임베딩 모델(`embed_model`은 적재·검색 때 같아야 함) | 모델 담당(내부망 주소) | `http://llm.example.local:8000/v1` · `<모델>` · `<비밀>` | PC·dev·prd | `host_ctl.sh check` ② ping_models |
 | `required.models.llm_*`·`vlm_*` | LLM·VLM 모델 | 모델 담당 | `http://llm.example.local:8001/v1` · `<모델>` | dev·prd | `host_ctl.sh check` ② ping_models |
 | `required.edw.edw_host`·`edw_port`·`edw_database`·`edw_read_*` | 회사 DB(EDW) 접속 — 읽기 계정(원천 목록·`query_edw`, EDW는 읽기만 함 — 쓰기 계정 칸은 없음) · `edw_port`는 비우면 1433 | DB 담당 | `edw.example.local` · (비움) · `EDW` · `<계정>` · `<비밀>` | dev·prd | `run_pipeline` 시작(빠지면 칸 이름을 찍고 멈춤) · `pipe_exec.sh publish --dry-run`(§1-9) |
@@ -458,61 +411,68 @@ docker exec pgvector psql -U <계정> -d rag -c 'CREATE EXTENSION IF NOT EXISTS 
 | `required.object_storage.object_storage_endpoint`·`object_storage_access_key`·`object_storage_secret_key` | Object Storage(S3 호환) 접속 | 스토리지 담당 | `https://os.example.local:9000` · `<비밀>` · `<비밀>` | dev·prd | `run_pipeline` 시작 · publish `--apply` |
 | `common.connections.object_storage.object_storage_region`·`object_storage_verify_tls` | 리전(비우면 `us-east-1`)·TLS 검증(비우면 `1` — 사내 CA면 CA 파일 경로). **`required` 아래가 아니다** | 스토리지 담당 | (비움) · (비움) | dev·prd | 설정을 읽을 때(자리가 틀리면 시작 거부) |
 | `extract.source.source_input_location`·`source_default_bucket`·`source_uri_prefix` | 원본 위치 — `source_default_bucket`은 서버에서 **필수**(`run_pipeline`이 비면 멈춤) | 운영 담당 | `rdb:csv:<루트>/list.csv` · `<버킷>` · `s3://<버킷>/<접두>` | dev·prd | 첫 `run_pipeline` |
-| `required.tokens.mcp_token` | MCP 토큰 하나 — 검색 MCP와 `parse_document` 작업 서비스가 함께 씀 | `openssl rand -hex 32` | 64자 16진수 | dev·prd | `host_ctl.sh check` ⑥ `/health` · `parse_document` 호출이 토큰 오류 |
+| `required.tokens.mcp_token` | MCP 토큰 하나 — 검색 MCP 외부 호출 인증에 씀(내부 전달은 Redis 권한) | `openssl rand -hex 32` | 64자 16진수 | dev·prd | `host_ctl.sh check` ⑥ `/health` · `parse_document` 호출이 토큰 오류 |
 | `required.tokens.fulltext_sign_key` | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키 — 비우면 두 도구가 `not_configured`, 바꾸면 이미 발급한 sfid가 모두 무효 | 같은 명령 | 64자 16진수 | dev·prd | 원문 도구 호출이 `not_configured` |
-| `required.deploy.pipeline_image` · `mcp_image` | 띄울 이미지 태그(같은 배포 묶음) | §1-5 2번 `load.sh` | dev: `data-pipeline-runtime:<이미지 판>` · prd: `data-pipeline:<VERSION>` | dev·prd | `host_ctl.sh up`이 이미지 없음으로 멈춤 |
-| `required.deploy.host_docs_dir` | 원본 문서 폴더(서버에 이미 있는 폴더) | 서버 관리자 | `/data/docs` | dev·prd | `host_ctl.sh up`이 `:?` 안내로 멈춤 |
-| `ops.host.host_output_dir` | 결과 폴더 — 비우면 `<루트>/output` | 서버 관리자 | (비움) | dev·prd | — |
+| `common.connections.redis.redis_password` | `parse_document` 작업 큐(Redis) 비밀번호 — 코드 폴더 맨 위 `.env`의 `REDIS_PASSWORD`와 같은 값(compose-redis.yml이 읽음). `redis_host: <서버 IP>` · `redis_port`는 비움(기본 8010 — `redis_host` 코드 기본값 `host.docker.internal`은 PC용) | `openssl rand -hex 32` | 64자 16진수 | dev·prd | `redis` 컨테이너 상태 검사 · `parse_document` 호출 |
+| `search.server.mcp_bind_host` · `mcp_port` · `mcp_allowed_hosts` | 검색 MCP 바인드·컨테이너 안 포트·허용 Host(벌 0 — 운영은 그 한 벌) | 정해진 값 · 서버 관리자 | `<서버 IP>`(`0.0.0.0` 금지) · `8051` · 비움 | dev·prd | `host_ctl.sh check` ⑥ `/health` |
+| `required.deploy.host_docs_dir` | 원본 문서 폴더(서버에 이미 있는 폴더 — compose 파일의 `DOC_SRC`로 넘어감) | 서버 관리자 | `/data/docs` | dev·prd | `host_ctl.sh up`이 `:?` 안내로 멈춤 |
 | `required.deploy.pg_container_name` | `pg_dump`·`psql`을 exec할 PG 컨테이너 이름 | DB 담당 | `<컨테이너>` | dev·prd | 백업 명령([§4-3](#4-3-백업)) |
 | `ops.host.container_cli` | 컨테이너 도구 | 정해진 값 | `docker` | dev·prd | 호스트 스크립트가 다른 도구를 부름 |
 
 그 밖 칸은 비워 두면 코드 기본값을 쓴다([env-guide "서버 값으로 적는 칸"](env-guide.md)도 본다). 모델 주소는 모두 내부망 주소여야 한다.
 
-**포트 — 모두 settings.yaml 칸**
+**포트 — 서버(바깥) 포트는 compose 파일 `ports` 칸**
 
-| 무엇 | settings.yaml 칸 | 기본 | 누가 붙나 |
+| 무엇 | 서버 → 컨테이너 | 정하는 곳 | 누가 붙나 |
 |---|---|---|---|
-| PostgreSQL(pgvector) | `required.pg.pg_port` | 없음(필수) | 파이프라인·검색 MCP |
-| 검색 MCP 서버(운영) | `search.server.mcp_port`(바인드 `search.server.mcp_bind_host`) | 8765(127.0.0.1) | AI 클라이언트 |
-| MCP 파싱 작업 서비스(운영) | `ops.services.data_parsing.data_parsing_port` — 검색 MCP도 이 값으로 `http://127.0.0.1:<포트>`를 부름 | 8766 | 검색 MCP의 `parse_document` |
-| 개발 작업 공간 SSH(개발 — 켰을 때만) | `option.devbox.ssh_port` | 없음 | 개발자 |
-| EDW(SQL Server) | `required.edw.edw_port`(주소·계정도 `required.edw`) | 1433 | 파이프라인·`query_edw` |
-| 검증 페이지(PC만) | `dev.search_ui.search_ui_port` | 8790 | 사람(브라우저) |
+| SSH — `data-pipeline-0`~`4`(개발 — 운영은 0만) | 8020~8024 | compose 파일 `SSH_PORT` | 개발자(root 비밀번호) |
+| SSH — `mcp-server-0` | 8050 | 같음 | 개발자·운영자 |
+| 검색 MCP | 8051 | compose 명령 `--set MCP_PORT=8051` · 바인드 `search.server.mcp_bind_host: <서버 IP>` | AI 클라이언트 · `mcp_keepalive.sh`(`mcp-server-0` 안에서 `<서버 IP>:8051/health`) |
+| PostgreSQL(pgvector) | 5433 → 5432 | `compose-pgvector.yml` · 앱 `required.pg.pg_port: 5433` | 파이프라인·검색 MCP(`<서버 IP>`) · DB 도구 |
+| Redis | 8010 → 6379 | `compose-redis.yml` · 앱 `common.connections.redis.redis_port`(기본 8010) | 검색 MCP·작업 컨테이너(`<서버 IP>`) |
+| EDW(SQL Server) | — | `required.edw.edw_port`(주소·계정도 `required.edw`) — 기본 1433 | 파이프라인·`query_edw` |
+| 검증 페이지(PC만) | — | `dev.search_ui.search_ui_port` — 기본 8790 | 사람(브라우저) |
 
-컨테이너는 host 네트워크라 포트가 서버에서 겹치지 않아야 한다(겹치면 뒤에 띄운 쪽이 시작하지 못한다).
+컨테이너는 서버 네트워크를 그대로 쓴다(`network_mode: host` — docker 자체 네트워크·포트 연결 없음). 컨테이너가 여는 포트가 곧 서버 포트이고, SSH는 컨테이너마다 `SSH_PORT`로 다른 포트를 연다. 서버에 있는 PG·Redis·모델은 settings.yaml에 적은 `<서버 IP>`로 붙는다. SSH·PG·Redis는 서버의 모든 주소에, 검색 MCP는 `mcp_bind_host`(서버 IP)에만 열린다. 서버 방화벽은 밖에서 붙을 포트만 연다(예 8051 — [§1-11](#1-11-밖에서-붙기다른-서버의-ai-클라이언트)). 다른 PC·서버에서 붙는 포트(개발 서버 기준 — 운영은 쓰는 것만):
+```bash
+for p in 8020 8021 8022 8023 8024 8050 8051 8010 5433; do firewall-cmd --permanent --add-port=$p/tcp; done && firewall-cmd --reload   # SSH 8020~8024·8050 · 검색 MCP 8051 · Redis 8010 · PG 5433
+firewall-cmd --list-ports                                                                                              # 기대: 위 포트가 보임
+```
+Redis·PG를 그 서버의 컨테이너만 쓰면 8010·5433은 열지 않아도 된다(방화벽은 서버 자신의 접속을 막지 않음).
 
 <a id="핵심-명령"></a>
 <a id="compose-파일-읽는-법"></a>
 ### 1-7. 컨테이너 다루기 — `host_ctl.sh`와 핵심 명령
 
-서버에서는 `docker run`·`docker start`·`docker compose`를 직접 치지 않는다. 이미지 불러오기는 `load.sh`, 컨테이너 띄우기·멈추기·로그는 `deploy/host/scripts/host_ctl.sh`가 맡는다 — settings.yaml을 읽어 셸 변수로 넘기고(컨테이너 이름·포트·볼륨), 실행 이미지면 코드 폴더를 붙여(`compose.code*.yml`) compose 파일을 함께 부른다. compose 하위 명령을 그대로 넘긴다(`up -d`·`ps`·`logs`·`stop`·`down`·`config`·`restart`). 컨테이너 도구는 셸 `DOCKER`(없으면 `ops.host.container_cli`). 서비스 이름은 `data-pipeline`·`mcp-data-parsing`·`mcp`(컨테이너 이름 `data-pipeline`·`mcp-data-parsing`·`mcp-server`). 서비스를 빼고 `up -d`하면 세 서비스를 모두 띄우므로 개발 서버에서는 늘 `data-pipeline`을 적는다.
+서버에서는 앱 컨테이너를 `docker run`으로 따로 띄우지 않는다. 이미지 불러오기는 `load.sh`, 앱 컨테이너는 `deploy/host/scripts/host_ctl.sh`가 맡는다 — settings.yaml `required.env.run_env`의 compose 파일(`deploy/host/compose/compose-<run_env>.yml`)로 `docker compose -f <그 파일> <인자…>`를 그대로 부른다(`up -d`·`ps`·`logs`·`stop`·`down`·`config`·`restart`). PG(`compose-pgvector.yml`)·Redis(`compose-redis.yml`)는 코드 폴더 맨 위에서 `docker compose --env-file .env -f deploy/host/compose/<그 파일> up -d`로 따로 띄운다(`down`·`logs`·`ps`도 `--env-file .env`를 붙인다)([§6-6](#6-6-서버-묶음--compose-파일과-root-ssh)). 컨테이너 도구는 셸 `DOCKER`(없으면 `ops.host.container_cli`). 서비스 이름 = 컨테이너 이름(`data-pipeline-0`·`mcp-server-0`·`mcp-data-parsing-0` …). 서비스를 빼고 `up -d`하면 그 파일의 앱 컨테이너를 모두 띄운다.
 
 **compose 파일 읽는 법**(`deploy/host/compose/*.yml`)
-- 맨 위 `x-settings:`·`x-code:`는 서비스가 아니라 함께 쓰는 YAML 조각이다 — `x-settings`는 settings.yaml을 읽기 전용으로 붙이는 줄, `x-code`는 코드 폴더를 `/app/deploy`에 붙이는 줄.
-- `${PARSE_CPUS:-5}` 같은 값은 `host_ctl.sh`가 settings.yaml에서 넘긴다(`load_settings.sh`). 비면 `:-` 뒤 기본값, `${…:?…}`는 꼭 있어야 하는 칸.
-- 그래서 compose를 직접 부르면 값을 못 받아 `:?`에서 멈추거나 기본값으로 뜬다. 바꿀 값은 settings.yaml에 적고 `host_ctl.sh`로 다시 띄운다. `host_ctl.sh`는 부를 때마다 settings.yaml을 다시 읽는다.
-- 셸에서 컨테이너 이름 변수가 필요하면 벌 폴더에서 `. deploy/host/scripts/load_settings.sh && load_settings` — `$PIPELINE_CNAME`·`$MCP_CNAME`·`$DATA_PARSING_CNAME`(밑 이름 + 벌 번호)·`DOCKER`를 낸다(init 뒤 — settings.yaml이 있어야 함). `nightly_batch.sh`·`pipe_exec.sh`·`mcp_keepalive.sh`·systemd unit은 `<루트>/settings.yaml`을 스스로 찾는다.
+- 맨 위 `x-dev:`·`x-prd:`·`x-ssh:`·`x-local:`은 서비스가 아니라 함께 쓰는 YAML 조각이다(재시작 정책·root·네트워크·로그 상한 — 서비스 칸의 `<<: *dev`가 그 조각을 붙임).
+- 이름·이미지·포트·`cpus`·`mem_limit`·볼륨은 파일에 직접 적혀 있다. `${IMAGE_TAG:-0.4.0}` 같은 자리만 셸 env나 파일 옆 `.env`로 바꾼다 — `IMAGE_TAG`(이미지 판) · `SBL_ROOT`(공용 폴더 — 기본 `/home/sbl`) · `PRD_DIR`(운영 폴더) · `DOC_SRC`(원본 문서 폴더 — `host_ctl.sh`가 settings.yaml `required.deploy.host_docs_dir`에서 냄) · `PG_DATA`·`REDIS_DATA`(데이터 폴더).
+- 파일을 고친 뒤 `host_ctl.sh up -d`가 바뀐 컨테이너만 다시 만든다. compose 파일은 코드라 git으로 커밋한다(§6-4).
+- `nightly_batch.sh`·`pipe_exec.sh`·`mcp_keepalive.sh`·systemd unit은 `<루트>/settings.yaml`을 스스로 찾는다.
 
 **핵심 명령**(root 셸 · `<루트>` = 벌 폴더 = 코드 폴더 · 아래 스크립트는 `deploy/host/scripts/`에 있다)
 
 | 하고 싶은 일 | 들어갈 폴더(`cd`) | 명령 | 성공하면 보이는 것 |
 |---|---|---|---|
-| 이미지 불러오기(서버에 한 번) | 공용 폴더(`/home/sbl`) | `bash sbl_images-main/load.sh <이미지 판>` | `== <이미지> — load` 줄들 → `BUILD.txt` 내용 → `== 끝 — settings.yaml 이미지 칸(…)을 위 태그로` |
+| 이미지 불러오기(서버에 한 번) | 공용 폴더(`/home/sbl`) | `bash sbl_images-main/load.sh <이미지 판>` | `== <이미지> — load` 줄들 → `BUILD.txt` 내용 → `== 끝 — compose 파일(…)의 IMAGE_TAG가 위 판인지 확인…` |
 | 벌 폴더 처음 채우기 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>` | `[host_ctl init] 루트: …` → `만듦 …settings.yaml` 등 → 빈 필수 칸 **이름** 목록 |
-| 설정 확인(값은 안 찍음) | `<루트>` | `bash deploy/host/scripts/host_ctl.sh config --quiet && echo 설정 OK` | `설정 OK` |
-| 띄우기 | `<루트>` | 운영 `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp` · 개발 `… up -d data-pipeline` | 아래 `ps`에 운영 세 줄 · 개발 한 줄 `Up` |
-| 상태 · 로그 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh ps` · `… logs --tail 100 data-pipeline`(서비스 이름) | 이 벌의 컨테이너만 · 그 컨테이너 로그 |
-| 전체 점검 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh check` | 마지막 줄 운영 `[host_ctl check] 통과 — 6개` · 개발 `[host_ctl check] 통과 — 4개(개발 서버 — data-pipeline만)` |
-| DB 표 만들기(처음 한 번 — 공용 DB) | `<루트>`(`data-pipeline`이 떠 있어야 함) | [§1-8](#1-8-db-표-만들기--migrate) 순서 — 검토용 SQL → `migrate up --target all --dim <임베딩 차원>` → `migrate master load` → `migrate check` | `[migrate] <갈래> <스키마>: 판 [...] (끝 …)` · `[pipe_exec] … 끝 (종료 코드 0)` |
+| PG·Redis 비밀번호 | `<루트>` | `vi .env && chmod 600 .env`(`REDIS_PASSWORD`·`PG_USER`·`PG_DB`·`PG_PASSWORD` — settings.yaml과 같은 값) | `ls -l .env` → `-rw-------` |
+| 설정·compose 확인(값은 안 찍음) | `<루트>` | `bash deploy/host/scripts/host_ctl.sh config --quiet && echo 설정 OK` | `설정 OK` |
+| 띄우기 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh up -d` | 아래 `ps`에 앱 컨테이너(운영 셋 · 개발 넷) `Up` |
+| 상태 · 로그 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh ps` · `… logs --tail 100 data-pipeline-0` | 그 compose 파일의 컨테이너만 · 그 컨테이너 로그 |
+| 전체 점검 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh check` | 마지막 줄 `[host_ctl check] 통과 — 7개` |
+| DB 표 만들기(처음 한 번 — 공용 DB) | `<루트>`(`data-pipeline-0`이 떠 있어야 함) | [§1-8](#1-8-db-표-만들기--migrate) 순서 — 검토용 SQL → `migrate up --target all --dim <임베딩 차원>` → `migrate master load` → `migrate check` | `[migrate] <갈래> <스키마>: 판 [...] (끝 …)` · `[pipe_exec] … 끝 (종료 코드 0)` |
 | DB 담당 검토용 SQL(DB에 붙지 않음) | `<루트>` | 위 `migrate up` 명령 끝에 `--sql /app/output/up.sql` | `[migrate] SQL → /app/output/up.sql (DB에 붙지 않음 — …)` — 호스트에서는 `<루트>/output/up.sql` |
 | 파이프라인 한 번(시험 2건) | `<루트>` | `nohup python3 deploy/host/scripts/run_pipeline.py --limit 2 > run_first.out 2>&1 &` | `deploy/host/scripts/test_space/batch_progress/progress.log` 끝 줄 `=== 문서별 flow 끝: 2건(완료 2 · …) · … · 종료 코드 0 ===` |
-| 설정을 바꾼 뒤 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh up -d --force-recreate <서비스…>`(그냥 `up -d`는 다시 만들지 않음) | `ps`에 `Up`(방금 시작) |
-| 멈추기 · 지우기 | `<루트>` | **타이머부터** — 운영 `systemctl stop mcp-server-keepalive.timer data-pipeline-nightly.timer` · 개발 `systemctl stop data-pipeline-nightly-<번호>.timer` → `bash deploy/host/scripts/host_ctl.sh stop`(지우기는 `down`) | `ps`에 `Exited`(`down`이면 줄 없음) |
-| 자동 실행 타이머 켜기 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh timers` → 확인 `systemctl list-timers 'mcp-server-keepalive*' 'data-pipeline-nightly*'` | 운영 `  씀  /etc/systemd/system/<단위>` 네 줄 · 개발 두 줄 · 목록에 타이머의 다음 실행 시각 |
+| 설정을 바꾼 뒤 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh up -d --force-recreate <서비스…>`(그냥 `up -d`는 settings.yaml만 바뀐 컨테이너를 다시 만들지 않음) | `ps`에 `Up`(방금 시작) |
+| 멈추기 · 지우기 | `<루트>` | **타이머부터** — `systemctl stop mcp-server-keepalive.timer data-pipeline-nightly.timer` → `bash deploy/host/scripts/host_ctl.sh stop`(지우기는 `down`) | `ps`에 `Exited`(`down`이면 줄 없음) |
+| 자동 실행 타이머 켜기 | 벌 0 폴더(운영은 그 한 벌) | `bash deploy/host/scripts/host_ctl.sh timers` → 확인 `systemctl list-timers 'mcp-server-keepalive*' 'data-pipeline-nightly*'` | `  씀  /etc/systemd/system/<단위>` 네 줄 · 목록에 타이머의 다음 실행 시각 |
 | 새 판 올리기 | `<루트>` | [§4](#4-운영-중인-서버를-새-판으로-올리기) | `host_ctl.sh check` 통과 |
-| 두 번째 벌(개발) | 공용 폴더 → 새 `<루트>` | [§2-15](#2-15-두-번째-벌-만들기) | 그 벌 폴더의 `host_ctl.sh ps`에 `-2` 컨테이너만 |
+| 벌 늘리기(개발) | 벌 0 폴더 | [§2-15](#2-15-두-번째-벌-만들기) — `compose-dev.yml`에 칸 하나 | `host_ctl.sh ps`에 새 컨테이너 |
 
-번호가 붙은 벌(`…-main-2`)이면 컨테이너·타이머 이름 끝에 `-<번호>`가 붙는다(예 `data-pipeline-nightly-2.timer`). 서버의 모든 컨테이너는 `docker ps`(일반 사용자 셸이면 `sudo docker ps`), 우리 벌만은 `host_ctl.sh ps`.
+서버의 모든 컨테이너는 `docker ps`(일반 사용자 셸이면 `sudo docker ps`), 그 compose 파일의 앱 컨테이너만은 `host_ctl.sh ps`.
 
 ### 1-8. DB 표 만들기 — `migrate`
 
@@ -564,32 +524,36 @@ selftest는 종료 코드가 아니라 `[판정]` 줄로 판정한다([§5-5](#5
 
 ### 1-10. 자원
 
-기본 상한 — 합계 CPU 9 · 메모리 36g.
+기본 상한은 compose 파일의 컨테이너 칸(`cpus`·`mem_limit`·`memswap_limit`)에 직접 적혀 있다(settings.yaml 칸 없음 — 고친 뒤 `host_ctl.sh up -d`).
 
-| 컨테이너 | CPU · 메모리 기본 | settings.yaml 칸 |
+| 컨테이너 | 개발(`compose-dev.yml`) | 운영(`compose-prd.yml`) |
 |---|---|---|
-| `data-pipeline` | 5 · 24g | `ops.containers.pipeline.pipeline_cpus` · `pipeline_mem_limit` |
-| `mcp-data-parsing`(운영) | 3 · 8g(CPU 나눔 비율 4096 — 일괄 1024보다 먼저) | `ops.containers.data_parsing.data_parsing_cpus` · `data_parsing_mem_limit` · `data_parsing_cpu_shares` |
-| `mcp-server`(운영) | 1 · 4g | `ops.containers.mcp.mcp_cpus` · `mcp_mem_limit` |
+| `data-pipeline-0` | 4 · 12g(스왑 4g 더 — `memswap_limit` 16g) | 4 · 12g(`memswap_limit` 16g) |
+| `data-pipeline-1`~`4` | 각 2 · 8g | — |
+| `mcp-server-0` | 3 · 12g | 3 · 12g |
+| `mcp-data-parsing-0` | 4 · 12g(CPU 나눔 비율 4096 — 일괄 1024보다 먼저) | 같음 |
+| `pgvector`(`compose-pgvector.yml`) | 4 · 12g | 같음 |
+| `redis`(`compose-redis.yml`) | 1 · 2g | 같음 |
 
-서버 CPU 수보다 큰 값은 컨테이너 도구가 거부한다. CPU 4개 서버라면 예: `ops.containers.pipeline.pipeline_cpus: 2`, `data_parsing_cpus: 1`(그러면 `tuning.ops.services.data_parsing.mcp_parse_engine_processes`도 1 이하), `ops.containers.mcp.mcp_cpus: 1`. 개발 서버에 벌이 여럿이면 모든 벌의 `data-pipeline` 합이 서버 CPU·메모리를 넘지 않게 벌마다 줄인다. 바꾼 뒤 `host_ctl.sh up -d --force-recreate …`.
+서버 CPU 수보다 큰 `cpus`는 docker가 거부한다. CPU 4개 서버라면 예: `data-pipeline-0` 2, `mcp-data-parsing-0` 1(그러면 `tuning.ops.services.data_parsing.mcp_parse_engine_processes`도 1 이하), `mcp-server-0` 1. `cpus`는 예약이 아니라 상한이고, CPU가 모자랄 때는 `cpu_shares`가 나눈다. 모든 컨테이너의 `mem_limit` 합이 서버 메모리를 넘지 않게 줄인다.
 
 ### 1-11. 밖에서 붙기(다른 서버의 AI 클라이언트)
 
-운영 서버의 검색 MCP에 다른 서버가 붙을 때.
-- 기본 바인드는 `127.0.0.1`. 밖에서 붙게 하려면 `search.server.mcp_bind_host`에 서버 IP를 적는다(`0.0.0.0`은 거부).
-- 이때 `required.tokens.mcp_token`가 꼭 있어야 한다(없으면 시작 거부). 만들기: `openssl rand -hex 32`.
-- 방화벽에서 `search.server.mcp_port`(기본 8765)를 연다 — 예: `firewall-cmd --add-port=8765/tcp --permanent && firewall-cmd --reload`.
+검색 MCP(`mcp-server-0`)에 다른 서버가 붙을 때.
+- 벌 0 settings.yaml `search.server.mcp_bind_host: <서버 IP>`(사내 대역 — `0.0.0.0`은 거부)이고, 포트는 compose 명령이 8051로 고정한다(서버 네트워크 그대로라 그 IP의 8051에 바로 열림). 클라이언트 주소는 `http://<서버 IP>:8051/mcp`.
+- `required.tokens.mcp_token`이 꼭 있어야 한다(없으면 시작 거부). 만들기: `openssl rand -hex 32`.
+- `search.server.mcp_allowed_hosts`에 클라이언트가 보내는 Host를 적는다 — 예 `<서버 IP>:8051`(이름으로 붙으면 그 이름도, 쉼표 구분).
+- 방화벽에서 8051을 연다 — 예: `firewall-cmd --add-port=8051/tcp --permanent && firewall-cmd --reload`.
 
 ---
 
 ## 2. 개발 서버 — 개발자 벌
 
-대상: 개발 서버(`dev`)를 처음 맡은 사람. 자기 벌(개발자 한 사람 몫의 `data-pipeline` 컨테이너 하나) 하나를 만들어 시험 원천 `DEV-1`의 문서를 파싱·게시·적재하고, 검색까지 확인한다. 설치 순서는 §1-5와 같고, 이 장은 개발 서버에서 단계마다 `cd`할 폴더·명령·성공 출력을 차례로 적은 것이다.
+대상: 개발 서버(`dev`)를 처음 맡은 사람. 서버 묶음(`compose-dev.yml` — 벌 0·1의 `data-pipeline-<번호>`, 벌 0의 검색 MCP·작업 컨테이너)을 띄우고 시험 원천 `DEV-1`의 문서를 파싱·게시·적재하고, 검색까지 확인한다. 설치 순서는 §1-5와 같고, 이 장은 개발 서버에서 단계마다 `cd`할 폴더·명령·성공 출력을 차례로 적은 것이다.
 
 **표기**
-- `/home/sbl` = 공용 폴더(예). 서버마다 다를 수 있다 — 앞 담당자에게 확인한다.
-- `<루트>` = 벌 폴더 = 코드 폴더 = 코드 zip을 푼 폴더(예 `/home/sbl/sbl_data_parsing-main-1`).
+- `/home/sbl` = 공용 폴더(예 — compose 파일의 `SBL_ROOT`). 서버마다 다를 수 있다 — 앞 담당자에게 확인한다.
+- `<루트>` = 벌 폴더 = 코드 폴더 = 코드 zip을 푼 폴더(예 `/home/sbl/sbl_data_parsing-main-0`).
 - `<…>` 꺾쇠 안은 직접 넣을 값이다. 실제 주소·계정·비밀번호는 문서·채팅·커밋에 적지 않는다.
 - 명령은 모두 **root 셸**에서 친다. 각 단계 맨 앞의 `cd`를 꼭 먼저 한다 — 스크립트는 자기 자리(코드 폴더)에서 설정을 찾지만, 결과 파일 경로(`output/…`, `deploy/host/scripts/test_space/…`)는 지금 폴더 기준으로 적었다.
 
@@ -598,38 +562,35 @@ selftest는 종료 코드가 아니라 `[판정]` 줄로 판정한다([§5-5](#5
 ```
 /home/sbl/                                   ← 공용 폴더
 ├── sbl_images-main/                         ← 이미지 폴더(서버에 한 번 불러오면 모든 벌이 같이 씀)
-├── opencode.json                            ← (선택) 개발 작업 공간 공용 opencode 설정
-├── sbl_data_parsing-main-1/                 ← 벌 1 = 코드 폴더 = <루트>
-│   ├── settings.yaml  edw_chain.yaml        ← 이 벌의 설정(init이 없을 때만 만듦 — 비밀값이 들어감, 권한 640)
+├── sbl_data_parsing-main-0/                 ← 벌 0 = 코드 폴더 = <루트> — 검색 MCP·작업 컨테이너·새벽 배치도 이 벌
+│   ├── settings.yaml                        ← 이 벌의 설정(init이 없을 때만 만듦 — 비밀값이 들어감, 권한 640)
+│   ├── .env                                 ← 벌 0만 — PG·Redis 비밀번호(사람이 적음, 600 — compose-pgvector.yml·compose-redis.yml)
 │   ├── output/                              ← 이 벌의 결과 폴더(컨테이너 안 /app/output)
-│   ├── home/                                ← (작업 공간을 켰을 때만) SSH 작업 공간 홈
+│   ├── home/                                ← root 홈(컨테이너 /root — home/mcp = mcp-server-0 홈)
 │   └── deploy/host/scripts/test_space/      ← run_pipeline 진행 기록(batch_progress/)
-└── sbl_data_parsing-main-2/                 ← 벌 2(§2-15)
+└── sbl_data_parsing-main-1/ … main-4/      ← 벌 1~4(§2-15)
 ```
 
-**벌 폴더(코드 폴더) 하나가 한 벌이고, 폴더 이름 끝 `-<숫자>`(1~99)가 벌 번호다.** 설정 칸은 따로 없다. 끝이 `-<숫자>`가 아니면(`sbl_data_parsing-main`, `sbl_data_parsing-0.3.0`, `sbl_data_parsing-20261106` 같은 날짜) 한 벌로 보고 이름을 그대로 쓴다. 이미지는 공용 폴더에서 한 번 불러오면 모든 벌이 같이 쓴다.
+**벌은 `compose-dev.yml`의 칸 하나다** — 서비스 `data-pipeline-<번호>`가 벌 폴더 `<공용 폴더>/sbl_data_parsing-main-<번호>`를 붙이고 SSH 포트 하나를 연다. 번호·폴더·포트는 그 파일에 적혀 있다(settings.yaml 칸 없음). 이미지는 공용 폴더에서 한 번 불러오면 모든 벌이 같이 쓴다. PG·Redis는 서버마다 하나다([§6-6](#6-6-서버-묶음--compose-파일과-root-ssh)).
 
-**개발 서버의 벌은 `data-pipeline` 하나만 띄운다.** 검색 MCP(`mcp-server`)·파싱 작업 서비스(`mcp-data-parsing`)는 운영 서버에만 있다. 검색 확인은 `data-pipeline` 안에서 한다(§2-10 — 실행 이미지가 `mcp_server`를 불러올 수 있음). 그래서 벌마다 검색 MCP 포트를 나눌 필요가 없다.
+| 벌 | 벌 폴더 | 컨테이너 | SSH(서버 포트) |
+|---|---|---|---|
+| 0 | `/home/sbl/sbl_data_parsing-main-0` | `data-pipeline-0` + 검색 MCP `mcp-server-0`(HTTP 8051) + 작업 컨테이너 `mcp-data-parsing-0` | 8020 · `mcp-server-0` 8050 |
+| 1~4 | `/home/sbl/sbl_data_parsing-main-1`~`-4` | `data-pipeline-1`~`4` | 8021~8024 |
 
-| 벌 번호가 저절로 정하는 것 | 기본 이름 → 벌 1 · 벌 2 |
+| 벌마다 settings.yaml로 정하는 것 | 어떻게 정하나 |
 |---|---|
-| 컨테이너 이름 | `data-pipeline` → `data-pipeline-1` · `data-pipeline-2` |
-| compose 묶음 이름 | `compose` → `compose-1` · `compose-2` |
-| systemd 타이머·서비스 이름 | `data-pipeline-nightly.timer` → `data-pipeline-nightly-1.timer` · `data-pipeline-nightly-2.timer` |
-
-| 벌 번호가 정하지 **않는** 것 | 어떻게 정하나 |
-|---|---|
-| SSH 작업 공간 포트 | 작업 공간을 켤 때만 그 벌의 settings.yaml `option.devbox.ssh_port`에 벌마다 다르게 적는다(호스트 네트워크라 겹치면 뒤에 띄운 쪽이 못 뜸) |
 | 어떤 문서를 파싱하나 | settings.yaml `required.source.source_systems`(쉼표 구분 — 예 `DEV-1` · `DEV-1, DEV-2`) |
 | 검색 DB 스키마 | 모든 벌이 같은 기준 스키마(`required.pg.pg_schema`, 비우면 `data_parsing`)를 함께 쓴다. 원천 `DEV-1` 문서는 그 아래 원천 스키마 `<기준>_dev_1`(기본이면 `data_parsing_dev_1`)에 들어간다 |
 
-- **벌 번호와 `DEV-<숫자>`는 서로 다른 것이다.** 벌 번호는 컨테이너 이름만, `DEV-<숫자>`는 문서와 스키마를 나눈다. 헷갈리지 않게 벌 1은 `DEV-1`, 벌 2는 `DEV-2`처럼 같은 숫자를 쓴다.
+- **벌 번호와 `DEV-<숫자>`는 서로 다른 것이다.** 벌 번호는 컨테이너·폴더만, `DEV-<숫자>`는 문서와 스키마를 나눈다.
 - 그 벌의 settings.yaml `required.source.source_systems`에 자기 원천 `DEV-<숫자>`를 적으면 그 문서만 파싱해 원천 스키마 `<기준>_dev_<숫자>`에 적재하고 `DEV-<숫자>/…`에 게시한다. **비우면 운영 5개 원천 전부를 파싱한다.**
 - 원천 `DEV-<숫자>` 문서는 EDW 파일 목록 표(`required.edw.edw_file_table`, 기본 `AI.FileStorageMap`)의 `source_system` 칸이 `dev-1`(대소문자 무관)인 행이고, Object Storage 경로는 `DEV-1/…`이다. 시험 행과 파일은 DB·스토리지 담당이 넣는다 — 먼저 `dev-1` 행이 있는지 담당에게 확인한다.
-- PG 스키마·EDW 기록 표·게시 경로는 벌마다 나뉘지 않는다 — 모든 벌이 같은 기준 스키마를 함께 쓴다. 그래서 **모든 벌이 같은 코드 판**이어야 한다(DB 표 판이 하나). `migrate up --target all`·`migrate master load`는 공용 DB에 아무 벌 하나에서 한 번.
-- `RUN_ENV`는 모든 벌이 `dev` 그대로다. `DEV-<숫자>`는 개발 서버에서만 쓴다. 운영(`prd`)에서는 번호 붙은 폴더도(종료 2 — `load_settings.sh`·`run_pipeline.py`, 운영은 한 벌이니 폴더 이름에서 번호를 뗀다), `DEV-…` 원천도 시작 거부다.
-- compose를 직접 부르지 않는다. 늘 그 벌 폴더에서 `deploy/host/scripts/host_ctl.sh`를 쓴다 — `host_ctl.sh`·`nightly_batch.sh`·`pipe_exec.sh`·`run_pipeline.py`가 자기 코드 폴더 이름에서 벌 번호를 구해 자기 벌의 컨테이너만 다룬다.
-- 자동 실행(`host_ctl.sh timers`)도 벌마다 따로 켜진다.
+- PG 스키마·EDW 기록 표·게시 경로는 벌마다 나뉘지 않는다 — 모든 벌이 같은 기준 스키마를 함께 쓴다. 그래서 **모든 벌이 같은 코드 판**이어야 한다(DB 표 판이 하나). `migrate up --target all`·`migrate master load`는 공용 DB에 한 번.
+- `RUN_ENV`는 모든 벌이 `dev` 그대로다. `DEV-<숫자>`는 개발 서버에서만 쓴다 — 운영(`prd`)에서는 `DEV-…` 원천이 시작 거부다.
+- 앱 컨테이너는 늘 `host_ctl.sh`로 다룬다 — 어느 벌 폴더에서 불러도 같은 `compose-dev.yml`(묶음 `docker-dev`)이고, 서비스 이름으로 고른다.
+- `pipe_exec.sh`·`run_pipeline.py`·새벽 배치·MCP 살리기는 벌 0 컨테이너(`data-pipeline-0`)만 다룬다 — 벌 0 settings.yaml의 원천. 벌 1은 SSH로 자기 컨테이너에 들어가 같은 도구를 안에서 부른다(`bash /app/docker/runtime_entry.sh tool check_env`·`… migrate check --target all`·`python -m pipeline.cli …`).
+- 자동 실행(`host_ctl.sh timers`)은 벌 0 폴더에서 한 번.
 
 ### 2-2. 서버 준비 확인(처음 한 번)
 
@@ -637,12 +598,12 @@ selftest는 종료 코드가 아니라 `[판정]` 줄로 판정한다([§5-5](#5
 export DOCKER=docker                      # 셸을 열 때마다(또는 root ~/.bashrc에)
 docker compose version                    # 판 번호가 나오면 됨
 python3 -c 'import yaml' && echo ok       # ok — 호스트 스크립트가 settings.yaml을 읽는 데 필요
-docker images | grep -E 'data-pipeline-runtime|mcp-server-runtime'   # 불러온 실행 이미지 태그 — 2-4에서 씀
+docker images | grep -E 'data-pipeline-runtime|mcp-server-runtime'   # 불러온 실행 이미지 태그
 ```
 - 하나라도 없으면 [§1-3](#1-3-미리-있어야-하는-것)대로 준비한다. 이미지가 없으면 [§1-5](#서버-설치-순서) 2번(`load.sh`)부터.
-- SSH 작업 공간을 켤 거면 쓸 포트가 비었는지 본다(줄이 안 나오면 빈 포트):
+- compose 파일이 열 포트가 비었는지 본다(줄이 안 나오면 빈 포트):
 ```bash
-ss -ltn | grep -E ':(2201)\b'
+ss -ltn | grep -E ':(802[0-4]|8050|8051|8010|5433)\b'
 ```
 
 ### 2-3. 벌 폴더 만들기와 `init`
@@ -650,8 +611,8 @@ ss -ltn | grep -E ':(2201)\b'
 ```bash
 cd /home/sbl
 unzip -q <코드 zip>                                         # → sbl_data_parsing-<판>/ (다른 벌과 같은 판)
-mv sbl_data_parsing-<판> sbl_data_parsing-main-1            # 이름 끝 -1 = 벌 1
-cd /home/sbl/sbl_data_parsing-main-1
+mv sbl_data_parsing-<판> sbl_data_parsing-main-0            # 이름 끝 -0 = 벌 0(compose-dev.yml이 붙이는 폴더)
+cd /home/sbl/sbl_data_parsing-main-0
 bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>
 ```
 gitea에서 clone해 쓰는 경우는 [§6-3](#6-3-개발자-한-벌-만들기).
@@ -659,16 +620,15 @@ gitea에서 clone해 쓰는 경우는 [§6-3](#6-3-개발자-한-벌-만들기).
 | 칸 | 넣을 값 | 어디서 |
 |---|---|---|
 | `<코드 zip>` | 코드 저장소의 그 판 zip(예 태그 `v0.3.0` → 풀면 `sbl_data_parsing-0.3.0/`) | GitHub `gigasamba/sbl_data_parsing` 태그 — 다른 벌과 같은 판 |
-| `<운영 그룹>` | 컨테이너(UID 10001)와 사람 계정이 함께 쓰는 리눅스 그룹 | `id -gn <운영 계정>` — 모르면 서버 관리자. 다른 벌과 같은 그룹 |
+| `<운영 그룹>` | 결과·설정 파일을 사람 계정과 함께 쓰는 리눅스 그룹 | `id -gn <운영 계정>` — 모르면 서버 관리자. 다른 벌과 같은 그룹 |
 
 **성공이면** 이렇게 찍힌다(값은 찍지 않는다):
 ```
-[host_ctl init] 루트: /home/sbl/sbl_data_parsing-main-1
-  만듦  /home/sbl/sbl_data_parsing-main-1/output
-  만듦  /home/sbl/sbl_data_parsing-main-1/output/_mcp_parse/jobs
-  권한  /home/sbl/sbl_data_parsing-main-1 (a+rX — 설정·결과·홈 빼고)
-  만듦  /home/sbl/sbl_data_parsing-main-1/settings.yaml(settings.sample.yaml에서)
-  만듦  /home/sbl/sbl_data_parsing-main-1/edw_chain.yaml(resources/config/edw_chain.yaml에서)
+[host_ctl init] 루트: /home/sbl/sbl_data_parsing-main-0
+  만듦  /home/sbl/sbl_data_parsing-main-0/output
+  만듦  /home/sbl/sbl_data_parsing-main-0/output/_mcp_parse/jobs
+  권한  /home/sbl/sbl_data_parsing-main-0 (a+rX — 설정·결과·홈 빼고)
+  만듦  /home/sbl/sbl_data_parsing-main-0/settings.yaml(settings.sample.yaml에서)
 [host_ctl init] settings.yaml에서 아직 비어 있는 필수 칸(값을 채울 것 — 이름만):
   - required.env.run_env
   - required.pg.pg_host
@@ -676,15 +636,14 @@ gitea에서 clone해 쓰는 경우는 [§6-3](#6-3-개발자-한-벌-만들기).
 ```
 - 여러 번 불러도 안전하다. 이미 있는 파일은 `있음 …(덮지 않음)`으로 두고 넘어간다.
 - `[host_ctl init] root로 실행할 것(sudo)` → root 셸에서 다시(종료 3).
-- `… 자리에 폴더가 있음 — 컨테이너를 init 전에 띄운 흔적` → 그 빈 폴더를 `rmdir`로 지우고 다시(종료 4).
 
 ### 2-4. 이 벌의 `settings.yaml` 채우기
 
 ```bash
-cd /home/sbl/sbl_data_parsing-main-1
+cd /home/sbl/sbl_data_parsing-main-0
 vi settings.yaml
 ```
-`init`이 찍은 빈 칸을 모두 채운다([§1-6](#꼭-채울-값)). 접속·모델·이미지 칸은 다른 벌(또는 앞 담당자)의 settings.yaml과 같게 옮기고, **벌마다 다른 칸**만 바꾼다. 아래는 가짜 값으로 쓴 꼴이다 — 이미 있는 칸을 고치고, 같은 칸을 두 번 적지 않는다(두 번이면 시작 거부).
+`init`이 찍은 빈 칸을 모두 채운다([§1-6](#꼭-채울-값)). 접속·모델 칸은 다른 벌(또는 앞 담당자)의 settings.yaml과 같게 옮기고, **벌마다 다른 칸**만 바꾼다. 아래는 가짜 값으로 쓴 꼴이다 — 이미 있는 칸을 고치고, 같은 칸을 두 번 적지 않는다(두 번이면 시작 거부).
 
 ```yaml
 required:
@@ -693,54 +652,59 @@ required:
   source:
     source_systems: DEV-1                     # 이 벌이 파싱할 원천 — 꼭 적는다(아래 주의)
   pg:
-    pg_host: <PG 주소>                        # 다른 벌과 같게(DB 담당이 준 값)
-    pg_port: <PG 포트>
-    pg_database: <DB 이름>
-    pg_user: <계정>
+    pg_host: <서버 IP>                        # 이 서버의 사내 IP(compose-pgvector.yml) — DB 담당이 따로 둔 PG면 그 주소
+    pg_port: 5433
+    pg_database: rag
+    pg_user: rag
     pg_password: <비밀>
     pg_schema: data_parsing                   # 기준 스키마 — 모든 벌이 같게(바꾸지 않는다)
   # models · edw · publish · object_storage · tokens: 다른 벌과 같게
   deploy:
-    pipeline_image: data-pipeline-runtime:<이미지 판>   # 2-2 docker images에서 본 태그
-    mcp_image: mcp-server-runtime:<이미지 판>
     host_docs_dir: <있는 호스트 폴더(절대 경로)>         # 컨테이너 /data/docs로 붙음
-    pg_container_name: <PG 컨테이너 이름>               # run_pipeline이 문서 수를 셀 때 씀
+    pg_container_name: pgvector                         # run_pipeline이 문서 수를 셀 때 씀
+common:
+  connections:
+    redis:
+      redis_password: <비밀>                  # 서버에 하나 — 모든 벌이 같게(벌 0 .env의 REDIS_PASSWORD와 같은 값 · redis_port는 비움 = 8010)
+      redis_host: <서버 IP>                   # 이 서버의 사내 IP
+search:
+  server:                                     # 벌 0만(검색 MCP 컨테이너가 이 설정을 읽음)
+    mcp_bind_host: <서버 IP>                 # 사내 대역(0.0.0.0 금지) — 컨테이너가 서버 네트워크 그대로
+    mcp_port: 8051
 ops:
   host:
     container_cli: docker
-option:
-  devbox:
-    ssh_port: null                            # SSH 작업 공간을 쓸 때만 포트(예 2201 — 벌마다 다르게, §2-13)
-    home_dir: null                            # 비우면 <루트>/home
 ```
 
 - ⚠️ **`required.source.source_systems`가 비어 있으면 "운영 5개 원천(`SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`) 전부"라는 뜻이다** — 그 벌은 운영 문서를 모두 파싱해 모든 벌이 함께 쓰는 스키마에 적재한다. 일부러 그렇게 만든 동작이라 코드가 막지 않는다. 개발자 벌은 꼭 자기 `DEV-<숫자>`(예 `DEV-1`)를 적는다.
-- CPU 수가 적은 서버면 자원 칸도 줄인다([§1-10](#1-10-자원)) — 모든 벌의 합이 서버 CPU를 넘지 않게.
-- 권한은 그대로 둔다(init이 640, 주인 10001로 만듦). 다른 편집기로 새로 저장해 주인이 바뀌었으면 `chown 10001:<운영 그룹> settings.yaml && chmod 640 settings.yaml`.
+- CPU 수가 적은 서버면 compose 파일의 `cpus`·`mem_limit`도 줄인다([§1-10](#1-10-자원)) — 모든 컨테이너의 합이 서버 CPU를 넘지 않게.
+- 권한은 그대로 둔다(init이 640으로 만듦). 다른 편집기로 새로 저장해 권한이 바뀌었으면 `chmod 640 settings.yaml`.
 
 **확인 — 설정이 읽히나:**
 ```bash
-cd /home/sbl/sbl_data_parsing-main-1
-bash deploy/host/scripts/host_ctl.sh config --quiet && echo 설정 OK     # 값은 찍지 않고 compose 문법·필수 칸만
+cd /home/sbl/sbl_data_parsing-main-0
+bash deploy/host/scripts/host_ctl.sh config --quiet && echo 설정 OK     # 값은 찍지 않고 compose 문법만
 ```
 - `설정 OK`면 통과.
 - `[설정] 설정 파일 없음: …` → 2-3 `init`을 이 폴더에서 했는지 본다.
-- `…:? … 필요` 안내 → 그 안내에 적힌 칸(예 `required.deploy.host_docs_dir`)을 채운다.
+- `[host_ctl] … 없음 — settings.yaml required.env.run_env는 local·dev·prd 중 하나` → `required.env.run_env`를 고친다.
 - `host_ctl.sh config`를 `--quiet` 없이 부르면 경로·이름이 모두 찍힌다 — 남과 화면을 나눌 때는 쓰지 않는다.
 
 ### 2-5. `data-pipeline` 띄우기와 연결 점검
 
+PG·Redis가 떠 있어야 한다([§6-6](#6-6-서버-묶음--compose-파일과-root-ssh) ①·②).
 ```bash
-cd /home/sbl/sbl_data_parsing-main-1
-bash deploy/host/scripts/host_ctl.sh up -d data-pipeline
-bash deploy/host/scripts/host_ctl.sh ps                      # data-pipeline-1 한 줄이 Up
+cd /home/sbl/sbl_data_parsing-main-0
+bash deploy/host/scripts/host_ctl.sh up -d data-pipeline-0
+bash deploy/host/scripts/host_ctl.sh ps                      # data-pipeline-0이 Up
 bash deploy/host/scripts/pipe_exec.sh check_env
 bash deploy/host/scripts/pipe_exec.sh ping_models
 ```
-- `pipe_exec.sh`는 앞뒤로 `[pipe_exec] <시각> <도구> 시작(data-pipeline 안에서)` · `[pipe_exec] <시각> <도구> 끝 (종료 코드 0)`을 찍는다. **끝 줄의 종료 코드가 0**이어야 한다.
+- `pipe_exec.sh`는 앞뒤로 `[pipe_exec] <시각> <도구> 시작(data-pipeline-0 안에서)` · `[pipe_exec] <시각> <도구> 끝 (종료 코드 0)`을 찍는다. **끝 줄의 종료 코드가 0**이어야 한다.
 - `check_env`: 항목마다 `[OK ]`(정상) 또는 `[-- ]`(문제·미설정) 줄. `[-- ]` 줄을 읽고 해당 칸을 고친다(PG 연결 실패가 "건너뜀"처럼 보일 수 있으니 PG 줄을 꼭 읽는다).
 - `ping_models`: 표의 `결과` 칸이 임베딩·LLM·VLM 모두 `OK`. `FAIL`이 있으면 종료 코드 1 — `required.models`의 주소·모델 이름을 고친다(서버는 내부망 모델만).
-- `[오류] 상주 컨테이너 data-pipeline-1가 떠 있지 않음` → 이 단계 첫 줄 `up -d data-pipeline`부터 다시.
+- `[오류] 상주 컨테이너 data-pipeline-0가 떠 있지 않음` → 이 단계 첫 줄 `up -d data-pipeline-0`부터 다시.
+- 컨테이너가 `Restarting`이면 `docker logs data-pipeline-0`의 `[devbox]` 줄을 본다 — `run_env is …`(settings.yaml `required.env.run_env`를 `dev`로) · 이미지에 root 비밀번호가 없음([§6-6](#6-6-서버-묶음--compose-파일과-root-ssh)).
 
 ### 2-6. DB 판 — 검토용 SQL 뽑기 → `migrate up`
 
@@ -791,21 +755,21 @@ bash deploy/host/scripts/pipe_exec.sh migrate check --target all    # 모든 줄
 ### 2-7. 전체 점검 — `host_ctl.sh check`
 
 ```bash
-cd /home/sbl/sbl_data_parsing-main-1
+cd /home/sbl/sbl_data_parsing-main-0
 bash deploy/host/scripts/host_ctl.sh check
 ```
-`check`는 단계를 차례로 돌리고 처음 실패에서 멈춘다. 단계마다 `[host_ctl check] ── <이름>` 줄 뒤에 그 명령의 출력이 나온다. 개발 서버는 ①~④에서 끝나고, 운영 서버는 ⑤⑥까지 돈다.
+`check`는 단계를 차례로 돌리고 처음 실패에서 멈춘다. 단계마다 `[host_ctl check] ── <이름>` 줄 뒤에 그 명령의 출력이 나온다. 개발·운영 모두 여섯 단계다.
 
 | 순서 | 단계 이름 | 하는 일 |
 |---|---|---|
-| ① | `check_env` | 2-5와 같음 |
+| ① | `check_env` | 2-5와 같음(`data-pipeline-0` 안) |
 | ② | `ping_models` | 2-5와 같음 |
 | ③ | `migrate check` | 2-6 확인과 같음 |
-| ④ | `selftest data-pipeline` | 서버 배포 시험(몇 분 걸림) — `[판정] 통과 — FAIL 0` 줄이 있어야 함 |
-| ⑤ | `selftest mcp-server` | (운영만) 같음 |
-| ⑥ | `검색 MCP` | (운영만) `/health` 응답 확인(꺼져 있으면 띄우고 다시 봄) |
+| ④ | `selftest data-pipeline` | `data-pipeline-0`의 이미지로 서버 배포 시험(몇 분 걸림 — 실행 이미지면 이 코드 폴더를 붙임) — `[판정] 통과 — FAIL 0` 줄이 있어야 함 |
+| ⑤ | `selftest mcp-server` | `mcp-server-0`의 이미지로 같음 |
+| ⑥ | `검색 MCP` | `mcp_keepalive.sh` — `http://<서버 IP>:8051/health` 응답 확인(꺼져 있으면 띄우고 다시 봄) |
 
-- **성공이면 마지막 줄** 개발 `[host_ctl check] 통과 — 4개(개발 서버 — data-pipeline만)` · 운영 `[host_ctl check] 통과 — 6개`.
+- **성공이면 마지막 줄** `[host_ctl check] 통과 — 7개`.
 - 실패면 마지막 줄 `[host_ctl check] 실패 — <단계>: <안내>` — 안내대로 고치고 `check`를 다시 부른다. ③에서 멈추면 2-6, ④⑤에서 멈추면 `FAIL` 줄의 시험 이름으로 원인을 찾는다([§5-5](#5-5-배포-판정--selftest)).
 
 ### 2-8. `DEV-1` 문서 한 번 처리하기
@@ -838,147 +802,111 @@ docker exec <PG 컨테이너> psql -U <계정> -d <DB 이름> -c "SELECT file_pa
 
 ### 2-10. 검색 확인
 
-`data-pipeline` 컨테이너 안에서 바로 검색한다 — 토큰 없이 DB 검색만 본다(실행 이미지가 `mcp_server`를 불러올 수 있음):
+`data-pipeline-0` 컨테이너 안에서 바로 검색한다 — 토큰 없이 DB 검색만 본다(실행 이미지가 `mcp_server`를 불러올 수 있음):
 ```bash
-cd /home/sbl/sbl_data_parsing-main-1
-docker exec data-pipeline-1 python -m mcp_server.cli.search_ask ask --source DEV-1 --k 3 --q "<처리한 문서에 있는 낱말>"
+cd /home/sbl/sbl_data_parsing-main-0
+docker exec data-pipeline-0 python -m mcp_server.cli.search_ask ask --source DEV-1 --k 3 --q "<처리한 문서에 있는 낱말>"
 ```
 - **성공이면** `질문: … (원천 DEV-1 · 근거 <N>건)` 줄 뒤에 `[1] <파일 경로>  p.<쪽> L.<줄>`처럼 근거가 나온다. `[ask] …`로 끝나면 그 오류 글자를 읽는다(원천 스키마가 없으면 2-6).
 - `근거 0건` → 2-9에서 `doc` 행이 있는지, 질문 낱말이 문서에 있는지 본다.
-- 실제 클라이언트와 같은 길(HTTP)로 부르는 시험(`mcp_smoke`)은 이 컨테이너 안에서 MCP를 잠깐 열어 한다 — [§0-2 ④](#0-2-dev--개발-서버-개발자별-벌)·[mcp-guide.md](mcp-guide.md).
+- 실제 클라이언트와 같은 길(HTTP — `mcp-server-0`, 서버 8051)로 부르는 시험(`mcp_smoke`)은 [§0-2 ④](#0-2-dev--개발-서버-개발자별-벌)·[mcp-guide.md](mcp-guide.md).
 
 ### 2-11. 로그 보기
 
 ```bash
-cd /home/sbl/sbl_data_parsing-main-1
-bash deploy/host/scripts/host_ctl.sh logs --tail 100 data-pipeline    # 서비스 이름(컨테이너 이름 data-pipeline-1 아님)
-bash deploy/host/scripts/host_ctl.sh logs -f data-pipeline            # 계속 보기(Ctrl+C — 컨테이너는 그대로)
+cd /home/sbl/sbl_data_parsing-main-0
+bash deploy/host/scripts/host_ctl.sh logs --tail 100 data-pipeline-0  # 서비스 이름 = 컨테이너 이름
+bash deploy/host/scripts/host_ctl.sh logs -f mcp-server-0             # 계속 보기(Ctrl+C — 컨테이너는 그대로)
 tail -n 50 deploy/host/scripts/test_space/batch_progress/progress.log # run_pipeline 진행 줄
 ls deploy/host/scripts/test_space/batch_progress/                     # doc_<번호>.log — 문서별 파싱·게시·구조화 출력
 cat run_first.out                                                     # 2-8 nohup 화면 출력
 ls -la output/logs/                                                   # 비어 있어야 정상 — 파일이 있으면 DB 로그 쓰기 실패
-journalctl -u data-pipeline-nightly-1.service -n 50                   # 타이머를 켠 뒤(§2-12)
+journalctl -u data-pipeline-nightly.service -n 50                     # 타이머를 켠 뒤(§2-12)
 ```
 - 실행 기록은 DB `applog` 스키마에 남는다 — [§3-12](#3-12-로그-db-살펴보기--applog-sql읽기만).
 
 ### 2-12. 자동 실행 켜기(선택)
 
 ```bash
-cd /home/sbl/sbl_data_parsing-main-1
+cd /home/sbl/sbl_data_parsing-main-0
 bash deploy/host/scripts/host_ctl.sh timers
-systemctl list-timers 'data-pipeline-nightly*'
+systemctl list-timers 'data-pipeline-nightly*' 'mcp-server-keepalive*'
 ```
-- **성공이면** `  씀  /etc/systemd/system/data-pipeline-nightly-1.<service|timer>` 두 줄, 목록에 `data-pipeline-nightly-1.timer`의 다음 실행 시각. 개발 서버는 검색 MCP를 띄우지 않으므로 MCP 살리기 타이머(`mcp-server-keepalive`)는 쓰지 않는다.
-- `data-pipeline-nightly-1.timer`는 settings.yaml `ops.nightly` 세 칸을 채우기 전에는 아무것도 하지 않는다([§3-3-2](#3-3-2-새벽-배치)) — 필요 없으면 `systemctl disable --now data-pipeline-nightly-1.timer`.
+- **성공이면** `  씀  /etc/systemd/system/<단위>` 네 줄(`data-pipeline-nightly`·`mcp-server-keepalive`의 `.service`·`.timer`), 목록에 두 타이머의 다음 실행 시각. MCP 살리기 타이머는 벌 0의 Redis·작업 컨테이너·검색 MCP를 2분마다 본다.
+- `data-pipeline-nightly.timer`는 settings.yaml `ops.nightly` 세 칸을 채우기 전에는 아무것도 하지 않는다([§3-3-2](#3-3-2-새벽-배치)) — 필요 없으면 `systemctl disable --now data-pipeline-nightly.timer`.
 - 코드 폴더를 새 판으로 덮어쓴 뒤에도 다시 부른다.
 
 ### 2-13. 개발 작업 공간 — SSH·opencode(선택)
 
-- 네 이미지 모두 개발 도구(sshd·git·uv·ruff·mypy·pytest·ripgrep·sqlite3·tmux·vim 등)와 opencode(이미지를 만들 때 `assets/opencode/opencode`가 있으면)를 담고 있다. 앱은 이 도구를 쓰지 않는다 — 켜지 않으면 이미지는 지금처럼 돈다.
-- 켜기: 그 벌의 `settings.yaml` 맨 아래 `option.devbox.ssh_port`에 포트를 적고(벌마다 다르게) `host_ctl.sh init --group <운영 그룹>`을 다시 불러 `<루트>/home`(10001, 700)을 만든다(없으면 `host_ctl.sh up`이 종료 2). 그러면 `host_ctl.sh`가 `data-pipeline`을 SSH 작업 공간으로 띄운다 — 명령 `devbox`(sshd, 컨테이너 사용자 UID 10001 · 열쇠 로그인만), 코드 폴더를 쓰기 가능으로, 홈 `/home/rag` = `<루트>/home`. 실행 이미지(`*-runtime`)에서만 되고, 운영(`prd`)이면 `host_ctl.sh`가 거부한다(종료 2).
+- 개발·운영 서버의 앱 컨테이너(`data-pipeline-*`·`mcp-server-0`)는 늘 SSH 작업 공간(명령 `devbox` — sshd)으로 뜬다. 사용자는 root, 비밀번호는 이미지에 넣은 값이다([§6-6](#6-6-서버-묶음--compose-파일과-root-ssh)). 작업 컨테이너 `mcp-data-parsing-0`은 SSH가 없다. PC(`compose-local.yml`)는 SSH를 열지 않는다.
+- 접속: `ssh -p 8020 root@<서버>`(벌 0) · `ssh -p 8021 root@<서버>`(벌 1) → `cd /app/deploy`(벌 폴더 — 쓰기 가능, `settings.yaml`만 읽기 전용). 홈 `/root` = `<벌 폴더>/home`(SSH 호스트 열쇠·git 계정·작업 기록 — 컨테이너를 다시 만들어도 남음). 열쇠 로그인을 쓰려면 `<벌 폴더>/home/.ssh/authorized_keys`에 내 공개 열쇠를 둔다(폴더 700 · 파일 600).
+- 이미지에는 개발 도구(sshd·git·uv·ruff·mypy·pytest·ripgrep·sqlite3·tmux·vim 등)와 opencode(이미지를 만들 때 `assets/opencode/opencode`가 있으면)가 들어 있다. 앱은 이 도구를 쓰지 않는다.
 - 저장소 루트 `opencode.jsonc`는 opencode 프로젝트 설정 자리다 — 외부망에는 빈 틀(`{}`)만 있고, 내부망 gitea에서 모델 주소·이름을 채워 커밋한다(키는 적지 않음 — 아래 `INTERNAL_LLM_API_KEY`). 외부망 새 판을 들여올 때 덮지 않는다([§6-1](#6-1-저장소-처음-만들기--관리자가-한-번) ⑥ `--exclude opencode.jsonc`).
-- opencode는 내부망 모델만 쓴다(외부 모델 목록 받기·자동 업데이트 끔). 첫 시작에 홈의 `~/.config/opencode/opencode.json`에 틀이 복사되니 모델 주소(`baseURL` — OpenAI 호환 `/v1`)·이름(`<model id>` 두 곳)을 채운다. 키가 필요한 모델이면 SSH 셸에서 `export INTERNAL_LLM_API_KEY=<키>`(틀이 이 env를 읽음 — 컨테이너 env·settings.yaml에는 넣지 않는다). 연결 모듈은 opencode에 들어 있어 폐쇄망에서 따로 받지 않는다.
-- 공용 폴더에 둔 설정 파일 하나(`<공용 폴더>/opencode.json`)를 모든 벌이 같이 쓰려면 벌마다 settings.yaml `option.devbox.opencode_config`에 그 호스트 경로를 적는다(읽기 전용으로 붙고 `OPENCODE_CONFIG`가 가리킨다). 이 파일은 코드 폴더 밖이라 키를 직접 적어도 된다 — 주인 UID 10001·권한 640(settings.yaml과 같게). 파일 하나를 붙이므로 고친 뒤에는 `host_ctl.sh restart data-pipeline`(편집기가 파일을 새로 바꿔 쓰면 컨테이너는 옛 내용을 계속 본다).
-
-```bash
-# <루트>/settings.yaml 맨 아래
-#   option:
-#     devbox:
-#       ssh_port: 2222
-#       opencode_config: /home/sbl/opencode.json   # 선택 — 공용 opencode 설정
-chown -R 10001:<운영 그룹> <루트> && chmod -R g+w <루트>    # 코드 폴더를 컨테이너 사용자(10001)가 고칠 수 있게(init은 a+rX만 — 읽기) · settings.yaml·edw_chain.yaml은 작업 공간 안에서 읽기 전용으로 다시 붙음
-chmod 640 <루트>/settings.yaml <루트>/edw_chain.yaml && chmod 700 <루트>/home    # 위 g+w가 넓힌 비밀 파일·홈 권한을 되돌림
-mkdir -p <루트>/home/.ssh && cp <내 공개 열쇠>.pub <루트>/home/.ssh/authorized_keys   # init이 만든 <루트>/home(10001, 700)
-chown -R 10001 <루트>/home/.ssh && chmod 700 <루트>/home/.ssh && chmod 600 <루트>/home/.ssh/authorized_keys
-bash deploy/host/scripts/host_ctl.sh up -d data-pipeline        # data-pipeline이 sshd로 뜸(호스트 네트워크 — 포트 게시 없음)
-ssh -p 2222 rag@<서버>                                           # 접속 뒤 cd /app/deploy — 코드 폴더(쓰기 가능), 컨테이너와 같은 env
-```
-- git 계정(선택): `option.devbox`에 `gitea_url`·`gitea_user`·`gitea_token`(비밀)을 모두 적으면 작업 공간이 시작할 때 `~/.git-credentials`의 그 호스트 줄을 쓴다 — 적는 법·토큰 만들기는 [§6-3](#6-3-개발자-한-벌-만들기).
-- 끄기: `ssh_port`를 비우고 `host_ctl.sh up -d data-pipeline` — 다시 `idle`, 코드 폴더는 읽기 전용으로 돌아온다. 홈 폴더(열쇠·opencode 설정·작업 기록)는 남는다.
+- opencode는 내부망 모델만 쓴다(외부 모델 목록 받기·자동 업데이트 끔). 첫 시작에 홈의 `~/.config/opencode/opencode.json`에 틀이 복사되니 모델 주소(`baseURL` — OpenAI 호환 `/v1`)·이름(`<model id>` 두 곳)을 채운다. 키가 필요한 모델이면 SSH 셸에서 `export INTERNAL_LLM_API_KEY=<키>`(틀이 이 env를 읽음 — 컨테이너 env·settings.yaml에는 넣지 않는다).
+- git 이름·메일(선택): `option.devbox`에 `git_user_name`·`git_user_email`을 적으면 작업 공간이 시작할 때 `git config --global user.name`·`user.email`을 쓴다. gitea 로그인은 컨테이너 안에서 처음 `git pull`·`push`할 때 직접 한다 — [§6-3](#6-3-개발자-한-벌-만들기).
+- 컨테이너 안에서 root로 쓴 파일은 서버에서도 root 소유다 — 서버 계정으로 고치거나 지울 때는 `sudo`.
 
 ### 2-14. 컨테이너 이름·볼륨 바꾸기
 
-이름은 "밑 이름 + 벌 번호"다. 밑 이름은 settings.yaml에서 바꾼다 — `ops.containers.<pipeline|data_parsing|mcp>.<…>_container_name`(기본 `data-pipeline`·`mcp-data-parsing`·`mcp-server`) · `ops.host.compose_project`(기본 `compose`).
+이름·이미지·포트·CPU·메모리·볼륨은 compose 파일(`deploy/host/compose/compose-<환경>.yml`)에 직접 적혀 있다(settings.yaml 칸 없음). 바꾸려면 그 칸을 고친다 — compose 파일은 코드라 git으로 커밋해 모든 벌 폴더를 같게 둔다(§6-4).
 
-```yaml
-ops:
-  host:
-    compose_project: rag                       # 묶음 → rag-1
-    extra_compose: compose.extra.yml           # 더 붙일 compose 파일(= <루트>/compose.extra.yml)
-  containers:
-    pipeline: {pipeline_container_name: rag-pipeline}         # → rag-pipeline-1
-    data_parsing: {data_parsing_container_name: rag-parsing}  # → rag-parsing-1(운영)
-    mcp: {mcp_container_name: rag-mcp}                        # → rag-mcp-1(운영)
-```
 ```bash
-cd /home/sbl/sbl_data_parsing-main-1
-bash deploy/host/scripts/host_ctl.sh down                           # ① 옛 이름을 먼저 내린다(settings.yaml을 고치기 전에)
-vi settings.yaml                                                    # ② 위 칸을 적음
-cp deploy/host/compose/extra.example.yml compose.extra.yml          # ③ 볼륨·env를 더할 때만 — 파일 안 규칙대로 고침
-bash deploy/host/scripts/host_ctl.sh config --quiet && echo 설정 OK  # ④
-bash deploy/host/scripts/host_ctl.sh up -d data-pipeline            # ⑤ → rag-pipeline-1
+cd /home/sbl/sbl_data_parsing-main-0
+bash deploy/host/scripts/host_ctl.sh down                           # ① 이름(서비스·container_name)을 바꿀 때만 — 옛 이름을 먼저 내린다
+vi deploy/host/compose/compose-dev.yml                              # ② 칸을 고침
+bash deploy/host/scripts/host_ctl.sh config --quiet && echo 설정 OK  # ③
+bash deploy/host/scripts/host_ctl.sh up -d                          # ④ 바뀐 컨테이너만 다시 만듦
 bash deploy/host/scripts/host_ctl.sh ps
-bash deploy/host/scripts/host_ctl.sh timers                         # ⑥ 타이머를 켰으면 다시(새 이름을 보게)
 ```
-- ①을 빼먹으면 옛 이름의 컨테이너가 남아(SSH 작업 공간이면 포트도 잡고) 새 컨테이너가 뜨지 못한다. 그때는 이름을 되돌려 `down` 한 뒤 다시 한다.
-- 볼륨·env를 더하는 파일은 틀 `deploy/host/compose/extra.example.yml`을 복사해 만들고 `ops.host.extra_compose`에 적는다(상대 경로는 루트 기준 — 예 `compose.extra.yml` = `<루트>/compose.extra.yml`). 그 안의 서비스 이름은 `data-pipeline`·`mcp-data-parsing`·`mcp`(컨테이너 이름 아님). 호스트 경로는 절대 경로나 `${RAG_ROOT}`로 시작하고 끝에 `:z`(읽기 전용이면 `:ro,z`). 적은 파일이 없으면 `[host_ctl] ops.host.extra_compose 파일 없음: …`(종료 2). `host_ctl.sh`와 MCP 살리기 타이머(`mcp_keepalive.sh`)가 늘 맨 뒤에 붙인다.
-- 사슬 사본·작업 공간 홈의 호스트 자리: `ops.host.host_edw_chain_file`(기본 `<루트>/edw_chain.yaml`) · `option.devbox.home_dir`(기본 `<루트>/home`) — 상대 경로는 루트 기준.
+- ①을 빼먹으면 옛 이름의 컨테이너가 남아 포트를 잡고 새 컨테이너가 뜨지 못한다. 그때는 `docker rm -f <옛 이름>` 뒤 ④.
+- 새벽 배치·MCP 살리기·`pipe_exec.sh`·`run_pipeline.py`는 이름 `data-pipeline-0`·`mcp-server-0`·`mcp-data-parsing-0`·`redis`와 서버 포트 8051을 그대로 찾는다 — 이 이름과 포트는 바꾸지 않는다.
+- 볼륨을 더할 때 호스트 경로는 절대 경로나 `${SBL_ROOT:-/home/sbl}`·`${PRD_DIR:-…}`로 시작하고 끝에 `:z`(읽기 전용이면 `:ro,z`).
 
 ### 2-15. 두 번째 벌 만들기
 
-벌 1과 같은 판의 코드 zip으로, 2-3~2-12를 번호만 바꿔 되풀이한다. 이미지는 이미 불러왔으므로 2-2의 이미지 확인만 한다.
+벌 0~4는 `compose-dev.yml`에 이미 있다. 더 늘릴 때는 `data-pipeline-4` 칸을 복사해 번호·`SSH_PORT`·폴더를 바꾼다(예 `data-pipeline-5` · `SSH_PORT: "8025"` · `sbl_data_parsing-main-5`, 방화벽에도 그 포트). 모든 컨테이너의 `cpus` 합이 서버 CPU를 넘지 않게 한다([§1-10](#1-10-자원)). 코드는 벌 0과 같은 판이다.
 
 ```bash
 cd /home/sbl
 unzip -q <코드 zip> && mv sbl_data_parsing-<판> sbl_data_parsing-main-2
 cd /home/sbl/sbl_data_parsing-main-2
 bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>
-cp ../sbl_data_parsing-main-1/settings.yaml settings.yaml.new      # 벌 1 설정을 틀로(아래 칸을 고친 뒤 settings.yaml로 바꿈)
+cp ../sbl_data_parsing-main-0/settings.yaml settings.yaml.new      # 벌 0 설정을 틀로(아래 칸을 고친 뒤 settings.yaml로 바꿈)
 ```
 `settings.yaml.new`에서 벌마다 다른 칸만 고친다:
 
-| 칸 | 벌 1 | 벌 2 |
+| 칸 | 벌 0 | 새 벌 |
 |---|---|---|
 | `required.source.source_systems` | `DEV-1` | `DEV-2` |
-| `option.devbox.ssh_port`(쓸 때만) | `2201` | `2202` |
-| `option.devbox.gitea_*`·`git_user_*` | 벌 1 개발자 계정 | 비우거나 벌 2 개발자 값 — 남의 gitea 토큰을 그대로 두지 않는다 |
-| `ops.run_pipeline.run_pipeline_work_dir` | 비움(또는 벌 1 전용 경로) | 비움 또는 벌 2 전용 경로 — 같으면 두 벌이 한 잠금·진행 기록을 나눠 써 함께 돌지 못한다 |
-| `ops.host.host_output_dir` | 비움(또는 벌 1 전용 경로) | 비움 또는 벌 2 전용 경로 — 같으면 결과·캐시가 섞인다 |
-| `ops.host.host_edw_chain_file` | 비움(또는 벌 1 경로) | 비움(벌 2 폴더의 `edw_chain.yaml`) 또는 벌 2 경로 |
-| `option.devbox.home_dir`(쓸 때만) | 비움(또는 벌 1 전용 경로) | 비움 또는 벌 2 전용 경로 — 같으면 두 작업 공간이 한 홈을 쓴다 |
-
-경로 칸은 비우면 그 벌 폴더 안(`<루트>/output` 등)이라 저절로 나뉜다. 벌 1에서 절대 경로를 적어 두었으면 복사한 틀에 그 경로가 그대로 남으니 꼭 고친다.
+| `option.devbox.git_user_*` | 벌 0 개발자 이름·메일 | 비우거나 새 벌 개발자 값 |
+| `search.server.*` | 검색 MCP 값 | 지워도 된다(검색 MCP는 벌 0만) |
 
 ```bash
-mv settings.yaml.new settings.yaml && chown 10001:<운영 그룹> settings.yaml && chmod 640 settings.yaml
-bash deploy/host/scripts/host_ctl.sh config --quiet && echo 설정 OK
-bash deploy/host/scripts/host_ctl.sh up -d data-pipeline                       # → data-pipeline-2
-bash deploy/host/scripts/pipe_exec.sh migrate up --target search               # data_parsing_dev_2를 만듦(2-6 (나) — 검토용 SQL 먼저)
-bash deploy/host/scripts/host_ctl.sh check                                     # [host_ctl check] 통과 — 4개(개발 서버 — data-pipeline만)
-bash deploy/host/scripts/host_ctl.sh ps                                        # 이 벌의 컨테이너만 보임
+mv settings.yaml.new settings.yaml && chmod 640 settings.yaml
+cd /home/sbl/sbl_data_parsing-main-0
+vi deploy/host/compose/compose-dev.yml                                         # data-pipeline-2 칸을 더함(git 커밋 — 다른 벌 폴더도 같은 파일로)
+bash deploy/host/scripts/host_ctl.sh up -d data-pipeline-2
+ssh -p 8022 root@<서버>                                                         # 안에서: cd /app/deploy && bash /app/docker/runtime_entry.sh migrate up --target search
 ```
-- 벌 2 폴더에서 부른 스크립트는 벌 2의 settings.yaml과 `-2` 컨테이너만 다룬다. 벌 1을 다룰 때는 벌 1 폴더로 `cd` 한다.
-- 모든 벌을 한 번에 띄우기: `for d in /home/sbl/sbl_data_parsing-main-*; do (cd $d && bash deploy/host/scripts/host_ctl.sh up -d data-pipeline); done`.
+- 새 `DEV-<숫자>` 원천 스키마는 그 벌 컨테이너 안에서 `migrate up --target search`로 만든다(2-6 (나) — 검토용 SQL 먼저).
+- 모든 벌을 한 번에 띄우기: `bash deploy/host/scripts/host_ctl.sh up -d`(서비스 이름 없이).
 
 ### 2-16. 멈추기·정리하기
 
-**잠깐 멈추기(다시 켤 수 있게)** — 타이머부터 끈다(안 그러면 새벽 배치가 다시 부른다):
+**잠깐 멈추기(다시 켤 수 있게)** — 벌 0을 멈출 때는 타이머부터 끈다(안 그러면 MCP 살리기·새벽 배치가 다시 부른다):
 ```bash
-cd /home/sbl/sbl_data_parsing-main-1
-systemctl stop data-pipeline-nightly-1.timer                                # 타이머를 켠 벌만
-bash deploy/host/scripts/host_ctl.sh stop
+cd /home/sbl/sbl_data_parsing-main-0
+systemctl stop mcp-server-keepalive.timer data-pipeline-nightly.timer      # 벌 0을 멈출 때만
+bash deploy/host/scripts/host_ctl.sh stop data-pipeline-1                   # 서비스 이름 — 빼면 모두
 bash deploy/host/scripts/host_ctl.sh ps                                     # data-pipeline-1이 Exited
 ```
-다시 켜기: `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline` → `systemctl start data-pipeline-nightly-1.timer`.
+다시 켜기: `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline-1`(벌 0이면 이어서 `systemctl start mcp-server-keepalive.timer data-pipeline-nightly.timer`).
 
 **벌 하나를 없애기** — 되돌릴 수 없으니 대상 번호를 두 번 확인하고, 지우기 전에 `settings.yaml`·`output/`을 백업할지 정한다:
 ```bash
-cd /home/sbl/sbl_data_parsing-main-2
-systemctl disable --now data-pipeline-nightly-2.timer
-bash deploy/host/scripts/host_ctl.sh down                                   # 컨테이너 지움(볼륨은 호스트 폴더라 남음)
-ls /etc/systemd/system/*-2.service /etc/systemd/system/*-2.timer           # 지울 단위 파일 확인 — 이 벌 것만인지
-rm /etc/systemd/system/data-pipeline-nightly-2.service /etc/systemd/system/data-pipeline-nightly-2.timer
-systemctl daemon-reload
+cd /home/sbl/sbl_data_parsing-main-0
+bash deploy/host/scripts/host_ctl.sh rm -sf data-pipeline-2                 # 컨테이너 멈추고 지움(볼륨은 호스트 폴더라 남음)
+vi deploy/host/compose/compose-dev.yml                                      # data-pipeline-2 칸을 지움(git 커밋)
 cd /home/sbl && rm -rf /home/sbl/sbl_data_parsing-main-2                   # 설정(비밀값)·결과 폴더도 함께 지워짐
 ```
 - DB의 `data_parsing_dev_2` 스키마는 남는다. 지우려면 DB 담당에게 요청한다(공용 DB — 직접 지우지 않는다). 남아 있으면 다른 벌의 `migrate up --target search`가 계속 판을 올리고, 검색의 원천 목록에도 남는다.
@@ -988,14 +916,16 @@ cd /home/sbl && rm -rf /home/sbl/sbl_data_parsing-main-2                   # 설
 
 | 메시지(일부) | 뜻 | 할 일 |
 |---|---|---|
-| `[설정] 코드 폴더 이름 끝 -<n>(벌 번호)는 개발 서버(dev)에서만` | `run_env: prd`인데 번호 붙은 폴더 | 개발 서버면 `run_env: dev` |
 | `[설정] 설정 파일 없음: …` | 이 폴더에 settings.yaml 없음 | 그 폴더에서 `host_ctl.sh init` |
-| `[오류] 상주 컨테이너 …가 떠 있지 않음` | `pipe_exec.sh`가 붙을 컨테이너가 꺼짐 | `host_ctl.sh up -d data-pipeline` |
-| `[host_ctl] … 없음(option.devbox.home_dir) — ssh_port를 적은 뒤 host_ctl.sh init …을 다시` | 작업 공간 홈이 없음 | `host_ctl.sh init --group <운영 그룹>` 한 번 더 |
+| `[host_ctl] … 없음 — settings.yaml required.env.run_env는 local·dev·prd 중 하나` | run_env가 비었거나 틀림 | `required.env.run_env: dev` |
+| `[오류] 상주 컨테이너 …가 떠 있지 않음` | `pipe_exec.sh`가 붙을 컨테이너가 꺼짐 | `host_ctl.sh up -d data-pipeline-0` |
+| `docker logs <이름>`의 `[devbox] run_env is …` | SSH 컨테이너는 dev·prd에서만 뜸 | 그 벌 settings.yaml `required.env.run_env` |
+| `[devbox] the image has no root password …` | 이미지에 root 비밀번호가 없음 | 비밀번호를 넣어 이미지를 다시 빌드([§6-6](#6-6-서버-묶음--compose-파일과-root-ssh)) |
+| PG·Redis `compose up`이 `… .env에 REDIS_PASSWORD 필요`(PG_USER·PG_DB·PG_PASSWORD도 같은 꼴)로 멈춤 | 코드 폴더 맨 위 `.env`가 없거나 그 칸이 빔(또는 `--env-file .env`를 빼고 부름) | `.env`에 settings.yaml과 같은 값을 적고 `--env-file .env`로 다시 부름 |
 | `… DEV 원천 스키마가 코드의 끝 판 …이 아님: 적재 전에 \`migrate up --target search\`` | `_dev_*` 스키마 판이 낮음 | 2-6 (나) |
 | `…: 차원을 모름 — --dim N` | 새 스키마인데 차원을 안 줌 | `--dim <임베딩 차원>` |
 | `[host_ctl check] 실패 — <단계>: …` | 그 단계 실패 | 2-7 표 |
-| `다른 run_pipeline이 도는 중` | 이 벌에서 이미 실행 중 | 끝날 때까지 기다림 |
+| `다른 run_pipeline이 도는 중` | 이 서버에서 이미 실행 중 | 끝날 때까지 기다림 |
 
 ---
 
@@ -1005,37 +935,39 @@ cd /home/sbl && rm -rf /home/sbl/sbl_data_parsing-main-2                   # 설
 
 ### 3-1. 상주 컨테이너와 자동 실행
 
-| 서비스(`host_ctl.sh`) | 컨테이너 | compose 파일(실행 이미지면 + 코드 폴더 파일) | 하는 일 | 어디서 |
-|---|---|---|---|---|
-| `data-pipeline` | `data-pipeline` | `compose.pipeline.yml`(+ `compose.code.yml`) | 일 없이 떠 있음(entrypoint `idle`) — `run_pipeline.py`·`pipe_exec.sh`가 `exec` | 개발·운영 |
-| `mcp-data-parsing` | `mcp-data-parsing` | `compose.data-parsing.yml`(+ `compose.code.data-parsing.yml`) | `parse_document` 작업 서비스(entrypoint `run-mcp-parsing`) — 토큰은 `required.tokens.mcp_token`(검색 MCP와 같은 칸) | 운영 |
-| `mcp` | `mcp-server` | `compose.mcp-server.yml`(+ `compose.code.mcp-server.yml`) | 검색 MCP | 운영 |
+| 서비스 = 컨테이너 | compose 파일 | 하는 일 | 어디서 |
+|---|---|---|---|
+| `data-pipeline-<번호>` | `compose-<환경>.yml` | SSH 작업 공간(`devbox`) — `run_pipeline.py`·`pipe_exec.sh`가 `data-pipeline-0`에 `exec`(PC `compose-local.yml`은 `idle`) | 개발(벌마다)·운영(0번) |
+| `mcp-data-parsing-0` | 같음 | `parse_document` 작업 서비스(`run-mcp-parsing` — SSH 없음) — 토큰은 `required.tokens.mcp_token`(검색 MCP와 같은 칸) | 개발(벌 0)·운영 |
+| `mcp-server-0` | 같음 | SSH + 검색 MCP(`devbox mcp` — 서버 8051) | 개발(벌 0)·운영 |
+| `redis` | `compose-redis.yml` | `parse_document` 작업 큐 | 서버마다 하나 |
+| `pgvector` | `compose-pgvector.yml` | 검색 DB | 서버마다 하나(DB 담당이 따로 둔 PG면 없음) |
 
 | 무엇 | 방법 |
 |---|---|
-| 검색 MCP·`mcp-data-parsing` 상주 확인(운영) | systemd `mcp-server-keepalive.timer` — 부팅 1분 뒤 + 2분마다 `mcp_keepalive.sh`(`/health`가 응답하면 그대로, 꺼져 있으면 띄우고, 응답이 없으면 재시작) |
+| 검색 MCP·작업 컨테이너·Redis 상주 확인 | systemd `mcp-server-keepalive.timer` — 부팅 1분 뒤 + 2분마다 `mcp_keepalive.sh`: `redis`가 꺼졌으면 `compose-redis.yml`로 띄우고 건강하지 않으면 restart · `mcp-data-parsing-0`이 꺼졌으면 `host_ctl.sh up -d` · `http://<서버 IP>:8051/health`가 응답하면 그대로, `mcp-server-0`이 꺼져 있으면 띄우고, 응답이 없으면 재시작 |
 | 새벽 배치 | systemd `data-pipeline-nightly.timer` — [§3-3-2](#3-3-2-새벽-배치) |
-| 재부팅 뒤 되살리기 | docker 서비스(`systemctl enable docker`)가 부팅 때 컨테이너를 다시 띄운다(`restart: unless-stopped` — 사람이 `host_ctl.sh stop`으로 멈춘 것은 그대로 둠). 운영의 검색 MCP 두 개는 keepalive 타이머가 2분마다 한 번 더 본다. 확인은 [§3-5](#3-5-서버를-다시-켠-뒤) |
+| 재부팅 뒤 되살리기 | docker 서비스(`systemctl enable docker`)가 부팅 때 컨테이너를 다시 띄운다 — 운영의 앱 컨테이너와 PG·Redis는 `restart: always`, 개발의 앱 컨테이너는 `unless-stopped`(사람이 `host_ctl.sh stop`으로 멈춘 것은 그대로 둠). keepalive 타이머가 2분마다 한 번 더 본다. 확인은 [§3-5](#3-5-서버를-다시-켠-뒤) |
 
-systemd 설치(DB 판과 컨테이너를 확인한 뒤 — 벌마다 그 벌 폴더에서, 새 판으로 덮어쓴 뒤에도 다시):
+systemd 설치(DB 판과 컨테이너를 확인한 뒤 — 벌 0 폴더(운영은 그 한 벌)에서, 새 판으로 덮어쓴 뒤에도 다시):
 
 ```bash
-bash deploy/host/scripts/host_ctl.sh timers        # 단위의 코드 폴더 자리를 이 코드 폴더로 채워 /etc/systemd/system에 쓰고 타이머를 켬 — 운영 4개(두 타이머) · 개발 2개(새벽 배치만)
+bash deploy/host/scripts/host_ctl.sh timers        # 단위의 코드 폴더 자리를 이 코드 폴더로 채워 /etc/systemd/system에 쓰고 두 타이머를 켬 — 단위 4개
 ```
 
-- 검색 MCP가 응답하나: `curl -s http://127.0.0.1:<search.server.mcp_port>/health`.
+- 검색 MCP가 응답하나: `curl -s http://<서버 IP>:8051/health`.
 - 타이머 기록: `journalctl -u mcp-server-keepalive.service -n 50`.
-- 끄고 다시 켜기(운영): 끌 때는 타이머부터(안 그러면 2분 안에 검색 MCP를 다시 띄운다) → `host_ctl.sh stop`. 켤 때는 `host_ctl.sh up -d data-pipeline mcp-data-parsing mcp` → `systemctl start mcp-server-keepalive.timer data-pipeline-nightly.timer`.
+- 끄고 다시 켜기: 끌 때는 타이머부터(안 그러면 2분 안에 검색 MCP를 다시 띄운다) → `host_ctl.sh stop`. 켤 때는 `host_ctl.sh up -d` → `systemctl start mcp-server-keepalive.timer data-pipeline-nightly.timer`.
 
 ### 3-2. 설정 값 바꾸기
 
 | 바꿀 것 | 방법 |
 |---|---|
-| 설정 값 | settings.yaml을 직접 고치고 `host_ctl.sh up -d --force-recreate <서비스>`(서비스 이름 `mcp`, 컨테이너 이름 `mcp-server`). 다시 띄우기 전에 [env-guide §4 "칸 이름 확인"](env-guide.md#4-확인) |
+| 설정 값 | settings.yaml을 직접 고치고 `host_ctl.sh up -d --force-recreate <서비스>`(서비스 이름 = 컨테이너 이름 — 예 `mcp-server-0`). 다시 띄우기 전에 [env-guide §4 "칸 이름 확인"](env-guide.md#4-확인) |
 | 이번 실행만 다른 값 | `--set 이름=값`(아래) |
 | 엔진 구성 | 코드 폴더의 `resources/config/pipeline_stack.json`(설정 칸 없음)을 고쳐 코드 폴더째 바꾼다([§4-5](#4-5-벌-폴더에-새-코드-덮어쓰기)) — 확인 `show-stack`([resources.md §1](../architecture/resources.md)). 이미지에 없는 엔진이 있으면 파이프라인 진입점이 종료 2. 검색 MCP는 시작 때 읽으므로 바꾼 뒤 `mcp_keepalive.sh`로 다시 띄운다. 원천은 폴더·`rdb:csv`만 |
 
-- **한 번만 다른 값은 `--set 이름=값`** — 받는 진입점: `pipeline.cli`·`pipeline.extract.candidate_ready`·`gold_bundle`·`pgvector_load`·`publish_parse_result`·`mcp_server.main`·`mcp_server.cli.search_ask`. 예: `$DOCKER exec $PIPELINE_CNAME python -m pipeline.cli --set PIPE_PROCS=2 parse …`. 이름은 옛 env 이름(`python -m common.config.sample --where`). 모르는 이름·호스트 칸·비밀 칸은 종료 2.
+- **한 번만 다른 값은 `--set 이름=값`** — 받는 진입점: `pipeline.cli`·`pipeline.extract.candidate_ready`·`gold_bundle`·`pgvector_load`·`publish_parse_result`·`mcp_server.main`·`mcp_server.cli.search_ask`. 예: `$DOCKER exec data-pipeline-0 python -m pipeline.cli --set PIPE_PROCS=2 parse …`. 이름은 옛 env 이름(`python -m common.config.sample --where`). 모르는 이름·호스트 칸·비밀 칸은 종료 2.
 - 셸·compose·`docker exec -e`로 준 옛 env 이름은 효과가 없다(시작 때 이름만 경고). 셸 env로 덮을 수 있는 것은 compose 치환 값(이미지 태그·자원·포트·호스트 경로)뿐이다.
 - 서버에서 바꾼 옵션 값은 코드가 아니라 `settings.yaml`에 둔다 — 새 판이 기본값을 바꿔도 settings.yaml 값이 이긴다. 바꿨으면 `server-changes.md`에 적는다([§3-11](#3-11-개발자에게-보고하는-법)).
 
@@ -1052,7 +984,7 @@ bash deploy/host/scripts/host_ctl.sh timers        # 단위의 코드 폴더 자
 - **대상:** 기본은 FileStorageMap의 모든 문서를 처음(`--start-offset` 기본 0)부터. 이름으로 좁힐 때만 `--filter <키워드,…>`(하나라도 들면). 몇 개만은 `--limit N`·`--seqs <번호,…>`.
 - **설정**은 서버 settings.yaml(`--settings` · `SETTINGS_FILE` · `<루트>/settings.yaml` 순)에서 읽는다 — 호스트 python에 PyYAML 필요. 필요한 칸이 없으면 칸 경로만 찍고 종료 2. `required.env.run_env`가 `dev`·`prd`가 아니면 시작하지 않는다.
   - 작업 폴더 `ops.run_pipeline.run_pipeline_work_dir`(비우면 스크립트 옆 `test_space/` — 진행 기록 `batch_progress/`)
-  - 결과 폴더 `ops.host.host_output_dir`(컨테이너 `/app/output`의 원본 — 비우면 `<루트>/output`)
+  - 결과 폴더 `<루트>/output`(컨테이너 `/app/output`의 원본)
   - MCP 업로드 작업 폴더는 `<결과 폴더>/_mcp_parse/jobs`(고정)
   - 레인·동시 수 값 `ops.run_pipeline.*`(비우면 코드 기본값)
 - **게시·EDW 설정**(settings.yaml `required` — 빠지면 run_pipeline이 칸 이름을 찍고 종료 2): 게시 위치 `required.publish.publish_bucket`·`publish_prefix`, Object Storage 접속 `required.object_storage.*`, EDW 접속 `required.edw.*` — 칸 뜻은 [§1-6](#꼭-채울-값). `dev.local.*`(가짜 EDW 등)은 PC 전용이라 서버에서는 읽지 않는다(`local_edw_sqlite_file`은 비운다).
@@ -1061,12 +993,12 @@ bash deploy/host/scripts/host_ctl.sh timers        # 단위의 코드 폴더 자
 - 원본(`_staging/*.bin`·그 ETag 파일 `*.etag`·`_docflow/<seq>/_source_files`)은 **publish가 성공한 뒤에만** 지운다. 파싱·publish가 실패한 문서는 원본이 남고 `batch_progress/progress.log`와 `applog.except_doc_info`(`error` 행)에 적힌다(다음 `--skip-done` 실행이 다시 고름). 구조화·적재가 실패하면 publish한 결과는 그대로이고 `doc` 행이 없으므로 다음 `--skip-done` 실행이 다시 고른다(`error` 행도 남김).
 - **종료 코드**(PRD [pl-18](../prd/ops.md#pl-18)): `0` 대상 0건·모두 끝 · `1` 실패 문서가 하나라도 · `75` 마감(`--deadline`) 도달(실패 없음) 또는 다른 run_pipeline이 도는 중 · `2` 설정 문제. 실패와 마감이 함께면 `1`. 새벽 배치 unit은 `75`를 성공으로 친다.
 - **겹침 잠금:** run_pipeline은 `batch_progress/run_pipeline.lock`을 `flock`으로 잡는다 — 새벽 배치와 사람이 직접 돌린 run_pipeline이 함께 돌지 않는다(뒤에 온 쪽이 75). 죽으면 잠금은 저절로 풀린다. 작업 폴더가 같아야 같은 잠금이다. 같은 결과 폴더에 두 작업이 겹치면 `/app/output/.pipeline.lock` 때문에 뒤쪽이 종료 75.
-- 우선순위 낮추기(`tuning.extract.low_priority_engines` — 일괄 파싱 엔진 자식 nice +10)는 같은 세션·autogroup 안에서만 효과가 있다. 컨테이너끼리는 CPU 나눔 비율(`ops.containers.data_parsing.data_parsing_cpu_shares` 4096 대 일괄 1024)이 정한다.
+- 우선순위 낮추기(`tuning.extract.low_priority_engines` — 일괄 파싱 엔진 자식 nice +10)는 같은 세션·autogroup 안에서만 효과가 있다. 컨테이너끼리는 CPU 나눔 비율(compose 파일 `mcp-data-parsing-0`의 `cpu_shares` 4096 대 일괄 1024)이 정한다.
 
 #### 3-3-1. 진행 보기
 
 ```bash
-bash deploy/host/scripts/host_ctl.sh logs -f data-pipeline                  # 상주 컨테이너 로그(Ctrl+C로 멈춤 — 컨테이너는 그대로)
+bash deploy/host/scripts/host_ctl.sh logs -f data-pipeline-0                # 상주 컨테이너 로그(Ctrl+C로 멈춤 — 컨테이너는 그대로)
 tail -f <run_pipeline 작업 폴더>/batch_progress/progress.log              # 문서별 줄("doc#<seq> 구조화+적재 OK|FAIL")
 tail -n 50 <결과 폴더>/_docflow/<seq>/structure.log                    # 그 문서의 구조화·적재 출력 — 문서가 끝나면 지워짐(남기려면 run_pipeline --no-cleanup)
 ```
@@ -1092,7 +1024,7 @@ bash deploy/host/scripts/pipe_exec.sh publish                    # 대표 결과
 #### 3-3-4. 답변 생성 점검(개발 서버 — 컨테이너 안에서)
 호스트 python에는 PyYAML만 있으므로 도구는 컨테이너 안에서 돌린다. `validation/`은 코드 폴더를 붙인 개발 서버의 실행 이미지에만 있다(운영 이미지에는 없음). 검색 MCP는 같은 컨테이너 안에서 먼저 연다([§0-2 ④](#0-2-dev--개발-서버-개발자별-벌)) — 그때 쓴 포트를 아래 `<search.server.mcp_port>` 자리에 넣는다.
 ```bash
-$DOCKER exec $PIPELINE_CNAME python -m validation.e2e.answer_gen --url http://127.0.0.1:<search.server.mcp_port>/mcp --q "<질문>"   # --concurrency N · 결과 /app/output/eval/answer_gen/
+$DOCKER exec data-pipeline-0 python -m validation.e2e.answer_gen --url http://127.0.0.1:<search.server.mcp_port>/mcp --q "<질문>"   # --concurrency N · 결과 /app/output/eval/answer_gen/
 ```
 MCP 토큰은 settings.yaml `required.tokens.mcp_token`, 모델은 `required.models.llm_*`(서버는 내부 모델만). 결과는 호스트 `<결과 폴더>/eval/answer_gen/`.
 
@@ -1107,24 +1039,46 @@ MCP 토큰은 settings.yaml `required.tokens.mcp_token`, 모델은 `required.mod
 | 검색 MCP(운영) | `curl -s http://127.0.0.1:<search.server.mcp_port>/health` | `{"ok":true,"ready":true,…}` |
 | 디스크 | `df -h <루트> <결과 폴더>` · `du -sh <결과 폴더>/_docflow <결과 폴더>/_staging` | 쓰기 여유 20% 넘음 · `_docflow`·`_staging`이 계속 늘지 않음 |
 | 로그 예비 파일 | `ls -la <결과 폴더>/logs/` | 비어 있음 — 파일이 있으면 DB 로그 쓰기 실패(파일 안 오류를 보고 DB를 고친 뒤 지움) |
-| 컨테이너 | `bash deploy/host/scripts/host_ctl.sh ps` | 운영 세 줄 · 개발 한 줄 Up |
+| 컨테이너 | `bash deploy/host/scripts/host_ctl.sh ps` | 운영 네 줄 · 개발 한 줄 Up |
 
-- `<작업 폴더>` = `ops.run_pipeline.run_pipeline_work_dir`(비우면 코드 폴더 안 `deploy/host/scripts/test_space/`). `<결과 폴더>` = `<루트>/output`(또는 `ops.host.host_output_dir`).
+- `<작업 폴더>` = `ops.run_pipeline.run_pipeline_work_dir`(비우면 코드 폴더 안 `deploy/host/scripts/test_space/`). `<결과 폴더>` = `<루트>/output`.
 - 문제가 있으면 §3-11 형식으로 `issues.md`에 적는다. DB에서 더 보려면 §3-12의 SQL.
+
+#### 3-4-1. MCP 파싱 작업 성능
+
+`docker exec mcp-data-parsing-0 python -m pipeline.tools.perf_report --mcp --since 24 --top 10`으로 최근 작업 수·fail/timeout 수와 전체(큐 대기+파싱)·대기·파싱·주요 단계의 p50/p95/최대를 본다. `--since` 기본은 24시간이다. 파싱은 파일 복사·준비부터 대표 결과까지이고, 주요 단계(엔진·채점·대표 결과)는 `proc.run` 벽시계 시간이다(병렬 엔진별 시간의 합이 아님). 진행 중 실행은 건수만 세고 시간 표에서는 뺀다. VLM 미설정 스캔 PDF도 완료 작업으로 기록하며 `metrics.note`에 안내가 남는다. DB를 못 쓰는 PC는 `--file <logsink 대체 jsonl>…`, 원인별 단계·엔진 상세는 `perf_report <run_id>`로 본다. 모두 읽기 전용이다.
+
+검색 MCP가 잰 총 응답 시간은 `mcp_log.duration_ms`, 서비스 큐 대기는 `mcp_parse.job.metrics.queue_wait_ms`, 파싱은 그 행의 `duration_ms`다. 같은 `job_id`로 아래처럼 잇는다(응답에는 업로드·Redis 대기 등도 포함되므로 서비스 전체와 차이가 날 수 있음). 실패 응답에 job_id가 없으면 작업 행만 따로 조회한다.
+
+```sql
+SELECT m.requested_at, m.request_id,
+       e.metrics->>'job_id' AS job_id, e.doc_id, e.run_id,
+       m.duration_ms AS response_ms,
+       (e.metrics->>'queue_wait_ms')::numeric AS queue_wait_ms,
+       e.duration_ms AS parsing_ms, e.status, e.metrics->>'note' AS note
+FROM applog.mcp_log AS m
+JOIN applog.pipe_event AS e
+  ON e.stage = 'mcp_parse.job'
+ AND e.metrics->>'job_id' = m.result_keys->>'job_id'
+WHERE m.tool_name = 'parse_document'
+  AND m.requested_at >= now() - interval '24 hours'
+  AND e.ts_start >= now() - interval '24 hours'
+ORDER BY m.requested_at DESC;
+```
 
 ### 3-5. 서버를 다시 켠 뒤
 
-docker 서비스가 부팅 때 컨테이너를 다시 띄운다(`restart: unless-stopped`). 사람은 떴는지 확인하고, 안 뜬 것만 띄운다. root 셸, 그 벌 폴더(코드 폴더)에서:
+docker 서비스가 부팅 때 컨테이너를 다시 띄운다(운영 앱·PG·Redis `always` · 개발 앱 `unless-stopped`). 사람은 떴는지 확인하고, 안 뜬 것만 띄운다. root 셸, 벌 0 폴더(운영은 그 한 벌)에서:
 ```bash
 export DOCKER=docker
 systemctl is-active docker                                                # 기대: active
-bash deploy/host/scripts/host_ctl.sh ps                                   # 기대: 운영 세 줄 · 개발 한 줄 Up — 없으면 다음 줄
-bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp   # 개발은 up -d data-pipeline
-systemctl start mcp-server-keepalive.timer data-pipeline-nightly.timer   # 꺼져 있었으면(개발은 data-pipeline-nightly-<번호>.timer만)
+docker ps --format '{{.Names}} {{.Status}}'                               # 기대: pgvector · redis · 앱 컨테이너(운영 셋 · 개발 넷) Up
+bash deploy/host/scripts/host_ctl.sh up -d                                # 안 뜬 앱 컨테이너만 띄움
+systemctl start mcp-server-keepalive.timer data-pipeline-nightly.timer   # 꺼져 있었으면
 systemctl list-timers 'mcp-server-keepalive*' 'data-pipeline-nightly*'   # 기대: 타이머 다음 실행 시각
-bash deploy/host/scripts/host_ctl.sh check                                # 기대 마지막 줄: 운영 [host_ctl check] 통과 — 6개 · 개발 [host_ctl check] 통과 — 4개(개발 서버 — data-pipeline만)
+bash deploy/host/scripts/host_ctl.sh check                                # 기대 마지막 줄: [host_ctl check] 통과 — 7개
 ```
-- 여러 벌이면 벌마다(그 벌 폴더에서) 같은 순서로 한다. PG 컨테이너는 DB 담당 몫이다 — `check`가 PG에서 멈추면 DB 담당에게 알린다.
+- `pgvector`·`redis`가 없으면 `docker compose -f deploy/host/compose/compose-pgvector.yml up -d`·`… compose-redis.yml up -d`([§6-6](#6-6-서버-묶음--compose-파일과-root-ssh)). DB 담당이 따로 둔 PG면 `check`가 PG에서 멈출 때 DB 담당에게 알린다.
 - 꺼지기 전에 돌던 `run_pipeline.py`는 다시 시작하지 않는다 — 다음 새벽 배치가 `--skip-done`으로 이어 가거나, 사람이 다시 부른다(§3-6).
 
 ### 3-6. 실패한 문서 찾기와 다시 돌리기
@@ -1148,12 +1102,12 @@ WHERE stage = 'load.embed_guard' AND ts_start > now() - interval '7 days' ORDER 
 
 ### 3-7. 서버에 생기는 파일
 
-서버마다 값이 다른 파일은 **루트(코드 폴더) 바로 아래**에 둔다 — git·코드 zip에 없는 파일이라 새 판을 덮어써도 남는다. `host_ctl.sh init`이 **없을 때만** git의 예시를 복사한다(있으면 덮지 않음).
+서버마다 값이 다른 파일은 **루트(코드 폴더) 바로 아래 `settings.yaml`** 하나다 — git·코드 zip에 없는 파일이라 새 판을 덮어써도 남는다. `host_ctl.sh init`이 **없을 때만** `settings.sample.yaml`을 복사한다(있으면 덮지 않음). PG·Redis 비밀번호는 같은 값을 코드 폴더 맨 위 `.env`에 사람이 적는다. EDW 조인 사슬 `edw_chain.yaml`은 서버 파일이 아니라 코드다(코드 폴더 맨 위 — git으로 고치고 운영 이미지에도 들어감, [§3-9-2](#3-9-2-edw-조인-사슬-파일-고쳐-쓰기)).
 
-| 파일 | 자리(호스트 → 컨테이너) | 예시(복사 원본) | 읽는 곳 | 주인·권한 |
+| 파일 | 자리(호스트 → 컨테이너) | 만드는 것 | 읽는 곳 | 권한 |
 |---|---|---|---|---|
-| `settings.yaml` | `<루트>/settings.yaml` → `/etc/rag/settings.yaml`(읽기 전용 — 모든 컨테이너) | `settings.sample.yaml` | 모든 앱·호스트 스크립트 | 10001:<운영 그룹> 640(운영 계정 UID가 10001이면 600) — **비밀값이 들어 있다**, 벌 폴더를 지울 때 함께 지운다 |
-| `edw_chain.yaml` | `<루트>/edw_chain.yaml` → `/etc/rag/edw_chain.yaml`(읽기 전용 — `data-pipeline`·`mcp-server`) | `resources/config/edw_chain.yaml` | 적재·검색 MCP — `ops.paths.edw_chain_file: /etc/rag/edw_chain.yaml`을 적었을 때만([§3-9-2](#3-9-2-edw-조인-사슬-파일-고쳐-쓰기)) | 10001:<운영 그룹> 640 |
+| `settings.yaml` | `<루트>/settings.yaml` → 개발 `/app/deploy/settings.yaml` · 운영 `/etc/rag/settings.yaml`(읽기 전용 — 모든 앱 컨테이너) | `host_ctl.sh init`(`settings.sample.yaml`에서) | 모든 앱·호스트 스크립트 | 640 — **비밀값이 들어 있다**, 벌 폴더를 지울 때 함께 지운다 |
+| `.env` | `<루트>/.env`(벌 0 — compose가 읽어 PG·Redis 컨테이너 설정으로) | 사람(`REDIS_PASSWORD`·`PG_USER`·`PG_DB`·`PG_PASSWORD` — settings.yaml과 같은 값) | `pgvector`·`redis` 컨테이너(compose `--env-file .env`) | 600 — 비밀번호가 들어 있다(git 제외) |
 
 실행하면서 생기는 파일:
 
@@ -1171,7 +1125,7 @@ WHERE stage = 'load.embed_guard' AND ts_start > now() - interval '7 days' ORDER 
 
 ### 3-8. 검색 MCP 사용
 
-운영 서버의 검색 MCP(`mcp-server`).
+검색 MCP(`mcp-server-0` — 운영 서버, 개발 서버는 벌 0).
 ```
 주소: http://<수집 서버 사내 IP>:<search.server.mcp_port>/mcp (MCP streamable HTTP)
 인증: Authorization: Bearer <required.tokens.mcp_token>
@@ -1182,7 +1136,7 @@ WHERE stage = 'load.embed_guard' AND ts_start > now() - interval '7 days' ORDER 
 - 연결 시험(컨테이너 안에서 — 실제 클라이언트와 같은 길, HTTP + 토큰):
 ```bash
 read -rs -p "MCP 토큰: " TOK; echo                 # settings.yaml required.tokens.mcp_token 값 — 화면·셸 기록에 남지 않게 입력
-$DOCKER exec $MCP_CNAME python -m mcp_server.cli.mcp_smoke --url http://127.0.0.1:<search.server.mcp_port>/mcp --source <원천> --q "<질문>" --token "$TOK"
+$DOCKER exec mcp-server-0 python -m mcp_server.cli.mcp_smoke --url http://127.0.0.1:<search.server.mcp_port>/mcp --source <원천> --q "<질문>" --token "$TOK"
 unset TOK
 ```
   - **성공이면** `도구: [...]`(도구 6개) → `search: 원천 <원천> · 근거 <N>건 · 상태 …` → 끝 줄 `MCP 바깥 호출 통과`.
@@ -1211,7 +1165,7 @@ unset TOK
 | 원천 표 열 이름 | settings.yaml `tuning.extract.source_columns.source_column_*` |
 | 엔진 구성 | `resources/config/pipeline_stack.json`(확인 `show-stack` — §3-2) |
 | MCP 안내 문구 | 코드 `mcp_server/main.py`의 `_DEFAULT_MCP_INSTRUCTIONS`(설정 칸 없음 — 바꾸면 코드 배포) |
-| EDW 조인 사슬(고객·원천 메타·검색 attrs 키) | 서버 사본 `<루트>/edw_chain.yaml`(§3-9-2) |
+| EDW 조인 사슬(고객·원천 메타·검색 attrs 키) | 코드 폴더 맨 위 `edw_chain.yaml`(git — §3-9-2) |
 
 #### 3-9-1. 고객 명부·용어집 작성법
 
@@ -1268,33 +1222,30 @@ SFDC·EDW 내보내기에서 `glossary.csv`의 고객(`client`) 줄을 만든다
 내보낸 파일과 매핑 파일을 `<루트>/output/glossary/`에 둔 뒤(컨테이너에서 `/app/output/glossary/`):
 ```bash
 G=/app/output/glossary
-$DOCKER exec $PIPELINE_CNAME python -m pipeline.transform.structure.roster_from_edw --kind client \
+$DOCKER exec data-pipeline-0 python -m pipeline.transform.structure.roster_from_edw --kind client \
   --source csv:$G/client_master.csv --mapping $G/client_master_map.json \
   --out $G/glossary.csv               # EDW 표에서 바로: --source rdb:<스키마.표>(읽기 계정)
-$DOCKER exec $PIPELINE_CNAME python -m pipeline.transform.structure.roster_from_edw --check $G/glossary.csv   # 오류 0 확인
+$DOCKER exec data-pipeline-0 python -m pipeline.transform.structure.roster_from_edw --check $G/glossary.csv   # 오류 0 확인
 ```
 `--out` 파일이 이미 있으면 고객 줄만 바꾸고 용어·ID 꼴 줄은 그대로 둔다(glossary 꼴이 아닌 파일이면 거부). 먼저 파일을 복사해 두고 바뀐 줄을 비교한 뒤 반영한다.
 
 ##### 옛 CSV를 `glossary.csv`로 옮기기
 옛 판의 `client_roster.csv`·`domain_terms.csv`·`id_patterns.csv`가 있는 폴더를 한 번에 옮긴다(같은 대응 — 없는 파일은 건너뜀. 만들 파일이 이미 있거나, 머리글이 옛 꼴과 다르거나(없는·모르는 칸), 머리글보다 칸이 많은 줄이 있으면 아무것도 쓰지 않고 거부):
 ```bash
-$DOCKER exec $PIPELINE_CNAME python -m common.store.master convert --src /app/output/glossary --out /app/output/glossary/glossary.csv
+$DOCKER exec data-pipeline-0 python -m common.store.master convert --src /app/output/glossary --out /app/output/glossary/glossary.csv
 ```
 
 ##### 점검(반영 전)
 ```bash
-$DOCKER exec $PIPELINE_CNAME python -c "import sys; from pathlib import Path; from common.store import master as M; from common.core import terms as T; m = M.Master(M.read_csv(Path(sys.argv[1]))); print(len(T._master_glossary(m)), '개념 반영 ·', len(m.rows('client_roster')), '고객 ·', len(m.rows('id_patterns')), 'ID 꼴')" /app/output/glossary   # 오류면 여기서 멈춤
+$DOCKER exec data-pipeline-0 python -c "import sys; from pathlib import Path; from common.store import master as M; from common.core import terms as T; m = M.Master(M.read_csv(Path(sys.argv[1]))); print(len(T._master_glossary(m)), '개념 반영 ·', len(m.rows('client_roster')), '고객 ·', len(m.rows('id_patterns')), 'ID 꼴')" /app/output/glossary   # 오류면 여기서 멈춤
 bash deploy/host/scripts/pipe_exec.sh migrate master load --dir /app/output/glossary && bash deploy/host/scripts/host_ctl.sh restart mcp   # 반영
 ```
 
 #### 3-9-2. EDW 조인 사슬 파일 고쳐 쓰기
 
-적재가 문서 메타(고객 `client_edw`·등록 시각 `created_at`·원천 메타 `doc.attrs`)를 EDW에서 채울 때 따라가는 표·칸 이름과, 검색 MCP가 쓰는 `attrs` 키의 거르기 이름·근거 표시는 파일 하나에 있다. 기본 파일은 코드 폴더의 `resources/config/edw_chain.yaml`이고 **꼴과 칸의 뜻은 그 파일의 머리 주석이 정본**이다. 서버 EDW 이름이 다르거나 메타 키를 더하려면 코드를 고치지 않고 사본을 고친다. 사슬을 바꿔도 이미 적재한 메타는 바뀌지 않는다 — 필요한 문서는 `--replace`로 다시 적재한다([§4-9](#4-9-다시-처리할-층과-명령)).
+적재가 문서 메타(고객 `client_edw`·등록 시각 `created_at`·원천 메타 `doc.attrs`)를 EDW에서 채울 때 따라가는 표·칸 이름과, 검색 MCP가 쓰는 `attrs` 키의 거르기 이름·근거 표시는 파일 하나에 있다 — 코드 폴더 맨 위 `edw_chain.yaml`이고 **꼴과 칸의 뜻은 그 파일의 머리 주석이 정본**이다. 서버 EDW 이름이 다르거나 메타 키를 더하려면 이 파일을 고쳐 git으로 커밋한다(개발 서버 벌 폴더에서 — 운영 서버는 그 커밋으로 구운 이미지에 들어간다, [§5-4](#5-4-개발--운영--시험한-그대로-굽기)). 사슬을 바꿔도 이미 적재한 메타는 바뀌지 않는다 — 필요한 문서는 `--replace`로 다시 적재한다([§4-9](#4-9-다시-처리할-층과-명령)).
 
-**① 사본 고치기 · 칸 적기** — 사본은 `<루트>/edw_chain.yaml`(`host_ctl.sh init`이 없을 때만 복사 — 10001, 640)이고, `data-pipeline`·`mcp-server`에 `/etc/rag/edw_chain.yaml`로 읽기 전용 붙는다. 설정 칸은 하나(`ops.paths.edw_chain_file` — 적재와 검색이 같은 칸)이고 **칸을 적었을 때만 사본이 쓰인다**(비우면 코드의 기본 파일).
-```bash
-vi <루트>/edw_chain.yaml                                             # 주인·권한은 그대로 10001, 640
-```
+**① 고치기** — 벌 컨테이너 안(SSH — 벌 폴더가 `/app/deploy`에 쓰기 가능으로 붙음)에서 `vi /app/deploy/edw_chain.yaml` → 점검(③) → `git commit`. 설정 칸 `ops.paths.edw_chain_file`은 비워 둔다(비움 = 코드 폴더의 `edw_chain.yaml` — 다른 파일을 시험할 때만 컨테이너 안 경로).
 
 **② 자주 하는 고침**
 ```yaml
@@ -1321,23 +1272,23 @@ crms:
 - 새 `filter` 이름은 `search`의 이름 있는 인자가 아니라 `attrs` 거르기로 쓴다(이름 있는 인자는 계약에 고정).
 - **이름을 바꾸면 안 되는 키:** SFDC `sf_op_id`(`list_doc_fulltext`가 키 이름 그대로 읽음 — EDW 칸 `from`만 바꾼다), 분류 힌트 키(`title`·`entity_*`·`sent_received__c`·`subject`·`stagename`·`real_rfp__c`·`rfp_received_*`·LAS `approvalname` — 분류가 이름으로 읽음). `doc_class`는 분류가 쓰는 키라 사슬에 쓰지 않는다.
 
-**③ 실제 실행 전에 점검** — 파일만 읽고 검사한다(EDW·PG에 붙지 않음). 컨테이너 이름 변수는 벌 폴더에서 `. deploy/host/scripts/load_settings.sh && load_settings`가 낸다(§1-7 — 아래 명령은 그 셸에서).
+**③ 실제 실행 전에 점검** — 파일만 읽고 검사한다(EDW·PG에 붙지 않음).
 ```bash
-$DOCKER exec $PIPELINE_CNAME python -m pipeline.load.edw_doc_meta --check                                   # 설정 칸이 가리키는 파일
-$DOCKER exec $PIPELINE_CNAME python -m pipeline.load.edw_doc_meta --check --file /etc/rag/edw_chain.yaml   # 칸을 적기 전에 사본만
+$DOCKER exec data-pipeline-0 python -m pipeline.load.edw_doc_meta --check                                        # 설정 칸이 가리키는 파일(비우면 코드 폴더의 것)
+$DOCKER exec data-pipeline-0 python -m pipeline.load.edw_doc_meta --check --file /app/deploy/edw_chain.yaml     # 파일을 직접 지정
 ```
 칸 이름이 EDW에 실제로 있는지는 이 점검이 보지 않는다 — `edw_meta`·`query_edw`나 DB 담당으로 확인한다. 검색 쪽은 `edw_meta`를 인자 없이 불러 `search_attrs`에 고친 키가 보이는지 본다.
 
 **④ 오류가 나면 · 되돌리기**
-- 적재 시작 때 `[edw_meta] 사슬 설정 파일을 못 읽음(…)`·`사슬 설정 오류(…)`·`사슬 설정 YAML 오류(…)`로 멈춘다(기본 파일로 돌아가지 않음). 검색은 같은 글을 `search`의 `{"error"}`로 돌려준다. ③으로 고친 뒤 다시 돌린다.
+- 적재 시작 때 `[edw_meta] 사슬 설정 파일을 못 읽음(…)`·`사슬 설정 오류(…)`·`사슬 설정 YAML 오류(…)`로 멈춘다. 검색은 같은 글을 `search`의 `{"error"}`로 돌려준다. ③으로 고친 뒤 다시 돌린다.
 - 칸 이름이 EDW에 없으면 적재는 계속되고 그 칸 메타만 비며(표를 못 읽으면 그 원천 메타 전체 — `optional` 단계면 그 단계만) 경고와 실행 기록 `meta_missing`이 남는다 — 고친 뒤 그 문서를 `--replace`로 다시 적재한다([§4-9](#4-9-다시-처리할-층과-명령)).
-- 되돌리기: settings.yaml의 `ops.paths.edw_chain_file`을 **비우면** 기본 파일로 돌아간다. 사본 파일은 지우지 않는다(마운트 원본 — 없으면 `data-pipeline`·`mcp-server`가 안 뜸).
+- 되돌리기: git으로 그 고침을 되돌린다(`git checkout HEAD -- edw_chain.yaml` — 커밋 전, 커밋 뒤면 `git revert <커밋>`).
 
 ### 3-10. 문제 해결
 
 | 증상 | 원인 | 조치 |
 |---|---|---|
-| `check`가 "컨테이너 안의 PG_HOST는 컨테이너 자신" 경고 | `required.pg.pg_host`가 `127.0.0.1` | compose로 띄웠으면 무시(`network_mode: host`). `docker run`으로 따로 띄울 때만 `--network host`(+`-e NETWORK_HOST=1`) 또는 서버 IP |
+| `check`가 "컨테이너 안의 PG_HOST는 컨테이너 자신" 경고 | `required.pg.pg_host`가 `127.0.0.1` | 서버 compose(서버 네트워크 그대로)로 띄웠으면 무시. PC(`compose-local.yml` — docker 자체 네트워크)나 `docker run`이면 `host.docker.internal`로(`docker run`은 `--add-host host.docker.internal:host-gateway`) |
 | 적재·검색이 PostgreSQL에 못 붙음 | `required.pg` 칸이 비었거나 틀림 | 호스트·포트·계정 확인 |
 | 파싱이 종료 4 | 서버에서 끝난 문서 기록(PG 원천 스키마 `doc`)을 못 읽음(전체 재파싱을 막으려고 멈춤) | `required.pg` 접속·PG 상태 확인 |
 | 구조화·적재가 "인계 형식(핑거프린트) 다름"으로 거부 | 핑거프린트가 바뀐 옛 파싱 결과 | 그 문서를 다시 파싱 |
@@ -1347,7 +1298,7 @@ $DOCKER exec $PIPELINE_CNAME python -m pipeline.load.edw_doc_meta --check --file
 | MCP `/health` 503 | 기동 직후 예열 중 | 잠시 뒤 재시도 |
 | MCP 401 | 호출 쪽 토큰이 없거나 `required.tokens.mcp_token`와 다름 | 호출 쪽 `Authorization: Bearer <토큰>`을 서버 값과 같게 |
 | MCP가 안 뜸 | `required.models.embed_base_url`·`embed_model` 없음 · 컨테이너가 설정 파일을 못 읽음(권한) | 필수 값 채우기 · 주인 10001·권한 640 |
-| `data-pipeline`·`mcp-server`가 안 뜸("edw_chain.yaml" 자리에 폴더) | `host_ctl.sh init` 전에 컨테이너를 띄워 빈 폴더가 생김 | 빈 폴더를 `rmdir` → `host_ctl.sh init` |
+| 앱 컨테이너가 안 뜸("settings.yaml" 자리에 폴더) | `host_ctl.sh init` 전에 컨테이너를 띄워 빈 폴더가 생김 | 빈 폴더를 `rmdir` → `host_ctl.sh init` |
 | 컨테이너가 `의존성 지문이 다름`으로 멈춤 | 코드의 `deploy/docker/DEPS_HASH`가 실행 이미지 지문과 다름 | 같은 지문의 실행 이미지를 불러온다([§4-4](#4-4-새-실행-이미지-불러오기--의존성-지문-확인)) |
 | 포트 충돌 | 다른 서비스가 같은 포트 | `search.server.mcp_port` 등 포트 칸만 바꿈 |
 | SELinux `Permission denied`(파일 권한·주인은 맞음) | 볼륨 라벨이 안 맞음 | 막힌 기록 보기 `ausearch -m avc -ts recent`(`denied { read }` 등과 파일 경로) · 라벨 보기 `ls -Z <폴더>`(`container_file_t`여야 함) · 우리 compose는 `:z`로 붙임 — 직접 붙인 볼륨이면 `:z` |
@@ -1410,7 +1361,7 @@ FROM applog.pipe_event
 WHERE ts_start > now() - interval '1 day'
 ORDER BY duration_ms DESC NULLS LAST LIMIT 20;
 ```
-`wait_cpu_ms`·`wait_mem_ms`가 크면 자원 대기(CPU·메모리 문턱), `ext_call_ms`가 크면 모델 호출이 느린 것이다. 한 실행을 자세히: `$DOCKER exec $PIPELINE_CNAME python -m pipeline.tools.perf_report <run_id>`.
+`wait_cpu_ms`·`wait_mem_ms`가 크면 자원 대기(CPU·메모리 문턱), `ext_call_ms`가 크면 모델 호출이 느린 것이다. 한 실행을 자세히: `$DOCKER exec data-pipeline-0 python -m pipeline.tools.perf_report <run_id>`.
 
 **③ MCP 도구별 호출 수 · 오류율 · p95**
 ```sql
@@ -1479,7 +1430,7 @@ GROUP BY except_type, reason, source_system ORDER BY docs DESC;
 | applog 판 `0003_applog` — 적재 안 된 문서 표 `except_doc_info` · `0004_applog` — `pipe_event` 원천·`except_doc_info` 확장자·크기 칸 · 검색 판 `0006_search` — `doc` 처리 기록 칸 · `0007_search` — `doc` 찾기 색인 · EDW에 쓰지 않음(쓰기 계정·`parsing_meta_table` 칸 없앰) | 첫 `run_pipeline.py` 전에 `migrate up` · 옛 기록 옮기기 | §4-7 |
 | 마스터 판 `0002_master` — 표 `glossary` 하나(옛 마스터 표 일곱 개를 지움), 원본 CSV 하나 `glossary.csv` | 서버 실명 자료를 `glossary.csv`로 옮김(`common.store.master convert`) · `migrate up --target master` 바로 뒤 `migrate master load` | §4-7 |
 | settings.yaml 칸 이름 정리 · 맨 아래 선택 절 `option.devbox` | 옛 이름이 남으면 모든 명령이 시작 거부 | §4-6 |
-| 벌 폴더 = 코드 폴더(`settings.yaml`·`edw_chain.yaml`·`output/`이 코드 폴더 안), 벌 번호 = 폴더 이름 끝 `-<숫자>`, 칸 `ops.host.instance_name` 지움 | 처음 한 번 옛 루트에서 옮김 · 그 칸이 남으면 시작 거부 | §4-5 · §4-6 |
+| 벌 폴더 = 코드 폴더(`settings.yaml`·`output/`이 코드 폴더 안), 벌 번호 = 폴더 이름 끝 `-<숫자>`, 칸 `ops.host.instance_name` 지움 | 처음 한 번 옛 루트에서 옮김 · 그 칸이 남으면 시작 거부 | §4-5 · §4-6 |
 | 개발자별 벌(폴더 이름 끝 번호)·gitea | 개발 서버만, 원할 때 | §2-15 · §6 |
 
 **0.3.1에서 바뀐 것** — 코드 폴더만 바꾼다(실행 이미지·DB 판 그대로 — §4-4는 이미지 두 줄을 건너뛰고 §4-7은 `migrate check --target all`만).
@@ -1490,37 +1441,45 @@ GROUP BY except_type, reason, source_system ORDER BY docs DESC;
 | 넘겨주기·레이어·엔진(office·kreuzberg·markitdown) 지문이 바뀜 | 모든 문서를 다시 처리(엑셀 날짜 칸이 `2026-11-29` 꼴로) | §4-9 |
 | `except_doc_info`에 새 종류 `part`·`silver`, 골드 적재 성공 때 `silver` 행을 지움 | 적재 계정에 그 표 DELETE 권한(DB 담당 확인 — refactor.md C-111·C-112) | §4-7 |
 | 배포 판정 시험이 서버 PG에 붙음(prd는 읽기만) | `host_ctl.sh check`에 PG 접속이 필요 | §4-10 |
-| 개발 서버의 벌은 `data-pipeline-<번호>` 하나만 띄움 | 전에 띄운 벌마다의 검색 MCP를 내린다 — 벌 폴더마다 `systemctl disable --now mcp-server-keepalive-<번호>.timer` → `docker rm -f mcp-data-parsing-<번호> mcp-server-<번호>` → `rm /etc/systemd/system/mcp-server-keepalive-<번호>.{service,timer}` → `systemctl daemon-reload` (번호 없는 벌이면 `-<번호>`를 뺀다) | §2-1 |
+
+**0.4.0에서 바뀐 것** — 새 실행 이미지가 필요하다(앱 컨테이너가 root로 돌고 root 비밀번호가 이미지에 들어감).
+
+| 무엇 | 서버에 미치는 것 | 이 문서의 절 |
+|---|---|---|
+| 환경마다 compose 파일 하나(`compose-dev.yml`·`compose-prd.yml`·`compose-local.yml`) — 컨테이너 이름(`data-pipeline-0`·`mcp-server-0`·`mcp-data-parsing-0` …)·이미지·포트·자원이 파일에 직접 | 옛 컨테이너를 내리고 새 이름으로 띄움 · 이미지·자원·컨테이너 칸을 settings.yaml에서 지움 | §4-6 · [§6-6](#6-6-서버-묶음--compose-파일과-root-ssh) |
+| PG(`compose-pgvector.yml` — 서버 5433)·Redis(`compose-redis.yml` — 공식 `redis:7.4.8-alpine`, 서버 8010)를 서버마다 하나, 손으로 한 번 띄움 · 비밀번호는 코드 폴더 맨 위 `.env` | `mcp-redis`를 내리고 `redis`를 띄움 · `redis_password` 채움 | §4-6 · [§6-7](#6-7-redis--compose-redisyml) |
+| 앱이 PG·Redis에 `<서버 IP>`로 붙음 · 컨테이너는 서버 네트워크 그대로 · 검색 MCP는 `<서버 IP>:8051` | settings.yaml `required.pg.pg_host`·`pg_port`, `search.server` 고침 | §4-6 · [§1-11](#1-11-밖에서-붙기다른-서버의-ai-클라이언트) |
+| `edw_chain.yaml`이 코드 폴더 맨 위(git — 운영 이미지에 들어감) | 서버에서 고친 사본은 git 파일로 옮김 | §4-6 · [§3-9-2](#3-9-2-edw-조인-사슬-파일-고쳐-쓰기) |
+| 타이머·keepalive·새벽 배치는 벌 0만(단위 이름 끝 번호 없음) | 옛 `-<번호>` 단위를 지우고 `host_ctl.sh timers` | §4-6 · §3-1 |
 
 ### 4-2. 지금 판 확인
 
 ```bash
 export DOCKER=docker
 cd <벌 폴더>                                                                  # 0.2.0 서버면 <옛 루트>/sbl_data_parsing-<앞 판>
-. deploy/host/scripts/load_settings.sh && load_settings                     # 컨테이너 이름 $PIPELINE_CNAME·$MCP_CNAME(밑 이름 + 벌 번호)
 cat VERSION CODE_COMMIT                                                       # 코드 폴더의 판·커밋
 $DOCKER image inspect <이미지 태그> --format '{{json .Config.Labels}}'          # 이미지 라벨 — version(판)·revision(빌드 커밋)
-$DOCKER logs $PIPELINE_CNAME 2>&1 | grep -m2 -E '^\[(image|code)\]'           # 시작 로그
+$DOCKER logs data-pipeline-0 2>&1 | grep -m2 -E '^\[(image|code)\]'           # 시작 로그
 bash deploy/host/scripts/pipe_exec.sh migrate current --target all            # DB 판
 ```
-- 이미지 태그는 settings.yaml `required.deploy.pipeline_image`·`mcp_image` 값이다. 여러 벌이면 컨테이너 이름 끝에 `-<벌 번호>`가 붙는다.
+- 이미지 태그는 compose 파일의 `IMAGE_TAG`(파일 옆 `.env`가 있으면 그 값)다 — 떠 있는 것은 `docker ps --format '{{.Names}} {{.Image}}'`. 컨테이너 이름은 compose 파일에 적힌 그대로(`data-pipeline-<번호>`·`mcp-server-0`·`mcp-data-parsing-0`).
 
 ### 4-3. 백업
 
 먼저 자동 실행을 멈추고, 도는 `run_pipeline.py`가 끝나길 기다린다(죽이지 않는다).
 ```bash
-systemctl stop data-pipeline-nightly.timer mcp-server-keepalive.timer       # 여러 벌이면 벌마다(이름 끝 -<벌 번호>) · 개발 서버는 data-pipeline-nightly-<번호>.timer
+systemctl stop data-pipeline-nightly.timer mcp-server-keepalive.timer       # 서버에 하나씩(벌 0이 설치)
 pgrep -af run_pipeline.py                                                     # 기대: 아무것도 안 나옴(나오면 끝날 때까지 기다림)
 
 B=<벌 폴더>  PG_C=<required.deploy.pg_container_name>  PG_U=<required.pg.pg_user>  PG_D=<required.pg.pg_database>
 S=<required.pg.pg_schema>
 BK=<백업 폴더 — 벌 폴더 밖>/<앞 판>-$(date +%Y%m%d-%H%M); mkdir -p "$BK" && chmod 700 "$BK"
-tar -czf "$BK/code.tar.gz" --exclude=./output --exclude=./home -C "$B" .      # 코드·settings.yaml·edw_chain.yaml(output/·home/은 덮어써도 남음)
+tar -czf "$BK/code.tar.gz" --exclude=./output --exclude=./home -C "$B" .      # 코드·settings.yaml(output/·home/은 덮어써도 남음)
 $DOCKER exec "$PG_C" pg_dump -U "$PG_U" -d "$PG_D" -Fc -n "$S" -n "${S}_*" -n applog > "$BK/pg.dump"   # 검색(+ 원천 5벌·마스터)·applog
 $DOCKER exec -i "$PG_C" pg_restore -l < "$BK/pg.dump" | grep -c ' TABLE '     # 기대: 0보다 큰 수 — 0이면 덤프 실패
 ```
 - 0.2.0 서버는 설정이 코드 폴더의 부모에 있으므로 `B=<옛 루트>`로 루트째 묶는다(같은 명령).
-- 벌마다 `code.tar.gz`, DB(`pg_dump`)는 모든 벌이 같이 쓰므로 한 번.
+- 벌마다 `code.tar.gz`, DB(`pg_dump`)는 모든 벌이 같이 쓰므로 한 번. PG·Redis 비밀번호 `.env`는 settings.yaml과 같은 값이라 settings.yaml과 함께 백업한다.
 - 우리 스키마만 뜬다(공유 DB). `pg_dump`가 암호를 물으면 DB 담당과 함께 한다. applog는 MCP 호출 원문이 있어 클 수 있다 — 디스크를 먼저 본다(`df -h <백업 폴더>`).
 - 백업 폴더에는 비밀값·DB 내용이 있다 — 권한 700 그대로, 밖으로 옮기지 않는다.
 
@@ -1537,6 +1496,15 @@ DOCKER=docker bash sbl_images-main/load.sh <이미지 판>                      
 ```
 - 0.3.0은 실행 이미지에 개발 도구가 들어가고 패키지 목록이 바뀌어 **새 실행 이미지가 꼭 필요하다**(0.2.0 실행 이미지로는 시작하지 않음). 코드만 바뀐 판(지문이 같음)은 이미지를 불러오는 두 줄만 건너뛴다(코드 zip 풀기는 한다). 같은 지문이 서버에 없으면 PC에서 새 실행 이미지를 만든다([§5-3](#5-3-pc에서--실행-이미지-만들기와-이미지-저장소에-올리기)).
 - 운영 서버: 개발 서버에서 `bake_prod_image.sh`로 구운 조각을 옮겨 `load.sh <VERSION>`([§5-4](#5-4-개발--운영--시험한-그대로-굽기)).
+- 0.4.0 이미지 저장소(`sbl_images` 브랜치 `0.4.0`)에는 실행 이미지 둘(root 비밀번호는 이미지에 해시로)·공식 Redis 이미지·**개발 홈 묶음 `devhome`**(VS Code 1.117 서버·확장·opencode·SSH 서버 열쇠 — 이미지 아님)이 있다. `load.sh`는 devhome을 건너뛴다. 홈 묶음은 컨테이너를 띄우기 **전에** 그 컨테이너의 root 홈(벌 폴더 `home/` — 검색 MCP는 `home/mcp`) 자리에 푼다:
+  ```bash
+  cd <공용 폴더>/sbl_images-main/0.4.0
+  sha256sum -c --quiet devhome.sha256 && echo OK                     # 기대: OK
+  H=<공용 폴더>/sbl_data_parsing-main-0/home                          # 개발: main-0/home ~ main-4/home · main-0/home/mcp(검색 MCP) / 운영: <운영 폴더>/home · <운영 폴더>/home/mcp
+  mkdir -p "$H" && cat devhome.tar.gz.part* | tar -xzf - -C "$H"     # 자리마다 H만 바꿔 다시
+  ls -a "$H" | grep -E 'vscode-server|opencode|bashrc'               # 기대: .bashrc · .opencode · .vscode-server
+  ```
+  접속하는 PC의 VS Code도 1.117(커밋 `7debcd0`)이어야 하고 자동 업데이트를 끈다(`update.mode: none` — 판이 다르면 내부망에서 서버를 새로 받으려다 실패). 이미 띄웠으면 풀고 `docker restart <컨테이너>`.
 
 ### 4-5. 벌 폴더에 새 코드 덮어쓰기
 
@@ -1548,7 +1516,7 @@ cd <공용 폴더>
 T=deploy/host/scripts/test_space
 [ ! -e "$B.test_space" ] || { echo "[멈춤] $B.test_space가 이미 있음 — 아래 '중간에 끊겼을 때'대로 먼저 되돌린다" >&2; false; } &&
   { [ ! -d "$B/$T" ] || mv "$B/$T" "$B.test_space"; } &&   # run_pipeline 작업 폴더(진행 기록·잠금)를 잠시 밖으로 — 아래 find가 deploy/를 지움
-  find "$B" -mindepth 1 -maxdepth 1 ! -name .git ! -name output ! -name home ! -name edw_chain.yaml ! -name "settings*" -exec rm -rf {} + &&   # 옛 코드만 지움
+  find "$B" -mindepth 1 -maxdepth 1 ! -name .git ! -name output ! -name home ! -name "settings*" ! -name .env -exec rm -rf {} + &&   # 옛 코드만 지움
   cp -a sbl_data_parsing-<새 판>/. "$B/" && rm -rf sbl_data_parsing-<새 판> &&   # 벌 폴더 위에 새 코드
   { [ ! -d "$B.test_space" ] || mv "$B.test_space" "$B/$T"; }   # 작업 폴더 되돌려 놓기
 cd "$B"
@@ -1556,18 +1524,19 @@ bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>               
 cat CODE_COMMIT                                                               # 기대: 그 판의 커밋
 ```
 - 코드 zip 대신 코드 묶음(`code-<버전>-<커밋>.tar.gz` — [§5-3](#5-3-pc에서--실행-이미지-만들기와-이미지-저장소에-올리기))이면 `cp -a` 줄 대신 `tar -xzf code-….tar.gz --no-same-owner -C "$B"`.
-- `settings.yaml`·`edw_chain.yaml`·`output/`(파싱 캐시·임베딩 캐시·FAQ 교체 기록 — 잃으면 전부 다시 처리)·`home/`은 zip에 없어 덮어써도 남는다. 지우거나 옮기지 않는다. `deploy/host/scripts/test_space/`(run_pipeline 진행 기록·잠금)는 `deploy/` 안이라 그대로 두면 find가 지운다 — 위 명령이 옮겼다 되돌려서 남는다(`ops.run_pipeline.run_pipeline_work_dir`를 코드 폴더 밖에 두었으면 그 단계는 아무것도 안 함).
+- `settings.yaml`·`output/`(파싱 캐시·임베딩 캐시·FAQ 교체 기록 — 잃으면 전부 다시 처리)·`home/`은 zip에 없어 덮어써도 남는다. 지우거나 옮기지 않는다. `deploy/host/scripts/test_space/`(run_pipeline 진행 기록·잠금)는 `deploy/` 안이라 그대로 두면 find가 지운다 — 위 명령이 옮겼다 되돌려서 남는다(`ops.run_pipeline.run_pipeline_work_dir`를 코드 폴더 밖에 두었으면 그 단계는 아무것도 안 함).
 - **중간에 끊겼을 때**(`[멈춤] … 이미 있음`): 지난 덮어쓰기가 되돌리기 전에 끊겼다는 뜻이다. `$B/$T`가 없으면 `mkdir -p "$B/deploy/host/scripts" && mv "$B.test_space" "$B/$T"`로 먼저 되돌린 뒤 위 명령을 다시 친다. `$B/$T`도 있으면 두 폴더의 `batch_progress/progress.log`를 보고 하나만 남긴다.
 - 옛 코드를 먼저 지우는 까닭: 새 판에서 지운 파일(옛 시험 등)이 남으면 selftest(`host_ctl.sh check`)가 그 파일 때문에 실패한다.
+- compose 파일 옆 `.env`(`deploy/host/compose/.env` — 이미지 판 `IMAGE_TAG` 등)를 두었으면 find가 지운다 — 덮어쓴 뒤 다시 만든다(새 판의 기본 `IMAGE_TAG`가 맞으면 두지 않는다).
 - 서버에서 고친 파일은 새 판 내용으로 바뀐다 — 필요하면 덮어쓴 뒤 다시 얹는다([§5-6](#5-6-서버에서-직접-고친-코드)).
 - **0.2.0 서버에서 처음 올릴 때만**(설정·결과가 코드 폴더의 부모 `<옛 루트>`에 있음): 덮어쓰지 않고 새 벌 폴더를 만들어 옛 루트에서 옮긴 뒤 위 `init`부터 한다. 옛 루트는 되돌리기용으로 그대로 둔다.
 ```bash
-cd <공용 폴더> && unzip -q <코드 zip> && mv sbl_data_parsing-<새 판> sbl_data_parsing-main-1   # 운영 서버·한 벌이면 번호 없이 sbl_data_parsing-main
-B=<공용 폴더>/sbl_data_parsing-main-1
-cp -p <옛 루트>/settings.yaml <옛 루트>/edw_chain.yaml "$B/" && cp -a <옛 루트>/output "$B/"
+cd <공용 폴더> && unzip -q <코드 zip> && mv sbl_data_parsing-<새 판> sbl_data_parsing-main-0   # 운영 서버면 번호 없이 sbl_data_parsing-main
+B=<공용 폴더>/sbl_data_parsing-main-0
+cp -p <옛 루트>/settings.yaml "$B/" && cp -a <옛 루트>/output "$B/"
 ```
-  `ops.host.host_output_dir`로 결과 폴더를 루트 밖에 두었으면 `output`은 복사하지 않는다.
-- settings.yaml 이미지 칸을 새 태그로 고친다(§4-6) — dev `data-pipeline-runtime:<이미지 판>`·`mcp-server-runtime:<이미지 판>`, prd `data-pipeline:<VERSION>`·`mcp-server:<VERSION>`.
+  옛 루트의 `edw_chain.yaml`을 고쳐 썼으면 그 내용을 새 코드 폴더 맨 위 `edw_chain.yaml`에 얹는다([§3-9-2](#3-9-2-edw-조인-사슬-파일-고쳐-쓰기)).
+- 띄울 이미지 판은 compose 파일의 `IMAGE_TAG`다 — 새 판의 기본값과 다르면 `deploy/host/compose/.env`에 `IMAGE_TAG=<판>`을 적는다.
 
 ### 4-6. 설정 고치기
 
@@ -1578,7 +1547,7 @@ cp -p <옛 루트>/settings.yaml <옛 루트>/edw_chain.yaml "$B/" && cp -a <옛
 cd "$B"
 cp -p settings.yaml settings.yaml.bak-$(date +%Y%m%d-%H%M)
 
-grep -noE '^[[:space:]]*(skipped_docs_log|secure_doc|source_column_content_version|embed_query_cache_file|embed_query_cache_max_rows|pg_standin|instance_name|edw_write_user|edw_write_password|parsing_meta_table)[[:space:]]*:' settings.yaml
+grep -noE '^[[:space:]]*(skipped_docs_log|secure_doc|source_column_content_version|embed_query_cache_file|embed_query_cache_max_rows|pg_standin|instance_name|edw_write_user|edw_write_password|parsing_meta_table|pipeline_image|mcp_image|compose_project|redis_image|redis_mem_limit|redis_data_dir|host_edw_chain_file|extra_compose|host_output_dir|containers|[a-z_]+_container_name|[a-z_]+_cpus|[a-z_]+_mem_limit|data_parsing_cpu_shares|ssh_port|opencode_config|home_dir|gitea_url|gitea_user|gitea_token)[[:space:]]*:' settings.yaml   # pg_container_name 줄은 남긴다
 
 vi settings.yaml        # :<줄 번호> 로 가서 dd · 저장 :wq
 
@@ -1591,14 +1560,25 @@ $DOCKER run --rm --entrypoint python -v "$PWD:/app/deploy:ro,z" "$IMG" -m common
 
 chown 10001:<운영 그룹> settings.yaml && chmod 640 settings.yaml
 ```
-- `load_settings.sh`(호스트 셸이 쓰는 칸만 꺼냄)는 모르는 칸을 보지 않는다 — 설정 확인은 `설정-읽힘` 줄로 한다.
+- 호스트 스크립트(`load_settings.sh` — 호스트 셸이 쓰는 칸만 꺼냄)는 모르는 칸을 보지 않는다 — 설정 확인은 `설정-읽힘` 줄로 한다.
 - 빈 절(예: 칸을 다 지워 `extract:`만 남음)은 그대로 두어도 된다.
 - `설정-읽힘`이 나온 뒤 백업 파일 `settings.yaml.bak-*`은 §4-10 점검까지 끝나면 지운다(비밀값이 들어 있음).
 - **칸 이름이 바뀌었다** — 옛 → 새 전체 표는 [refactor.md 부록 — 칸 이름 대응표](../refactoring/refactor.md#부록--설정-칸-이름-대응표)(1차 표의 새 이름이 2차 표의 옛 이름 — 둘 다 옮김).
-- **서버 settings.yaml에서 지울 줄** — 코드가 읽지 않아 지운 칸이다(남으면 모르는 칸으로 시작 거부):
+- **서버 settings.yaml에서 지울 칸** — 코드가 읽지 않아 지운 칸이다(남으면 모르는 칸으로 시작 거부):
 
-  | 지울 줄(칸 전체 이름) | 언제 지운 칸 | 까닭 |
+  | 지울 칸(전체 이름) | 언제 지운 칸 | 까닭 |
   |---|---|---|
+  | `required.deploy.pipeline_image` · `required.deploy.mcp_image` | 0.4.0 | 이미지는 compose 파일의 `IMAGE_TAG` |
+  | `ops.host.compose_project` | 0.4.0 | compose 묶음 이름은 파일의 `name:`(`docker-dev`·`sbl-prd`) |
+  | `ops.host.redis_image` · `ops.host.redis_mem_limit` · `ops.host.redis_data_dir` | 0.4.0 | Redis는 `compose-redis.yml`(공식 이미지 · 자원·데이터 폴더가 파일에) |
+  | `ops.host.host_edw_chain_file` | 0.4.0 | `edw_chain.yaml`은 코드 폴더 맨 위(git — 이미지에 들어감) |
+  | `ops.host.extra_compose` | 0.4.0 | 덧붙임 compose 파일 없음 — 볼륨·env는 `compose-<환경>.yml`에 직접 |
+  | `ops.host.host_output_dir` | 0.4.0 | 결과 폴더는 늘 `<루트>/output` |
+  | `ops.containers.pipeline.pipeline_container_name` · `pipeline_cpus` · `pipeline_mem_limit` | 0.4.0 | 컨테이너 이름·자원은 compose 파일에 직접 |
+  | `ops.containers.data_parsing.data_parsing_container_name` · `data_parsing_cpus` · `data_parsing_mem_limit` · `data_parsing_cpu_shares` | 0.4.0 | 같음 |
+  | `ops.containers.mcp.mcp_container_name` · `mcp_cpus` · `mcp_mem_limit` | 0.4.0 | 같음 |
+  | `option.devbox.ssh_port` · `option.devbox.opencode_config` · `option.devbox.home_dir` | 0.4.0 | SSH 포트·홈은 compose 파일(홈 `<벌 폴더>/home` → `/root`) · opencode 설정은 저장소 루트 `opencode.jsonc` |
+  | `option.devbox.gitea_url` · `gitea_user` · `gitea_token` | 0.4.0 | 쓰지 않음 — gitea 로그인은 컨테이너 안에서 직접(§6-3) |
   | `extract.skipped_docs_log` | 0.3.1 | 건너뛴 문서 기록은 늘 `<준비 폴더>/_records/skipped.jsonl`(게시 단계가 읽는 자리) |
   | `extract.secure_doc`(절 통째 — 안에 `secure_doc_passwords_file`) | 0.3.1 | 읽는 곳이 없음(암호 문서는 건너뜀) |
   | `tuning.extract.source_columns.source_column_content_version` | 0.3.1 | 판 ID 열은 읽지 않음(증분 판정 열은 `source_column_increment`) |
@@ -1608,14 +1588,36 @@ chown 10001:<운영 그룹> settings.yaml && chmod 640 settings.yaml
   | `edw_write_user` · `edw_write_password` · `parsing_meta_table` | 0.3.0 | 파이프라인이 EDW에 쓰지 않음(§4-7) |
 
 - **엔진 구성 파일** `resources/config/pipeline_stack.json`은 코드 폴더 안이라 §4-5에서 새 판으로 바뀐다. 서버에서 고친 옛 파일을 다시 덮어 쓰면 그 파일의 `retrieve`·`k` 칸을 지운다(모르는 칸이면 읽기 거부). 확인: `$DOCKER run --rm --entrypoint python -v "$PWD:/app/deploy:ro,z" "$IMG" -m pipeline.cli show-stack` — 엔진 표가 나오면 통과.
-- **새 선택 절 `option.devbox`**(파일 맨 아래) — 개발 서버의 SSH 작업 공간. 비우면 끔. 쓰는 법은 [§2-13](#2-13-개발-작업-공간--sshopencode선택).
+- **선택 절 `option.devbox`**(파일 맨 아래) — SSH 작업 공간의 git 이름·메일(`git_user_name`·`git_user_email`). 비우면 설정하지 않음. 옛 판의 `gitea_url`·`gitea_user`·`gitea_token` 줄이 남아 있으면 모르는 칸으로 시작이 거부되니 지운다. 쓰는 법은 [§2-13](#2-13-개발-작업-공간--sshopencode선택).
 - **경로 칸은 컨테이너 안 절대 경로로** 적고, 쓰는 자리는 `/app/output/…` 아래여야 한다 — [env-guide §5](env-guide.md#5-서버-경로-칸--컨테이너-안-절대-경로).
 - `설정-읽힘` 확인을 건너뛰어도 §4-7에서 컨테이너가 뜰 때 같은 칸 이름을 알리고 멈춘다 — 고치고 다시 띄운다.
+
+**compose 파일 하나로 옮기기(한 번 — 옛 묶음을 쓰던 서버)** — 컨테이너 이름·이미지·자원을 settings.yaml 칸으로 정하던 옛 배치(덧붙임 compose 파일 여럿 · `mcp-redis`)에서 환경마다 compose 파일 하나(`compose-<환경>.yml`)와 서버마다 PG·Redis 하나로 옮긴다. 비밀번호 값은 어느 단계에서도 화면에 찍지 않는다.
+
+1. **(§4-5 전에 — 옛 코드로)** 타이머를 끄고 옛 컨테이너를 내린다. 진행 중인 `parse_document` 작업이 끝난 뒤 한다.
+   ```bash
+   systemctl disable --now mcp-server-keepalive.timer data-pipeline-nightly.timer   # 옛 이름 끝 -<번호> 단위가 있으면 그것도 — 단위 파일은 rm /etc/systemd/system/<단위> 뒤 systemctl daemon-reload
+   cd <옛 벌 폴더> && bash deploy/host/scripts/host_ctl.sh down                     # 벌마다 — 옛 묶음(data-pipeline·mcp-data-parsing·mcp-server·mcp-redis)
+   docker ps -a --format '{{.Names}}'                                                # 남은 옛 컨테이너(예 data-pipeline-1)는 docker rm -f <이름> — 결과 폴더·DB는 남음
+   ```
+2. settings.yaml을 고친다 — 아래 "서버 settings.yaml에서 지울 칸"을 지우고, 채울 칸:
+   - `common.connections.redis.redis_password` — 서버마다 새 값(`openssl rand -hex 32`). `redis_host: <서버 IP>` · `redis_port`는 비운다(기본 8010).
+   - `required.pg.pg_host: <서버 IP>` · `pg_port: 5433`(`compose-pgvector.yml`로 띄울 때 — DB 담당이 따로 둔 PG면 그 값 그대로).
+   - 벌 0(운영은 그 한 벌) `search.server`: `mcp_bind_host: <서버 IP>` · `mcp_port: 8051`(`mcp_allowed_hosts`는 비움 — 바인드 주소가 이미 허용됨).
+   - `ops.paths.edw_chain_file`에 `/etc/rag/edw_chain.yaml`을 적었으면 지운다(비움 = 코드 폴더 맨 위 `edw_chain.yaml`).
+3. 비밀번호: 벌 0 코드 폴더 맨 위에 `.env`를 만들어 `REDIS_PASSWORD`·`PG_USER`·`PG_DB`·`PG_PASSWORD`를 settings.yaml과 같은 값으로 적고 `chmod 600 .env`. 손으로 만든 옛 비밀번호 파일(`<공용 폴더>/pg_pw`·`redis_pw`·`root_pw`), 앞 판의 `<공용 폴더>/secrets/`, 옛 Redis 설정 폴더(`<루트>/redis-conf`), 앞 판이 Redis 데이터 폴더에 복사해 둔 `<REDIS_DATA>/redis.conf`(기본 `/data/redis/redis.conf` — 비밀번호가 들어 있음)는 더 쓰지 않으니 지운다. 비밀번호가 맞는지는 `host_ctl.sh check`의 첫 단계가 본다. root SSH 비밀번호는 이미지에 들어간다([§6-6](#6-6-서버-묶음--compose-파일과-root-ssh)).
+4. PG: 옛 `pgvector` 컨테이너를 멈추고 지운 뒤(`docker stop pgvector && docker rm pgvector` — 데이터 폴더는 그대로) `docker compose --env-file .env -f deploy/host/compose/compose-pgvector.yml up -d`(같은 데이터 폴더 `PG_DATA` — 기본 `/data/pg/pipeline`). `.env`의 계정·비밀번호는 빈 데이터 폴더에서만 쓰이므로 `.env`·settings.yaml의 값이 기존 DB 계정·비밀번호와 같아야 한다. docker 볼륨이었으면 멈춘 뒤 `docker volume inspect <볼륨> --format '{{.Mountpoint}}'` 폴더의 내용을 데이터 폴더로 복사한다.
+5. Redis: `docker compose --env-file .env -f deploy/host/compose/compose-redis.yml up -d` → `docker ps --filter name=^redis$`(기대 `healthy`). 옛 `mcp-redis`의 데이터는 옮기지 않는다(작업 큐 — 1에서 작업이 끝난 뒤라 비어 있음).
+6. EDW 사슬: 서버에서 고친 `<루트>/edw_chain.yaml` 사본이 있었으면 §4-5 전에 밖으로 복사해 두고, 그 내용을 새 코드 폴더 맨 위 `edw_chain.yaml`에 얹어 git으로 커밋한다([§3-9-2](#3-9-2-edw-조인-사슬-파일-고쳐-쓰기)) — 새 판은 사본을 따로 붙이지 않는다.
+7. 덧붙임 compose 파일(`ops.host.extra_compose`로 붙이던 `compose.extra.yml` 등)이 있었으면 그 볼륨·env를 `compose-<환경>.yml`의 칸에 옮겨 적고(git 커밋) 지운다. 컨테이너 자원을 settings.yaml에 적어 두었으면 그 값을 compose 파일의 `cpus`·`mem_limit`에 옮긴다.
+8. 앱: `bash deploy/host/scripts/host_ctl.sh up -d` → 벌 0 폴더(운영은 그 한 벌)에서 `host_ctl.sh timers`(이름 끝 번호 없는 단위 4개) → §4-10 점검.
+
+새 판에서 없어진 파일: 옛 compose 파일 10개(`compose.pipeline.yml`·`compose.data-parsing.yml`·`compose.mcp-server.yml`·`compose.code.yml`·`compose.code.data-parsing.yml`·`compose.code.mcp-server.yml`·`compose.dev.yml`·`compose.opencode.yml`·`compose.redis.yml`·`extra.example.yml`), `deploy/docker/Dockerfile.redis`와 `deploy/docker/redis/`(이미지 `sbl-redis`는 더 쓰지 않음 — 공식 `redis:7.4.8-alpine`), `resources/config/edw_chain.yaml`(→ 코드 폴더 맨 위 `edw_chain.yaml`).
 
 ### 4-7. DB 판 올리기 — `migrate up`
 
 ```bash
-bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline     # 벌 폴더에서 — pipe_exec.sh가 이 안에서 돈다
+bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline-0   # 벌 0 폴더(운영은 그 한 벌)에서 — pipe_exec.sh가 이 안에서 돈다
 bash deploy/host/scripts/pipe_exec.sh migrate current --target all
 bash deploy/host/scripts/pipe_exec.sh migrate up --target applog
 bash deploy/host/scripts/pipe_exec.sh migrate up --target search                # 0.3.0: 원천 스키마 5벌 doc에 처리 기록 칸(0006_search)·찾기 색인(0007_search)
@@ -1626,10 +1628,10 @@ bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 
 - **applog는 모든 벌이 함께 쓴다 — 첫 벌에서 `migrate up --target applog`를 끝낸 뒤에 다른 벌을 새 코드로 바꾼다.** 첫 벌은 위 첫 줄로 새 코드를 띄운 다음 바로 올린다. 그 사이도 없애려면 DB 담당이 `--sql` 파일(아래)을 코드를 바꾸기 전에 손으로 실행한다. 판 `0004_applog` 전의 applog에는 새 코드의 사건 행(`source_system` 칸)이 들어가지 못해 그 벌의 applog 기록이 모두 파일 대체 기록(`output/logs/*.jsonl`)으로 가고, 적재 안 된 문서 기록(`except_doc_info`)은 칸 없음으로 실패한다.
 - DB 담당이 SQL을 먼저 보고 손으로 실행하려면: `bash deploy/host/scripts/pipe_exec.sh migrate up --target applog --from 0001_applog --sql /app/output/up_applog.sql`(DB·접속 정보 없이 — 스키마 이름만 설정에서 · `<벌 폴더>/output/`에 다 만든 뒤 한 번에 씀 · `--from` = `migrate current`가 보인 지금 판, 갈래마다 — 없는 갈래는 빈 스키마부터라 경고 줄과 `-- 주의:` 주석이 나온다 · 차원을 읽는 판(`0001_search`·`0002_search`)이 들면 `--dim`이 필요). DB를 읽어야 하는 확인(지금 판·vector 확장·남의 스키마·차원)은 파일 안 `-- 수동:` 줄이다. 손으로 실행한 뒤 `migrate check --target all`.
 - 갈래(`--target`)마다 따로 올리면 어느 갈래가 바뀌었는지 출력에서 바로 보인다. 한 번에는 `--target all`. 명령 하나하나의 뜻·오류 분기(종료 2)는 [§1-8](#1-8-db-표-만들기--migrate).
-- 벌이 여럿이면 아무 벌 하나에서 한 번 — 다른 벌은 §4-5·§4-6 뒤 §4-10만 한다.
+- 벌이 여럿이면 벌 0에서 한 번 — 다른 벌은 §4-5·§4-6 뒤 §4-10만 한다.
 - 0.3.0의 applog `0003_applog`는 새 표 `except_doc_info`를 만들고 옛 `skip_doc_info` 행을 `skip`으로 옮긴다. `0004_applog`는 `pipe_event`에 `source_system`, `except_doc_info`에 `file_ext`·`file_size` 칸을 더한다(옛 행은 비움). search `0006_search`는 `doc`에 처리 기록 칸(`sha256`·`silver_bucket`·`silver_key`·`engines`·`parse_status`·`silver_version`·`gold_version`·`parsed_at`·`loaded_at`)을 더하고, `0007_search`는 `doc`에 찾기 색인 3개(`sha256` · `silver_bucket`+`silver_key` · `file_path`)를 만든다(행이 많으면 만드는 동안 그 `doc`에 쓰기가 잠깐 막힌다 — 실행 중인 적재가 없을 때). **첫 `run_pipeline.py` 전에** 둘 다 올린다 — 없으면 대상 목록·받기가 표 없음으로 멈춘다.
 - 0.3.0 사람이 할 일(DB 담당과): EDW `AI.ParsingMeta`에 있던 처리 기록을 `doc` 새 칸으로 손으로 옮긴다(파이프라인은 EDW에 더 쓰지 않고, `doc` 행이 있으면 끝난 문서로 본다). 옮긴 것을 확인한 뒤 옛 표 `applog.skip_doc_info`를 지운다(마이그레이션은 지우지 않음). settings.yaml에 `edw_write_user`·`edw_write_password`·`parsing_meta_table` 칸이 남아 있으면 시작을 거부하므로 지운다.
-- 0.3.0의 master `0002_master`는 표 `glossary`를 만들고 옛 마스터 표(`client_roster`·`domain_terms`·`id_patterns` 등 일곱 개)를 지운다(되돌리기 없음 — 먼저 마스터 스키마 백업). `master load`는 `glossary.csv` 하나만 읽으므로 **올리기 전에** 서버 실명 자료(옛 CSV)를 `glossary.csv`로 옮겨 둔다(`$DOCKER exec $PIPELINE_CNAME python -m common.store.master convert --src /app/output/glossary --out /app/output/glossary/glossary.csv` — [§3-9-1](#3-9-1-고객-명부용어집-작성법), refactor.md C-108).
+- 0.3.0의 master `0002_master`는 표 `glossary`를 만들고 옛 마스터 표(`client_roster`·`domain_terms`·`id_patterns` 등 일곱 개)를 지운다(되돌리기 없음 — 먼저 마스터 스키마 백업). `master load`는 `glossary.csv` 하나만 읽으므로 **올리기 전에** 서버 실명 자료(옛 CSV)를 `glossary.csv`로 옮겨 둔다(`$DOCKER exec data-pipeline-0 python -m common.store.master convert --src /app/output/glossary --out /app/output/glossary/glossary.csv` — [§3-9-1](#3-9-1-고객-명부용어집-작성법), refactor.md C-108).
 - `올린 뒤에도 차이:`가 나오거나 종료 2이면 멈추고 출력(이름만)을 DB 담당과 본다.
 
 ### 4-8. pgvector가 바뀔 때 — 두 경우
@@ -1637,8 +1639,8 @@ bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 
 검색 DB에 들어가는 것을 바꾸는 방법은 둘이다. 어느 쪽으로 할지는 사람이 정한다.
 
 **(가) 문서 메타 키만 — 스키마 그대로.** 문서 메타는 `doc.attrs`(JSON 칸) 하나에 들어가므로 키를 더하거나 EDW 칸을 바꿔도 표는 그대로다.
-1. `<루트>/edw_chain.yaml`의 `fields`를 고친다(법: [§3-9-2](#3-9-2-edw-조인-사슬-파일-고쳐-쓰기)).
-2. 점검: `$DOCKER exec $PIPELINE_CNAME python -m pipeline.load.edw_doc_meta --check` — 기대 `[edw_meta] 사슬 설정 OK(…)`, 종료 코드 0.
+1. 코드 폴더 맨 위 `edw_chain.yaml`의 `fields`를 고쳐 커밋한다(법: [§3-9-2](#3-9-2-edw-조인-사슬-파일-고쳐-쓰기)).
+2. 점검: `$DOCKER exec data-pipeline-0 python -m pipeline.load.edw_doc_meta --check` — 기대 `[edw_meta] 사슬 설정 OK(…)`, 종료 코드 0.
 3. 이미 적재한 문서는 값이 저절로 차지 않는다 — 영향받는 원천의 문서를 §4-9의 순서로 `--replace` 다시 적재한다.
 
 **(나) 표 구조(표·칸·색인)를 바꿀 때.** 새 마이그레이션 판(`common/store/db/migrations/versions/`)이 필요하다. DB 스키마 변경이라 **사람 검토와 DB 담당 합의가 먼저**다. 올리는 법은 둘 중 하나:
@@ -1665,10 +1667,10 @@ bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 
 **구조화 + 적재만 다시(게시 없이).** 서버는 문서가 끝나면 작업 폴더(`_docflow/<번호>/`)를 지우므로 묶음이 남아 있지 않다. 그 문서를 파싱해 묶음을 다시 만들고 `--replace`로 적재한다(Object Storage에는 다시 쓰지 않음).
 ```bash
 R=/app/output/redo
-$DOCKER exec $PIPELINE_CNAME python -m pipeline.cli --set PIPE_OUT_ROOT=$R parse --source rdb:csv:$R/list.csv --src $R/prepared
-$DOCKER exec $PIPELINE_CNAME python -m pipeline.transform.structure.gold_bundle --set PIPE_OUT_ROOT=$R \
+$DOCKER exec data-pipeline-0 python -m pipeline.cli --set PIPE_OUT_ROOT=$R parse --source rdb:csv:$R/list.csv --src $R/prepared
+$DOCKER exec data-pipeline-0 python -m pipeline.transform.structure.gold_bundle --set PIPE_OUT_ROOT=$R \
     --parse-dir $R/parse --src $R/prepared --out $R/bundle
-$DOCKER exec $PIPELINE_CNAME python -m pipeline.load.pgvector_load --set PIPE_OUT_ROOT=$R \
+$DOCKER exec data-pipeline-0 python -m pipeline.load.pgvector_load --set PIPE_OUT_ROOT=$R \
     load --bundle $R/bundle --rep-dir $R/parse/_rep --replace                  # 기대: 종료 코드 0
 ```
 - 끝나면 `<결과 폴더>/redo/`를 지운다(원본 사본이 들어 있음).
@@ -1679,27 +1681,27 @@ $DOCKER exec $PIPELINE_CNAME python -m pipeline.load.pgvector_load --set PIPE_OU
 ### 4-10. 올린 뒤 점검
 
 ```bash
-bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline mcp-data-parsing mcp   # 개발 서버는 up -d --force-recreate data-pipeline
-bash deploy/host/scripts/host_ctl.sh logs data-pipeline 2>&1 | grep -m1 '^\[image\]'   # 기대: [image] 이미지 <이름 버전 커밋> · 코드 <커밋> · 의존성 <지문>
-bash deploy/host/scripts/host_ctl.sh check                                    # 기대 마지막 줄: 운영 [host_ctl check] 통과 — 6개 · 개발 [host_ctl check] 통과 — 4개(개발 서버 — data-pipeline만)
-curl -s http://127.0.0.1:<search.server.mcp_port>/health                      # (운영) 기대: {"ok":true,"ready":true,"store":"pgvector",…}
+bash deploy/host/scripts/host_ctl.sh up -d --force-recreate                   # 그 compose 파일의 앱 컨테이너 모두
+bash deploy/host/scripts/host_ctl.sh logs data-pipeline-0 2>&1 | grep -m1 '^\[image\]'   # 기대: [image] 이미지 <이름 버전 커밋> · 코드 <커밋> · 의존성 <지문>
+bash deploy/host/scripts/host_ctl.sh check                                    # 기대 마지막 줄: [host_ctl check] 통과 — 7개
+curl -s http://<서버 IP>:8051/health                                          # 기대: {"ok":true,"ready":true,"store":"pgvector",…}
 bash deploy/host/scripts/pipe_exec.sh parse --source-limit 3                  # 원본 3건 파싱 — 기대: 종료 코드 0
 bash deploy/host/scripts/pipe_exec.sh publish --dry-run > /tmp/dry.json; grep -c 'CRMS/CRMS/' /tmp/dry.json; rm /tmp/dry.json
 ```
 - `의존성 지문이 다름`으로 멈추면 그 코드는 새 실행 이미지가 필요하다(§4-4).
 - 컨테이너 안 코드가 있는지 파일로 본다(bind 마운트 원본이 없으면 빈 폴더가 붙어 `test -d`는 통과하므로):
 ```bash
-for c in data-pipeline mcp-data-parsing; do   # 여러 벌이면 이름 끝 -<벌 번호> · 개발 서버는 data-pipeline-<번호>만
+for c in data-pipeline-0 mcp-data-parsing-0; do   # 개발 서버는 벌마다 data-pipeline-<번호>도
  $DOCKER exec $c test -f /app/deploy/pipeline/transform/parse/parse_engines.py && echo "$c OK" || echo "$c 코드 없음(빈 마운트?)"; done
 ```
-- (운영) MCP 클라이언트로 `search` 한 번(원천 `source_system` 필수) 뒤 로그 행이 생기는지:
+- MCP 클라이언트로 `search` 한 번(원천 `source_system` 필수) 뒤 로그 행이 생기는지:
 ```bash
 $DOCKER exec "$PG_C" psql -U "$PG_U" -d "$PG_D" -c "SELECT tool_name, status, requested_at FROM applog.mcp_log ORDER BY requested_at DESC LIMIT 3"
 ```
 - 처음 게시하는 서버면 실제 처리(게시·적재) 한 번 뒤 `doc` 처리 기록과 Object Storage 파일을 본다:
 ```bash
 $DOCKER exec "$PG_C" psql -U "$PG_U" -d "$PG_D" -c "SELECT file_path, parse_status, silver_bucket, silver_key, parsed_at, gold_version FROM <pg_schema>_<원천>.doc ORDER BY loaded_at DESC NULLS LAST LIMIT 5"
-$DOCKER exec $PIPELINE_CNAME python -c "import sys; from common.store.objectstore import client; r=client().list_objects_v2(Bucket=sys.argv[1], Prefix=sys.argv[2]); [print(o['Key'], o['Size']) for o in r.get('Contents', [])]" <silver_bucket> <silver_key의 폴더>
+$DOCKER exec data-pipeline-0 python -c "import sys; from common.store.objectstore import client; r=client().list_objects_v2(Bucket=sys.argv[1], Prefix=sys.argv[2]); [print(o['Key'], o['Size']) for o in r.get('Contents', [])]" <silver_bucket> <silver_key의 폴더>
 ```
 - 실제 publish는 한 번만 한다(다시 돌리면 Object Storage에 같은 결과가 새 시각 이름으로 또 올라감).
 - 다 되면 자동 실행을 다시 켠다(단위 틀이 바뀌었을 수 있어 이 코드 폴더로 다시 씀): `bash deploy/host/scripts/host_ctl.sh timers` → `versions.md`에 한 줄([§3-11-1](#3-11-1-서버-버전-기록)).
@@ -1713,7 +1715,7 @@ pgrep -af run_pipeline.py                                                     # 
 cd "$B" && bash deploy/host/scripts/host_ctl.sh down
 mv "$B" "$B.new" && mkdir "$B" && tar -xzf "$BK/code.tar.gz" -C "$B"         # 앞 판 코드·설정
 mv "$B.new/output" "$B/"; [ -d "$B.new/home" ] && mv "$B.new/home" "$B/"     # 결과·홈은 그대로 옮김
-cd "$B" && bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline mcp-data-parsing mcp   # 개발 서버는 data-pipeline만
+cd "$B" && bash deploy/host/scripts/host_ctl.sh up -d --force-recreate        # 앞 판의 compose 파일로
 bash deploy/host/scripts/host_ctl.sh timers
 ```
 - `$B.new`(새 판 코드)는 확인 뒤 사람이 지운다.
@@ -1743,12 +1745,12 @@ bash deploy/host/scripts/pipe_exec.sh migrate check --target applog           # 
 
 | 이미지 | 역할 | `RAG_MODULE` | 실행 이미지 `IMAGE_TARGET` | 코드가 든 이미지 `IMAGE_TARGET` | 안에 든 것 | 상주 컨테이너(§3-1) |
 |---|---|---|---|---|---|---|
-| `data-pipeline` | 파싱·게시·구조화·적재 | `pipeline` | `pipeline-runtime` → `data-pipeline-runtime:<판>` | `pipeline` | 의존성 + LibreOffice + `assets/`(OCR 모델) | `data-pipeline` · `mcp-data-parsing` |
-| `mcp-server` | 검색 MCP | `mcp` | `mcp-runtime` → `mcp-server-runtime:<판>` | `mcp` | 의존성 | `mcp-server` |
+| `data-pipeline` | 파싱·게시·구조화·적재 | `pipeline` | `pipeline-runtime` → `data-pipeline-runtime:<판>` | `pipeline` | 의존성 + LibreOffice + `assets/`(OCR 모델) | `data-pipeline-<번호>` · `mcp-data-parsing-0` |
+| `mcp-server` | 검색 MCP | `mcp` | `mcp-runtime` → `mcp-server-runtime:<판>` | `mcp` | 의존성 | `mcp-server-0` |
 
 - 이미지 시작 스크립트(`entrypoint.sh`)는 다른 이미지의 명령을 종료 64로 거부한다(맞는 이미지를 알려 줌). data-pipeline: `parse`·`publish`·`show-stack`·`idle`·`migrate`·`run-mcp-parsing` · mcp-server: `mcp`·`ask`·`show-stack`. 어느 이미지에서나: `help`·`check`·`resources`·`services`·`check-modules`·`tool <이름> [인자]`·`selftest`.
-- **코드 폴더** = 코드 zip(또는 코드 묶음)을 푼 폴더(저장소 트리 그대로)를 벌 폴더 이름으로 바꾼 것(예 `/home/sbl/sbl_data_parsing-main-1` — 이름 끝 `-<숫자>`가 벌 번호, §2-1). **루트** = 코드 폴더 자체 — 호스트 스크립트는 자기 자리에서 루트를 구해 `<루트>/settings.yaml`·`<루트>/edw_chain.yaml`·`<루트>/output/`을 쓴다. 사람·systemd는 코드 폴더에서 `bash deploy/host/scripts/…`를 부른다.
-- 개발 서버는 실행 이미지(`*-runtime`)에 코드 폴더를 `/app/deploy`에 읽기 전용으로 붙인다 — `host_ctl.sh`·`mcp_keepalive.sh`가 자기 코드 폴더를 `CODE_DIR`로 잡는다(셸에 `CODE_DIR`가 있으면 그 값). 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2) — 실행 이미지 판은 `BUILD.txt`의 `DEPS_HASH`가 코드의 `deploy/docker/DEPS_HASH`와 같은 판을 쓴다. 운영 서버는 개발 서버에서 구운 코드가 든 이미지(§5-4)를 마운트 없이 쓴다.
+- **코드 폴더** = 코드 zip(또는 코드 묶음)을 푼 폴더(저장소 트리 그대로)를 벌 폴더 이름으로 바꾼 것(예 `/home/sbl/sbl_data_parsing-main-0` — 이름 끝 `-<숫자>`가 벌 번호, §2-1). **루트** = 코드 폴더 자체 — 호스트 스크립트는 자기 자리에서 루트를 구해 `<루트>/settings.yaml`·`<루트>/output/`을 쓴다. 사람·systemd는 코드 폴더에서 `bash deploy/host/scripts/…`를 부른다.
+- 개발 서버는 실행 이미지(`*-runtime`)에 벌 폴더를 `/app/deploy`에 붙인다(`compose-dev.yml` — 쓰기 가능, `settings.yaml`만 읽기 전용). 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2) — 실행 이미지 판은 `BUILD.txt`의 `DEPS_HASH`가 코드의 `deploy/docker/DEPS_HASH`와 같은 판을 쓴다. 운영 서버는 개발 서버에서 구운 코드가 든 이미지(§5-4)를 마운트 없이 쓴다.
 - **코드 폴더만으로 못 바꾸는 것**(바꾸면 새 실행 이미지 버전): `deploy/docker/requirements*.txt`·`Dockerfile`·`wheels/`·시스템 패키지·`assets/` 모델 파일. 시작할 때 코드의 `deploy/docker/DEPS_HASH`(requirements 두 파일의 지문)가 이미지 지문과 다르면 컨테이너가 멈춘다. 휠·Dockerfile·assets만 바뀐 경우는 자동으로 막지 않으니 사람이 판을 올려 새로 빌드한다.
 
 ### 5-2. 버전
@@ -1794,10 +1796,10 @@ ls assets/rapidocr/*.onnx assets/opencode/opencode    # build_ship.sh가 보는 
 
 운영 이미지는 PC에서 빌드하지 않는다. 개발 서버에 불러온 **실행 이미지 그 판** 위에 **시험한 코드 폴더**를 COPY만 해서 앱마다 코드가 든 이미지 하나(`data-pipeline:<VERSION>`·`mcp-server:<VERSION>`)를 다시 빌드한다(`deploy/docker/Dockerfile.bake` — 패키지 설치·네트워크 없음). 구운 이미지는 코드 폴더 없이 뜬다. 순서: 개발 서버에서 굽기·판정 → 조각을 운영 서버로 옮김 → 운영 서버에서 불러오기·띄우기.
 
-1. 개발 서버(시험한 코드 폴더에서): `bash deploy/release/bake_prod_image.sh <실행 이미지 판>`(개발 서버가 지금 쓰는 실행 이미지 판 — settings.yaml 이미지 칸의 태그, 대상 하나만이면 뒤에 `pipeline` 또는 `mcp`). 코드 폴더는 스크립트가 든 폴더(다른 폴더면 `CODE_DIR=`), 새 태그는 코드 `VERSION`(다른 `TAG=`는 거부), 컨테이너 도구는 docker(`DOCKER=`), 저장 폴더 `/var/tmp/bake`(`OUT=`).
+1. 개발 서버(시험한 코드 폴더에서): `bash deploy/release/bake_prod_image.sh <실행 이미지 판>`(개발 서버가 지금 쓰는 실행 이미지 판 — `docker ps --format '{{.Image}}'`에 보이는 태그, 대상 하나만이면 뒤에 `pipeline` 또는 `mcp`). 코드 폴더는 스크립트가 든 폴더(다른 폴더면 `CODE_DIR=`), 새 태그는 코드 `VERSION`(다른 `TAG=`는 거부), 컨테이너 도구는 docker(`DOCKER=`), 저장 폴더 `/var/tmp/bake`(`OUT=`).
 2. 스크립트 순서: ① 코드 `DEPS_HASH` = 실행 이미지 지문인지(다르면 멈춤) ② 빌드 — 라벨 `org.opencontainers.image.revision`(코드 커밋)·`org.opencontainers.image.base.digest`(실행 이미지 ID) ③ `selftest_gate.sh` 판정(`[판정] 통과`가 아니면 멈춤) ④ 저장·45 MB 분할·sha256 → `/var/tmp/bake/sbl_images/`(`load.sh` · `<태그>/BUILD.txt` · `<태그>/<이미지>/` + 같은 태그 폴더에 코드 묶음 `code-<태그>-<커밋>.tar.gz`·sha256). 코드 묶음에는 `.git`·`deploy/host/scripts/test_space/`·`valid_env/`·`validation/`·`settings*.yaml`(sample 빼고)·`output/`이 들어가지 않는다(코드 폴더가 git clone이면 `git archive`로 추적 파일만).
 3. 옮기기: `/var/tmp/bake/sbl_images/`를 운영 서버로 옮긴다.
-4. 운영 서버: `DOCKER=docker bash sbl_images/load.sh <태그>` → 코드 묶음을 벌 폴더(`/home/sbl/sbl_data_parsing-main` — 운영은 한 벌이라 번호 없이)에 풀고(호스트 스크립트만 씀) settings.yaml 이미지 칸을 `data-pipeline:<VERSION>`·`mcp-server:<VERSION>`으로 → [§4-5](#4-5-벌-폴더에-새-코드-덮어쓰기)·§4-10으로 띄우고 `host_ctl.sh check`. 셸·unit에 `CODE_DIR`을 두지 않는다(두면 compose가 코드 폴더를 덮어 붙임).
+4. 운영 서버: `DOCKER=docker bash sbl_images/load.sh <태그>` → 코드 묶음을 벌 폴더(`/home/sbl/sbl_data_parsing-main` — 운영은 한 벌이라 번호 없이)에 풀고(호스트 스크립트·compose 파일만 씀) `compose-prd.yml`의 `IMAGE_TAG`가 `<VERSION>`인지 본다(다르면 `deploy/host/compose/.env`에 `IMAGE_TAG=<VERSION>`) → [§4-5](#4-5-벌-폴더에-새-코드-덮어쓰기)·§4-10으로 띄우고 `host_ctl.sh check`.
 5. 어느 판인지: `docker image inspect <태그> --format '{{json .Config.Labels}}'`.
 
 ### 5-5. 배포 판정 — selftest
@@ -1850,14 +1852,14 @@ bash deploy/release/selftest_gate.sh $DOCKER run --rm --network host -v "$SETTIN
 
 #### git 셸 — 들어가는 두 길
 
-| 길 | 언제 | 명령(예: 벌 2) |
+| 길 | 언제 | 명령(예: 벌 1) |
 |---|---|---|
-| **(가) 떠 있는 벌 컨테이너에 들어가기** | 평소(코드 고치기·commit·push·pull) — 벌이 SSH 작업 공간([§2-13](#2-13-개발-작업-공간--sshopencode선택))이거나 코드를 쓰기 가능으로 붙여 띄웠을 때([§6-3](#6-3-개발자-한-벌-만들기) ④) | `docker exec -it -e HOME=/home/rag data-pipeline-2 bash` → `cd /app/deploy` · SSH면 `ssh -p 2223 rag@10.0.0.12` → `cd /app/deploy` |
-| **(나) git 전용 컨테이너를 잠깐 띄우기** | 처음(첫 반입·clone)이나 벌 컨테이너가 읽기 전용으로 떠 있을 때 | `docker run --rm -it --network host --entrypoint bash -v $B:/work:z -w /work data-pipeline-runtime:0.3.0` → (이미 `/work`) |
+| **(가) 떠 있는 벌 컨테이너에 들어가기** | 평소(코드 고치기·commit·push·pull) — 벌 폴더가 `/app/deploy`에 쓰기 가능으로 붙어 있음([§2-13](#2-13-개발-작업-공간--sshopencode선택)) | `ssh -p 8021 root@10.0.0.12` → `cd /app/deploy` · 서버 셸에서는 `docker exec -it data-pipeline-1 bash` → `cd /app/deploy` |
+| **(나) git 전용 컨테이너를 잠깐 띄우기** | 처음(첫 반입·clone) — 벌 컨테이너가 아직 없을 때 | `docker run --rm -it --user 0 --network host --entrypoint bash -v $B:/work:z -w /work data-pipeline-runtime:0.3.0` → (이미 `/work`) |
 
-- `-e HOME=/home/rag`: 파이프라인 이미지의 기본 홈은 `/tmp`라, 빼면 git 로그인 정보·`git config --global`이 `/tmp`에 써져 컨테이너를 다시 띄우면 사라진다(작업 공간이 만든 gitea 로그인 정보도 못 본다). `/home/rag`는 `$B/home`이 붙은 자리다.
-- (나)의 `--entrypoint bash`는 시작 점검을 건너뛰고 셸로 들어간다. `--rm`이라 나가면 컨테이너는 사라지고 `$B`의 파일·`.git`은 남는다. 홈이 `/tmp`라 로그인 정보는 남지 않는다(push·pull마다 아이디·토큰을 물음 — 한 번 쓰는 일에만 쓴다).
-- 안에서 `id -u`가 `10001`이어야 한다. 파일을 저장할 때 `Permission denied`면 서버 셸에서 `sudo chown -R 10001:sbl $B`(그다음 `sudo chmod 640 $B/settings.yaml $B/edw_chain.yaml && sudo chmod 700 $B/home`).
+- (가)의 홈은 `/root` = `$B/home`이라 git 로그인 정보·`git config --global`이 남는다(작업 공간이 만든 gitea 로그인 정보도 여기).
+- (나)의 `--entrypoint bash`는 시작 점검을 건너뛰고 셸로 들어간다. `--rm`이라 나가면 컨테이너는 사라지고 `$B`의 파일·`.git`은 남는다. 홈이 이미지 안이라 로그인 정보는 남지 않는다(push·pull마다 아이디·토큰을 물음 — 한 번 쓰는 일에만 쓴다).
+- 둘 다 root로 돈다 — 안에서 만든 파일은 서버에서도 root 소유다(서버 계정으로 고칠 때 `sudo`).
 
 ### 6-1. 저장소 처음 만들기 — 관리자가 한 번
 
@@ -1880,19 +1882,17 @@ bash deploy/release/selftest_gate.sh $DOCKER run --rm --network host -v "$SETTIN
 **⑤ 첫 반입** — 코드 zip을 푼 공용 main 벌 폴더(git 기록 없음)를 저장소의 첫 커밋으로 올린다.
 서버 셸(root):
 ```bash
-B=/home/sbl/sbl_data_parsing-main-1
-chown -R 10001:sbl $B                                 # 컨테이너(UID 10001)가 .git을 만들고 파일을 고칠 수 있게 · sbl = 운영 그룹(id -gn sbl)
-chmod 640 $B/settings.yaml $B/edw_chain.yaml           # 비밀값 파일은 다시 좁힘(없으면 오류 — init 전이면 이 줄은 건너뜀)
-docker run --rm -it --network host --entrypoint bash -v $B:/work:z -w /work data-pipeline-runtime:0.3.0   # git 셸 (나)
+B=/home/sbl/sbl_data_parsing-main-0
+docker run --rm -it --user 0 --network host --entrypoint bash -v $B:/work:z -w /work data-pipeline-runtime:0.3.0   # git 셸 (나)
 ```
 git 셸 안(`/work`):
 ```bash
-id -u                                                 # 기대: 10001
+id -u                                                 # 기대: 0
 echo '$Format:%H %h$' > CODE_COMMIT                    # zip이 채운 커밋 표시를 틀로 되돌림(gitea가 zip을 만들 때 다시 채움)
 git init -b main
-git config --global user.name jehun && git config --global user.email jehun@sbl.local   # 커밋·태그에 남길 이름·메일 — 이 셸에서만(홈 /tmp)
-git add .                                             # settings.yaml·edw_chain.yaml·output/·home/은 .gitignore에 있어 빠짐
-git status --short | grep -E '^.. "?(settings[^/]*\.yaml|edw_chain\.yaml|output/|home/)' | grep -v 'settings\.sample\.yaml' \
+git config --global user.name jehun && git config --global user.email jehun@sbl.local   # 커밋·태그에 남길 이름·메일 — 이 셸에서만(git 셸 (나)는 나가면 사라짐)
+git add .                                             # settings.yaml·output/·home/은 .gitignore에 있어 빠짐
+git status --short | grep -E '^.. "?(settings[^/]*\.yaml|output/|home/)' | grep -v 'settings\.sample\.yaml' \
   && echo "멈춤 — 비밀·결과 파일이 들어감" || echo "확인 — 비밀·결과 파일 없음"
 git commit -qm "Import 0.3.1 from external main"
 git remote add origin http://gitea.example.local:3000/sbl/sbl_data_parsing.git
@@ -1904,22 +1904,22 @@ exit
 - "멈춤"이 나오면 커밋하지 않는다 — 그 파일 이름을 `.gitignore`에 넣고 `git rm --cached <파일>`(예 `git rm --cached "settings copy.yaml"`) 뒤 다시.
 - 그다음 ④(브랜치 보호)를 건다.
 
-**⑥ 외부망 새 판 들여오기** — 새 판 zip(예 `sbl_data_parsing-0.3.2.zip`)을 서버 `/home/sbl/incoming/`에 놓고, 내 벌(예 `-2`)에서 `release/<버전>` 브랜치로 바꿔 커밋한다. git이 관리하는 파일만 바꾸므로 settings.yaml·edw_chain.yaml·output/·home/은 그대로다.
+**⑥ 외부망 새 판 들여오기** — 새 판 zip(예 `sbl_data_parsing-0.3.2.zip`)을 서버 `/home/sbl/incoming/`에 놓고, 내 벌(예 `-1`)에서 `release/<버전>` 브랜치로 바꿔 커밋한다. git이 관리하는 파일만 바꾸므로 settings.yaml·edw_chain.yaml·output/·home/은 그대로다.
 ```bash
-B=/home/sbl/sbl_data_parsing-main-2                   # 서버 셸 — git 셸 (나)에 zip 폴더를 읽기 전용으로 더 붙임
-docker run --rm -it --network host --entrypoint bash -v $B:/work:z -v /home/sbl/incoming:/incoming:ro,z -w /work data-pipeline-runtime:0.3.0
+B=/home/sbl/sbl_data_parsing-main-1                   # 서버 셸 — git 셸 (나)에 zip 폴더를 읽기 전용으로 더 붙임
+docker run --rm -it --user 0 --network host --entrypoint bash -v $B:/work:z -v /home/sbl/incoming:/incoming:ro,z -w /work data-pipeline-runtime:0.3.0
 ```
 git 셸 안:
 ```bash
 git status --short                                    # 기대: 빈 줄(고치던 것이 있으면 먼저 commit)
-git config --global user.name jehun && git config --global user.email jehun@sbl.local   # 커밋·태그에 남길 이름·메일 — 이 셸에서만(홈 /tmp)
+git config --global user.name jehun && git config --global user.email jehun@sbl.local   # 커밋·태그에 남길 이름·메일 — 이 셸에서만(git 셸 (나)는 나가면 사라짐)
 git fetch origin && git switch -c release/0.3.2 origin/main
 rm -rf /tmp/new && unzip -q /incoming/sbl_data_parsing-0.3.2.zip -d /tmp/new
 git ls-files -z | xargs -0 rm -f                      # git이 관리하는 파일만 지움(지운 파일이 새 판에 없으면 그대로 지워진 것으로 남음)
 cp -a /tmp/new/sbl_data_parsing-0.3.2/. .             # 새 판으로 채움
 echo '$Format:%H %h$' > CODE_COMMIT
 git ls-files --error-unmatch opencode.jsonc >/dev/null 2>&1 && git checkout HEAD -- opencode.jsonc   # 내부망에서 채운 opencode 설정은 내부망 것 그대로(아직 커밋 전이면 새 판의 빈 틀)
-git add -A && git status --short | head -30           # 바뀐 파일 확인 — 내부망에서만 고친 파일(예 resources/config/edw_chain.yaml)이 보이면
+git add -A && git status --short | head -30           # 바뀐 파일 확인 — 내부망에서만 고친 파일(예 edw_chain.yaml)이 보이면
 #   외부망 판으로 덮인 것: 내부망 것을 살리려면 git checkout HEAD -- <파일> → 외부망에도 같은 고침을 넣어 다음 판부터 맞춘다
 git commit -qm "Import 0.3.2 from external main" && git push -u origin release/0.3.2   # 그다음 §6-5 ④부터(PR → 병합 → 태그)
 exit
@@ -1927,31 +1927,31 @@ exit
 
 ### 6-2. 개발자마다 한 벌 + 공용 main 한 벌
 
-개발 서버 한 대에 여러 벌을 띄운다. 벌 폴더(코드 폴더 = gitea clone) 하나가 한 벌이고, 폴더 이름 끝 `-<숫자>`(벌 번호)로 컨테이너·compose 묶음·타이머 이름이 나뉜다([§2-1](#2-1-폴더와-벌)).
+개발 서버 한 대에 여러 벌을 띄운다. 벌 폴더(코드 폴더 = gitea clone) 하나가 한 벌이고, `compose-dev.yml`의 칸 `data-pipeline-<번호>`가 그 폴더를 붙인다([§2-1](#2-1-폴더와-벌)).
 
 | 벌 | 벌 폴더(예) | 코드 | 컨테이너 |
 |---|---|---|---|
-| 공용 main | `/home/sbl/sbl_data_parsing-main-1` | gitea `main`의 태그 판(예 `v0.3.1`) | `data-pipeline-1` |
-| 개발자마다 하나 | `/home/sbl/sbl_data_parsing-main-2` | 그 개발자의 `feature/*` 브랜치 | `data-pipeline-2` |
+| 공용 main(벌 0) | `/home/sbl/sbl_data_parsing-main-0` | gitea `main`의 태그 판(예 `v0.3.1`) | `data-pipeline-0` + `mcp-server-0` · `mcp-data-parsing-0` |
+| 개발자마다 하나 | `/home/sbl/sbl_data_parsing-main-1` | 그 개발자의 `feature/*` 브랜치 | `data-pipeline-1` |
 
-- **pgvector는 우리 compose에 없다.** PG는 DB 담당이 주는 서버를 쓰고, 모든 벌이 같은 기준 스키마를 함께 쓴다 — 모든 벌을 같은 코드 판으로 둔다.
-- **벌마다 다른 값은 그 벌의 settings.yaml로만 준다**(코드나 compose에 사람별로 적지 않음 — 원천 `DEV-<숫자>`(예 `DEV-2`), 작업 공간을 켜면 `option.devbox.ssh_port`(예 `2223`)). 다른 사람의 포트·벌 번호를 쓰지 않는다.
-- `settings.yaml`(사본 `settings copy.yaml` 등 포함)·`edw_chain.yaml`·`output/`·`home/`·`.worktrees/`는 clone 안에 있지만 git 제외 목록(`.gitignore`)에 있어 커밋되지 않는다. 저장소 루트 `opencode.jsonc`(opencode 설정 — 키 없이)는 커밋한다.
+- **검색 DB는 서버마다 하나다**(`compose-pgvector.yml` 또는 DB 담당의 PG). 모든 벌이 같은 기준 스키마를 함께 쓴다 — 모든 벌을 같은 코드 판으로 둔다.
+- **벌마다 다른 값**: 원천 `DEV-<숫자>`(예 `DEV-2`)·gitea 계정은 그 벌의 settings.yaml, 컨테이너 이름·SSH 포트·폴더는 `compose-dev.yml`의 칸(§2-15). 다른 사람의 포트·벌 번호를 쓰지 않는다.
+- `settings.yaml`(사본 `settings copy.yaml` 등 포함)·`output/`·`home/`·`.worktrees/`는 clone 안에 있지만 git 제외 목록(`.gitignore`)에 있어 커밋되지 않는다. `edw_chain.yaml`·compose 파일·저장소 루트 `opencode.jsonc`(opencode 설정 — 키 없이)는 커밋한다.
 - 이미지는 공용 폴더에 한 번 불러 두면 모든 벌이 같이 쓴다.
 - gitea 전용 코드는 두지 않는다 — git 명령과 브랜치 규칙만 쓴다.
 
 ### 6-3. 개발자 한 벌 만들기
 
-예: 벌 번호 `2`, 벌 폴더 `/home/sbl/sbl_data_parsing-main-2`, 원천 `DEV-2`, SSH 포트 `2223`, MCP 포트 `18772`.
+예: 벌 번호 `1`, 벌 폴더 `/home/sbl/sbl_data_parsing-main-1`, 원천 `DEV-2`, SSH 포트 `8021`(`compose-dev.yml`의 `data-pipeline-1` 칸 — 새 번호면 §2-15처럼 칸을 더한다).
 
-**① 토큰**(선택 — 비밀번호로도 된다): gitea 웹 → 프로필 사진 → **설정**(Settings) → **응용**(Applications) → **새 토큰 만들기**(Generate New Token) — 이름 `devserver-main-2`, 권한 `repository` **읽기 및 쓰기**(Read and Write, 옛 판은 `repo` 체크) → 만들기. 토큰은 만들 때 한 번만 보이므로 바로 ③의 settings.yaml에 넣는다. 잃어버리면 그 토큰을 지우고 새로 만든다. 토큰을 권하는 까닭: 컨테이너 홈의 `~/.git-credentials`에 글자 그대로 저장되는데, 토큰은 저장소 권한뿐이고 따로 지울 수 있다. 관리자가 비밀번호 로그인을 막았거나 2단계 인증을 켰으면 토큰만 된다.
+**① 토큰**(선택 — 비밀번호로도 된다): gitea 웹 → 프로필 사진 → **설정**(Settings) → **응용**(Applications) → **새 토큰 만들기**(Generate New Token) — 이름 `devserver-main-1`, 권한 `repository` **읽기 및 쓰기**(Read and Write, 옛 판은 `repo` 체크) → 만들기. 토큰은 만들 때 한 번만 보이므로 바로 ⑤에서 쓴다. 잃어버리면 그 토큰을 지우고 새로 만든다. 토큰을 권하는 까닭: 컨테이너 홈의 `~/.git-credentials`에 글자 그대로 저장되는데, 토큰은 저장소 권한뿐이고 따로 지울 수 있다. 관리자가 비밀번호 로그인을 막았거나 2단계 인증을 켰으면 토큰만 된다.
 
 **② clone** — 빈 벌 폴더를 만들어 git 셸 (나)에서 받는다.
 서버 셸(root):
 ```bash
-B=/home/sbl/sbl_data_parsing-main-2
-mkdir -p $B && chown 10001:sbl $B                     # 빈 폴더 — 주인 10001(sbl = 운영 그룹)
-docker run --rm -it --network host --entrypoint bash -v $B:/work:z -w /work data-pipeline-runtime:0.3.0
+B=/home/sbl/sbl_data_parsing-main-1
+mkdir -p $B
+docker run --rm -it --user 0 --network host --entrypoint bash -v $B:/work:z -w /work data-pipeline-runtime:0.3.0
 ```
 git 셸 안:
 ```bash
@@ -1961,56 +1961,35 @@ exit
 ```
 **③ 설정·폴더** — 서버 셸(root):
 ```bash
-cd $B && bash deploy/host/scripts/host_ctl.sh init --group sbl   # settings.yaml·edw_chain.yaml·output/ 만듦(없을 때만)
+cd $B && bash deploy/host/scripts/host_ctl.sh init --group sbl   # settings.yaml·output/ 만듦(없을 때만)
 ```
-공용 벌 settings.yaml을 틀로 벌마다 다른 칸을 고친다([§2-15](#2-15-두-번째-벌-만들기) 표 — 예 `required.source.source_systems: DEV-2` · `search.server.mcp_port: 18772`). 맨 아래에 작업 공간·gitea 칸:
+공용 벌 settings.yaml을 틀로 벌마다 다른 칸을 고친다([§2-15](#2-15-두-번째-벌-만들기) 표 — 예 `required.source.source_systems: DEV-2`). 맨 아래에 git 이름·메일:
 ```yaml
 option:
   devbox:
-    ssh_port: 2223                            # 이 벌의 SSH 포트(다른 벌과 다르게)
-    gitea_url: http://gitea.example.local:3000   # 주소·포트까지(저장소 경로 없이) — https면 https://
-    gitea_user: jehun                         # gitea 가입 때 사용자 이름
-    gitea_token: <내 토큰>                     # ①에서 만든 값 — 비밀, 이 파일에만
     git_user_name: jehun                      # 커밋에 남길 이름
     git_user_email: jehun@sbl.local           # gitea 계정 메일과 같게
 ```
 ```bash
-bash deploy/host/scripts/host_ctl.sh init --group sbl   # ssh_port를 적었으니 다시 — home/(10001, 700)을 만듦
-chown -R 10001:sbl $B && chmod -R g+w $B               # 코드를 컨테이너가 고칠 수 있게(init은 읽기 권한만 엶)
-chmod 640 $B/settings.yaml $B/edw_chain.yaml && chmod 700 $B/home   # 비밀 파일·홈은 다시 좁힘
-mkdir -p $B/home/.ssh && cp /home/sbl/jehun_id_ed25519.pub $B/home/.ssh/authorized_keys   # SSH로 들어갈 때만 — 내 PC 공개 열쇠(~/.ssh/id_ed25519.pub)를 서버로 옮겨 둔 자리
-chown -R 10001 $B/home/.ssh && chmod 700 $B/home/.ssh && chmod 600 $B/home/.ssh/authorized_keys
+chmod 640 $B/settings.yaml
+mkdir -p $B/home/.ssh && cp /home/sbl/jehun_id_ed25519.pub $B/home/.ssh/authorized_keys   # 열쇠로 들어갈 때만 — 내 PC 공개 열쇠(~/.ssh/id_ed25519.pub)를 서버로 옮겨 둔 자리
+chmod 700 $B/home/.ssh && chmod 600 $B/home/.ssh/authorized_keys
 ```
-**④ 띄우기** — 작업 공간(코드 쓰기 가능 + gitea 로그인 자동)으로:
+**④ 띄우기** — SSH 작업 공간(코드 쓰기 가능)으로:
 ```bash
-bash deploy/host/scripts/host_ctl.sh up -d data-pipeline   # data-pipeline-2가 SSH 작업 공간으로 뜸
+bash deploy/host/scripts/host_ctl.sh up -d data-pipeline-1   # compose-dev.yml의 칸 — 벌 폴더를 /app/deploy에 쓰기 가능으로(settings.yaml만 읽기 전용)
 ```
-SSH 없이 `docker exec`로만 쓰려면 `host_ctl.sh` 대신 직접 `idle`로 띄워도 된다(그때는 gitea 로그인을 ⑤에서 손으로):
-```bash
-docker run -d --name data-pipeline-2 --restart unless-stopped --network host --init \
-  --memory 24g --memory-swap 24g --cpus 5 --cpu-shares 1024 --pids-limit 4096 \
-  --log-opt max-size=50m --log-opt max-file=3 \
-  -e SETTINGS_FILE=/app/deploy/settings.yaml -e RUN_ENV=dev \
-  -v $B:/app/deploy:z \
-  -v $B/settings.yaml:/app/deploy/settings.yaml:ro,z \
-  -v $B/output:/app/output:z \
-  -v /data/docs:/data/docs:ro,z \
-  -v $B/home:/home/rag:z \
-  data-pipeline-runtime:0.3.0 idle
-```
-- `-v $B:/app/deploy:z`(읽기 전용 `ro` 없음)로 코드를 고칠 수 있고, 같은 자리에 settings.yaml만 `ro`로 다시 붙여 컨테이너(opencode 포함)가 비밀값 파일을 고치지 못하게 한다.
 
 **⑤ 첫 확인** — git 셸 (가):
 ```bash
-docker exec -it -e HOME=/home/rag data-pipeline-2 bash
-cd /app/deploy && git ls-remote origin | head -2      # 기대: 아이디를 묻지 않고 커밋 번호 줄(작업 공간이 로그인 정보를 씀)
-#   idle로 띄웠으면 처음 한 번: git config --global credential.helper store && git config --global user.name jehun && git config --global user.email jehun@sbl.local && git pull
+ssh -p 8021 root@<서버>                               # 또는 서버 셸에서 docker exec -it data-pipeline-1 bash
+cd /app/deploy && git config --global credential.helper store   # 로그인 정보를 홈에 기억(한 번만)
+git ls-remote origin | head -2                        # Username: jehun · Password: ①의 토큰 → 기대: 커밋 번호 줄(다음부터는 묻지 않음)
 ```
-그다음은 [§2-15](#2-15-두-번째-벌-만들기)와 같다 — (새 `DEV-<숫자>`면) `migrate up --target search` → `host_ctl.sh check`(기대 마지막 줄 `[host_ctl check] 통과 — 4개(개발 서버 — data-pipeline만)`). DB 표가 아직 없는 서버의 첫 벌이면 [§2-6](#2-6-db-판--검토용-sql-뽑기--migrate-up) (가).
+그다음은 [§2-15](#2-15-두-번째-벌-만들기)와 같다 — (새 `DEV-<숫자>`면) 컨테이너 안에서 `bash /app/docker/runtime_entry.sh migrate up --target search` → 벌 0 폴더에서 `host_ctl.sh check`(기대 마지막 줄 `[host_ctl check] 통과 — 7개`). DB 표가 아직 없는 서버의 첫 벌이면 [§2-6](#2-6-db-판--검토용-sql-뽑기--migrate-up) (가).
 
 - `cat ~/.git-credentials`는 하지 않는다(토큰이 찍힘).
-- 비밀번호·토큰을 바꿨으면 git 셸 (가)에서 `printf 'protocol=http\nhost=gitea.example.local:3000\n' | git credential reject` 뒤 `git pull`에서 새 값을 넣는다(작업 공간이면 settings.yaml `gitea_token`을 고치고 `host_ctl.sh up -d data-pipeline`).
-- 작업 공간의 gitea 로그인 자동 설정: 시작할 때 홈에 `~/.git-credentials`(권한 600)의 그 gitea 호스트 줄만 바꾸고(다른 줄은 그대로) `credential.helper store`·이름·메일을 설정한다(토큰은 컨테이너 env로 넘기지 않고 붙인 settings.yaml에서 직접 읽음 — 화면·로그에 나오지 않음). 셋(`gitea_url`·`gitea_user`·`gitea_token`) 중 하나라도 비우면 전에 쓴 그 호스트 줄을 지운다. 주소 꼴은 `http(s)://호스트[:포트][/경로]` — 틀리면 경고만 남기고 아무것도 쓰지 않는다.
+- 비밀번호·토큰을 바꿨으면 git 셸 (가)에서 `printf 'protocol=http\nhost=gitea.example.local:3000\n' | git credential reject` 뒤 `git pull`에서 새 값을 넣는다.
 - `https`인데 `SSL certificate problem`이면 서버 관리자에게 사내 인증서를 받아 등록한다(검사 끄기 `sslVerify=false`는 쓰지 않는다).
 
 ### 6-4. 매일 쓰는 법 — 브랜치 따기·push·PR
@@ -2033,7 +2012,7 @@ git fetch --prune                                     #    gitea에서 지운 �
 ```
 - PR 하나는 기능 하나. 다른 사람 PR과 같은 파일을 고쳐 충돌하면 내 브랜치에서 `git pull origin develop` → 충돌 파일을 고쳐 커밋 → `git push`.
 - 동시에 여러 기능을 고치려면 `git worktree add .worktrees/ocr-fix -b feature/ocr-fix origin/develop`(git 셸 (가)에서만 — worktree는 `/app/deploy` 절대 경로를 기억해 (나)의 `/work`에서는 깨진다 · 코드 폴더 안이라 컨테이너에서 보임 · `.gitignore`에 있음). 그 폴더 코드로는 시험 명령만 돈다(`cd .worktrees/ocr-fix && PYTHONPATH=$PWD python -m pipeline.cli selftest --only test_publish`) — 파이프라인 전체는 늘 `/app/deploy` 코드로 돈다.
-- 고친 코드는 data-pipeline 컨테이너 안에서 **다음 명령부터** 쓰인다. 같은 벌의 MCP 컨테이너는 다시 띄워야 반영된다(`host_ctl.sh up -d --force-recreate mcp-data-parsing mcp`). 의존성 지문(`deploy/docker/DEPS_HASH`)이 바뀐 커밋은 새 실행 이미지가 필요하다([§4-4](#4-4-새-실행-이미지-불러오기--의존성-지문-확인)).
+- 고친 코드는 `data-pipeline-<번호>` 컨테이너 안에서 **다음 명령부터** 쓰인다. 같은 벌의 MCP 컨테이너는 다시 띄워야 반영된다(`host_ctl.sh up -d --force-recreate mcp-data-parsing-0 mcp-server-0`). 의존성 지문(`deploy/docker/DEPS_HASH`)이 바뀐 커밋은 새 실행 이미지가 필요하다([§4-4](#4-4-새-실행-이미지-불러오기--의존성-지문-확인)).
 - 공용 main 벌은 gitea `main`에 붙인 태그 판(`v<버전>`, 예 `v0.3.2`)만 받는다([§6-5](#6-5-판-내기--release-브랜치와-태그)). 판을 바꿀 때는 [§4](#4-운영-중인-서버를-새-판으로-올리기) 순서(백업 → DB 판 → 점검) — 벌이 같은 DB를 쓰므로 모든 벌을 같은 판으로.
 - **`server-changes.md`·`issues.md`·`versions.md`** — [§3-11](#3-11-개발자에게-보고하는-법) 형식.
 - 외부망 `main`과 내부망 gitea를 오가는 때(판마다·정기)와 개발자별 벌 목록을 둘 곳은 [refactor.md](../refactoring/refactor.md)의 열린 항목에서 정한다.
@@ -2063,3 +2042,114 @@ git tag -l 'v*'                                       #    기대: … v0.3.1 v0
 - 공용 main 벌을 이 판으로 올릴 때는 [§4](#4-운영-중인-서버를-새-판으로-올리기) 순서 — 코드 받기는 공용 벌의 git 셸에서(공용 벌 컨테이너는 코드를 읽기 전용으로 붙이므로 (나) — `B=/home/sbl/sbl_data_parsing-main-1`) `git fetch origin --tags && git switch --detach v0.3.2 && git rev-parse --short HEAD > CODE_COMMIT && git update-index --skip-worktree CODE_COMMIT`(판에 고정 — 다음 판도 태그로 옮긴다).
 - 태그는 한 번 올리면 옮기지 않는다. 잘못 붙였으면 다음 판 번호로 새로 낸다(남이 이미 받았을 수 있다).
 - `release/*` 브랜치는 병합 뒤에도 지우지 않는다(그 판을 고칠 때 다시 씀).
+
+### 6-6. 서버 묶음 — compose 파일과 root SSH
+
+서버의 컨테이너는 compose 파일 다섯으로 띄운다(`deploy/host/compose/` — 이름·이미지·포트·CPU·메모리·볼륨이 파일에 직접 적혀 있음).
+
+| 파일 | 묶음 이름 | 컨테이너 | 띄우는 법 | 재시작 정책 |
+|---|---|---|---|---|
+| `compose-dev.yml` | `docker-dev` | `data-pipeline-0`~`4` · `mcp-server-0` · `mcp-data-parsing-0` — 실행 이미지 `*-runtime` + 벌 폴더 | `host_ctl.sh up -d`(run_env `dev`) | `unless-stopped` |
+| `compose-prd.yml` | `sbl-prd` | `data-pipeline-0` · `mcp-server-0` · `mcp-data-parsing-0` — 구운 이미지(코드 안) | `host_ctl.sh up -d`(run_env `prd`) | `always` |
+| `compose-local.yml` | `sbl-local` | PC 시험 — 0번 한 벌 셋(SSH 없음 — `data-pipeline-0`은 `idle`) | `host_ctl.sh up -d`(run_env `local`) | 없음 |
+| `compose-pgvector.yml` | `sbl-pgvector` | `pgvector`(검색 DB — 서버 5433) | `docker compose -f deploy/host/compose/compose-pgvector.yml up -d` — 한 번 | `always` |
+| `compose-redis.yml` | `sbl-redis` | `redis`(작업 큐 — 서버 8010) | `docker compose -f deploy/host/compose/compose-redis.yml up -d` — 한 번 | `always` |
+
+| 컨테이너 | 서버 포트 → 컨테이너 포트 | 개발 CPU · 메모리(파일에 적힌 값) |
+|---|---|---|
+| `data-pipeline-0` | 8020(SSH) | 4 · 12g(스왑 4g 더 — `memswap_limit` 16g) |
+| `data-pipeline-1`~`4` | 8021~8024(SSH) | 각 2 · 8g |
+| `mcp-server-0` | 8050(SSH) · 8051(HTTP) | 3 · 12g |
+| `mcp-data-parsing-0` | — | 4 · 12g(`cpu_shares` 4096) |
+| `pgvector` | 5433 → 5432 | 4 · 12g |
+| `redis` | 8010 → 6379 | 1 · 2g |
+
+- 앱 컨테이너는 모두 root로 뜬다. SSH 컨테이너(`data-pipeline-*`·`mcp-server-0`)는 root 비밀번호 SSH를 연다 — 비밀번호는 **이미지에 넣은 값**이다(이미지 빌드 때 BuildKit 비밀 `BUILD_ARGS="--secret id=root_pw,src=<git 밖 파일>"` — 첫 줄 · 저장소·`docker history`에 남지 않음 · 바꾸려면 `--no-cache`로 다시 빌드). 벌 settings.yaml `required.env.run_env`가 `dev`·`prd`가 아니면 SSH 컨테이너가 시작을 거부한다.
+- 컨테이너는 서버 네트워크를 그대로 쓴다(`network_mode: host`) — 서버에 있는 PG(5433)·Redis(8010)·모델은 `<서버 IP>`로 적는다(settings.yaml `required.pg.pg_host` · `common.connections.redis.redis_host`). 서버 바깥(DB 도구 등)에서도 `<서버 IP>:5433`.
+- 검색 MCP: 벌 0(운영은 그 한 벌) settings.yaml `search.server` — `mcp_bind_host: <서버 IP>`(예 `10.10.1.20`, `0.0.0.0` 금지) · `mcp_port: 8051` · `required.tokens.mcp_token`(루프백이 아니라 필수). 서버의 `mcp_keepalive.sh`는 `mcp-server-0` 안에서 `http://<서버 IP>:8051/health`를 본다.
+- CPU·메모리·포트를 바꾸려면 그 파일의 컨테이너 칸을 고친다([§2-14](#2-14-컨테이너-이름볼륨-바꾸기)). 모든 컨테이너의 `cpus` 합 ≤ 서버 CPU 수([§1-10](#1-10-자원)).
+
+**① 준비(서버, 한 번)**
+```bash
+cd /home/sbl/sbl_data_parsing-main-0                         # 운영은 /home/sbl/sbl_data_parsing-main
+#   먼저 settings.yaml에 required.pg.pg_password · common.connections.redis.redis_password를 채운다(설치 순서 4번)
+vi .env && chmod 600 .env                                    # 같은 값을 손으로: REDIS_PASSWORD= · PG_USER= · PG_DB= · PG_PASSWORD=($·따옴표·줄바꿈 없이)
+sudo mkdir -p /data/pg/pipeline /data/redis                   # 데이터 폴더 — PG는 비어 있으면 처음 시작 때 DB를 만든다(이 때만 .env 계정을 씀)
+docker compose --env-file .env -f deploy/host/compose/compose-pgvector.yml up -d
+docker compose --env-file .env -f deploy/host/compose/compose-redis.yml up -d
+docker ps --filter name=^redis$ --format '{{.Status}}'      # 기대: Up … (healthy)
+```
+- `.env`는 벌 0 코드 폴더(운영은 그 한 벌) 맨 위 하나다 — git 제외(`.gitignore`)라 새 판을 덮어써도 남는다. 값이 비어 있으면 compose가 `.env에 … 필요`로 멈춘다. 비밀번호는 Redis는 명령 인자, PG는 환경 변수로 넘어가 `docker inspect`에 보인다(서버 root·docker 권한자만).
+- 비밀번호를 바꾸면 `.env`·settings.yaml을 같이 고치고 Redis를 `up -d --force-recreate`(두 앱 컨테이너도 `host_ctl.sh restart mcp-server-0 mcp-data-parsing-0`). PG는 이미 만든 DB에 `.env` 값을 다시 쓰지 않는다 — `psql`의 `\password`로 같게 바꾼다([§1-4](#서버-pg-띄우기)).
+- 벌마다 settings.yaml `required.env.run_env`: `dev` · `required.pg`: `pg_host` `<서버 IP>` · `pg_port` `5433` · `pg_database`·`pg_user` = `rag`(compose `PG_DB`·`PG_USER`와 같게) · `pg_password`.
+
+**② 띄우기·확인**
+```bash
+cd /home/sbl/sbl_data_parsing-main-0
+bash deploy/host/scripts/host_ctl.sh up -d                    # 벌 폴더마다 코드·settings.yaml이 있어야 한다(§2-3·§2-4)
+docker ps --format '{{.Names}} {{.Status}} {{.Ports}}'        # 그대로 입력 — 기대: 앱 넷 + pgvector · redis Up, 0.0.0.0:8020->22/tcp …
+docker logs mcp-server-0 | tail -5                            # 기대: Server listening … port 22 + 검색 MCP 시작 줄
+curl -s http://<서버 IP>:8051/health                          # 기대: {"ok":true,…}
+```
+- 컨테이너가 `Restarting (2)`면 `docker logs <이름>`의 `[devbox]` 줄을 본다 — `run_env is …`(벌 settings.yaml `required.env.run_env`를 `dev`로) · `the image has no root password …`(비밀번호를 넣어 이미지를 다시 빌드).
+
+**③ 접속(서버 바깥 PC에서)**
+```bash
+ssh -p 8020 root@<서버 IP>     # data-pipeline-0 — 비밀번호 = 이미지에 넣은 값 · 예 ssh -p 8020 root@10.10.1.20
+ssh -p 8021 root@<서버 IP>     # data-pipeline-1
+ssh -p 8050 root@<서버 IP>     # mcp-server-0
+curl http://<서버 IP>:8051/health   # 검색 MCP — 기대: 200
+psql -h <서버 IP> -p 5433 -U rag -d rag -c 'select 1'   # 검색 DB(psql이 있는 PC에서) — 비밀번호 = settings.yaml required.pg.pg_password
+```
+- 들어가면 `/app/deploy`(벌 폴더 — 쓰기 가능)에서 고치고 git을 쓴다(§6-4). `sudo`·`su`도 있다.
+- root로 쓴 파일은 서버에서도 root 소유다 — 서버 계정으로 고치거나 지울 때는 `sudo`.
+- 검색 MCP는 sshd 옆에서 뒤로 돈다 — MCP만 멈춰도 컨테이너는 Up이다. 8051이 응답하지 않으면 MCP 살리기 타이머가 `docker restart mcp-server-0`을 한다(손으로는 `bash deploy/host/scripts/mcp_keepalive.sh`).
+- 내리기: `bash deploy/host/scripts/host_ctl.sh down`(벌 폴더·결과는 그대로). PG·Redis는 `docker compose -f deploy/host/compose/compose-<pgvector|redis>.yml down`(데이터 폴더는 그대로).
+
+#### 운영 서버 — compose-prd.yml
+`compose-prd.yml`은 0번 `data-pipeline-0`·`mcp-server-0`·`mcp-data-parsing-0`을 띄운다. 포트·비밀 파일·PG·Redis는 개발과 같고, 다른 점은 아래뿐이다.
+
+| | 개발(`compose-dev.yml`) | 운영(`compose-prd.yml`) |
+|---|---|---|
+| 컨테이너 | `data-pipeline-0`·`-1` · `mcp-server-0` · `mcp-data-parsing-0` | `data-pipeline-0` · `mcp-server-0` · `mcp-data-parsing-0` |
+| 이미지 | 실행 이미지 `*-runtime:<판>` + 벌 폴더를 `/app/deploy`에(쓰기 가능) | 구운 이미지 `data-pipeline:<판>`·`mcp-server:<판>`([§0-3](#0-3-prd--운영-서버-코드를-구운-이미지)) — 코드(`edw_chain.yaml` 포함)는 이미지 안(고칠 수 없음) |
+| 설정·결과 | 벌 폴더의 `settings.yaml`·`output/`·`home/` | 운영 폴더 `PRD_DIR`(기본 `/home/sbl/sbl_data_parsing-main`)의 `settings.yaml`·`output/`·`home/`(`home/mcp` = mcp-server-0 홈) |
+| 재시작 | `unless-stopped`(손으로 멈추면 그대로) | `always`(손으로 멈춘 것도 docker가 다시 켜질 때 띄움) |
+| 실행 환경 | `run_env: dev` | `run_env: prd` |
+
+```bash
+cd /home/sbl/sbl_data_parsing-main                              # 코드 묶음을 푼 운영 폴더(§0-3 ①)
+bash deploy/host/scripts/host_ctl.sh up -d                      # run_env: prd → compose-prd.yml
+docker inspect -f '{{.Name}} {{.HostConfig.RestartPolicy.Name}}' data-pipeline-0 mcp-server-0 mcp-data-parsing-0 pgvector redis   # 그대로 입력 — 기대: 모두 always
+```
+- 접속은 위 ③과 같다 — `ssh -p 8020 root@<서버 IP>`(data-pipeline-0) · `ssh -p 8050 root@<서버 IP>`(mcp-server-0) · `curl http://<서버 IP>:8051/health` · `psql -h <서버 IP> -p 5433 -U rag -d rag`.
+- 구운 이미지의 시작 스크립트(`entrypoint.sh`)를 이 파일이 SSH 컨테이너만 작업 공간(`dev_entry.sh`)으로 바꿔 띄우고, 앱 명령은 `entrypoint.sh`로 넘긴다. 작업 컨테이너는 이미지 시작 스크립트 그대로다. 그래서 굽기 바탕이 sudo·root SSH가 든 실행 이미지여야 한다.
+
+### 6-7. Redis — compose-redis.yml
+`deploy/host/compose/compose-redis.yml` 한 파일로 Redis 하나(공식 이미지 `redis:7.4.8-alpine`, 컨테이너 `redis`)를 띄운다. 서버마다 하나이고 개발·운영이 같다. 앱은 `<서버 IP>:8010`으로 붙는다(settings.yaml `common.connections.redis.redis_host: <서버 IP>` · `redis_port`는 비움 = 8010).
+
+| 무엇 | 값 |
+|---|---|
+| 포트 | 서버 `0.0.0.0:8010` → 컨테이너 6379 |
+| 보호 | `protected-mode yes` + `--requirepass`(코드 폴더 맨 위 `.env`의 `REDIS_PASSWORD` = settings.yaml `common.connections.redis.redis_password` — 필수, 기본값 없음) |
+| 데이터 | `REDIS_DATA`(기본 `/data/redis`) → `/data`(AOF) |
+| 상태 검사 | `redis-cli ping`이 `PONG` 또는 `NOAUTH`(떠 있음 — 비밀번호 없이) |
+| 재시작 | `always` · MCP 살리기 타이머가 꺼졌으면 이 파일로 다시 띄움 |
+
+**① 이미지 반입** — 인터넷 PC에서 `docker pull redis:7.4.8-alpine`으로 받은 뒤 `bash deploy/release/stage_images.sh`가 판 폴더에 조각(`redis/`)을 함께 만든다 → 서버에서 `bash sbl_images/load.sh <판>`이 다른 이미지와 함께 불러온다.
+
+**② 준비·띄우기(서버)**
+```bash
+cd <루트>                                                     # 벌 0 코드 폴더 — .env에 REDIS_PASSWORD(settings.yaml redis_password와 같은 값)
+mkdir -p /data/redis
+docker compose --env-file .env -f deploy/host/compose/compose-redis.yml up -d
+docker ps --filter name=^redis$ --format '{{.Status}}'      # 기대: Up … (healthy)
+```
+
+**③ 확인(서버 바깥 PC에서)**
+```bash
+redis-cli -h <서버 IP> -p 8010 --askpass ping                  # 기대: PONG(비밀번호를 물으면 settings.yaml의 값)
+```
+- 비밀번호는 `redis-server` 명령 인자로 넘어가 `docker inspect`(Args)에 보인다 — 서버 root·docker 권한자만 볼 수 있다. 셸 명령·로그에는 적지 않는다.
+- 비밀번호를 바꾸면: `.env`·settings.yaml을 같이 고치고 `docker compose --env-file .env -f deploy/host/compose/compose-redis.yml up -d --force-recreate` → `host_ctl.sh restart mcp-server-0 mcp-data-parsing-0`.
+- 키 보기·작업 추적은 [§1-3-1](#1-3-1-parse_document-redis-큐113).

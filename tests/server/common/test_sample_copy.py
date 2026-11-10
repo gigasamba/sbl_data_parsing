@@ -45,8 +45,6 @@ DEV = {**MODELS, **PG, **SERVER_ONLY} | {
     "object_storage_secret_key": _HEX,
     "mcp_token": _HEX,
     "fulltext_sign_key": _HEX,
-    "pipeline_image": "data-pipeline-runtime:0.0.0",
-    "mcp_image": "mcp-server-runtime:0.0.0",
     "host_docs_dir": "/data/docs",
     "pg_container_name": "pgvector",
 }
@@ -172,7 +170,7 @@ def test_copied_sample_runs_after_filling_blanks():
                 host = _host()
                 doc, herr = host.load_or_error(y)
                 out = host.lines(doc, None)
-                image = any(x.startswith("export DATA_PIPELINE_IMAGE=") for x in out)  # local은 빈 칸 그대로 = 안 냄
+                image = any(x.startswith("export DOC_SRC=") for x in out)  # local은 빈 칸 그대로 = 안 냄
                 assert herr is None and f"export RUN_ENV='{want}'" in out and image == (want == "dev"), (what, herr)
 
 

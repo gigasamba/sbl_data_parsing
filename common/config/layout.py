@@ -90,17 +90,15 @@ REQUIRED_GROUPS = (
         "tokens",
         "서비스 토큰·서명 키",
         (
-            ("mcp_token", "common.tokens.mcp", "필수 · dev·prd(mcp·parse MCP 서비스)"),
+            ("mcp_token", "common.tokens.mcp", "필수 · dev·prd(mcp)"),
             ("fulltext_sign_key", "mcp.server.fulltext_secret", "필수 · dev·prd(mcp — 원문 도구를 쓸 때)"),
         ),
     ),
     (
         "deploy",
-        "서버 배포(이미지·호스트 폴더)",
+        "서버 배포(호스트 폴더·컨테이너)",
         (
-            ("pipeline_image", "pipeline.host.image", "필수 · dev·prd(호스트 compose)"),
-            ("mcp_image", "mcp.host.image", "필수 · dev·prd(호스트 compose)"),
-            ("host_docs_dir", "common.host.doc_src", "필수 · dev·prd(호스트 compose)"),
+            ("host_docs_dir", "common.host.doc_src", "필수 · dev·prd(호스트 compose — 원본 문서 폴더)"),
             ("pg_container_name", "common.host.pg_container", "필수 · dev·prd(호스트 run_pipeline·백업)"),
         ),
     ),
@@ -110,6 +108,7 @@ REQUIRED = {r[1]: f"required.{g}.{r[0]}" for g, _t, rows in REQUIRED_GROUPS for 
 NEED = {r[1]: r[2] for _g, _t, rows in REQUIRED_GROUPS for r in rows if isinstance(r, tuple)}
 # 역할 절 — (모델 접두, 파일 접두). 긴 접두가 먼저 맞는다. 파일 접두도 서로 1:1(거꾸로 바꿀 때 가장 긴 파일 접두).
 ROLES = (
+    ("common.parse_queue.", "ops.services.data_parsing."),
     ("common.runtime.", "ops.runtime."),
     ("common.log.", "ops.log."),
     ("common.paths.", "ops.paths."),
@@ -132,13 +131,21 @@ ROLES = (
     ("mcp.edw_query.", "search.edw_query."),
     ("mcp.output.", "search.output."),
     ("mcp.audit.", "search.audit."),
-    ("mcp.host.", "ops.mcp_host."),
     ("mcp.dev.", "dev.mcp."),
 )
 
 # 이름·자리를 바꾼 칸 — {모델 경로: 파일 자리}. 모델 경로·옛 env 이름·--set 이름은 그대로(코드는 안 바뀜), 파일 자리만 다르다.
 # 이름은 줄임 없이 뜻이 보이게(단위·꼴을 끝에 — _sec·_file·_dir·max_…). 표에 없는 칸은 LOCAL·TUNING·ROLES 규칙대로.
 PLACED = {
+    # parse_document Redis 큐 — 서버당 한 벌(번호 벌은 파싱 MCP 없음).
+    "common.connections.redis.redis_host": "common.connections.redis.redis_host",
+    "common.connections.redis.redis_port": "common.connections.redis.redis_port",
+    "common.connections.redis.redis_password": "common.connections.redis.redis_password",
+    "common.connections.redis.redis_db": "common.connections.redis.redis_db",
+    "common.connections.redis.redis_key_prefix": "common.connections.redis.redis_key_prefix",
+    "common.parse_queue.mcp_parse_workers": "ops.services.data_parsing.mcp_parse_workers",
+    "common.parse_queue.mcp_parse_max_attempts": "tuning.ops.services.data_parsing.mcp_parse_max_attempts",
+    "common.parse_queue.mcp_parse_result_ttl_sec": "tuning.ops.services.data_parsing.mcp_parse_result_ttl_sec",
     # common
     "common.connections.rdb.connect_kwargs": "common.connections.edw.edw_extra_connect_args",
     "common.connections.object_storage.region": "common.connections.object_storage.object_storage_region",
@@ -183,19 +190,7 @@ PLACED = {
     "mcp.server.max_concurrency": "search.server.mcp_max_concurrent_tools",
     "mcp.server.port": "search.server.mcp_port",
     # ops
-    "pipeline.host.data_parsing_cpu_shares": "ops.containers.data_parsing.data_parsing_cpu_shares",
-    "pipeline.host.data_parsing_cpus": "ops.containers.data_parsing.data_parsing_cpus",
-    "pipeline.host.data_parsing_mem_limit": "ops.containers.data_parsing.data_parsing_mem_limit",
-    "mcp.host.cpus": "ops.containers.mcp.mcp_cpus",
-    "mcp.host.mem_limit": "ops.containers.mcp.mcp_mem_limit",
-    "pipeline.host.parse_cpus": "ops.containers.pipeline.pipeline_cpus",
-    "pipeline.host.parse_mem_limit": "ops.containers.pipeline.pipeline_mem_limit",
-    "common.host.pipeline_container": "ops.containers.pipeline.pipeline_container_name",
-    "common.host.data_parsing_container": "ops.containers.data_parsing.data_parsing_container_name",
-    "common.host.mcp_container": "ops.containers.mcp.mcp_container_name",
     "common.host.docker": "ops.host.container_cli",
-    "common.host.edw_chain_src": "ops.host.host_edw_chain_file",
-    "common.host.output_root": "ops.host.host_output_dir",
     "common.host.prune_keep": "ops.host.prune_keep_versions",
     "common.host.image_stage_dir": "ops.host.prune_stage_dir",
     "common.log.db_enabled": "ops.log.log_db_enabled",
@@ -302,7 +297,7 @@ PLACED = {
     "pipeline.service.data_parsing.procs": "tuning.ops.services.data_parsing.mcp_parse_engine_processes",
     "pipeline.service.data_parsing.warmup_sec": "tuning.ops.services.data_parsing.mcp_parse_first_try_min_timeout_sec",
     "pipeline.service.data_parsing.job_timeout_sec": "tuning.ops.services.data_parsing.mcp_parse_job_timeout_sec",
-    "pipeline.service.data_parsing.queue_max": "tuning.ops.services.data_parsing.mcp_parse_max_queued_jobs",
+    "common.parse_queue.queue_max": "tuning.ops.services.data_parsing.mcp_parse_max_queued_jobs",
     "pipeline.service.data_parsing.text_page_sec": "tuning.ops.services.data_parsing.mcp_parse_text_engine_page_timeout_sec",
     "mcp.audit.max_input_bytes": "tuning.search.audit.audit_max_input_bytes",
     "mcp.audit.max_output_bytes": "tuning.search.audit.audit_max_output_bytes",
@@ -385,7 +380,7 @@ TUNING_INTERNAL = (  # 내부 조정값 — 재시도·내부 대기·묶음 크
     "pipeline.transform.structure.embed_max_chars",
     "pipeline.transform.structure.embed_retry",
     "pipeline.service.data_parsing.job_timeout_sec",
-    "pipeline.service.data_parsing.queue_max",
+    "common.parse_queue.queue_max",
     "pipeline.service.data_parsing.text_page_sec",
     "pipeline.service.data_parsing.warmup_sec",
     "mcp.server.pg_statement_timeout_sec",

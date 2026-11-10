@@ -1,6 +1,6 @@
 #!/bin/bash
 # 서버 이미지(2개: pipeline·mcp) — 로컬 스테이징만(push 안 함·저장소 생성 안 함 — 사람 승인 뒤 수동 push, docs/operations/server-guide.md §4-5·§5-3).
-#   bash deploy/release/stage_images.sh [태그 — 기본 저장소 루트 VERSION, 예: 0.1.0] [대상들… 기본 pipeline mcp]
+#   bash deploy/release/stage_images.sh [태그 — 기본 저장소 루트 VERSION, 예: 0.1.0] [대상들… 기본 pipeline mcp; Redis는 redis 대상 추가]
 #   개발 서버: 대상 pipeline-runtime·mcp-runtime(코드 없는 실행 이미지 — 코드는 코드 저장소 zip, server-guide §1-1)
 #   운영 서버: bake_prod_image.sh가 pipeline·mcp + CODE_BUNDLE(시험한 코드 폴더 묶음 — 호스트 스크립트용, 판 폴더에 같이 놓음)
 # 전제: 이미지가 이미 로컬에 있어야 함(build_ship.sh·bake_prod_image.sh) — 이 스크립트는 빌드하지 않는다.
@@ -13,7 +13,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."                                # deploy/release/ → 저장소 루트
 . deploy/release/image_names.sh   # image_name_of·app_version — 타깃 → 이미지 이름(build_ship.sh와 같은 파일) — 대상은 repo_of()가 이미 걸러냄
 case "${1:-}" in
-  ""|pipeline|mcp|pipeline-runtime|mcp-runtime) TAG=$(app_version) || exit 2 ;;   # 태그를 안 주면 VERSION(두 이미지 같은 버전 태그)
+  ""|pipeline|mcp|pipeline-runtime|mcp-runtime|redis) TAG=$(app_version) || exit 2 ;;   # 태그를 안 주면 VERSION(두 이미지 같은 버전 태그)
   *) TAG="$1"; shift ;;
 esac
 if [ "$#" -gt 0 ]; then TARGETS=("$@"); else TARGETS=(pipeline mcp); fi
@@ -25,7 +25,7 @@ REPO="${SHIP_REPO:-sbl_images}"
 
 repo_of() {    # 대상 검사만 — 이미지 저장소는 하나(mono repo)
   case "$1" in
-    pipeline|mcp|pipeline-runtime|mcp-runtime) echo "$REPO" ;;   # 실행 이미지도
+    pipeline|mcp|pipeline-runtime|mcp-runtime|redis) echo "$REPO" ;;   # 실행 이미지도
     *) return 1 ;;
   esac
 }
@@ -33,9 +33,14 @@ repo_of() {    # 대상 검사만 — 이미지 저장소는 하나(mono repo)
 
 stage_one() {
   local target="$1" tag name dir n
-  repo_of "$target" >/dev/null || { echo "[stage_images] 모르는 대상: $target (pipeline·mcp·pipeline-runtime·mcp-runtime만)"; return 2; }
-  name=$(image_name_of "$target")
-  tag="$name:$TAG"
+  repo_of "$target" >/dev/null || { echo "[stage_images] 모르는 대상: $target (pipeline·mcp·pipeline-runtime·mcp-runtime·redis)"; return 2; }
+  if [ "$target" = redis ]; then   # 공식 Redis 이미지(compose-redis.yml과 같은 판 — 앱 판과 별개, 이름 그대로 반입)
+    tag=$(sed -n 's/^ *image: *//p' deploy/host/compose/compose-redis.yml | head -n1)   # 판은 compose-redis.yml 한 곳
+    name=redis
+  else
+    name=$(image_name_of "$target")
+    tag="$name:$TAG"
+  fi
   if ! $DOCKER image inspect "$tag" >/dev/null 2>&1; then
     echo "[stage_images] 이미지 없음: $tag — 먼저 빌드(build_ship.sh·bake_prod_image.sh), 건너뜀"
     return 1
@@ -43,6 +48,7 @@ stage_one() {
   dir="$OUT/$REPO/$TAG/$name"
   mkdir -p "$dir"
   rm -f "$dir/$name.tar.gz.part"* "$dir/$name.sha256"   # 재실행 시 이전 조각과 안 섞이게
+  printf '%s\n' "$tag" > "$dir/image.txt"
   echo "[stage_images] $tag 저장·분할 → $dir"
   # `if stage_one`에서는 set -e가 꺼짐 — 저장 실패(디스크 부족 등)를 직접 실패로(잘린 조각에 sha256을 만들지 않게)
   $DOCKER save "$tag" | gzip -1 | split -b "$CHUNK" -d -a 3 - "$dir/$name.tar.gz.part" \
@@ -72,7 +78,7 @@ commit=$(cut -d' ' -f1 CODE_COMMIT 2>/dev/null); case "$commit" in ''|'$Format'*
   echo "판: $TAG"
   echo "빌드 커밋: $commit"
   echo "DEPS_HASH: $(tr -d '\r\n' < deploy/docker/DEPS_HASH 2>/dev/null || echo unknown)"
-  printf '이미지:'; for d in "$OUT/$REPO/$TAG"/*/; do d=${d%/}; d=${d##*/}; [ -f "$OUT/$REPO/$TAG/$d/$d.sha256" ] && printf ' %s' "$d:$TAG"; done; echo   # 판 폴더에 있는 것 전부(bake는 대상마다 부름)
+  printf '이미지:'; for d in "$OUT/$REPO/$TAG"/*/; do d=${d%/}; d=${d##*/}; [ -f "$OUT/$REPO/$TAG/$d/$d.sha256" ] && printf ' %s' "$(cat "$OUT/$REPO/$TAG/$d/image.txt" 2>/dev/null || echo "$d:$TAG")"; done; echo   # 판 폴더에 있는 것 전부(bake는 대상마다 부름)
   echo "만든 날: $(date +%F)"
 } > "$OUT/$REPO/$TAG/BUILD.txt"
 echo "[stage_images] 끝 — 완료 $ok · 건너뜀/실패 $fail · $OUT/$REPO/(load.sh · $TAG/BUILD.txt · $TAG/<이미지>/) 확인 뒤 사람이 push(저장소 생성·push는 이 스크립트가 안 함)"

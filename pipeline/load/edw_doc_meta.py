@@ -1,6 +1,6 @@
 """적재 때 EDW 조인으로 문서 메타 채우기(매핑은 적재 몫). 원본 경로(gold doc.file_path = FileStorageMap.s3_key)마다
 원천의 사슬을 따라 고객(client_edw)·등록 시각(created_at)·원천 메타(doc.attrs 키)를 구한다 — 외부 파일 file_meta는 쓰지 않는다. 읽기 계정만(SELECT).
-사슬(표·칸 이름·단계·SFDC 접두 갈래·attrs 키·거르기 이름·근거 표시)은 설정 파일 resources/config/edw_chain.yaml — 모든 원천이 같은 꼴(steps·fields·
+사슬(표·칸 이름·단계·SFDC 접두 갈래·attrs 키·거르기 이름·근거 표시)은 설정 파일 edw_chain.yaml(코드 폴더 맨 위) — 모든 원천이 같은 꼴(steps·fields·
 client_edw·created, 머리 주석 참고), 읽기·검사는 common.store.edw_chain(검색 MCP와 함께 씀). 코드는 사슬을 따라가는 해석기 하나(_resolve)뿐이다:
 단계를 위에서 아래로 — 열쇠(file 또는 앞 단계 칸)로 표를 읽고, 열쇠 목록이면 앞 자리부터 후보가 있는 첫 자리에서 하나로 정하고(둘 이상이면 비움),
 when.prefix로 SFDC id 접두 갈래를 고른다. SFDC 분류 힌트의 연결 개체 종류는 접두 표 resources/mappings/sfdc_prefix.json(sfdc_entity 단계).

@@ -24,4 +24,4 @@ for d in */; do
 done
 [ "$n" -gt 0 ] || { echo "[load] $ver 안에 이미지 폴더(<이미지>/<이미지>.sha256)가 없음" >&2; exit 2; }
 [ -f BUILD.txt ] && cat BUILD.txt
-echo "== 끝 — settings.yaml 이미지 칸(required.deploy.pipeline_image·mcp_image)을 위 태그로(예: data-pipeline-runtime:$ver)"
+echo "== 끝 — compose 파일(deploy/host/compose/compose-<환경>.yml)의 IMAGE_TAG가 위 판인지 확인(기본값과 다르면 셸 env나 compose 파일 옆 .env에 IMAGE_TAG=$ver)"

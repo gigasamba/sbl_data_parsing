@@ -13,8 +13,7 @@
     (EDW_QUERY_TABLES), row/time/response-size caps. Returns raw rows only — no summarization, the
     calling agent does its own post-processing. See mcp_server/services/edw_query.py for the full guard.
   (2026-10-21 사용자 요청·같은 날 단일화) parse_document(path, content_b64, filename, time_out_threshold=300, max_chars=200000) —
-    비정형 파일 1건의 text 파싱 대표 결과: mcp-data-parsing 컨테이너(11-03 — 옛 data-pipeline-parse)의 작업 서비스(PARSE_URL, 기본 http://127.0.0.1:8766 ·
-    그 컨테이너의 주 프로세스 — 토큰은 settings.yaml required.tokens.mcp_token)가
+    비정형 파일 1건의 text 파싱 대표 결과: mcp-data-parsing 컨테이너(11-03 — 옛 data-pipeline-parse)의 Redis Streams worker(공유 작업 폴더 + 완료 LIST의 BLPOP — #113)가
     prepare → run_all( phase 1·2만 — 그림[VLM] 파싱은 phase 3이라 실행 안 됨, 표 인식 유지) → parse_qa → represent(대표 결과)만
     수행(구조화·임베딩·EDW/OS 적재 없음). path는 허용 루트(/app/output/_mcp_parse/inbox) 하위만(jail) · 파일 상한 100MB(path·content_b64 같음 — ops.services.data_parsing.mcp_parse_max_file_mb, 11-03) ·
     time_out_threshold(기본 300초) 안에 끝나야 결과를 돌려주고 못 끝내면 {"error": "시간 안에 수행 못했습니다", "job_id": …}만 반환 —
@@ -264,7 +263,7 @@ if __name__ == "__main__":
             mc.token_text(mc.common_cfg().tokens.mcp),
         )  # 공백뿐인 토큰 = 토큰 없음(사용자 결정 10-27)
         if host == "auto":  # 브리지 네트워크 컨테이너: 자기 사설 IP(포트 게시로 밖에서 부름) — 토큰 필수
-            # 같은 풀이: compose.mcp-server.yml healthcheck 한 줄·mcp_keepalive.sh(컨테이너 안 exec) — 바꾸면 함께
+            # 서버 compose(compose-<환경>.yml)는 안팎 8051로 게시 — mcp_keepalive.sh는 서버에서 127.0.0.1:8051/health
             import socket
 
             host = socket.gethostbyname(socket.gethostname())

@@ -18,7 +18,7 @@
 
 ## 예외
 
-- `deploy/host/compose/` compose 파일 이름(파일 이름 글자 수 규칙의 예외 — 사용자 결정): 컨테이너 이름을 그대로 쓴다 — `compose.pipeline.yml`(data-pipeline) · `compose.data-parsing.yml`(mcp-data-parsing) · `compose.mcp-server.yml`(mcp-server), 개발 서버 코드 폴더 짝은 `compose.code.yml` · `compose.code.data-parsing.yml` · `compose.code.mcp-server.yml`.
+- `deploy/host/compose/` compose 파일: 환경마다 하나 `compose-local.yml`·`compose-dev.yml`·`compose-prd.yml` + 따로 띄우는 `compose-pgvector.yml`·`compose-redis.yml`.
 
 ## Glossary
 
@@ -48,7 +48,7 @@
 | represent | 엔진 결과 중 대표를 고르고 고치는 단계 |
 | flow 러너 | 서버 호스트의 문서별 실행기 `run_pipeline.py` — 레인 light·medium·vlm, staging(미리 받기) |
 | selftest | 이미지 안 반입 시험(`tests/server/`) — `[판정]` 줄로 판정 |
-| 사슬 파일 | EDW 조인 사슬 `resources/config/edw_chain.yaml` — 원천별 메타 키·거르기·근거 키 |
+| 사슬 파일 | EDW 조인 사슬 `edw_chain.yaml`(저장소 맨 위) — 원천별 메타 키·거르기·근거 키 |
 
 **같은 뜻의 말**(문서와 코드 주석에 섞여 나온다)
 시험=테스트 · 반입=(폐쇄망) 배포 · 칸=항목/컬럼 · 판=버전 · 지문=핑거프린트 · 열쇠=키 · 층=레이어 · 묶음=번들 · 대장=레지스트리 · 인계=핸드오프 · 덮기 파일=오버레이 설정 파일 · 게시=퍼블리시 · 지시서/지시문=프롬프트.

@@ -12,12 +12,12 @@
 
 ### 규칙
 1. 적재(`pipeline/load/edw_doc_meta.py`)가 PG 트랜잭션 밖에서 EDW 읽기 계정(`common.connections.rdb.read`)으로 원천별 사슬을 따라 `client_edw`·`attrs`·`created_at`을 채운다. 결과는 gold `doc`에만 쓴다.
-2. 사슬(표·칸 이름·단계·`attrs` 키)은 사슬 파일 [`resources/config/edw_chain.yaml`](../../resources/config/edw_chain.yaml)이 정한다 — 꼴은 [load-schema.md#pl-52](load-schema.md#pl-52), 키 뜻은 [db_schema.md](../architecture/db_schema.md) gold.doc.attrs 키.
+2. 사슬(표·칸 이름·단계·`attrs` 키)은 사슬 파일 [`edw_chain.yaml`](../../edw_chain.yaml)이 정한다 — 꼴은 [load-schema.md#pl-52](load-schema.md#pl-52), 키 뜻은 [db_schema.md](../architecture/db_schema.md) gold.doc.attrs 키.
 3. SFDC 고객 순서: 영업 기회 직접(`006`) > `Task.WhatId`(`00T`) > `Event.WhatId`(`00U`) > (Quote — 사슬 파일에서 켤 때만), 기회가 없으면 계정 직접 연결. 같은 단계에 후보가 둘 이상이면 비운다.
 4. CRMS는 `FileStorageMap_CRMS.rm_contract_code → CRMS.RM_CM_PJTLIST`, LAS는 `FileStorageMap_LAS.manage_no → LAS.Contract`(최신 판). LAS `client_edw`(`PartnerCorpName`)는 지금 모두 비어 있다. FAQ는 고객 연결이 없다.
 5. 같은 sha256 묶음에도 고객은 전파하지 않는다.
 6. 만약 EDW를 못 읽으면 → 메타 없이 적재하고 경고·실행 기록 `meta_missing`을 남긴다. 적재 뒤 바뀐 연결은 자동으로 갱신하지 않는다 — `--replace`로 다시 적재해 채운다.
-7. 사슬 파일 자리 = 설정 `ops.paths.edw_chain_file`(적재·검색 MCP가 함께 읽음). 비우면 `resources/config/edw_chain.yaml`. 만약 파일이 없거나 틀리면 → 적재는 시작 때 멈추고 검색은 오류(기본 파일로 돌아가지 않음). 서버 사본을 고쳐 쓰는 법은 [server-guide §3-9-2](../operations/server-guide.md#3-9-2-edw-조인-사슬-파일-고쳐-쓰기).
+7. 사슬 파일 = 코드 폴더 맨 위 `edw_chain.yaml`(git — 이미지에도 들어감, 적재·검색 MCP가 함께 읽음). 다른 파일을 쓰려면 설정 `ops.paths.edw_chain_file`. 만약 파일이 없거나 틀리면 → 적재는 시작 때 멈추고 검색은 오류(기본 파일로 돌아가지 않음). 서버 사본을 고쳐 쓰는 법은 [server-guide §3-9-2](../operations/server-guide.md#3-9-2-edw-조인-사슬-파일-고쳐-쓰기).
 8. 파일만 점검: `python -m pipeline.load.edw_doc_meta --check [--file F]`(EDW·PG에 붙지 않음).
 
 ### QA

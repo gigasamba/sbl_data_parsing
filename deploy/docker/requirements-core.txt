@@ -1,6 +1,7 @@
 # 서버 이미지 2개의 공유 base 층(S6b D-020 — mcp-server(옛 data-retrieval)는 이것만, data-pipeline(옛 data-parsing+data-structure)은
 # 이것 + requirements-image.txt) — 파싱 엔진·OCR 없이.
 # 폐쇄망 빌드: `pip download -r requirements-core.txt -r requirements-image.txt -d deploy/docker/wheels` 후 반입(Dockerfile 참고).
+redis==5.2.1              # parse_document Streams·완료 LIST — 폐쇄망 휠 반입 필요(#113)
 numpy
 pillow
 rapidfuzz

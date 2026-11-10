@@ -14,7 +14,8 @@ def _selftest_transport_security():
     test_mcp_server_transport_security.py(ASGI in-process 호출)가 확인."""
     ts_loop = build(host="127.0.0.1", port=8765).settings.transport_security
     assert ts_loop.allowed_hosts == ["127.0.0.1:*", "localhost:*", "[::1]:*"], ts_loop.allowed_hosts
-    ts_non = build(host="10.0.0.5", port=8765).settings.transport_security
+    with mc.senv(MCP_ALLOWED_HOSTS=None):  # 서버 settings.yaml의 mcp_allowed_hosts와 상관없이 기본값만
+        ts_non = build(host="10.0.0.5", port=8765).settings.transport_security
     assert ts_non.enable_dns_rebinding_protection is True
     assert ts_non.allowed_hosts == ["10.0.0.5:*"] and "http://10.0.0.5:*" in ts_non.allowed_origins, ts_non
     with mc.senv(MCP_ALLOWED_HOSTS="proxy.local:9999, gw.local:*"):

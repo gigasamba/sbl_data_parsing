@@ -62,8 +62,7 @@ IMAGE_PATHS = {
     "docs_mount": "/data/docs",  # 원본 폴더를 읽기 전용으로 붙이는 자리(compose DOC_SRC → 이 자리 · pipeline DOC_DIR 기본값)
 }
 # 코드가 읽지 않는 약속 자리(compose·Dockerfile·dev_entry.sh에만 같은 글자 — 바꾸면 그 파일들을 함께):
-#   /etc/rag/settings.yaml(설정 파일 — compose x-settings·SETTINGS_FILE) · /etc/rag/edw_chain.yaml(EDW 사슬 사본 — 호스트 ops.host.host_edw_chain_file)
-#   · /home/rag(개발 작업 공간 홈 — 호스트 option.devbox.home_dir) · /etc/devbox(작업 공간 부품 — git_cred.py·compose.opencode.yml)
+#   /etc/rag/settings.yaml(설정 파일 — 운영 compose-prd.yml·SETTINGS_FILE) · /etc/devbox(작업 공간 부품 — dev_entry.sh·git_cred.py)
 IMAGE_PATHS["prepared_out"] = IMAGE_PATHS["output_root"] + "/prepared"  # 원본 사본(prepare) 자리(pipeline DOC_DIR_PREPARED 기본값)
 # 이미지 안 모델 기본값 — 규칙은 "settings.yaml > 코드 기본값" 하나라 Dockerfile ENV로 굽지 않고 여기 둔다.
 # 이미지 신호 RAG_MODULE로 그 이미지 값만 고른다. PC·시험 하위 프로세스(RAG_MODULE 없음)는 PC 기본값.
@@ -1316,6 +1315,33 @@ class CommonConnectionsPg(Section):
     user: str | None = F(None, "PG_USER", "PostgreSQL 접속 계정 이름(필수 — op-09)")
 
 
+class CommonConnectionsRedis(Section):
+    redis_host: str = F(
+        "host.docker.internal", "REDIS_HOST", "parse_document Redis 호스트 — 컨테이너에서 서버 자신(compose-redis.yml, 서버마다 하나)"
+    )
+    redis_port: Port = F(8010, "REDIS_PORT", "parse_document Redis 포트(compose-redis.yml이 서버 8010에 연다)")
+    redis_password: SecretStr | None = F(
+        None,
+        "REDIS_PASSWORD",
+        "Redis 비밀번호(필수 — 서버마다 채움) — 코드 폴더 맨 위 .env의 REDIS_PASSWORD(compose-redis.yml)와 같은 값. 로그·셸 env에 내보내지 않음",
+    )
+    redis_db: int = F(0, "REDIS_DB", "Redis 데이터베이스 번호", ge=0)
+    redis_key_prefix: str = F("mcp_parse", "REDIS_KEY_PREFIX", "Redis 큐 키 접두 — 설정값 그대로(서버당 한 벌)", min_length=1)
+
+
+class CommonParseQueue(Section):
+    queue_max: int = F(8, "DATA_PARSING_QUEUE_MAX", "parse MCP 서비스 대기 작업 상한(건)", ge=1)
+    mcp_parse_workers: int = F(
+        2,
+        "MCP_PARSE_WORKERS",
+        "Redis 작업 소비자 프로세스 수 — 지금은 최대 2(사용자 결정 2026-11-09). 늘리려면 상한과 CPU·메모리·엔진 프로세스 수를 같이 조정",
+        ge=1,
+        le=2,
+    )
+    mcp_parse_max_attempts: int = F(3, "MCP_PARSE_MAX_ATTEMPTS", "죽은 worker 작업의 최대 전달 횟수", ge=1)
+    mcp_parse_result_ttl_sec: int = F(86400, "MCP_PARSE_RESULT_TTL_SEC", "완료 HASH·LIST 보존 시간(초)", ge=1)
+
+
 class CommonDevDocker(Section):
     mcp_publish_port: Port | None = F(18765, "MCP_PUBLISH_PORT", "시험 compose에서 MCP를 호스트에 게시할 포트")
     pg_image: str | None = F("pgvector/pgvector:pg16", "PG_IMAGE", "시험 PostgreSQL(pgvector) 이미지")
@@ -1422,77 +1448,19 @@ class CommonDev(Section):
 
 
 class CommonHostDevbox(Section):
-    ssh_port: int | None = F(
-        None,
-        "DEVBOX_SSH_PORT",
-        "개발 작업 공간(선택 — 개발 서버 dev만): data-pipeline 컨테이너를 SSH 작업 공간으로 띄울 포트(호스트 네트워크 그대로 — 개발자마다 다르게)."
-        " 비우면 끔. 적으면 host_ctl.sh가 compose.dev.yml을 더함(코드 폴더 쓰기 가능·홈 폴더 <루트>/home) — prd면 거부",
-    )
-    opencode_config: str | None = F(
-        None,
-        "DEVBOX_OPENCODE_CONFIG",
-        "개발 작업 공간의 opencode 설정 파일(호스트 경로, 선택) — 읽기 전용으로 붙이고 OPENCODE_CONFIG로 가리킴. 비우면 이미지의 틀(홈의 ~/.config/opencode/opencode.json)",
-    )
-    home_dir: str | None = F(
-        None,
-        "DEVBOX_HOME",
-        "개발 작업 공간 홈 폴더(호스트 경로) — 컨테이너 /home/rag로 붙임(SSH 열쇠·opencode 설정·작업 기록). 비우면 <루트>/home(host_ctl.sh init이 만듦 — 10001, 700)",
-    )
-    gitea_url: str | None = F(
-        None,
-        "DEVBOX_GITEA_URL",
-        "개발 작업 공간의 내부망 gitea 주소(선택 — http(s)://호스트[:포트][/경로]) · 예 https://gitea.corp.local:3000 — http는 토큰이 암호화 없이 감."
-        " 주소·계정·토큰을 모두 적으면 시작할 때 ~/.git-credentials(권한 600)에 그 호스트 줄을 씀",
-        pattern=r"^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/\S*)?$",
-    )
-    gitea_user: str | None = F(None, "DEVBOX_GITEA_USER", "개발 작업 공간의 gitea 계정 이름(선택)")
-    gitea_token: SecretStr | None = F(None, "DEVBOX_GITEA_TOKEN", "개발 작업 공간의 gitea 접근 토큰(선택 — gitea 설정 > 응용 > 토큰)")
     git_user_name: str | None = F(None, "DEVBOX_GIT_USER_NAME", "개발 작업 공간의 git 커밋 이름(git config user.name, 선택)")
     git_user_email: str | None = F(None, "DEVBOX_GIT_USER_EMAIL", "개발 작업 공간의 git 커밋 메일(git config user.email, 선택)")
 
 
-_CONTAINER_NAME = r"^[A-Za-z0-9][A-Za-z0-9_.-]*$"  # docker·podman 컨테이너 이름 꼴(명령 줄에 그대로 들어감)
-
-
-def _cname(default, env, what):
-    return F(
-        default,
-        env,
-        f"{what} 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>가 붙음). host_ctl.sh·mcp_keepalive.sh·pipe_exec.sh·run_pipeline.py가 이 이름으로 찾음",
-        pattern=_CONTAINER_NAME,
-    )
-
-
 class CommonHost(Section):
-    compose_project: str = F(
-        "compose",
-        "COMPOSE_PROJECT",
-        "compose 묶음(project) 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>). host_ctl.sh·mcp_keepalive.sh가 -p로 줌 — 바꾸면 옛 묶음은 down으로 먼저 내림",
-        pattern=r"^[a-z0-9][a-z0-9_-]*$",
-    )
-    data_parsing_container: str = _cname("mcp-data-parsing", "DATA_PARSING_CONTAINER", "parse_document 작업 서비스 전용")
     devbox: CommonHostDevbox = Field(default_factory=CommonHostDevbox)
-    doc_src: str | None = F(None, "DOC_SRC", "호스트 원본 문서 폴더 — compose가 컨테이너 /data/docs에 읽기 전용으로 붙임")
+    doc_src: str | None = F(
+        None,
+        "DOC_SRC",
+        "호스트 원본 문서 폴더 — host_ctl.sh가 compose 변수 DOC_SRC로 넘겨 컨테이너 /data/docs에 읽기 전용으로 붙임(비우면 /data/docs)",
+    )
     docker: str | None = F(None, "DOCKER", "호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등 — op-10)")
-    edw_chain_src: str | None = F(
-        None,
-        "EDW_CHAIN_SRC",
-        "호스트의 EDW 조인 사슬 사본 파일 — compose가 컨테이너 /etc/rag/edw_chain.yaml로 읽기 전용으로 붙이는 원본. 비우면 <루트>/edw_chain.yaml(host_ctl.sh init이 없을 때만 만듦)",
-    )
-    extra_compose: CsvList | None = F(
-        None,
-        "EXTRA_COMPOSE",
-        "더 붙일 compose 파일 목록(볼륨·env 더하기 — 틀 deploy/host/compose/extra.example.yml — 예 compose.extra.yml = <루트>/compose.extra.yml). 상대 경로는 루트(코드 폴더) 기준."
-        " host_ctl.sh·mcp_keepalive.sh가 늘 맨 뒤에 -f로 더함",
-    )
     image_stage_dir: str | None = F(None, "IMAGE_STAGE_DIR", "prune_images.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값)")
-    mcp_container: str = _cname("mcp-server", "MCP_CONTAINER", "검색 MCP")
-    output_root: str | None = F(
-        None,
-        "RAG_OUT",
-        "호스트의 결과(output) 폴더(서버 경로) — compose가 컨테이너 /app/output으로 마운트하는 원본. 비우면 <루트>/output",
-    )
-    pipeline_container: str = _cname("data-pipeline", "PIPELINE_CONTAINER", "일괄 상주 파이프라인")
     pg_container: str | None = F(
         None,
         "PG_CONTAINER",
@@ -1519,8 +1487,7 @@ class CommonPaths(Section):
         None,
         "EDW_CHAIN_FILE",
         "EDW 조인 사슬 파일 경로 — 적재(EDW 조인)와 검색 MCP(search attrs·edw_meta search_attrs)가 함께 읽음(pl-29·pl-52). 비우면 "
-        "resources/config/edw_chain.yaml · 서버 사본은 컨테이너 안 /etc/rag/edw_chain.yaml(원본 <루트>/edw_chain.yaml — host_ctl.sh init이 "
-        "없을 때만 복사, 적었을 때만 쓰임) · 점검: python -m pipeline.load.edw_doc_meta --check",
+        "코드 폴더 맨 위 edw_chain.yaml(git으로 관리 — 이미지에도 들어감) · 점검: python -m pipeline.load.edw_doc_meta --check",
     )
     source_manifest: str | None = F(None, "SOURCE_MANIFEST", "원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응)")
 
@@ -1549,7 +1516,7 @@ class CommonRuntime(Section):
     data_parsing_port: Port = F(
         8766,
         "DATA_PARSING_PORT",
-        "parse_document 작업 서비스 포트(127.0.0.1) — 작업 서비스가 듣고 검색 MCP가 부름. 여러 벌이면 벌마다 다르게(기본값이면 시작 거부)",
+        "더 쓰지 않음(#113 Redis 큐로 대체) — 다음 판에서 지움",
     )
     pipe_max_procs: float | None = F(8, "PIPE_MAX_PROCS", "파싱 엔진 프로세스 수 자동 결정의 상한(개)", unset=("auto",))
     pipe_proc_gb: float | None = F(3.0, "PIPE_PROC_GB", "엔진 프로세스 1개당 메모리 가정(GB) — 자동 프로세스 수 계산용", unset=("auto",))
@@ -1586,6 +1553,7 @@ class CommonConnections(Section):
     object_storage: CommonConnectionsObjectStorage = Field(default_factory=CommonConnectionsObjectStorage)
     pg: CommonConnectionsPg = Field(default_factory=CommonConnectionsPg)
     rdb: CommonConnectionsRdb = Field(default_factory=CommonConnectionsRdb)
+    redis: CommonConnectionsRedis = Field(default_factory=CommonConnectionsRedis)
 
 
 class CommonModels(Section):
@@ -1619,7 +1587,7 @@ class CommonTokens(Section):
     mcp: SecretStr | None = F(
         None,
         "MCP_TOKEN",
-        "MCP 토큰 하나 — 검색 MCP Bearer(비루프백 바인드면 필수)·parse_document 프록시 → 작업 서비스 호출·작업 서비스 확인에 같이 씀",
+        "MCP Bearer 토큰(비루프백 바인드면 필수) — parse_document 내부 전달은 Redis 접속 권한을 씀",
     )
 
 
@@ -1634,6 +1602,7 @@ class CommonSettings(Section):
     log: CommonLog = Field(default_factory=CommonLog)
     paths: CommonPaths = Field(default_factory=CommonPaths)
     runtime: CommonRuntime = Field(default_factory=CommonRuntime)
+    parse_queue: CommonParseQueue = Field(default_factory=CommonParseQueue)
     text: CommonText = Field(default_factory=CommonText)
     tokens: CommonTokens = Field(default_factory=CommonTokens)
 
