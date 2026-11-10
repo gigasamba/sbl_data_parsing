@@ -1,0 +1,69 @@
+# Redis 클러스터(op-19): 노드 6개(주 3 + 복제 3) — 이미지 sbl-redis:<판>(deploy/docker/Dockerfile.redis — 공식 redis 7.4.8 + 노드 설정).
+#   포트: 노드 7001~7006 · 클러스터 내부 통신 17001~17006(노드 포트 + 10000) — 서버의 모든 주소(0.0.0.0)에 연다.
+#   노드는 REDIS_IP(서버 IP — 바깥 클라이언트·다른 노드가 이 주소로 붙음)를 알린다. 클라이언트는 <서버 IP>:7001~7006 중 아무 데나(클러스터 모드).
+#   비밀번호 = <SBL_ROOT>/redis_pw 첫 줄(" 와 \ 는 못 씀) — env·명령 인자에 두지 않는다. 데이터 = REDIS_DATA/<포트>(기본 /data/redis).
+#   띄우기: REDIS_IP=<서버 IP> docker compose -f compose-redis.yml up -d — redis-init이 처음 한 번 클러스터를 묶는다(이미 있으면 건너뜀).
+#   바꿀 자리: SBL_ROOT(기본 /home/sbl) · IMAGE_TAG(sbl-redis 판) · REDIS_IP(필수) · REDIS_DATA. 준비·확인 순서: docs/operations/server-guide.md §6-7
+name: sbl-redis
+x-node: &node
+  image: sbl-redis:${IMAGE_TAG:-0.4.0}
+  restart: always
+  command: ["node"]
+  pids_limit: 1024
+  cpus: 1
+  mem_limit: 2g
+  memswap_limit: 2g
+  logging:
+    options: {max-size: "20m", max-file: "3"}
+
+x-pw: &pw {type: bind, source: "${SBL_ROOT:-/home/sbl}/redis_pw", target: /run/secrets/redis_pw, read_only: true,
+           bind: {create_host_path: false, selinux: z}}
+
+services:
+  redis-7001:
+    <<: *node
+    container_name: redis-7001
+    environment: {REDIS_PORT: "7001", REDIS_IP: "${REDIS_IP:?REDIS_IP=<서버 IP> 필요}"}
+    ports: ["0.0.0.0:7001:7001", "0.0.0.0:17001:17001"]
+    volumes: ["${REDIS_DATA:-/data/redis}/7001:/data:z", *pw]
+  redis-7002:
+    <<: *node
+    container_name: redis-7002
+    environment: {REDIS_PORT: "7002", REDIS_IP: "${REDIS_IP:?REDIS_IP=<서버 IP> 필요}"}
+    ports: ["0.0.0.0:7002:7002", "0.0.0.0:17002:17002"]
+    volumes: ["${REDIS_DATA:-/data/redis}/7002:/data:z", *pw]
+  redis-7003:
+    <<: *node
+    container_name: redis-7003
+    environment: {REDIS_PORT: "7003", REDIS_IP: "${REDIS_IP:?REDIS_IP=<서버 IP> 필요}"}
+    ports: ["0.0.0.0:7003:7003", "0.0.0.0:17003:17003"]
+    volumes: ["${REDIS_DATA:-/data/redis}/7003:/data:z", *pw]
+  redis-7004:
+    <<: *node
+    container_name: redis-7004
+    environment: {REDIS_PORT: "7004", REDIS_IP: "${REDIS_IP:?REDIS_IP=<서버 IP> 필요}"}
+    ports: ["0.0.0.0:7004:7004", "0.0.0.0:17004:17004"]
+    volumes: ["${REDIS_DATA:-/data/redis}/7004:/data:z", *pw]
+  redis-7005:
+    <<: *node
+    container_name: redis-7005
+    environment: {REDIS_PORT: "7005", REDIS_IP: "${REDIS_IP:?REDIS_IP=<서버 IP> 필요}"}
+    ports: ["0.0.0.0:7005:7005", "0.0.0.0:17005:17005"]
+    volumes: ["${REDIS_DATA:-/data/redis}/7005:/data:z", *pw]
+  redis-7006:
+    <<: *node
+    container_name: redis-7006
+    environment: {REDIS_PORT: "7006", REDIS_IP: "${REDIS_IP:?REDIS_IP=<서버 IP> 필요}"}
+    ports: ["0.0.0.0:7006:7006", "0.0.0.0:17006:17006"]
+    volumes: ["${REDIS_DATA:-/data/redis}/7006:/data:z", *pw]
+
+  # 클러스터 묶기(한 번 돌고 끝남) — 노드 6개가 답하면 `redis-cli --cluster create`(복제 1개씩). 이미 묶였으면 건너뜀.
+  redis-init:
+    image: sbl-redis:${IMAGE_TAG:-0.4.0}
+    container_name: redis-init
+    restart: "no"
+    command: ["init"]
+    environment:
+      REDIS_NODES: "${REDIS_IP:?REDIS_IP=<서버 IP> 필요}:7001 ${REDIS_IP}:7002 ${REDIS_IP}:7003 ${REDIS_IP}:7004 ${REDIS_IP}:7005 ${REDIS_IP}:7006"
+    volumes: [*pw]
+    depends_on: [redis-7001, redis-7002, redis-7003, redis-7004, redis-7005, redis-7006]

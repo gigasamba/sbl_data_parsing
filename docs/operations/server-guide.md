@@ -2110,6 +2110,7 @@ psql -h <서버 IP> -p 5433 -U rag -d rag -c 'select 1'   # 검색 DB(psql이 �
 ```
 - 들어가면 `/app/deploy`(벌 폴더 — 쓰기 가능)에서 고치고 git을 쓴다(§6-4). `sudo`·`su`도 있다.
 - 비밀번호를 바꾸려면 `root_pw`를 고치고 `docker compose -f deploy/host/compose/compose-dev.yml restart`(시작할 때마다 그 파일 값으로 다시 건다).
+- `root_pw`가 빈 파일이면 이미지에 넣은 root 비밀번호를 쓴다(이미지 빌드 때 `BUILD_ARGS="--secret id=root_pw,src=<git 밖 파일>"`로 넣은 경우만 — 비밀번호를 바꿨으면 `--no-cache`로 다시 빌드, 층 재사용 키에 비밀값이 안 들어감).
 - root로 쓴 파일은 서버에서도 root 소유다 — 서버 계정으로 고치거나 지울 때는 `sudo`.
 - 검색 MCP는 sshd 옆에서 뒤로 돈다 — MCP만 멈춰도 컨테이너는 Up이다. 8051이 응답하지 않으면 `docker logs mcp-server-0`로 원인을 보고 `docker restart mcp-server-0`.
 - 내리기: `docker compose -f deploy/host/compose/compose-dev.yml down`(벌 폴더·결과는 그대로).
@@ -2135,3 +2136,36 @@ docker inspect -f '{{.Name}} {{.HostConfig.RestartPolicy.Name}}' data-pipeline-0
 - 구운 이미지의 시작 스크립트(`entrypoint.sh`)를 이 파일이 SSH 작업 공간(`dev_entry.sh`)으로 바꿔 띄우고, 앱 명령은 `entrypoint.sh`로 넘긴다. 그래서 굽기 바탕이 0.4.0 이상(sudo·root SSH가 든 실행 이미지)이어야 한다.
 - §0-3의 `docker run`이나 `host_ctl.sh`로 띄운 운영 컨테이너가 있으면 먼저 내린다(포트·이름이 겹침).
 
+### 6-7. Redis 클러스터 — compose-redis.yml
+`deploy/host/compose/compose-redis.yml` 한 파일로 Redis 클러스터 노드 6개(주 3 + 복제 3)를 띄운다([op-19](../prd/ops.md#op-19)). 이미지는 `sbl-redis:<판>`(공식 `redis:7.4.8-alpine` + 노드 설정 — `deploy/docker/Dockerfile.redis`).
+
+| 컨테이너 | 서버 포트(모두 `0.0.0.0`) | 데이터 |
+|---|---|---|
+| `redis-7001` ~ `redis-7006` | 노드 7001~7006 · 클러스터 내부 통신 17001~17006 | `/data/redis/<포트>`(`REDIS_DATA`) |
+| `redis-init` | — (처음 한 번 클러스터를 묶고 끝남 · 이미 있으면 건너뜀) | — |
+
+**① 이미지 만들기·반입(PC)**
+```bash
+docker build -f deploy/docker/Dockerfile.redis -t sbl-redis:$(cat VERSION) deploy/docker/redis   # 저장소 루트에서
+V=$(cat VERSION); d=output/ship/sbl_images/$V/sbl-redis; mkdir -p $d
+docker save sbl-redis:$V | gzip -1 | split -b 45m -d -a 3 - $d/sbl-redis.tar.gz.part && (cd $d && sha256sum sbl-redis.tar.gz.part* > sbl-redis.sha256)
+#   서버: bash sbl_images/load.sh <판> — 판 폴더의 다른 이미지와 함께 불러온다
+```
+
+**② 준비·띄우기(서버)**
+```bash
+cd /home/sbl
+sudo install -m 600 -o root /dev/null redis_pw && read -rs p && printf '%s\n' "$p" | sudo tee redis_pw >/dev/null && unset p   # " 와 \ 는 못 씀
+sudo mkdir -p /data/redis/{7001,7002,7003,7004,7005,7006}
+REDIS_IP=<서버 IP> IMAGE_TAG=<판> docker compose -f <코드 폴더>/deploy/host/compose/compose-redis.yml up -d   # 예 REDIS_IP=10.10.1.20
+docker logs redis-init | tail -2                       # 기대: [OK] All 16384 slots covered. (다시 띄우면 cluster already exists — skip)
+```
+
+**③ 확인(서버 바깥 PC에서)**
+```bash
+redis-cli -c -h <서버 IP> -p 7001 --askpass cluster info | grep -E 'cluster_state|cluster_size'   # 기대: cluster_state:ok · cluster_size:3
+redis-cli -c -h <서버 IP> -p 7001 --askpass set k1 v1 && redis-cli -c -h <서버 IP> -p 7002 --askpass get k1   # 기대: OK · v1
+```
+- 노드는 `REDIS_IP`(서버 IP)를 알린다 — 클라이언트는 클러스터 모드(`-c`, 라이브러리의 cluster 클라이언트)로 아무 노드에나 붙는다. 서버 IP가 바뀌면 `down` → 데이터 폴더의 `nodes.conf`를 지우고 다시(클러스터를 새로 묶음).
+- 재시작 정책 `always`. 노드는 컨테이너 안에서 root로 돈다(이 이미지에 사용자를 바꾸는 도구가 없음).
+- 비밀번호는 `redis_pw` 파일에서 시작할 때 노드 설정(`/tmp/auth.conf`, 600)으로만 넘긴다 — env·명령 인자·`docker inspect`에 나오지 않는다.

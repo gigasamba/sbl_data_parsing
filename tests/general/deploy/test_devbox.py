@@ -171,3 +171,17 @@ def test_compose_prd():
         assert not any(isinstance(x, str) and ":/app/deploy" in x for x in v), (name, v)  # 코드는 이미지 안
     pg = svcs["pgvector"]
     assert {k: pg[k] for k in ("ports", "environment", "volumes")} == {k: dev["pgvector"][k] for k in ("ports", "environment", "volumes")}
+
+
+def test_compose_redis():
+    svcs = yaml.safe_load((COMPOSE / "compose-redis.yml").read_text(encoding="utf-8"))["services"]
+    ports = [7001 + i for i in range(6)]
+    assert set(svcs) == {f"redis-{p}" for p in ports} | {"redis-init"}
+    pw = "${SBL_ROOT:-/home/sbl}/root_pw".replace("root_pw", "redis_pw")
+    for p in ports:
+        s = svcs[f"redis-{p}"]
+        assert s["ports"] == [f"0.0.0.0:{p}:{p}", f"0.0.0.0:{p + 10000}:{p + 10000}"] and s["restart"] == "always", p
+        assert s["environment"]["REDIS_PORT"] == str(p) and "REDIS_IP" in s["environment"]["REDIS_IP"], p
+        assert any(isinstance(v, dict) and v["source"] == pw and v["read_only"] for v in s["volumes"]), p
+    init = svcs["redis-init"]
+    assert init["command"] == ["init"] and init["restart"] == "no" and init["environment"]["REDIS_NODES"].count(":70") == 6

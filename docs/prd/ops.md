@@ -365,3 +365,26 @@ DB 스키마(마이그레이션 — `doc` 칸·`doc` 색인·`except_doc_info`·
 
 ### 사람 검토
 보안 경계(root 비밀번호 SSH — 운영 서버 포함, 모든 주소에 연 포트 — 운영 PG 5433 포함, 운영 이미지에도 sudo).
+
+<a id="op-19"></a>
+## op-19 · Redis 클러스터 — 이미지 sbl-redis와 compose-redis.yml
+
+### 무엇·왜
+서버에 Redis 클러스터(노드 6개 — 주 3 + 복제 3)를 우리 이미지로 띄우고, 서버 바깥에서 접속해 쓴다(사용자 11-10).
+
+### 규칙
+1. 이미지 `sbl-redis:<VERSION>` = 공식 `redis:7.4.8-alpine` + `node.conf`(cluster-enabled · AOF · `/data`) + `redis_entry.sh`(`deploy/docker/Dockerfile.redis`, 문맥 `deploy/docker/redis/`). 패키지 설치 없음.
+2. `deploy/host/compose/compose-redis.yml`: `redis-7001`~`redis-7006`(포트 `0.0.0.0:<포트>`·`0.0.0.0:<포트+10000>`, 데이터 `REDIS_DATA/<포트>` 기본 `/data/redis`, 재시작 `always`)과 `redis-init`(한 번 — 노드가 모두 답하면 `redis-cli --cluster create … --cluster-replicas 1`, `cluster_state:ok`면 건너뜀).
+3. 노드는 `REDIS_IP`(필수 — 서버 IP)를 `cluster-announce-ip`로 알린다(bridge 네트워크 + 같은 번호 포트 게시).
+4. 비밀번호는 `<SBL_ROOT>/redis_pw`(읽기 전용 — `create_host_path: false`) 첫 줄 → `requirepass`·`masterauth`를 `/tmp/auth.conf`(600)에 써 `--include`. env·명령 인자에 두지 않는다. 없거나 비면 종료 2, `"`·`\`가 있으면 종료 2.
+5. 반입은 다른 이미지와 같은 배치(`sbl_images/<판>/sbl-redis/` 조각 + sha256 — `load.sh`가 함께 불러옴).
+
+### 비고
+- parse_document 작업 큐(PR #177 — `mcp-redis`, 단일 노드)와는 따로다. 그 큐 클라이언트(`redis.Redis`)는 클러스터 모드를 쓰지 않는다.
+
+### QA
+- `tests/general/deploy/test_devbox.py`(compose-redis 노드 포트·announce·비밀번호 파일·재시작·묶기 명령) · PC 시험(이미지 빌드 → 6노드 → 묶기 `All 16384 slots covered` → PC 사설 IP로 7001 쓰기·7002·7005 읽기 → 틀린·없는 비밀번호 거부 → 다시 시작 뒤 값 유지·묶기 건너뜀 → env에 비밀번호 없음).
+- Status: dev
+
+### 사람 검토
+보안 경계(Redis 포트를 모든 주소에), 새 외부 이미지(`redis:7.4.8-alpine` — 반입 승인).

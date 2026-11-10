@@ -87,6 +87,10 @@ RUN pip install --no-cache-dir $(cat /tmp/pipopt) uv==${UV_VERSION} -r /tmp/requ
 COPY --from=src /src/opencode/ /usr/local/bin/
 COPY deploy/docker/devbox/ /etc/devbox/
 RUN sed -i 's/\r$//' /etc/devbox/* && chmod 755 /etc/devbox/dev_entry.sh && ln -s /etc/devbox/profile.sh /etc/profile.d/zz-devbox.sh
+# Image root password (user exception): BuildKit secret `--secret id=root_pw,src=<file outside git>` — first line.
+#   Not in the repo or `docker history`; the hash stays in /etc/shadow. A non-empty <SBL_ROOT>/root_pw still overrides it at start.
+RUN --mount=type=secret,id=root_pw,required=false \
+    if [ -s /run/secrets/root_pw ]; then head -n1 /run/secrets/root_pw | tr -d '\r' | sed 's/^/root:/' | chpasswd; fi
 ENV OPENCODE_DISABLE_MODELS_FETCH=1 OPENCODE_DISABLE_AUTOUPDATE=1
 
 # 파싱 엔진·OCR 의존성(무거움) — 코드 바뀌어도 다시 설치 안 되게 코드 복사 전에

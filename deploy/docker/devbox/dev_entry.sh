@@ -22,8 +22,8 @@ O=$HOME/.config/opencode/opencode.json
 # never goes through env. A failure only warns; the workspace still starts.
 python /etc/devbox/git_cred.py || echo "[devbox] git account setup failed — check option.devbox.gitea_*" >&2
 [ -f "$K/ssh_host_ed25519_key" ] || ssh-keygen -q -t ed25519 -N '' -f "$K/ssh_host_ed25519_key"
-# root (set compose compose-dev.yml / compose-prd.yml, user "0"): root password from the mounted file, root password login.
-# Servers only (dev, prd). The password never goes through env, the image or the repo.
+# root (set compose compose-dev.yml / compose-prd.yml, user "0"): root password from the mounted file (if non-empty), else the
+# one built into the image (Dockerfile secret root_pw); root password login. Servers only (dev, prd). Never via env or the repo.
 SSHD_OPTS=()
 if [ "$(id -u)" = 0 ]; then
   # run_env as the apps resolve it (env RUN_ENV, else the mounted settings.yaml) — only dev or prd opens root login
@@ -31,8 +31,13 @@ if [ "$(id -u)" = 0 ]; then
   case "$E" in dev | prd) ;; *) echo "[devbox] root SSH is for the servers only (dev, prd) — run_env is '${E:-?}' (settings.yaml required.env.run_env)" >&2; exit 2 ;; esac
   P=/run/secrets/root_pw
   W=$( [ -f "$P" ] && head -n1 "$P" | tr -d '\r' || true)
-  [ -n "$W" ] || { echo "[devbox] $P missing or empty — create <SBL_ROOT>/root_pw before up (server-guide §6-6)" >&2; exit 2; }
-  printf 'root:%s\n' "$W" | chpasswd
+  if [ -n "$W" ]; then
+    printf 'root:%s\n' "$W" | chpasswd
+  elif [ "$(getent shadow root | cut -d: -f2 | cut -c1)" = '$' ]; then
+    echo "[devbox] $P missing or empty — using the root password built into the image" >&2
+  else
+    echo "[devbox] $P missing or empty and the image has no root password — fill <SBL_ROOT>/root_pw (server-guide §6-6)" >&2; exit 2
+  fi
   unset W
   git config --global --replace-all safe.directory '*'   # code folder is owned by 10001; root git would refuse it
   SSHD_OPTS=(-o PermitRootLogin=yes -o PasswordAuthentication=yes)
