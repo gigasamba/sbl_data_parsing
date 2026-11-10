@@ -42,8 +42,8 @@ dc_init() {
   }
   _mk "$out" 2775
   _mk "$jobs" 2775
-  if [ -z "$test" ]; then   # 코드만 a+rX — 설정(사본·백업 포함)·결과·홈을 건드리지 않음
-    find . \( -path "./settings*.yaml*" -o -path "./settings copy*" -o -path ./output -o -path ./home \) -prune -o -exec chmod a+rX {} + &&
+  if [ -z "$test" ]; then   # 코드만 a+rX — 설정(사본·백업 포함)·.env(비밀번호)·결과·홈을 건드리지 않음
+    find . \( -path "./settings*.yaml*" -o -path "./settings copy*" -o -path ./.env -o -path ./output -o -path ./home \) -prune -o -exec chmod a+rX {} + &&
       echo "  권한  $(pwd) (a+rX — 설정·결과·홈 빼고)"
   else echo "  (시험 — 코드 폴더 a+rX 건너뜀)"; fi
   if [ -e "$sf" ]; then echo "  있음  $sf(덮지 않음)"
@@ -75,7 +75,7 @@ PY
 }
 
 # check — 이미 있는 점검을 차례로(새 점검 없음). 처음 실패에서 멈추고 마지막 한 줄 "[host_ctl check] 통과 — N개" 또는 "[host_ctl check] 실패 — <단계>: <안내>".
-#   ① check_env ② ping_models ③ migrate check --target all(pipe_exec.sh — data-pipeline-0 안) ④⑤ selftest_gate.sh(두 컨테이너의 이미지 — "[판정] 통과" 줄로 판정)
+#   ⓪ .env = settings.yaml(PG·Redis 비밀번호·계정 — 다른 이름만) ① check_env ② ping_models ③ migrate check --target all(pipe_exec.sh — data-pipeline-0 안) ④⑤ selftest_gate.sh(두 컨테이너의 이미지 — "[판정] 통과" 줄로 판정)
 #   ⑥ mcp_keepalive.sh(/health). 검색 근거가 필요한 MCP 호출(mcp_smoke)은 넣지 않음 — 첫 적재 전에는 근거가 없음.
 #   DC_FAKE=<명령>이면 각 단계를 `<명령> <단계 이름>`으로 바꿔 부른다(시험용 — 출력·종료 코드를 그대로 판정).
 dc_check() {
@@ -102,6 +102,7 @@ dc_check() {
   }
   # 판정 시험의 DB 사례는 서버 PG에 붙는다(prd는 읽기만): 같은 설정 파일·host 네트워크·RUN_ENV · settings.yaml의 host.docker.internal이 서버 자신으로
   local gate=(--network host --add-host host.docker.internal:host-gateway -v "${SETTINGS_FILE:?SETTINGS_FILE 필요 — load_settings}:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e "RUN_ENV=${RUN_ENV:?RUN_ENV 필요 — load_settings}")
+  _step ".env 일치" ".env의 REDIS_PASSWORD·PG_USER·PG_DB·PG_PASSWORD를 settings.yaml과 같게(다른 칸 이름만 찍음)" "${PY:-python3}" deploy/host/scripts/settings_to_env.py --file "$SETTINGS_FILE" --check-env .env || return 1
   _step check_env "출력의 FAIL 줄 확인(server-guide §1-9)" bash deploy/host/scripts/pipe_exec.sh check_env || return 1
   _step ping_models "모델 주소·키(settings.yaml required.models) — 서버는 내부망 모델만" bash deploy/host/scripts/pipe_exec.sh ping_models || return 1
   _step "migrate check" "migrate up --target all · master load(server-guide §4-7)" bash deploy/host/scripts/pipe_exec.sh migrate check --target all || return 1

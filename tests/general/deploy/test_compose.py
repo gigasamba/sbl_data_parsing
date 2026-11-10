@@ -91,7 +91,8 @@ def test_secret_env():
     redis = _load("compose-redis.yml")["services"]["redis"]
     assert redis["command"][:3] == ["redis-server", "--requirepass", "${REDIS_PASSWORD:?.env에 REDIS_PASSWORD 필요}"], redis["command"]
     assert redis["volumes"] == ["${REDIS_DATA:-/data/redis}:/data:z"] and "environment" not in redis, redis
-    assert "PONG|NOAUTH" in redis["healthcheck"]["test"][1] and "REDIS_PASSWORD" not in redis["healthcheck"]["test"][1]
+    # 상태 확인은 비밀번호로 PONG(틀린 비밀번호면 unhealthy) — 값은 .env에서 compose가 채움(env로 넘기지 않음)
+    assert redis["healthcheck"]["test"][1] == "REDISCLI_AUTH='${REDIS_PASSWORD}' redis-cli --no-auth-warning ping | grep -q PONG"
 
 
 def test_entry_commands():

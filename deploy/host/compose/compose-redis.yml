@@ -1,7 +1,7 @@
 # Redis(parse_document 작업 큐): 서버마다 하나 — 공식 이미지 redis:7.4.8-alpine. 따로 한 번 띄운다(compose-<환경>.yml보다 먼저). 재시작 정책 always.
 #   비밀번호: 코드 폴더 맨 위 .env(git 제외 · 권한 600 · 사람이 적음)의 REDIS_PASSWORD — settings.yaml common.connections.redis.redis_password와 같은 값.
 #     값에 $·따옴표·줄바꿈은 쓰지 않는다. 비어 있으면 compose가 멈춘다.
-#   띄우기(코드 폴더 맨 위에서): docker compose --env-file .env -f deploy/host/compose/compose-redis.yml up -d     내리기: … down(데이터 폴더는 그대로)
+#   띄우기(코드 폴더 맨 위에서): docker compose --env-file .env -f deploy/host/compose/compose-redis.yml up -d     내리기·로그: 같은 앞부분 + down·logs(데이터 폴더는 그대로 — --env-file .env 없이는 compose가 멈춤)
 #     비밀번호를 바꾼 뒤: .env·settings.yaml을 같이 고치고 up -d --force-recreate(두 앱 컨테이너도 다시 시작 — 새 비밀번호를 읽게)
 #   포트: 서버 8010 → 컨테이너 6379, 서버의 모든 주소(0.0.0.0)에 연다(protected-mode + 비밀번호 필수). 컨테이너에서는 host.docker.internal:8010.
 #   비밀번호는 명령 인자로 넘어가 docker inspect(Args)에 보인다 — 서버 root·docker 권한자만 볼 수 있다.
@@ -18,7 +18,7 @@ services:
     volumes:
       - ${REDIS_DATA:-/data/redis}:/data:z
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep -qE 'PONG|NOAUTH'"]   # 떠 있으면 PONG 또는 NOAUTH(비밀번호 없이 확인)
+      test: ["CMD-SHELL", "REDISCLI_AUTH='${REDIS_PASSWORD}' redis-cli --no-auth-warning ping | grep -q PONG"]   # 비밀번호로 PONG(명령 인자와 같이 inspect에만 보임)
       interval: 15s
       timeout: 5s
       retries: 3

@@ -139,17 +139,47 @@ def lines(doc, sections, fmt="sh"):
     return out
 
 
+ENV_PAIRS = (  # .env(compose-redis.yml·compose-pgvector.yml) 이름 → settings.yaml 모델 경로 — 둘이 같아야 앱이 붙음
+    ("REDIS_PASSWORD", "common.connections.redis.redis_password"),
+    ("PG_USER", "common.connections.pg.user"),
+    ("PG_DB", "common.connections.pg.db"),
+    ("PG_PASSWORD", "common.connections.pg.password"),
+)
+
+
+def env_mismatch(doc, env_file):
+    """.env와 settings.yaml이 다른(또는 빈) 이름 목록 — 값은 돌려주지 않는다."""
+    env = {}
+    for line in Path(env_file).read_text(encoding="utf-8").splitlines():
+        k, sep, v = line.partition("=")
+        if sep and not k.lstrip().startswith("#"):
+            env[k.strip()] = v.strip()
+    return [n for n, p in ENV_PAIRS if not env.get(n) or env.get(n) != str(get(doc, p) or "")]
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     ap.add_argument("sections", nargs="*", help="모델 경로 절(없으면 표 전부 — 호스트 칸 모두)")
     ap.add_argument("--file", help="설정 파일(없으면 SETTINGS_FILE)")
     ap.add_argument("--format", choices=("env", "sh"), default="env")
+    ap.add_argument("--check-env", help=".env가 settings.yaml과 같은지만 확인(다른 이름만 찍음 — host_ctl.sh check)")
     a = ap.parse_args(argv)
     path = a.file or os.environ.get("SETTINGS_FILE")  # env 남김 — 설정 파일 자리 신호(load_settings가 정함)
     if not path:
         print("[settings_to_env] 설정 파일 없음 — --file 또는 SETTINGS_FILE", file=sys.stderr)
         return 2
     doc, err = load_or_error(path)
+    if not err and a.check_env:
+        try:
+            bad = env_mismatch(doc, a.check_env)
+        except OSError:
+            print(f"[settings_to_env] .env를 읽지 못함: {a.check_env}", file=sys.stderr)
+            return 2
+        if bad:
+            print("[settings_to_env] .env가 settings.yaml과 다름(또는 빔): " + " ".join(bad), file=sys.stderr)
+            return 1
+        print("[settings_to_env] .env = settings.yaml(" + " ".join(n for n, _ in ENV_PAIRS) + ")")
+        return 0
     try:
         out = [] if err else lines(doc, a.sections, a.format)
     except ValueError as e:

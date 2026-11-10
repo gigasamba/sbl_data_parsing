@@ -83,3 +83,21 @@ def test_host_env_matches_export():
     print(
         f"[시험] 호스트 칸 → 셸 env — PyYAML만으로 export와 같은 줄 {len(got)}개 · host_settings.tsv = 설정 모델 · 값 꼴 {len(cases)}개 통과"
     )
+
+
+# .env 대조(host_ctl.sh check 첫 단계): (.env 줄, 기대 다른 이름) — settings.yaml은 아래 SET_DOC 하나
+ENV_DOC = {"common": {"connections": {"redis": {"redis_password": "r1"}, "pg": {"user": "u", "db": "d", "password": "p1"}}}}
+ENV_CASES = [
+    ("REDIS_PASSWORD=r1\nPG_USER=u\nPG_DB=d\nPG_PASSWORD=p1\n", []),
+    ("# 주석\nREDIS_PASSWORD=r2\nPG_USER=u\nPG_DB=d\nPG_PASSWORD=p1\n", ["REDIS_PASSWORD"]),  # 다르면 이름만
+    ("REDIS_PASSWORD=r1\nPG_USER=u\nPG_DB=d\n", ["PG_PASSWORD"]),  # 빠지면 이름만
+]
+
+
+def test_env_mismatch():
+    s2e = _load("s2e_env", "deploy/host/scripts/settings_to_env.py")
+    with tempfile.TemporaryDirectory() as d:
+        f = Path(d) / ".env"
+        for body, want in ENV_CASES:
+            f.write_text(body, encoding="utf-8")
+            assert s2e.env_mismatch(ENV_DOC, f) == want, (body, want)

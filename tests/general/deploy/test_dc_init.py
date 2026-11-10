@@ -113,8 +113,9 @@ esac
 """
 # (FAIL 단계, NOJUDGE, 컨테이너가 꺼진 단계, 기대 종료 코드, 마지막 줄 시작, 나오면 안 되는 단계[, RUN_ENV — 없으면 dev])
 CHECK_CASES = [
-    ("", "", "", 0, "[host_ctl check] 통과 — 6개", None),
-    ("", "", "", 0, "[host_ctl check] 통과 — 6개", None, "prd"),
+    ("", "", "", 0, "[host_ctl check] 통과 — 7개", None),
+    ("", "", "", 0, "[host_ctl check] 통과 — 7개", None, "prd"),
+    (".env 일치", "", "", 1, "[host_ctl check] 실패 — .env 일치:", "── check_env"),  # .env가 settings.yaml과 다르면 첫 단계에서 멈춤
     ("migrate check", "", "", 1, "[host_ctl check] 실패 — migrate check:", "── selftest data-pipeline"),
     ("", "1", "", 1, "[host_ctl check] 실패 — selftest data-pipeline:", "── selftest mcp-server"),  # [판정] 줄이 없으면 종료 0이어도 실패
     # pipe_exec.sh가 "상주 컨테이너가 떠 있지 않음"(종료 코드 2) — 띄우지 않고 안내로 멈춤

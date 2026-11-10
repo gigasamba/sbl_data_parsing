@@ -105,5 +105,5 @@
   5. 지난 판에서만 하는 일(0.1.0·0.2.0 갈래)은 `docs/history/`로 옮기고, server-guide 맨 위 "이번 판에서 바뀐 것" 표만 판마다 바꾼다.
   6. 문서와 코드가 다른 칸 설명(필수·선택)은 코드(설정 모델 설명)를 고쳐 맞춘다.
 - 파일: `README.md` §5, `docs/operations/{server-guide,env-guide}.md`, `docs/INDEX.md`, `common/config/settings.py`·`pipeline/config.py`(칸 설명), `deploy/host/scripts/host_ctl.sh`(init의 빈 필수 칸 목록).
-- QA: 새 사람이 server-guide §1-5만 보고 새 서버(또는 PC의 docker 시험 서버)에 설치해 `[host_ctl check] 통과 — 6개`까지 간다. 문서 링크·앵커 점검이 0건.
+- QA: 새 사람이 server-guide §1-5만 보고 새 서버(또는 PC의 docker 시험 서버)에 설치해 `[host_ctl check] 통과 — 7개`까지 간다. 문서 링크·앵커 점검이 0건.
 - Status: todo
