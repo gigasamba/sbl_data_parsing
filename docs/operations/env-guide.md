@@ -49,7 +49,7 @@
 
 | YAML 자리 | 기본 | 뜻 |
 |---|---|---|
-| `common.connections.redis.redis_host` · `redis_port` | host.docker.internal · 8010 | 두 앱의 Redis 접속. Redis는 서버마다 하나(`compose-redis.yml` — 공식 이미지 `redis:7.4.8-alpine`, 서버 8010 → 컨테이너 6379)이고 앱 컨테이너는 서버 자신을 `host.docker.internal`로 부른다. PC에서 Redis를 직접(컨테이너 밖) 부르면 `127.0.0.1` |
+| `common.connections.redis.redis_host` · `redis_port` | host.docker.internal · 8010 | 두 앱의 Redis 접속. Redis는 서버마다 하나(`compose-redis.yml` — 공식 이미지 `redis:7.4.8-alpine`, 서버 8010 → 컨테이너 6379)이고 서버 settings.yaml은 `redis_host: <서버 IP>`(코드 기본값 `host.docker.internal`은 PC `compose-local.yml`용). PC에서 Redis를 직접(컨테이너 밖) 부르면 `127.0.0.1` |
 | 같은 절 `redis_password` · `redis_db` | 비움 · 0 | 비밀번호는 서버마다 채운다(sample은 비움 — 기본 비밀번호 없음). 비면 서버(dev·prd)의 앱 client가 거부한다(local만 무인증 허용). Redis 컨테이너는 코드 폴더 맨 위 `.env`의 `REDIS_PASSWORD`(같은 값)로 뜬다 — 셸 export·로그에 싣지 않는다 |
 | 같은 절 `redis_key_prefix` | mcp_parse | 설정값 그대로 사용(자동 접미사 없음) |
 | `ops.services.data_parsing.mcp_parse_workers` | 2 | spawn 소비자 프로세스 수, 현재 1~2만 허용(사용자 결정 2026-11-09). 늘리려면 상한·CPU·메모리·엔진 수를 함께 조정 |
@@ -117,13 +117,13 @@ PG·Redis 비밀번호(`.env`): PG·Redis 컨테이너는 settings.yaml을 읽�
 ### 저장소 (PostgreSQL + pgvector)
 | 이름 | 메모 |
 |---|---|
-| `PG_HOST`·`PG_PORT`·`PG_DB`·`PG_USER`·`PG_PASSWORD`·`PG_SCHEMA` | 서버는 접속 다섯 칸 필수(자동 탐지 없음 — 비면 채울 자리를 적고 멈춤) · `PG_SCHEMA`(`pg_schema`)는 비우면 `data_parsing`(여러 벌도 같은 스키마) · PC(local)도 다섯 칸 필수(sqlite 대역 없음). 서버 컨테이너는 docker 자체 네트워크(bridge)라 `127.0.0.1`은 컨테이너 자신 — 서버의 PG는 `pg_host: host.docker.internal`(포트 5433). 계정은 우리 스키마 권한만 |
+| `PG_HOST`·`PG_PORT`·`PG_DB`·`PG_USER`·`PG_PASSWORD`·`PG_SCHEMA` | 서버는 접속 다섯 칸 필수(자동 탐지 없음 — 비면 채울 자리를 적고 멈춤) · `PG_SCHEMA`(`pg_schema`)는 비우면 `data_parsing`(여러 벌도 같은 스키마) · PC(local)도 다섯 칸 필수(sqlite 대역 없음). 서버는 `pg_host: <서버 IP>`(포트 5433) · PC 컨테이너는 `host.docker.internal`. 계정은 우리 스키마 권한만 |
 
 ### 검색 MCP
 | 이름 | 기본 | 메모 |
 |---|---|---|
-| `MCP_HOST`(`search.server.mcp_bind_host`) | `127.0.0.1` | 사내 IP로 열면 `MCP_TOKEN` 필수, `0.0.0.0`은 거부. 서버 컨테이너는 `auto`(컨테이너 자기 주소 — compose가 포트를 서버에 게시) |
-| `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 서버 컨테이너는 `mcp_port: 8051`(compose가 컨테이너 안팎 8051로 게시 — 호출은 `http://<서버 IP>:8051/mcp`, `mcp_allowed_hosts`에 `<서버 IP>:8051`). 토큰은 `required.tokens.mcp_token` 하나 — 검색 MCP·`parse_document` 작업 서비스가 함께 쓴다(호출 쪽은 같은 값을 `Authorization: Bearer`로) · 공백만인 토큰은 없음과 같음 |
+| `MCP_HOST`(`search.server.mcp_bind_host`) | `127.0.0.1` | 사내 IP로 열면 `MCP_TOKEN` 필수, `0.0.0.0`은 거부. 서버 컨테이너는 `<서버 IP>`(서버 네트워크 그대로 — `auto`는 PC `compose-local.yml`처럼 docker 자체 네트워크일 때만) |
+| `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 서버 컨테이너는 8051(compose 명령이 고정 — 호출은 `http://<서버 IP>:8051/mcp`). 토큰은 `required.tokens.mcp_token` 하나 — 검색 MCP·`parse_document` 작업 서비스가 함께 쓴다(호출 쪽은 같은 값을 `Authorization: Bearer`로) · 공백만인 토큰은 없음과 같음 |
 | `FULLTEXT_SIGN_SECRET`(`required.tokens.fulltext_sign_key`) | 비움 | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키(비밀). 비면 두 도구가 `not_configured`. 바꾸면 이미 발급된 `sfid`가 모두 무효 |
 | `DATA_PARSING_PORT`(`ops.services.data_parsing.data_parsing_port`) | `8766` | `parse_document` 작업 서비스 포트(127.0.0.1) — 작업 서비스가 듣고 검색 MCP가 이 값으로 부름(칸 하나). 여러 벌이면 벌마다 다르게(기본값이면 시작 거부) |
 | `DATA_PARSING_MAX_MB`(`ops.services.data_parsing.mcp_parse_max_file_mb`) | `100` | `parse_document` 파일 1건 크기 상한(MB) — 검색 MCP와 파싱 서비스가 같은 칸을 읽음 |
@@ -145,7 +145,7 @@ PG·Redis 비밀번호(`.env`): PG·Redis 컨테이너는 settings.yaml을 읽�
 | `EDW_META_DIR`(`search.edw_meta.edw_meta_catalog_dir`) | 비움(`/app/config/edw_meta` — 서버 compose는 안 붙임) | `edw_meta` 자료(`catalog.json`·`columns.jsonl`, 개인정보 없는 자료) 폴더. 서버는 `<루트>/output/edw_meta/`에 복사하고 `/app/output/edw_meta`로 적는다. 없으면 `edw_meta`만 `not_configured` |
 
 ### compose 파일과 호스트 경로
-컨테이너 이름(`data-pipeline-0`·`data-pipeline-1`·`mcp-server-0`·`mcp-data-parsing-0`)·이미지·CPU·메모리·포트·재시작 정책은 `deploy/host/compose/compose-<run_env>.yml`에 직접 적혀 있다(설정 칸 없음 — 바꾸려면 그 파일을 고친다). `host_ctl.sh`는 `docker compose -f deploy/host/compose/compose-<run_env>.yml <인자…>`를 그대로 부른다.
+컨테이너 이름(`data-pipeline-0`~`4`·`mcp-server-0`·`mcp-data-parsing-0`)·이미지·CPU·메모리·포트·재시작 정책은 `deploy/host/compose/compose-<run_env>.yml`에 직접 적혀 있다(설정 칸 없음 — 바꾸려면 그 파일을 고친다). `host_ctl.sh`는 `docker compose -f deploy/host/compose/compose-<run_env>.yml <인자…>`를 그대로 부른다.
 
 | 이름 | 메모 |
 |---|---|

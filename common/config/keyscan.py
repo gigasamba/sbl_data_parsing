@@ -72,7 +72,7 @@ NOT_SETTINGS = {
     ),
     "PYTHONUTF8": ("env로 남김", "파이썬 실행 옵션(이미지·셸)"),
     "APP_ENTRY": ("env로 남김", "이미지 신호(Dockerfile ENV) — dev_entry.sh가 `devbox` 밖의 명령을 넘길 이미지 시작 스크립트"),
-    "SSH_PORT": ("env로 남김", "compose-dev.yml·compose-prd.yml → dev_entry.sh(컨테이너 안 22)"),
+    "SSH_PORT": ("env로 남김", "compose-dev.yml·compose-prd.yml → dev_entry.sh(서버 포트 그대로 — 8020~8024·8050)"),
     "UV_VERSION": ("env로 남김", "Dockerfile 빌드 인자(uv 판)"),
     "DO_NOT_TRACK": ("env로 남김", "외부 라이브러리 원격 측정 끄기 — Dockerfile ENV(U-1, S7a2) · settings·빈 틀에서만 뺌(S7e)"),
     "HF_HOME": ("env로 남김", "라이브러리(huggingface)가 읽음"),

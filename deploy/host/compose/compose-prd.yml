@@ -1,4 +1,4 @@
-# 운영 서버 묶음: 0번 data-pipeline + 검색 MCP mcp-server + parse_document 작업 컨테이너 mcp-data-parsing을 한 파일로 띄운다. 포트는 compose-dev.yml과 같다.
+# 운영 서버 묶음: 0번 data-pipeline + 검색 MCP mcp-server + parse_document 작업 컨테이너 mcp-data-parsing을 한 파일로 띄운다. 포트·네트워크는 compose-dev.yml과 같다.
 #   PG(compose-pgvector.yml)·Redis(compose-redis.yml)는 따로 한 번 띄운다(코드 폴더 맨 위 .env의 비밀번호로). 준비·접속 순서: docs/operations/server-guide.md §6-6
 #   띄우기: bash deploy/host/scripts/host_ctl.sh up -d [서비스…](운영 폴더 settings.yaml required.env.run_env = prd면 이 파일)     내리기: … down
 #   이미지 = 개발 서버에서 구운 코드가 든 이미지(data-pipeline:<판> · mcp-server:<판> — server-guide §0-3, edw_chain.yaml 포함) — 코드 폴더를 붙이지 않는다.
@@ -6,15 +6,16 @@
 #   실행 환경은 settings.yaml required.env.run_env(prd) — dev·prd가 아니면 SSH 컨테이너가 시작을 거부한다. 재시작 정책 always.
 #   바꿀 자리: PRD_DIR(운영 폴더 — 기본 /home/sbl/sbl_data_parsing-main: settings.yaml·output/·home/) · IMAGE_TAG(굽기 판 = 코드 VERSION)
 #     · DOC_SRC(원본 문서 폴더 — host_ctl.sh가 settings.yaml required.deploy.host_docs_dir에서 냄) — 셸 env나 이 파일 옆 .env
-#     컨테이너마다 ports·cpus·mem_limit·memswap_limit(메모리+스왑 합 — 같으면 스왑 안 씀)는 아래 각 칸에 직접 적는다.
-#   네트워크: docker 자체 네트워크(bridge) — 포트를 서버의 모든 주소(0.0.0.0)에 연다. 서버에 있는 PG(5433)·Redis(8010)·모델은 host.docker.internal로.
-#   검색 MCP: settings.yaml search.server — mcp_bind_host auto · mcp_port 8051 · required.tokens.mcp_token · mcp_allowed_hosts <서버 IP>:8051.
+#     컨테이너마다 SSH_PORT·cpus·mem_limit·memswap_limit(메모리+스왑 합 — 같으면 스왑 안 씀)는 아래 각 칸에 직접 적는다.
+#   네트워크: 서버 네트워크 그대로(network_mode: host) — SSH는 SSH_PORT(8020·8050)로 연다. PG(5433)·Redis(8010)·모델은 settings.yaml에 적은 <서버 IP>.
+#   검색 MCP: settings.yaml search.server — mcp_bind_host <서버 IP>(0.0.0.0 금지) · mcp_port 8051 · required.tokens.mcp_token.
 name: sbl-prd                                 # compose 묶음 이름
 x-prd: &prd
   restart: always
+  network_mode: host                          # 서버 네트워크 그대로(포트 연결 없음)
   init: true
   user: "0"                                   # root — 운영 폴더에 쓰는 파일도 root 소유가 됨
-  extra_hosts: ["host.docker.internal:host-gateway"]   # 컨테이너에서 서버 자신(PG·Redis·모델)
+  extra_hosts: ["host.docker.internal:host-gateway"]   # 옛 설정(host.docker.internal)도 서버 자신으로 — 새 설정은 <서버 IP>
   pids_limit: 4096
   logging:
     options: {max-size: "50m", max-file: "3"}
@@ -29,8 +30,7 @@ services:
     image: data-pipeline:${IMAGE_TAG:-0.4.0}
     container_name: data-pipeline-0
     command: ["devbox"]
-    ports: ["0.0.0.0:8020:22"]                # SSH: 서버 8020 → 컨테이너 22
-    environment: {SSH_PORT: "22", SETTINGS_FILE: /etc/rag/settings.yaml, APP_ENTRY: /app/docker/entrypoint.sh}
+    environment: {SSH_PORT: "8020", SETTINGS_FILE: /etc/rag/settings.yaml, APP_ENTRY: /app/docker/entrypoint.sh}
     volumes:
       - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/settings.yaml:/etc/rag/settings.yaml:ro,z
       - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/output:/app/output:z
@@ -45,9 +45,8 @@ services:
     <<: *ssh
     image: mcp-server:${IMAGE_TAG:-0.4.0}
     container_name: mcp-server-0
-    command: ["devbox", "mcp", "--set", "MCP_PORT=8051", "--set", "MCP_HOST=auto"]   # 포트·바인드는 ports 칸과 같게 고정(settings.yaml 값과 상관없이)
-    ports: ["0.0.0.0:8050:22", "0.0.0.0:8051:8051"]   # SSH 8050 → 22 · HTTP 8051
-    environment: {SSH_PORT: "22", SETTINGS_FILE: /etc/rag/settings.yaml, APP_ENTRY: /app/docker/entrypoint.sh}
+    command: ["devbox", "mcp", "--set", "MCP_PORT=8051"]   # HTTP 8051 고정 · 바인드 주소는 settings.yaml mcp_bind_host(서버 IP)
+    environment: {SSH_PORT: "8050", SETTINGS_FILE: /etc/rag/settings.yaml, APP_ENTRY: /app/docker/entrypoint.sh}
     volumes:
       - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/settings.yaml:/etc/rag/settings.yaml:ro,z
       - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/output:/app/output:ro,z

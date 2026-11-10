@@ -100,7 +100,7 @@ dc_check() {
     img=$($DOCKER inspect -f '{{.Config.Image}}' "$1" 2>/dev/null); vol=()
     case "$img" in *-runtime:*) vol=(-v "$(pwd):$APP_CODE_ROOT:ro,z") ;; esac
   }
-  # 판정 시험의 DB 사례는 서버 PG에 붙는다(prd는 읽기만): 같은 설정 파일·host 네트워크·RUN_ENV · settings.yaml의 host.docker.internal이 서버 자신으로
+  # 판정 시험의 DB 사례는 서버 PG에 붙는다(prd는 읽기만): 같은 설정 파일·host 네트워크·RUN_ENV · settings.yaml의 <서버 IP>(PC는 host.docker.internal)로
   local gate=(--network host --add-host host.docker.internal:host-gateway -v "${SETTINGS_FILE:?SETTINGS_FILE 필요 — load_settings}:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e "RUN_ENV=${RUN_ENV:?RUN_ENV 필요 — load_settings}")
   _step ".env 일치" ".env의 REDIS_PASSWORD·PG_USER·PG_DB·PG_PASSWORD를 settings.yaml과 같게(다른 칸 이름만 찍음)" "${PY:-python3}" deploy/host/scripts/settings_to_env.py --file "$SETTINGS_FILE" --check-env .env || return 1
   _step check_env "출력의 FAIL 줄 확인(server-guide §1-9)" bash deploy/host/scripts/pipe_exec.sh check_env || return 1

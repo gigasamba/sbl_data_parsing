@@ -3,7 +3,7 @@
 #     pg_password와 같은 값(값에 $·따옴표·줄바꿈은 쓰지 않음 — 비어 있으면 compose가 멈춤). 환경 변수로 넘어가 docker inspect에 보인다.
 #   띄우기(코드 폴더 맨 위에서): docker compose --env-file .env -f deploy/host/compose/compose-pgvector.yml up -d     내리기·로그: 같은 앞부분 + down·logs(데이터 폴더는 그대로 — --env-file .env 없이는 compose가 멈춤)
 #   바꿀 자리: PG_DATA(데이터 폴더 — 기본 /data/pg/pipeline) — .env나 셸 env
-#   접속: 다른 묶음의 컨테이너는 host.docker.internal:5433 · 서버 바깥은 <서버 IP>:5433(0.0.0.0에 연다).
+#   접속: 서버 앱 컨테이너·서버 바깥 모두 <서버 IP>:5433(0.0.0.0에 연다 · PC 컨테이너는 host.docker.internal:5433).
 name: sbl-pgvector
 services:
   # 검색 DB(PostgreSQL 16 + pgvector) — 데이터 폴더 PG_DATA(기본 /data/pg/pipeline). 서버 바깥 5433 → 컨테이너 5432.

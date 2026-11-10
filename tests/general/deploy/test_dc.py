@@ -1,6 +1,6 @@
 """host_ctl.sh(op-20) — compose 하위 명령은 `docker compose -f deploy/host/compose/compose-<run_env>.yml <인자…>` 그대로(덧붙임 파일·
 묶음 이름 계산 없음), 모르는 run_env면 종료 2. mcp_keepalive.sh는 0번 벌만(redis·mcp-data-parsing-0·mcp-server-0) 보고 /health는
-http://127.0.0.1:8051/health. DOCKER=echo·대역 명령으로 명령 줄만 본다(docker·설정 읽기 없음 — PC 전용)."""
+mcp-server-0 안에서 http://<mcp_bind_host>:8051/health(docker exec). DOCKER=echo·대역 명령으로 명령 줄만 본다(docker·설정 읽기 없음 — PC 전용)."""
 
 import os
 import subprocess
@@ -90,7 +90,7 @@ def test_stale_shell_reads_own_root():
 
 
 # (redis 상태, mcp-data-parsing-0 Running, mcp-server-0 상태, 기대 docker 명령(앞 낱말들))
-#   /health는 늘 응답 없음(대역 python3 실패) — 다시 띄운 뒤에도 없어 종료 1
+#   /health는 늘 응답 없음(대역 docker exec 실패) — 다시 띄운 뒤에도 없어 종료 1
 KEEP_CASES = [
     ("true healthy", "true", "running", [["restart", "mcp-server-0"]]),
     ("true unhealthy", "true", "running", [["restart", "redis"], ["restart", "mcp-server-0"]]),
@@ -115,16 +115,16 @@ def test_keepalive():
     with tempfile.TemporaryDirectory() as d:
         stub = Path(d) / "bin"
         stub.mkdir()
-        calls = Path(d) / "py.log"  # 호스트 python3 대역이 받은 인자(/health 주소)
-        py = f'#!/bin/sh\necho "$*" >> "{_posix(calls)}"\nexit 1\n'
+        calls = Path(d) / "exec.log"  # docker exec 대역이 받은 인자(/health 확인)
         # 컨테이너 도구 대역: inspect는 STATE_<컨테이너> 값, 그 밖은 명령 줄을 log에
         log = Path(d) / "dk.log"
         dk = (
             "#!/bin/bash\n"
             'if [ "$1" = inspect ]; then n=${@: -1}; n=STATE_${n//-/_}; echo "${!n:-}"; [ -n "${!n:-}" ]; exit; fi\n'
+            f'if [ "$1" = exec ]; then echo "$*" >> "{_posix(calls)}"; exit 1; fi\n'
             f'echo "$*" >> "{_posix(log)}"\n'
         )
-        for exe, body in (("python3", py), ("sleep", "#!/bin/sh\nexit 0\n"), ("dk", dk)):
+        for exe, body in (("sleep", "#!/bin/sh\nexit 0\n"), ("dk", dk)):
             (stub / exe).write_text(body, encoding="utf-8", newline="\n")
             (stub / exe).chmod(0o755)
         sf = Path(d) / "settings.yaml"
@@ -152,4 +152,5 @@ def test_keepalive():
                 if not line.startswith("logs ")
             ]
             assert r.returncode == 1 and got == want, (redis, parse, mcp, got, r.stdout, r.stderr)
-            assert "http://127.0.0.1:8051/health" in calls.read_text(encoding="utf-8"), calls.read_text(encoding="utf-8")
+            c = calls.read_text(encoding="utf-8")
+            assert c.startswith("exec mcp-server-0 python") and "server.host}:8051/health" in c, c

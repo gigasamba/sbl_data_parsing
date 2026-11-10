@@ -1,4 +1,4 @@
-# 개발 서버 묶음: 벌 0·1의 data-pipeline + 벌 0의 검색 MCP mcp-server·parse_document 작업 컨테이너 mcp-data-parsing을 한 파일로 띄운다.
+# 개발 서버 묶음: 벌 0~4의 data-pipeline + 벌 0의 검색 MCP mcp-server·parse_document 작업 컨테이너 mcp-data-parsing을 한 파일로 띄운다.
 #   PG(compose-pgvector.yml)·Redis(compose-redis.yml)는 따로 한 번 띄운다(코드 폴더 맨 위 .env의 비밀번호로). 준비·접속 순서: docs/operations/server-guide.md §6-6
 #   띄우기: bash deploy/host/scripts/host_ctl.sh up -d [서비스…](벌 폴더 settings.yaml required.env.run_env = dev면 이 파일)     내리기: … down
 #   컨테이너는 모두 root로 뜬다. SSH 컨테이너(data-pipeline-*·mcp-server-0)는 root 비밀번호 SSH를 연다(비밀번호 = 이미지에 넣은 값).
@@ -6,17 +6,19 @@
 #   이미지: 실행 이미지(*-runtime — 코드 없음) + 벌 폴더 전체를 /app/deploy에 쓰기 가능으로(코드·settings.yaml·edw_chain.yaml이 그 안).
 #   바꿀 자리: SBL_ROOT(벌 폴더들의 위 폴더 — 기본 /home/sbl) · IMAGE_TAG(이미지 판) · DOC_SRC(원본 문서 폴더 — host_ctl.sh가 settings.yaml
 #     required.deploy.host_docs_dir에서 냄) — 셸 env나 이 파일 옆 .env
-#     컨테이너마다 ports(서버 포트:컨테이너 포트)·cpus·mem_limit·memswap_limit(메모리+스왑 합 — 같으면 스왑 안 씀)는 아래 각 칸에 직접 적는다
-#     (컨테이너 하나의 cpus ≤ 서버 CPU 수 — docker가 거부). 벌을 늘리려면 data-pipeline-1 칸을 복사해 번호·포트·폴더를 바꾼다.
-#   네트워크: docker 자체 네트워크(bridge) — 포트를 서버의 모든 주소(0.0.0.0)에 연다. 컨테이너 안 127.0.0.1은 컨테이너 자신이라
-#     서버에 있는 PG(5433)·Redis(8010)·모델은 host.docker.internal로(settings.yaml required.pg.pg_host · common.connections.redis.redis_host).
-#   검색 MCP: 벌 0 settings.yaml search.server — mcp_bind_host auto · mcp_port 8051 · required.tokens.mcp_token · mcp_allowed_hosts <서버 IP>:8051.
-name: sbl-devset                             # compose 묶음 이름
+#     컨테이너마다 SSH_PORT·cpus·mem_limit·memswap_limit(메모리+스왑 합 — 같으면 스왑 안 씀)는 아래 각 칸에 직접 적는다
+#     (컨테이너 하나의 cpus ≤ 서버 CPU 수 — docker가 거부). 벌을 늘리려면 data-pipeline-4 칸을 복사해 번호·SSH_PORT·폴더를 바꾼다.
+#   네트워크: 서버 네트워크 그대로(network_mode: host — docker 자체 네트워크·포트 연결 없음). 컨테이너가 여는 포트가 곧 서버 포트라
+#     SSH는 컨테이너마다 SSH_PORT(8020~8024·8050)로 따로 연다. PG(5433)·Redis(8010)·모델은 settings.yaml에 적은 <서버 IP>로
+#     (settings.yaml required.pg.pg_host · common.connections.redis.redis_host).
+#   검색 MCP: 벌 0 settings.yaml search.server — mcp_bind_host <서버 IP>(0.0.0.0 금지) · mcp_port 8051 · required.tokens.mcp_token.
+name: docker-dev                             # compose 묶음 이름(같은 폴더의 다른 compose 파일과 섞이지 않게)
 x-dev: &dev
   restart: unless-stopped
+  network_mode: host                          # 서버 네트워크 그대로(포트 연결 없음)
   init: true
   user: "0"                                   # root — 벌 폴더에 쓰는 파일도 root 소유가 됨
-  extra_hosts: ["host.docker.internal:host-gateway"]   # 컨테이너에서 서버 자신(PG·Redis·모델)
+  extra_hosts: ["host.docker.internal:host-gateway"]   # 옛 설정(host.docker.internal)도 서버 자신으로 — 새 설정은 <서버 IP>
   pids_limit: 4096
   logging:
     options: {max-size: "50m", max-file: "3"}
@@ -27,8 +29,7 @@ services:
     image: data-pipeline-runtime:${IMAGE_TAG:-0.4.0}
     container_name: data-pipeline-0
     command: ["devbox"]
-    ports: ["0.0.0.0:8020:22"]                # SSH: 서버 8020 → 컨테이너 22
-    environment: {SSH_PORT: "22", SETTINGS_FILE: /app/deploy/settings.yaml}
+    environment: {SSH_PORT: "8020", SETTINGS_FILE: /app/deploy/settings.yaml}
     volumes:
       - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-0:/app/deploy:z                         # 벌 폴더 전체(코드 — 쓰기 가능)
       - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-0/settings.yaml:/app/deploy/settings.yaml:ro,z   # 설정은 읽기 전용
@@ -44,13 +45,60 @@ services:
     image: data-pipeline-runtime:${IMAGE_TAG:-0.4.0}
     container_name: data-pipeline-1
     command: ["devbox"]
-    ports: ["0.0.0.0:8021:22"]
-    environment: {SSH_PORT: "22", SETTINGS_FILE: /app/deploy/settings.yaml}
+    environment: {SSH_PORT: "8021", SETTINGS_FILE: /app/deploy/settings.yaml}
     volumes:
       - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-1:/app/deploy:z
       - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-1/settings.yaml:/app/deploy/settings.yaml:ro,z
       - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-1/output:/app/output:z
       - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-1/home:/root:z
+      - ${DOC_SRC:-/data/docs}:/data/docs:ro,z
+    cpus: 2
+    mem_limit: 8g
+    memswap_limit: 8g
+
+  data-pipeline-2:
+    <<: *dev
+    image: data-pipeline-runtime:${IMAGE_TAG:-0.4.0}
+    container_name: data-pipeline-2
+    command: ["devbox"]
+    environment: {SSH_PORT: "8022", SETTINGS_FILE: /app/deploy/settings.yaml}
+    volumes:
+      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-2:/app/deploy:z
+      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-2/settings.yaml:/app/deploy/settings.yaml:ro,z
+      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-2/output:/app/output:z
+      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-2/home:/root:z
+      - ${DOC_SRC:-/data/docs}:/data/docs:ro,z
+    cpus: 2
+    mem_limit: 8g
+    memswap_limit: 8g
+
+  data-pipeline-3:
+    <<: *dev
+    image: data-pipeline-runtime:${IMAGE_TAG:-0.4.0}
+    container_name: data-pipeline-3
+    command: ["devbox"]
+    environment: {SSH_PORT: "8023", SETTINGS_FILE: /app/deploy/settings.yaml}
+    volumes:
+      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-3:/app/deploy:z
+      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-3/settings.yaml:/app/deploy/settings.yaml:ro,z
+      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-3/output:/app/output:z
+      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-3/home:/root:z
+      - ${DOC_SRC:-/data/docs}:/data/docs:ro,z
+    cpus: 2
+    mem_limit: 8g
+    memswap_limit: 8g
+
+  data-pipeline-4:
+    <<: *dev
+    image: data-pipeline-runtime:${IMAGE_TAG:-0.4.0}
+    container_name: data-pipeline-4
+    command: ["devbox"]
+    environment: {SSH_PORT: "8024", SETTINGS_FILE: /app/deploy/settings.yaml}
+    volumes:
+      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-4:/app/deploy:z
+      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-4/settings.yaml:/app/deploy/settings.yaml:ro,z
+      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-4/output:/app/output:z
+      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-4/home:/root:z
       - ${DOC_SRC:-/data/docs}:/data/docs:ro,z
     cpus: 2
     mem_limit: 8g
@@ -62,9 +110,8 @@ services:
     <<: *dev
     image: mcp-server-runtime:${IMAGE_TAG:-0.4.0}
     container_name: mcp-server-0
-    command: ["devbox", "mcp", "--set", "MCP_PORT=8051", "--set", "MCP_HOST=auto"]   # 포트·바인드는 ports 칸과 같게 고정(settings.yaml 값과 상관없이)
-    ports: ["0.0.0.0:8050:22", "0.0.0.0:8051:8051"]   # SSH 8050 → 22 · HTTP 8051
-    environment: {SSH_PORT: "22", SETTINGS_FILE: /app/deploy/settings.yaml}
+    command: ["devbox", "mcp", "--set", "MCP_PORT=8051"]   # HTTP 8051 고정 · 바인드 주소는 settings.yaml mcp_bind_host(서버 IP)
+    environment: {SSH_PORT: "8050", SETTINGS_FILE: /app/deploy/settings.yaml}
     volumes:
       - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-0:/app/deploy:z
       - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-0/settings.yaml:/app/deploy/settings.yaml:ro,z

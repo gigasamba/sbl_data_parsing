@@ -11,6 +11,7 @@ HEALTH = ["CMD", "python", "-m", "pipeline.run_mcp_parsing", "--health"]
 JOBS = ":/app/output/_mcp_parse/jobs:z"  # parse_document 업로드·결과(검색 MCP는 결과가 읽기 전용이라 이 폴더만 쓰기)
 
 # 파일 → (묶음 이름, 재시작 정책(None = 없음), {서비스: (이미지 앞부분, 명령, 포트)})
+# 서버(dev·prd)는 서버 네트워크 그대로(network_mode: host) — 포트 칸 대신 SSH_PORT(문자열, SSH 없으면 None)
 FILES = {
     "compose-local.yml": (
         "sbl-local",
@@ -22,16 +23,11 @@ FILES = {
         },
     ),
     "compose-dev.yml": (
-        "sbl-devset",
+        "docker-dev",
         "unless-stopped",
         {
-            "data-pipeline-0": ("data-pipeline-runtime:", ["devbox"], ["0.0.0.0:8020:22"]),
-            "data-pipeline-1": ("data-pipeline-runtime:", ["devbox"], ["0.0.0.0:8021:22"]),
-            "mcp-server-0": (
-                "mcp-server-runtime:",
-                ["devbox", "mcp", "--set", "MCP_PORT=8051", "--set", "MCP_HOST=auto"],
-                ["0.0.0.0:8050:22", "0.0.0.0:8051:8051"],
-            ),
+            **{f"data-pipeline-{n}": ("data-pipeline-runtime:", ["devbox"], f"802{n}") for n in range(5)},
+            "mcp-server-0": ("mcp-server-runtime:", ["devbox", "mcp", "--set", "MCP_PORT=8051"], "8050"),
             "mcp-data-parsing-0": ("data-pipeline-runtime:", ["run-mcp-parsing"], None),
         },
     ),
@@ -39,12 +35,8 @@ FILES = {
         "sbl-prd",
         "always",
         {
-            "data-pipeline-0": ("data-pipeline:", ["devbox"], ["0.0.0.0:8020:22"]),
-            "mcp-server-0": (
-                "mcp-server:",
-                ["devbox", "mcp", "--set", "MCP_PORT=8051", "--set", "MCP_HOST=auto"],
-                ["0.0.0.0:8050:22", "0.0.0.0:8051:8051"],
-            ),
+            "data-pipeline-0": ("data-pipeline:", ["devbox"], "8020"),
+            "mcp-server-0": ("mcp-server:", ["devbox", "mcp", "--set", "MCP_PORT=8051"], "8050"),
             "mcp-data-parsing-0": ("data-pipeline:", ["run-mcp-parsing"], None),
         },
     ),
@@ -66,7 +58,12 @@ def test_compose_files():
             s = doc["services"][name]
             vols = [str(v) for v in s.get("volumes", [])]
             assert s["image"].startswith(image) and s["container_name"] == name, (f, name)
-            assert (cmd is None or s.get("command") == cmd) and s.get("ports") == ports and s.get("restart") == restart, (f, name)
+            assert (cmd is None or s.get("command") == cmd) and s.get("restart") == restart, (f, name)
+            if f in ("compose-dev.yml", "compose-prd.yml"):
+                assert s["network_mode"] == "host" and "ports" not in s, (f, name)
+                assert s.get("environment", {}).get("SSH_PORT") == ports, (f, name)
+            else:
+                assert s.get("ports") == ports, (f, name)
             assert not any("edw_chain" in v or "root_pw" in v or "redis_pw" in v for v in vols), (f, name, vols)
             if name.startswith(("data-pipeline", "mcp-")):
                 assert s["user"] == "0" and "RUN_ENV" not in s.get("environment", {}), (f, name)  # root · 환경은 settings.yaml
