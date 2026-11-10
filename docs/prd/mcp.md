@@ -30,7 +30,7 @@
   - `source_system` — `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other` 중 하나. 끝에 `-test`가 붙은 값(`SFDC-test`)도 같은 뜻. 개발 서버(dev·local)는 `DEV-<숫자>`(대소문자 무관)도 — 그 원천 스키마 `<기준>_dev_<숫자>`가 있을 때만(op-17 — 부를 때 DB를 한 번 찾아 새로 생긴 스키마는 재시작 없이 더하고, 사라진 것은 뺀다 · 표 없는 등 깨진 DEV 스키마는 경고 한 줄 뒤 그 원천만 빼고 5벌은 그대로). 없으면 `{"error": "source_system is required — exactly one of SFDC, CRMS, LAS, FAQ, Other…"}`(있는 DEV 원천이 있으면 뒤에 덧붙임 · prd의 `DEV-…`는 모르는 값과 같은 오류). `filter` 메아리의 DEV 값은 `DEV-<숫자>` 꼴.
   - `client` — 글자 하나 또는 목록, 적재 때 EDW에서 조인한 고객 `client_edw`와 정확 일치. `client_like: true`면 부분 일치.
   - `created_since`·`created_until` — gold `doc.created_at`(원천 등록 시각)과 비교. 시간대 없는 값은 KST. 날짜만이면 since = 그날 00:00, until = 그날 끝까지. `created_at`이 없는 문서는 빠진다. 형식이 틀리면 오류.
-  - `attrs: {키: 값 또는 목록}` — 그 원천 `doc.attrs`(JSONB)의 키로 정확 일치(키끼리 AND, 목록 OR). 받는 키 = 사슬 파일(`resources/config/edw_chain.yaml`) `fields`에서 `filter`가 있는 키 + `doc_class`(SFDC·LAS). 모르는 키는 `{"error"}`에 그 원천의 키 목록을 담는다. SQL은 `attrs @> %s::jsonb`(GIN 색인).
+  - `attrs: {키: 값 또는 목록}` — 그 원천 `doc.attrs`(JSONB)의 키로 정확 일치(키끼리 AND, 목록 OR). 받는 키 = 사슬 파일(`edw_chain.yaml`) `fields`에서 `filter`가 있는 키 + `doc_class`(SFDC·LAS). 모르는 키는 `{"error"}`에 그 원천의 키 목록을 담는다. SQL은 `attrs @> %s::jsonb`(GIN 색인).
   - 이름 있는 거르기 `project_id`·`division`·`service_type`·`doc_class`·`sf_op_id`·`sf_op_name`·`contract_id`는 사슬의 `filter:`로 attrs 키에 이어진다(예 `project_id` → `project_code__c`). 그 원천에 이어진 키가 없으면 0건. `FAQ_group`은 청크 칸.
 - 출력:
   - 맨 위 5칸(`SEARCH_TOP_KEYS`): `question` · `evidence[]`(최대 k) · `evidence_status`(`found`·`weak`·`none`) · `filter`(정규화한 거르기 메아리 — 빈 값 뺌, `-test` 뗌) · `scope_docs`(맞은 문서 수 — 거르기가 `source_system`뿐이면 재적재 확인(기본 30초 간격)이 세어 둔 그 원천 스키마의 문서 수를 쓰고, 없을 때만 직접 센다). `filter`·`scope_docs`는 늘 나온다.
@@ -43,7 +43,7 @@
   - `chunk_key` = `<doc_id>:<seq>`(운영 `<file_path>:<순번>`), `file_path` = Object Storage 원본 경로(운영은 서버 안 경로).
   - 근거에 `file_path`·`attrs` 2칸을 더했고, 입력에 `attrs` 거르기를 더했다.
   - 크기 상한으로 근거를 줄여도 표시 칸을 붙이지 않는다. `notes` 칸은 없다.
-- 파일: `mcp_server/schemas/evidence.py`, `mcp_server/services/search/search_svc.py`, `resources/config/edw_chain.yaml`.
+- 파일: `mcp_server/schemas/evidence.py`, `mcp_server/services/search/search_svc.py`, `edw_chain.yaml`.
 - QA: `tests/server/mcp/test_search_svc.py`(`_selftest_contract` 사례 표) · `test_dev_search.py`(DEV 원천 사례 표 — op-17) · 통과. 서버 확인 [refactor.md](../refactoring/refactor.md) C-89.
 - Status: done
 
@@ -215,5 +215,5 @@
 |---|---|
 | `query_edw` | `required.edw` 읽기 계정, 또는 PC sqlite 대역 |
 | `edw_meta` | `search.edw_meta.edw_meta_catalog_dir`의 자료 |
-| `parse_document` | `mcp-redis` + `mcp-data-parsing` + 공유 jobs 폴더(외부 MCP 인증은 기존 토큰) |
+| `parse_document` | Redis(`compose-redis.yml`) + `mcp-data-parsing-0` + 공유 jobs 폴더(외부 MCP 인증은 기존 토큰) |
 | 원문 도구 | `required.tokens.fulltext_sign_key` · Object Storage 읽기 · EDW 읽기 계정 |

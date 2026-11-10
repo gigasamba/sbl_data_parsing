@@ -36,7 +36,7 @@
   1. Dockerfile 타깃 `pipeline-runtime`·`mcp-runtime`(이미지 `data-pipeline-runtime`·`mcp-server-runtime`) = OS 패키지·LibreOffice·휠·`assets/` 모델·사용자 10001·ENV만. 코드가 든 `pipeline`·`mcp`는 그 위에 코드 COPY만 얹는다.
   2. 실행 이미지 시작 `deploy/docker/runtime_entry.sh`: ① `/app/deploy`에 코드 폴더가 없으면 종료 2 ② 이미지 의존성 지문(`/app/docker/deps_hash`) ≠ 코드의 `deploy/docker/DEPS_HASH`(`deploy/release/deps_hash.sh` — requirements-core·image의 sha256)면 종료 2 ③ 이미지 판·코드 커밋(`CODE_COMMIT`)을 한 줄 남기고 코드 폴더의 `deploy/docker/entrypoint.sh`로 넘긴다.
   3. 코드 폴더 묶음 = 이 커밋의 git 추적 파일 + `CODE_COMMIT`, `valid_env/`·`validation/` 뺌 — `build_ship.sh`가 `output/ship/code-<버전>-<커밋>.tar.gz`로 만든다. `/app/deploy`에 읽기 전용(`:ro,z`)으로 붙인다.
-  4. compose는 컨테이너마다 파일 하나 — `compose.pipeline.yml`·`compose.data-parsing.yml`·`compose.mcp-server.yml`, 개발 서버는 각각 `compose.code.yml`·`compose.code.data-parsing.yml`·`compose.code.mcp-server.yml`을 덧붙인다(셸에 `CODE_DIR`가 있으면 셋 다, 아니면 이미지마다 — 그 이미지가 `*-runtime`이면 그 짝, 코드 폴더는 자기 코드 폴더 — `host_ctl.sh`).
+  4. compose는 환경마다 파일 하나 — `compose-local.yml`·`compose-dev.yml`·`compose-prd.yml`(+ 따로 띄우는 `compose-pgvector.yml`·`compose-redis.yml`). `host_ctl.sh`가 settings.yaml `run_env`에 맞는 파일 하나로 부른다([ops.md#op-20](ops.md#op-20)).
   5. 반입: 이미지 git(`sbl_images` — 판 폴더마다 분할 조각 + `load.sh`)과 코드 git을 공용 폴더에 zip으로 받아 풀고, 코드 폴더는 벌 폴더 이름으로 바꾼다. server-guide §1-1.
 - 파일: `deploy/docker/{Dockerfile,runtime_entry.sh,DEPS_HASH}`, `deploy/release/{build_ship.sh,deps_hash.sh}`, `deploy/host/compose/`, `deploy/host/scripts/in_container.sh`.
 - QA: `tests/server/common/test_deps_hash.py`(DEPS_HASH ↔ requirements) · 통과. 실행 이미지에 코드 트리를 붙여 `selftest` `[판정]` 통과 · 코드 없이 띄우면 종료 2.
@@ -62,7 +62,7 @@
 - 규칙:
   1. 설치 길은 server-guide §1-5에만 쓰고 다른 문서는 링크한다. 운영 중인 서버의 판 올리기·되돌리기는 [server-guide.md](../operations/server-guide.md#4-운영-중인-서버를-새-판으로-올리기) 하나(판 번호와 상관없는 순서 — 지난 0.2.0 배포 절차는 [history/deploy_0_2_0.md](../history/deploy_0_2_0.md)).
   2. 컨테이너 도구 = 셸 `DOCKER` > settings.yaml `ops.host.container_cli` > docker > podman(`load_settings.sh` `docker_default`, 설정을 읽은 뒤 정함). `stage_images.sh`·`load.sh`도 podman 우선.
-  3. 서버 상주 컨테이너 셋: 일괄 `data-pipeline`(파싱·구조화·적재 — 문서 폴더 읽기 전용 + 결과 폴더, 자원 `ops.containers.pipeline.pipeline_cpus` 5·`pipeline_mem_limit` 24g), `mcp-data-parsing`([ops.md#rn-03](ops.md#rn-03)), `mcp-server`. pgvector·redis는 우리 것이 아니다.
+  3. 서버 상주 컨테이너 셋: 일괄 `data-pipeline-0`(파싱·구조화·적재 — 문서 폴더 읽기 전용 + 결과 폴더), `mcp-data-parsing-0`([ops.md#rn-03](ops.md#rn-03)), `mcp-server-0`. 자원(CPU·메모리)은 compose 파일에 직접. pgvector·Redis는 따로 띄우는 compose 파일.
   4. 운영 작업(`pipe_exec.sh parse|publish`, `pipe_exec.sh <도구>|migrate|show-stack|check`, `dbtool`)은 상주 `data-pipeline` 안에서 `docker exec`(`in_container.sh` `in_pipeline` — 안 떠 있으면 종료 2). 일회성 작업 컨테이너는 없다. 이미지 점검(`docker run --rm … selftest`)만 예외.
   5. `load_settings.sh`는 호스트 python(PyYAML만)의 `settings_to_env.py` + `host_settings.tsv`로 설정을 셸 env로 낸다.
   6. 재부팅 때 docker 서비스(`systemctl enable docker`)가 `restart: unless-stopped` 컨테이너를 다시 띄운다. keepalive 타이머 `mcp-server-keepalive`가 `mcp_keepalive.sh`로 `mcp-server`·`mcp-data-parsing`를 살핀다.
@@ -82,7 +82,7 @@
 - 이유: 서버 아무 자리에 폴더 하나를 두고 그 안에서 실행한다(사용자 11-04). 루트를 코드 폴더 자체로 두어 벌 하나가 폴더 하나로 끝나게 하고, 검색 DB(pgvector — 따로 떠 있는 PG 컨테이너)만 함께 본다(사용자 11-06).
 - 규칙:
   1. 루트 = 코드 zip을 푼 폴더(코드 폴더) 자체 — 서버는 벌 폴더(예 `/home/sbl/sbl_data_parsing-main-1/`), PC는 저장소 루트. 호스트 스크립트는 자기 위치에서 루트를 구한다(env·고정 경로 없음).
-  2. 루트(코드 폴더) 바로 아래 코드와 함께: `settings.yaml`(git의 `settings.sample.yaml`을 복사해 이름을 바꾸고, 맨 위 `required`의 빈 필수값을 직접 채움) · `edw_chain.yaml` · `output/`(결과 — `output/_mcp_parse/jobs` 포함) · `home/`(`option.devbox.ssh_port`를 적었을 때만). 넷 다 git 제외(`.gitignore`). `host_ctl.sh init`은 `backup/`을 만들지 않고, 권한 정리(`a+rX`)에서 이 넷을 뺀다. 이미지 폴더(`sbl_images-main/`)와 공용 `opencode.json`은 한 단계 위 공용 폴더(예 `/home/sbl/`)에 하나 — 여러 벌(op-15)이 같이 쓴다(사용자 11-04·11-06).
+  2. 루트(코드 폴더) 바로 아래 코드와 함께: `settings.yaml`(git의 `settings.sample.yaml`을 복사해 이름을 바꾸고, 맨 위 `required`의 빈 필수값을 직접 채움) · `output/`(결과 — `output/_mcp_parse/jobs` 포함) · `home/`(SSH 컨테이너의 root 홈 — compose가 붙임). 셋 다 git 제외(`.gitignore`). `edw_chain.yaml`은 코드와 함께 git에 있다. `host_ctl.sh init`은 `backup/`을 만들지 않고, 권한 정리(`a+rX`)에서 settings.yaml·output/·home/을 뺀다. 이미지 폴더(`sbl_images-main/`)와 공용 `opencode.json`은 한 단계 위 공용 폴더(예 `/home/sbl/`)에 하나 — 여러 벌(op-15)이 같이 쓴다(사용자 11-04·11-06).
   3. `/srv/rag`, `env/`(`SERVER_ENV_DIR`), `code/live` 링크를 만들거나 쓰지 않는다.
   4. 새 판 = 사람이 새 코드를 벌 폴더에 덮어씀(옛 것은 각자 백업 — gitea에도 올림). `settings.yaml`·`edw_chain.yaml`·`output/`·`home/`은 zip에 없어 남는다. 새 판에서 지운 파일도 남는다. 검색 DB는 같은 PG를 그대로 본다. 되돌리기 = 백업을 되살려 다시 띄움(server-guide §4-11).
   5. 컨테이너는 compose로 띄운다(`host_ctl.sh up`). 상태 보기는 둘 다 안내 — 서버 전체는 `docker ps`(일반 사용자 셸이면 `sudo`), 우리 묶음만은 `host_ctl.sh ps`.

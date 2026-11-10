@@ -16,7 +16,7 @@
 - **처리 기록:** 파싱·적재 기록은 EDW가 아니라 gold `doc` 칸(`sha256`·`silver_bucket`·`silver_key`·`engines`·`parse_status`·`silver_version`·`gold_version`·`parsed_at`·`loaded_at`)에 둔다. 끝난 문서 = 원천 스키마 어디든 `doc` 행이 있는 원본 키, 내용 중복 = 다른 원본 키의 `doc.sha256`이 같음. 적재되지 않은 문서(영구 뺌·실패)는 §6 `applog.except_doc_info`. EDW는 읽기만 한다.
 - **대표 결과 주소 `rep_uri`:** 원문 도구가 `doc.silver_bucket`·`doc.silver_key`(게시한 대표 결과 객체)의 폴더를 그때 읽는다. PG를 못 읽으면 `registry_unavailable`. `search` 근거에는 `rep_uri`가 없다.
 - **근거 `file_name`** = `doc.file_path`의 끝 조각.
-- **원천별 EDW 사슬:** 적재가 `client_edw`·`created_at`·`attrs`를 채우는 표·칸은 사슬 파일 [`resources/config/edw_chain.yaml`](../../resources/config/edw_chain.yaml)이 정한다. 칸 이름이 실제 EDW와 같은지는 D-1·D-2.
+- **원천별 EDW 사슬:** 적재가 `client_edw`·`created_at`·`attrs`를 채우는 표·칸은 사슬 파일 [`edw_chain.yaml`](../../edw_chain.yaml)이 정한다. 칸 이름이 실제 EDW와 같은지는 D-1·D-2.
 
 ## 2. gold — 검색 스키마 (pgvector — 원천별 스키마 5벌 + 개발 서버의 DEV 원천 스키마)
 
@@ -56,7 +56,7 @@
 - `ix_<스키마>_doc_path` (`file_path`) — 원본 경로로 찾기: 적재(재게시면 그 행만 고침 — `pgvector_load`), `--skip-done` 끝난 문서(`gold_docs.done_keys`), 원문 도구 `docs` 경로(파일 이름만 준 `LIKE '%/이름'` 찾기는 이 색인을 못 씀), `search` 범위·`attrs` 읽기.
 - 그 밖: `ix_<스키마>_doc_attrs`(GIN `attrs` — 판 0005).
 
-#### gold.doc.attrs 키(기본 사슬 파일 `resources/config/edw_chain.yaml` 기준 — 서버 사본이 바꾸면 그쪽이 맞음)
+#### gold.doc.attrs 키(사슬 파일 `edw_chain.yaml` 기준)
 
 거르기 이름·근거 여부는 사슬 파일의 `filter`·`evidence`.
 
@@ -135,7 +135,7 @@
 
 접속: `common.connections.rdb` 읽기 계정 `rdb.read` — 이 프로젝트는 EDW에 쓰지 않는다(처리 기록은 §2 gold `doc`).
 
-EDW 표(`AI.FileStorageMap`, 원천 표 SFDC·CRMS·LAS 등)는 서버에서 운영하는 표라 이 문서에 칸 명세를 두지 않는다. 이 프로젝트가 읽는 표·칸·잇는 키는 사슬 파일 [`resources/config/edw_chain.yaml`](../../resources/config/edw_chain.yaml)(서버 사본은 코드 폴더의 `edw_chain.yaml`)이 정하고, 그 값이 §2 gold `doc`의 `client_edw`·`created_at`·`attrs`로 매핑된다. 파싱 대상은 `AI.FileStorageMap`에서 고른다(원천 = `source_system` 칸 — [op-17](../prd/ops.md#op-17)). PC 대역 정의는 `valid_env/edw/*.sql`에 있다.
+EDW 표(`AI.FileStorageMap`, 원천 표 SFDC·CRMS·LAS 등)는 서버에서 운영하는 표라 이 문서에 칸 명세를 두지 않는다. 이 프로젝트가 읽는 표·칸·잇는 키는 사슬 파일 [`edw_chain.yaml`](../../edw_chain.yaml)이 정하고, 그 값이 §2 gold `doc`의 `client_edw`·`created_at`·`attrs`로 매핑된다. 파싱 대상은 `AI.FileStorageMap`에서 고른다(원천 = `source_system` 칸 — [op-17](../prd/ops.md#op-17)). PC 대역 정의는 `valid_env/edw/*.sql`에 있다.
 
 ## 4. master — 마스터 표 (검색 PG, 스키마 `<PG_SCHEMA>_master`)
 
@@ -167,7 +167,7 @@ EDW 표(`AI.FileStorageMap`, 원천 표 SFDC·CRMS·LAS 등)는 서버에서 운
 | # | 무엇 | 왜 |
 |---|---|---|
 | D-1 | `AI.FileStorageMap`의 실제 정의 — `created_at`이 있는지(같은 `s3_key` 중 가장 늦은 행을 이 칸으로 고름), 원천별 등록 시각(SFDC `ContentVersion.CreatedDate`, CRMS `RM_CM_DOCU.INIT_DTTM`, LAS `FileManager.CreateDate`)과 같은 값인지 · 원천 id 칸의 실제 이름 · SFDC Quote 표의 실제 이름·칸과 `OpportunityId` 연결 | 저장소에는 PC 대역(`valid_env/edw/ai.sql`)뿐 |
-| D-2 | `client_edw`·원천 메타를 얻는 사슬(`resources/config/edw_chain.yaml`)의 표·칸 이름이 실제 EDW와 같은지 | 적재가 EDW 읽기 계정으로 직접 조인한다 — 칸 이름은 운영 노트 기준(refactor.md C-76) · LAS 고객은 상대사 출처가 정해질 때까지 비움 |
+| D-2 | `client_edw`·원천 메타를 얻는 사슬(`edw_chain.yaml`)의 표·칸 이름이 실제 EDW와 같은지 | 적재가 EDW 읽기 계정으로 직접 조인한다 — 칸 이름은 운영 노트 기준(refactor.md C-76) · LAS 고객은 상대사 출처가 정해질 때까지 비움 |
 | D-6 | 원천별 gold 스키마 5벌 + 기준 스키마의 공용 `doc_id_seq`(§2) — 기존 서버 데이터는 백업 뒤 다시 적재 | 첫 적재가 전체 e2e와 함께 · refactor.md C-74·C-76 |
 | D-8 | FAQ 원천 등록 — Object Storage `FAQ/<uuid>/<파일>`을 `AI.FileStorageMap`에 등록(candidate_pick list는 `s3_key LIKE 'FAQ/%'`로 고름) | FAQ 행을 누가 어떻게 넣나 |
 | D-10 | `applog` 스키마 추가(§6) — `up`의 `CREATE SCHEMA`, `maintain`의 파티션 생성·DROP, 앱의 INSERT와 `pipe_run` UPDATE 권한. 호출량 기준 용량(`mcp_log` 행 본문 최대 약 80KB) | 새 스키마이고 로그 쓰기가 기존 PG 접속 정보를 함께 씀 |

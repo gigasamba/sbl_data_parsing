@@ -19,7 +19,7 @@
 | 기계 | 파일 | 적용 | 모델 엔드포인트 |
 |---|---|---|---|
 | PC(개발) | 저장소 루트 `settings.yaml`(git 밖, 권한 600) | `RUN_ENV`가 없거나 `local`이면 코드가 이 파일을 찾음. 한 번만 몇 칸 바꿀 때는 명령 인자 `--set PIPE_OUT_ROOT=… --set EMBED_ALLOW_EXTERNAL=1` | 내부망 또는 OpenRouter(기능 시험만 — CLAUDE.md §7) |
-| 수집·개발 서버 | `<루트>/settings.yaml`(루트 = 코드 폴더 자체 — git·코드 zip에 없는 파일이라 새 판을 덮어써도 남음, server-guide §1-2). **주인 UID 10001·그룹 운영 그룹·권한 640**(운영 계정 UID가 10001이면 600) | 컨테이너: compose가 `/etc/rag/settings.yaml`에 읽기 전용(`:ro,z`)으로 붙이고 env는 `SETTINGS_FILE`·`RUN_ENV`만 준다. **값을 바꿀 때는 이 파일을 직접 고친다.** 셸·systemd: `deploy/host/scripts/load_settings.sh`의 `load_settings`가 호스트 칸(이미지·자원·포트·`RAG_OUT`·`DOC_SRC`·`NIGHTLY_*` 등)을 셸 env로 내보내 compose가 치환한다 | 내부망만 |
+| 수집·개발 서버 | `<루트>/settings.yaml`(루트 = 코드 폴더 자체 — git·코드 zip에 없는 파일이라 새 판을 덮어써도 남음, server-guide §1-2). **권한 640**(비밀값이 들어 있음 — 운영 그룹만 읽기) | 컨테이너: compose 파일(`deploy/host/compose/compose-<run_env>.yml`)이 읽기 전용(`:ro,z`)으로 붙이고 env는 `SETTINGS_FILE`만 준다(개발 서버 `/app/deploy/settings.yaml` · 운영 서버 `/etc/rag/settings.yaml`). **값을 바꿀 때는 이 파일을 직접 고친다.** 셸·systemd: `deploy/host/scripts/load_settings.sh`의 `load_settings`가 호스트 칸(`RUN_ENV`·`DOC_SRC`·`DOCKER`·이미지 정리·`NIGHTLY_*`)을 셸 env로 내보낸다. 컨테이너 이름·이미지·CPU·메모리·포트는 설정 칸이 아니라 compose 파일에 직접 적혀 있다 | 내부망만 |
 
 ### 0-0. 실행 기록(JSON 로그·DB 감사·성능)
 
@@ -49,20 +49,19 @@
 
 | YAML 자리 | 기본 | 뜻 |
 |---|---|---|
-| `common.connections.redis.redis_host` · `redis_port` | 127.0.0.1 · 6379 | 두 앱의 Redis 접속. compose Redis는 루프백 bind, 서버당 한 벌 — 번호 벌은 파싱 MCP 없음 |
-| 같은 절 `redis_password` · `redis_db` | 비움 · 0 | 서버(dev·prd)는 비밀번호 필수(공백도 거부), local만 무인증 허용. 비밀값은 settings.yaml에만 작성. 호스트가 Redis용 보호 파일(600)로 전달, 비밀값은 셸 export·argv에 안 실음 |
+| `common.connections.redis.redis_host` · `redis_port` | host.docker.internal · 8010 | 두 앱의 Redis 접속. Redis는 서버마다 하나(`compose-redis.yml` — 공식 이미지 `redis:7.4.8-alpine`, 서버 8010 → 컨테이너 6379)이고 앱 컨테이너는 서버 자신을 `host.docker.internal`로 부른다. PC에서 Redis를 직접(컨테이너 밖) 부르면 `127.0.0.1` |
+| 같은 절 `redis_password` · `redis_db` | 비움 · 0 | 비밀번호는 서버마다 채운다(sample은 비움 — 기본 비밀번호 없음). 비면 `host_ctl.sh secrets`가 거부하고, 서버(dev·prd)의 앱 client도 거부한다(local만 무인증 허용). 비밀값은 settings.yaml에만 — 호스트가 Redis용 보호 파일(600)로만 전달하고 셸 export·argv·compose env에 싣지 않는다 |
 | 같은 절 `redis_key_prefix` | mcp_parse | 설정값 그대로 사용(자동 접미사 없음) |
 | `ops.services.data_parsing.mcp_parse_workers` | 2 | spawn 소비자 프로세스 수, 현재 1~2만 허용(사용자 결정 2026-11-09). 늘리려면 상한·CPU·메모리·엔진 수를 함께 조정 |
 | `tuning.ops.services.data_parsing.mcp_parse_engine_processes` | 비움 | worker마다 max(1, min(2, CPU − 1)), 보통 2 workers × 2 engines = 총 4개 |
-| `ops.containers.data_parsing.data_parsing_cpus` · `data_parsing_mem_limit` · `data_parsing_cpu_shares` | 4.0 · 12g · 4096 | 호스트 4 CPU 이상·12g 메모리 여유 확인. 4 CPU 미만이면 CPU 상한을 낮추고 엔진 수 1. cpus는 예약이 아닌 상한, 공유 시 우선순위는 cpu_shares |
+| (compose 파일) `mcp-data-parsing-0`의 `cpus` · `mem_limit` · `cpu_shares` | 4 · 12g · 4096 | 서버 4 CPU 이상·12g 메모리 여유 확인. 4 CPU 미만이면 compose 파일의 cpus를 낮추고 엔진 수 1. cpus는 예약이 아닌 상한, 공유 시 우선순위는 cpu_shares |
 | `tuning.ops.services.data_parsing.mcp_parse_max_attempts` · `mcp_parse_result_ttl_sec` | 3 · 86400 | 유실 작업 최대 전달 횟수 · 완료 HASH/LIST 보존 초 |
-| `ops.host.redis_image` · `redis_mem_limit` · `redis_data_dir` | redis:7.4.2-alpine · 512m · `<루트>/redis` | 이미지 반입·메모리·AOF 데이터 호스트 폴더 |
 | `tuning.ops.services.data_parsing.mcp_parse_max_queued_jobs` | 8 | 대기+실행 작업 상한. YAML 경로·alias DATA_PARSING_QUEUE_MAX·기본값은 그대로, 모델만 common으로 이동 |
 | `ops.services.data_parsing.data_parsing_port` | 8766 | 더 쓰지 않음(#113 Redis 큐로 대체) — 다음 판 삭제 여부는 C-116 |
 
-Redis 인증(#177): 서버(dev·prd)의 `settings.yaml`에는 `common.connections.redis.redis_password`를 반드시 채운다. 비움·공백은 호스트 prepare_redis와 앱 client가 거부하며 worker 시작은 종료 코드 2다. local에서만 무인증을 허용한다. Redis는 루프백 bind와 `protected-mode yes`를 함께 사용한다. 비밀값 처리 변경은 검토 등급 A로 다른 사람의 승인이 필요하다(C-117).
+Redis 인증(#177): 서버(dev·prd)의 `settings.yaml`에는 `common.connections.redis.redis_password`를 반드시 채운다. 비움·공백은 `host_ctl.sh secrets`와 앱 client가 거부하며 worker 시작은 종료 코드 2다. Redis는 서버의 모든 주소(0.0.0.0)에 열리므로 `protected-mode yes`와 비밀번호를 함께 쓴다. 비밀값 처리 변경은 검토 등급 A로 다른 사람의 승인이 필요하다(C-117).
 
-Redis 보호 설정은 운영 계정 소유 `${REDIS_CONF_DIR:-$RAG_ROOT/redis-conf}`(폴더 700, 파일 600)에 두고 `/conf:ro,z`로 붙인다. `REDIS_CONF_DIR`는 호스트 셸에서만 덮을 수 있으며 settings.yaml 항목은 추가하지 않는다(keyscan에서도 호스트 인자로 분류). `/data`는 Redis가 소유하는 AOF 데이터 폴더다. prepare_redis는 파일 내용이 같으면 다시 쓰지 않고, 바뀌면 `REDIS_CONF_CHANGED=1`로 알려 host_ctl·keepalive가 실행 중인 Redis → 파싱 MCP → 검색 MCP를 재시작한다. Redis가 꺼져 있어도 실행 중인 두 앱은 재시작한다. 보호 파일의 읽기·쓰기·chmod 실패는 값이나 traceback 없이 경로와 소유자·권한 확인 안내(server-guide §4-6)로 보고한다.
+비밀 파일: `bash deploy/host/scripts/host_ctl.sh secrets`가 settings.yaml의 PG 비밀번호(`required.pg.pg_password`)와 Redis 비밀번호를 `<SBL_ROOT>/secrets/`(SBL_ROOT = 셸 env, 없으면 코드 폴더의 위 폴더 — 폴더 700, 파일 600)에 쓴다: `pg_pw`(`compose-pgvector.yml`의 `POSTGRES_PASSWORD_FILE`)와 `redis/redis.conf`·`start.sh`·`health.sh`(`compose-redis.yml`의 `/conf:ro,z`). 값은 찍지 않는다. 내용이 같으면 다시 쓰지 않고, 바뀌면 Redis를 `--force-recreate`로 다시 띄우라고 알린다(앱 컨테이너도 다시 시작해 새 비밀번호를 읽게). `/data`는 Redis AOF 데이터 폴더(`REDIS_DATA` — 기본 `/data/redis`)다. 보호 파일의 읽기·쓰기 실패는 값이나 traceback 없이 경로와 소유자·권한 확인 안내로 보고한다.
 
 기동·건강 확인·키 조회는 [server-guide §1-3-1](server-guide.md#1-3-1-parse_document-redis-큐113). 외부 MCP Bearer 토큰은 계속 필요하며 내부 parse HTTP 토큰 검사는 없어졌다.
 
@@ -75,7 +74,7 @@ Redis 보호 설정은 운영 계정 소유 `${REDIS_CONF_DIR:-$RAG_ROOT/redis-c
 - `run_pipeline.py`(서버 전용)도 같은 파일을 읽는다 — 필요한 칸이 없으면 칸 경로만 찍고 종료 2.
 - **모드마다 꼭 채울 칸**(sample 주석 `[필수 · …]`와 같음):
   - `local`(PC): `required.env.run_env`, 모델 접속 `required.models`(`embed_base_url`·`embed_model`·`llm_base_url`·`llm_model`·`vlm_base_url`·`vlm_model`). PG(`required.pg` 접속 다섯 칸)도 필수(sqlite 대역 없음). EDW·Object Storage·토큰·배포 칸은 채우지 않는다 — 적혀 있어도 EDW 주소·계정, Object Storage 주소·키, 원천 버킷, 서버 게시 버킷은 비우고 `[settings] local(PC) — 서버 전용 칸을 무시함(비움): <칸 이름>` 한 줄을 찍는다(값 없음). 대신 `dev.local`(가짜 EDW `local_edw_sqlite_file` · 게시 폴더 `local_publish_dir` · 원본 폴더 `local_source_dir` · 새 문서 상한 `local_max_new_docs_per_run`)의 기본값을 쓴다.
-  - `dev`·`prd`(서버): 위에 더해 PG 접속 다섯 칸, EDW(`edw_host`·`edw_database`·`edw_read_user`·`edw_read_password`), `publish_bucket`, Object Storage 세 칸, 토큰(`mcp_token`·원문 도구를 쓰면 `fulltext_sign_key`), 배포 네 칸(`pipeline_image`·`mcp_image`·`host_docs_dir`·`pg_container_name`). `pg_schema`는 비우면 `data_parsing`. EDW는 읽기만 하므로 쓰기 계정 칸은 없다.
+  - `dev`·`prd`(서버): 위에 더해 PG 접속 다섯 칸, EDW(`edw_host`·`edw_database`·`edw_read_user`·`edw_read_password`), `publish_bucket`, Object Storage 세 칸, 토큰(`mcp_token`·원문 도구를 쓰면 `fulltext_sign_key`), 배포 두 칸(`host_docs_dir`·`pg_container_name`). `pg_schema`는 비우면 `data_parsing`. EDW는 읽기만 하므로 쓰기 계정 칸은 없다.
 - 라이브러리가 읽는 env(`TZ`·`OMP_NUM_THREADS`·`HF_HUB_OFFLINE`·`TESSDATA_PREFIX` 등 — 허용 목록 `common.config.settings.LIB_ENV_NAMES`)는 `ops.runtime.library_env` 사전에 적는다. 목록 밖 이름은 검증 오류.
 
 ### 0-2. 한 번 실행에만 다른 값 — `--set 이름=값`(서버 포함)
@@ -118,13 +117,13 @@ Redis 보호 설정은 운영 계정 소유 `${REDIS_CONF_DIR:-$RAG_ROOT/redis-c
 ### 저장소 (PostgreSQL + pgvector)
 | 이름 | 메모 |
 |---|---|
-| `PG_HOST`·`PG_PORT`·`PG_DB`·`PG_USER`·`PG_PASSWORD`·`PG_SCHEMA` | 서버는 접속 다섯 칸 필수(자동 탐지 없음 — 비면 채울 자리를 적고 멈춤) · `PG_SCHEMA`(`pg_schema`)는 비우면 `data_parsing`(여러 벌도 같은 스키마) · PC(local)도 다섯 칸 필수(sqlite 대역 없음). compose는 `network_mode: host`라 `127.0.0.1`이 서버 자신. 계정은 우리 스키마 권한만 |
+| `PG_HOST`·`PG_PORT`·`PG_DB`·`PG_USER`·`PG_PASSWORD`·`PG_SCHEMA` | 서버는 접속 다섯 칸 필수(자동 탐지 없음 — 비면 채울 자리를 적고 멈춤) · `PG_SCHEMA`(`pg_schema`)는 비우면 `data_parsing`(여러 벌도 같은 스키마) · PC(local)도 다섯 칸 필수(sqlite 대역 없음). 서버 컨테이너는 docker 자체 네트워크(bridge)라 `127.0.0.1`은 컨테이너 자신 — 서버의 PG는 `pg_host: host.docker.internal`(포트 5433). 계정은 우리 스키마 권한만 |
 
 ### 검색 MCP
 | 이름 | 기본 | 메모 |
 |---|---|---|
-| `MCP_HOST`(`search.server.mcp_bind_host`) | `127.0.0.1` | 사내 IP로 열면 `MCP_TOKEN` 필수, `0.0.0.0`은 거부 |
-| `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 토큰은 `required.tokens.mcp_token` 하나 — 검색 MCP·`parse_document` 작업 서비스가 함께 쓴다(호출 쪽은 같은 값을 `Authorization: Bearer`로) · 공백만인 토큰은 없음과 같음 |
+| `MCP_HOST`(`search.server.mcp_bind_host`) | `127.0.0.1` | 사내 IP로 열면 `MCP_TOKEN` 필수, `0.0.0.0`은 거부. 서버 컨테이너는 `auto`(컨테이너 자기 주소 — compose가 포트를 서버에 게시) |
+| `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 서버 컨테이너는 `mcp_port: 8080`(compose가 컨테이너 8080을 서버 8051에 게시 — 호출은 `http://<서버 IP>:8051/mcp`, `mcp_allowed_hosts`에 `<서버 IP>:8051`). 토큰은 `required.tokens.mcp_token` 하나 — 검색 MCP·`parse_document` 작업 서비스가 함께 쓴다(호출 쪽은 같은 값을 `Authorization: Bearer`로) · 공백만인 토큰은 없음과 같음 |
 | `FULLTEXT_SIGN_SECRET`(`required.tokens.fulltext_sign_key`) | 비움 | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키(비밀). 비면 두 도구가 `not_configured`. 바꾸면 이미 발급된 `sfid`가 모두 무효 |
 | `DATA_PARSING_PORT`(`ops.services.data_parsing.data_parsing_port`) | `8766` | `parse_document` 작업 서비스 포트(127.0.0.1) — 작업 서비스가 듣고 검색 MCP가 이 값으로 부름(칸 하나). 여러 벌이면 벌마다 다르게(기본값이면 시작 거부) |
 | `DATA_PARSING_MAX_MB`(`ops.services.data_parsing.mcp_parse_max_file_mb`) | `100` | `parse_document` 파일 1건 크기 상한(MB) — 검색 MCP와 파싱 서비스가 같은 칸을 읽음 |
@@ -145,16 +144,13 @@ Redis 보호 설정은 운영 계정 소유 `${REDIS_CONF_DIR:-$RAG_ROOT/redis-c
 | `EDW_QUERY_MAX_BYTES` | `2000000` | 응답 JSON 크기 상한 — 넘으면 끝 행부터 버리고 `truncated: true` |
 | `EDW_META_DIR`(`search.edw_meta.edw_meta_catalog_dir`) | 비움(`/app/config/edw_meta` — 서버 compose는 안 붙임) | `edw_meta` 자료(`catalog.json`·`columns.jsonl`, 개인정보 없는 자료) 폴더. 서버는 `<루트>/output/edw_meta/`에 복사하고 `/app/output/edw_meta`로 적는다. 없으면 `edw_meta`만 `not_configured` |
 
-### 이미지 태그·호스트 경로 (compose 치환용)
+### compose 파일과 호스트 경로
+컨테이너 이름(`data-pipeline-0`·`data-pipeline-1`·`mcp-server-0`·`mcp-data-parsing-0`)·이미지·CPU·메모리·포트·재시작 정책은 `deploy/host/compose/compose-<run_env>.yml`에 직접 적혀 있다(설정 칸 없음 — 바꾸려면 그 파일을 고친다). `host_ctl.sh`는 `docker compose -f deploy/host/compose/compose-<run_env>.yml <인자…>`를 그대로 부른다.
+
 | 이름 | 메모 |
 |---|---|
-| `DATA_PIPELINE_IMAGE`·`MCP_SERVER_IMAGE`(`required.deploy.pipeline_image`·`mcp_image`) | dev `*-runtime:<판>` · prd `*:<판>` |
-| `RAG_OUT`(`ops.host.host_output_dir`) | 결과 폴더(컨테이너 `/app/output`) |
-| `DOC_SRC`(`required.deploy.host_docs_dir`) | 원본 문서 폴더(컨테이너 `/data/docs:ro`) |
-| `EDW_CHAIN_SRC`(`ops.host.host_edw_chain_file`) | EDW 사슬 사본(컨테이너 `/etc/rag/edw_chain.yaml:ro`) — 비우면 `<루트>/edw_chain.yaml`, 상대 경로는 루트 기준 |
-| `EXTRA_COMPOSE`(`ops.host.extra_compose`) | 더 붙일 compose 파일 목록(볼륨·env 더하기 — 틀 `deploy/host/compose/extra.example.yml`) — `host_ctl.sh`·`mcp_keepalive.sh`가 맨 뒤에 붙임. 상대 경로는 루트 기준(예 `compose.extra.yml` = `<루트>/compose.extra.yml`) · 없는 파일이면 `host_ctl.sh` 종료 2 |
-| `COMPOSE_PROJECT`(`ops.host.compose_project`) | compose 묶음 밑 이름(기본 `compose`) — 실제 이름은 끝에 벌 번호(`-<숫자>`) |
-| `PIPELINE_CONTAINER`·`DATA_PARSING_CONTAINER`·`MCP_CONTAINER`(`ops.containers.<pipeline·data_parsing·mcp>.<…>_container_name`) | 컨테이너 밑 이름(기본 `data-pipeline`·`mcp-data-parsing`·`mcp-server`) — 실제 이름은 끝에 벌 번호. 바꾸기 전에 `host_ctl.sh down` |
+| `DOC_SRC`(`required.deploy.host_docs_dir`) | 원본 문서 폴더(컨테이너 `/data/docs:ro`) — `load_settings`가 셸 env로 내 compose가 치환 |
+| `IMAGE_TAG`·`SBL_ROOT`·`PRD_DIR`·`PG_DATA`·`REDIS_DATA` | compose 파일 변수(설정 칸 아님) — 셸 env나 compose 파일 옆 `.env`. 이미지 판 · 벌 폴더들의 위 폴더(기본 `/home/sbl` — `secrets/`도 그 아래) · 운영 폴더 · PG·Redis 데이터 폴더 |
 
 ### 원천·경로 묶음
 코드 주석의 "env-guide 1-2"가 이 절이다.
@@ -173,7 +169,7 @@ Redis 보호 설정은 운영 계정 소유 `${REDIS_CONF_DIR:-$RAG_ROOT/redis-c
 | `OS_ENDPOINT`·`OS_REGION`·`OS_ACCESS_KEY`·`OS_SECRET_KEY`·`OS_VERIFY_TLS` | `required.object_storage`(`object_storage_endpoint`·`object_storage_access_key`·`object_storage_secret_key`) · `common.connections.object_storage`(`object_storage_region`·`object_storage_verify_tls` — `required` 아래가 아님) — 서버만. PC(local)는 적혀 있어도 주소·키를 비우고 경고(게시는 `dev.local.local_publish_dir` 폴더). `object_storage_region` 비우면 `us-east-1` · `object_storage_verify_tls` 비우면 `1`, 사내 CA면 CA 파일 경로(`0`이면 검증 끔 — 경고) |
 | `RDB_CONNECT_KWARGS` | EDW 연결 추가 인자(JSON — 비밀) |
 | `PM_BUCKET`·`PM_PREFIX`(`required.publish.publish_bucket`·`publish_prefix`) | silver 게시 위치 — 서버: 버킷 이름(원천 원본 버킷과 달라야 함) · PC(local): 이 칸은 무시하고 `dev.local.local_publish_dir`(`LOCAL_PM_DIR` — 폴더 경로, 기본 `valid_env/object_storage/Parsing_Result`, 처음 게시할 때 만듦)에 쓴다. `publish_prefix`는 버킷(폴더) 안 경로 접두(비우면 맨 위). |
-| `EDW_CHAIN_FILE`(`ops.paths.edw_chain_file`) | EDW 조인 사슬 파일 — 적재와 검색 MCP가 같은 칸을 읽는다. 비우면 코드의 `resources/config/edw_chain.yaml`, 서버 사본을 쓰려면 `/etc/rag/edw_chain.yaml`. 쓰는 법: [server-guide §3-9-2](server-guide.md#3-9-2-edw-조인-사슬-파일-고쳐-쓰기) |
+| `EDW_CHAIN_FILE`(`ops.paths.edw_chain_file`) | EDW 조인 사슬 파일 — 적재와 검색 MCP가 같은 칸을 읽는다. 보통 비운다: 비우면 코드 폴더 맨 위 `edw_chain.yaml`(git으로 고치고 코드와 함께 배포 — 이미지에도 들어 있음). 쓰는 법: [server-guide §3-9-2](server-guide.md#3-9-2-edw-조인-사슬-파일-고쳐-쓰기) |
 
 ### 새벽 배치 (systemd `data-pipeline-nightly`)
 코드 주석의 "env-guide 1-3"이 이 절이다. **세 칸이 모두 있어야 돈다**(하나라도 비면 없음).
@@ -185,13 +181,10 @@ Redis 보호 설정은 운영 계정 소유 `${REDIS_CONF_DIR:-$RAG_ROOT/redis-c
 | `NIGHTLY_DEADLINE`(`ops.nightly.nightly_stop_time`) | 마감 HH:MM(시작보다 이르면 다음 날, 시작보다 5분 넘게 뒤) — 지나면 새 문서를 받지 않고 받은 문서는 끝까지 |
 
 ### 선택 기능 — 개발 작업 공간 (`option`, 파일 맨 아래)
-앱은 이 절을 읽지 않는다 — 호스트 스크립트(`host_ctl.sh`)와 작업 공간 시작 스크립트(`dev_entry.sh` → `git_cred.py`)만 쓴다. 비우면 끔. 쓰는 법: server-guide §2-13.
+앱은 이 절을 읽지 않는다 — 작업 공간 시작 스크립트(`dev_entry.sh` → `git_cred.py`)만 쓴다. 비우면 끔. SSH 작업 공간 자체(포트·홈 폴더)는 compose 파일에 적혀 있다(개발 서버 `data-pipeline-0` 8020·`data-pipeline-1` 8021·`mcp-server-0` 8050 → 컨테이너 22, root 비밀번호 SSH — 홈은 벌 폴더 `home/`). 쓰는 법: server-guide §2-13.
 
 | 이름 | 기본 | 뜻 |
 |---|---|---|
-| `DEVBOX_SSH_PORT`(`option.devbox.ssh_port`) | 비움(끔) | 적으면 `data-pipeline`을 SSH 작업 공간(`devbox`)으로 띄움 — 그 포트에서 sshd(호스트 네트워크 그대로, 개발자마다 다르게) · 코드 폴더 쓰기 가능 · 홈 `<루트>/home`(포트를 적은 뒤 `host_ctl.sh init`이 만듦 — 없으면 `host_ctl.sh up` 종료 2). 개발 서버(dev)의 실행 이미지에서만 — prd·코드가 든 이미지면 `host_ctl.sh` 종료 2 |
-| `DEVBOX_HOME`(`option.devbox.home_dir`) | 비움(`<루트>/home`) | 작업 공간 홈의 호스트 폴더 — `/home/rag`로 붙임. `host_ctl.sh init`이 만듦(UID 10001, 700) · 상대 경로는 루트 기준 |
-| `DEVBOX_OPENCODE_CONFIG`(`option.devbox.opencode_config`) | 비움(이미지의 틀) | opencode 설정 파일의 호스트 경로 — 읽기 전용으로 붙이고 `OPENCODE_CONFIG`로 가리킴. 비우면 홈의 `~/.config/opencode/opencode.json`(첫 시작에 틀 복사 — 내부망 모델만) |
 | `DEVBOX_GITEA_URL`·`DEVBOX_GITEA_USER`·`DEVBOX_GITEA_TOKEN`(`option.devbox.gitea_url`·`gitea_user`·`gitea_token` — 토큰은 비밀) | 비움(설정 안 함) | 셋 다 적으면 작업 공간 시작 때 `~/.git-credentials`(권한 600)에서 그 호스트 줄 `<scheme>://<계정>:<토큰>@<호스트[:포트]>`만 바꾸고(다른 줄 그대로) `git config --global credential.helper store` — 하나라도 비우면 전에 쓴 줄(`~/.devbox/gitea_host`)을 지움. 주소는 `http(s)://호스트[:포트][/경로]`(`https://` 권장 — http면 토큰이 암호화 없이 감). 컨테이너 안에서 붙인 settings.yaml을 직접 읽는다(토큰은 env로 안 넘김) |
 | `DEVBOX_GIT_USER_NAME`·`DEVBOX_GIT_USER_EMAIL`(`option.devbox.git_user_name`·`git_user_email`) | 비움 | 적으면 작업 공간 시작 때 `git config --global user.name`·`user.email` |
 
@@ -240,7 +233,7 @@ PC는 `.venv/bin/python -m pipeline.config`(루트 `settings.yaml`)가 같은 �
 ## 5. 서버 경로 칸 — 컨테이너 안 절대 경로
 
 - 컨테이너 안에서 **상대 경로는 `/app` 기준**이다(`/app/deploy`가 아님 — 작업 자리가 `/app`이고 코드는 `/app/deploy`). `file://` 꼴도 같다: `file://output/x` → `/app/output/x`.
-- 컨테이너 사용자(UID 10001)가 **쓸 수 있는 곳은 붙인 폴더뿐**이다 — 결과 폴더 `/app/output`(호스트 `<루트>/output` 또는 `ops.host.host_output_dir`). 그 밖(`/app`·`/app/deploy`·`/etc/rag`)은 쓰기가 안 된다. 예: `file://x` → `/app/x`는 권한 오류로 멈춘다.
+- 컨테이너가 **쓰는 곳은 붙인 결과 폴더** `/app/output`(호스트 `<벌 폴더>/output` — 운영 `<운영 폴더>/output`)이다. 그 밖(`/app`·`/etc/rag`)에 쓴 것은 컨테이너를 다시 만들면 사라지고, 붙인 설정 파일은 읽기 전용이다.
 - 그래서 서버 settings.yaml의 경로 칸(`ops.paths.*`·`ops.log.log_fallback_dir`·`search.edw_meta.edw_meta_catalog_dir` 등)은 **컨테이너 안 절대 경로**로 적고, 무엇이든 쓰는 자리는 `/app/output/…` 아래로 둔다(예 `/app/output/edw_meta`). 비워 두면 기본값이 이미 `/app/output` 아래다.
-- 호스트 쪽 칸(`ops.host.host_output_dir`·`required.deploy.host_docs_dir`·`ops.run_pipeline.run_pipeline_work_dir`·`option.devbox.opencode_config`)은 **호스트 절대 경로**다.
+- 호스트 쪽 칸(`required.deploy.host_docs_dir`·`ops.run_pipeline.run_pipeline_work_dir`)은 **호스트 절대 경로**다.
 - PC에서 Docker로 시험할 때 `valid_env`의 자료를 쓰려면 `/app/valid_env/…`에 붙이고, 시험 설정의 경로도 그 자리(절대 경로)로 적는다.
