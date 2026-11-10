@@ -86,7 +86,7 @@ def connection_error(exc):
     """인증 실패에도 비밀번호·연결 URL은 출력하지 않는다."""
     s = cfg().connections.redis
     detail = redact(exc)
-    return f"parse 서비스 연결 실패(Redis {s.redis_host}:{s.redis_port}) — mcp-redis 기동·설정 확인: {type(exc).__name__}: {detail}"
+    return f"parse 서비스 연결 실패(Redis {s.redis_host}:{s.redis_port}) — redis 컨테이너 기동·설정 확인: {type(exc).__name__}: {detail}"
 
 
 def submit(r, job_id, meta, queue_max):

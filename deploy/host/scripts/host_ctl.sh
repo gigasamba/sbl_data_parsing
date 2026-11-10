@@ -84,7 +84,7 @@ dc_secrets() {
   out=$("${PY:-python3}" deploy/host/scripts/settings_to_env.py --file "$SETTINGS_FILE" --secrets-dir "$dir") || return 2
   echo "[host_ctl secrets] $dir — pg_pw · redis/(redis.conf·start.sh·health.sh) 권한 600(값은 찍지 않음)"
   if [ "$out" = changed ]; then
-    echo "  바뀜 — Redis: docker compose -f deploy/host/compose/compose-redis.yml up -d --force-recreate"
+    echo "  바뀜 — Redis: SBL_ROOT=${dir%/secrets} docker compose -f deploy/host/compose/compose-redis.yml up -d --force-recreate"
     echo "         PG: 비밀번호 파일은 데이터 폴더가 비었을 때(처음)만 쓰임 — 이미 띄운 PG는 psql ALTER USER로 같게"
   fi
 }
@@ -115,8 +115,8 @@ dc_check() {
     img=$($DOCKER inspect -f '{{.Config.Image}}' "$1" 2>/dev/null); vol=()
     case "$img" in *-runtime:*) vol=(-v "$(pwd):$APP_CODE_ROOT:ro,z") ;; esac
   }
-  # 판정 시험의 DB 사례는 서버 PG에 붙는다(prd는 읽기만): 같은 설정 파일·host 네트워크·RUN_ENV
-  local gate=(--network host -v "${SETTINGS_FILE:?SETTINGS_FILE 필요 — load_settings}:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e "RUN_ENV=${RUN_ENV:?RUN_ENV 필요 — load_settings}")
+  # 판정 시험의 DB 사례는 서버 PG에 붙는다(prd는 읽기만): 같은 설정 파일·host 네트워크·RUN_ENV · settings.yaml의 host.docker.internal이 서버 자신으로
+  local gate=(--network host --add-host host.docker.internal:host-gateway -v "${SETTINGS_FILE:?SETTINGS_FILE 필요 — load_settings}:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e "RUN_ENV=${RUN_ENV:?RUN_ENV 필요 — load_settings}")
   _step check_env "출력의 FAIL 줄 확인(server-guide §1-9)" bash deploy/host/scripts/pipe_exec.sh check_env || return 1
   _step ping_models "모델 주소·키(settings.yaml required.models) — 서버는 내부망 모델만" bash deploy/host/scripts/pipe_exec.sh ping_models || return 1
   _step "migrate check" "migrate up --target all · master load(server-guide §4-7)" bash deploy/host/scripts/pipe_exec.sh migrate check --target all || return 1
@@ -159,4 +159,5 @@ esac
 F=deploy/host/compose/compose-${RUN_ENV:-}.yml   # 환경 = settings.yaml required.env.run_env(load_settings가 RUN_ENV로 냄)
 [ -f "$F" ] || { echo "[host_ctl] $F 없음 — settings.yaml required.env.run_env는 local·dev·prd 중 하나" >&2; exit 2; }
 # shellcheck disable=SC2086 — DOCKER(sudo docker처럼 두 낱말)는 낱말 나눔
+export SBL_ROOT=${SBL_ROOT:-$(dirname "$RAG_ROOT")} PRD_DIR=${PRD_DIR:-$RAG_ROOT}   # compose 파일의 폴더 자리 = 이 코드 폴더(폴더 이름이 기본값과 달라도)
 exec $DOCKER compose -f "$F" "$@"   # compose 변수 DOC_SRC(ops.host.host_docs_dir)는 load_settings가 셸 env로 냄

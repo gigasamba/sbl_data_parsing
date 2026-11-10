@@ -33,7 +33,7 @@ services:
     <<: *local
     image: mcp-server-runtime:${IMAGE_TAG:-0.4.0}
     container_name: mcp-server-0
-    command: ["mcp"]
+    command: ["mcp", "--set", "MCP_PORT=8051", "--set", "MCP_HOST=auto"]   # 포트·바인드는 ports 칸과 같게 고정(settings.yaml 값과 상관없이)
     ports: ["0.0.0.0:8051:8051"]              # HTTP 8051
     volumes:
       - ../../..:/app/deploy:ro,z
