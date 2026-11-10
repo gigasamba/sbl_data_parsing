@@ -127,7 +127,7 @@ SETS = {  # 시험 묶음 docker-compose.yml(op-18) 서비스 → (명령, 포�
 
 def test_compose_sets():
     svcs = yaml.safe_load((COMPOSE / "docker-compose.yml").read_text(encoding="utf-8"))["services"]
-    assert set(svcs) == set(SETS)
+    assert set(svcs) == {*SETS, "pgvector"}
     for name, (cmd, ports, folder, home) in SETS.items():
         s = svcs[name]
         assert s["command"] == cmd and s["ports"] == ports and s["user"] == "0", name
@@ -143,3 +143,6 @@ def test_compose_sets():
             "bind": {"create_host_path": False, "selinux": "z"},
         }
         assert f"{b}/{home}:/root:z" in v and pw in v, (name, v)
+    pg = svcs["pgvector"]  # 검색 DB — 바깥 5433, 데이터 폴더, 비밀번호는 파일(env에 값 없음)
+    assert pg["ports"] == ["0.0.0.0:5433:5432"] and pg["environment"]["POSTGRES_PASSWORD_FILE"] == "/run/secrets/pg_pw", pg
+    assert "POSTGRES_PASSWORD" not in pg["environment"] and pg["volumes"][0] == "${PG_DATA:-/data/pg/pipeline}:/var/lib/postgresql/data:z"

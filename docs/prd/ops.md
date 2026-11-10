@@ -347,7 +347,7 @@ DB 스키마(마이그레이션 — `doc` 칸·`doc` 색인·`except_doc_info`·
 개발 서버에서 벌마다 컨테이너를 띄우고, 서버 바깥에서 root 비밀번호로 바로 SSH 접속해 코드를 고치고 시험한다. `host_ctl.sh`의 작업 공간(op-16 — rag, 열쇠 로그인)과 따로 쓰는 길이다.
 
 ### 규칙
-1. `deploy/host/compose/docker-compose.yml` 한 파일: `data-pipeline-0`·`data-pipeline-1`(실행 이미지 `data-pipeline-runtime`, SSH 서버 포트 8020·8021 → 22)과 `mcp-server-0`(`mcp-server-runtime`, SSH 8050 → 22 · HTTP 8051 → 8080). 포트는 `0.0.0.0`, 네트워크는 docker bridge(PG는 `host.docker.internal`).
+1. `deploy/host/compose/docker-compose.yml` 한 파일: `data-pipeline-0`·`data-pipeline-1`(실행 이미지 `data-pipeline-runtime`, SSH 서버 포트 8020·8021 → 22), `mcp-server-0`(`mcp-server-runtime`, SSH 8050 → 22 · HTTP 8051 → 8080), `pgvector`(`pgvector/pgvector:pg16`, 5433 → 5432, 데이터 `PG_DATA` 기본 `/data/pg/pipeline`, 비밀번호 `<SBL_ROOT>/pg_pw` — `POSTGRES_PASSWORD_FILE`, 처음 만들 때만). 포트는 `0.0.0.0`, 네트워크는 docker bridge(컨테이너끼리 PG는 `pgvector:5432`).
 2. 벌 폴더 `<SBL_ROOT>/sbl_data_parsing-main-<n>` 전체를 `/app/deploy`에 쓰기 가능으로, 그 `settings.yaml`은 같은 자리에 읽기 전용으로 다시, `output/` → `/app/output`, `home/` → `/root`. `mcp-server-0`은 벌 0을 쓰고(결과는 읽기 전용) 홈만 `home/mcp/`(홈은 git·굽기 묶음에서 빠짐).
 3. 컨테이너마다 `cpus`·`mem_limit`·`memswap_limit`(메모리+스왑 합)·`ports`를 그 칸에 직접 적는다. 바꿀 env: `SBL_ROOT`(기본 `/home/sbl`)·`IMAGE_TAG`·`DOC_SRC`.
 4. 컨테이너는 root(`user: "0"`)로 `devbox`를 띄운다. `dev_entry.sh`가 root면 실행 환경(앱과 같은 풀이 — 붙인 settings.yaml `required.env.run_env`, compose는 env `RUN_ENV`를 주지 않음)이 정확히 `dev`일 때만 `/run/secrets/root_pw`(서버 `<SBL_ROOT>/root_pw`를 읽기 전용으로) 첫 줄로 root 비밀번호를 걸고 sshd에 root·비밀번호 로그인을 연다. dev가 아니거나 파일이 없거나 비면 종료 2(docker가 없는 자리에 빈 폴더를 만들 수 있음 — 그 폴더를 지우고 파일로). 비밀번호는 env·이미지·저장소·settings.yaml에 두지 않는다.

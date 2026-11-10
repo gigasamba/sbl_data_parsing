@@ -2065,27 +2065,30 @@ git tag -l 'v*'                                       #    기대: … v0.3.1 v0
 - `release/*` 브랜치는 병합 뒤에도 지우지 않는다(그 판을 고칠 때 다시 씀).
 
 ### 6-6. 개발 서버 시험 묶음 — root SSH 컨테이너 여러 개(compose 한 파일)
-`deploy/host/compose/docker-compose.yml` 한 파일로 벌 0·1의 `data-pipeline`과 벌 0의 `mcp-server`를 함께 띄운다([op-18](../prd/ops.md#op-18)). 컨테이너는 root로 뜨고, 서버 바깥에서 root 비밀번호로 SSH 접속한다. **개발 서버만** — 벌 settings.yaml `required.env.run_env`가 `dev`가 아니면 컨테이너가 시작을 거부한다. `host_ctl.sh`와 따로 쓴다 — 같은 벌을 두 길로 띄우지 않는다(컨테이너 이름 `data-pipeline-0`·`mcp-server-0`이 `host_ctl.sh` 벌 0과 같아 함께 띄우면 이름이 겹친다 · 먼저 `host_ctl.sh down`).
+`deploy/host/compose/docker-compose.yml` 한 파일로 벌 0·1의 `data-pipeline`, 벌 0의 `mcp-server`, 검색 DB `pgvector`를 함께 띄운다([op-18](../prd/ops.md#op-18)). 컨테이너는 root로 뜨고, 서버 바깥에서 root 비밀번호로 SSH 접속한다. **개발 서버만** — 벌 settings.yaml `required.env.run_env`가 `dev`가 아니면 컨테이너가 시작을 거부한다. `host_ctl.sh`와 따로 쓴다 — 같은 벌을 두 길로 띄우지 않는다(컨테이너 이름 `data-pipeline-0`·`mcp-server-0`이 `host_ctl.sh` 벌 0과 같아 함께 띄우면 이름이 겹친다 · 먼저 `host_ctl.sh down`).
 
 | 컨테이너 | 벌 폴더(`/app/deploy`) | 서버 포트 → 컨테이너 포트 | CPU · 메모리(파일에 적힌 값) |
 |---|---|---|---|
 | `data-pipeline-0` | `/home/sbl/sbl_data_parsing-main-0` | 8020 → 22(SSH) | 4 · 12g(스왑 4g 더 — `memswap_limit` 16g) |
 | `data-pipeline-1` | `/home/sbl/sbl_data_parsing-main-1` | 8021 → 22(SSH) | 2 · 8g |
 | `mcp-server-0` | `/home/sbl/sbl_data_parsing-main-0`(벌 0과 같음) | 8050 → 22(SSH) · 8051 → 8080(HTTP) | 3 · 12g |
+| `pgvector-pipeline`(묶음 안 주소 `pgvector`) | 데이터 `/data/pg/pipeline`(`PG_DATA`) | 5433 → 5432(PG) | 4 · 12g |
 
 - CPU·메모리·포트는 그 파일의 컨테이너 칸(`cpus`·`mem_limit`·`memswap_limit`·`ports`)에 직접 적는다(`memswap_limit` = 메모리+스왑 합 — `mem_limit`과 같으면 스왑 안 씀). 모든 컨테이너의 `cpus` 합 ≤ 서버 CPU 수([§0-2 ②](#0-2-dev--개발-서버-개발자별-벌)). 벌을 늘리려면 `data-pipeline-1` 칸을 복사해 번호·포트·폴더를 바꾼다.
-- 포트는 서버의 모든 주소(`0.0.0.0`)에 열린다. 컨테이너는 docker 자체 네트워크에 있어 컨테이너 안 `127.0.0.1`은 컨테이너 자신이다 — PG·모델 주소는 서버 주소로 적는다.
+- 포트는 서버의 모든 주소(`0.0.0.0`)에 열린다. 컨테이너는 docker 자체 네트워크에 있어 컨테이너 안 `127.0.0.1`은 컨테이너 자신이다 — 모델 주소는 서버 주소로, PG는 `pgvector:5432`(같은 묶음 — 이름으로 찾음)로 적는다. 서버 바깥(DB 도구 등)에서는 `<서버 IP>:5433`.
 
 **① 준비(서버, 한 번)**
 ```bash
 cd /home/sbl
 sudo install -m 600 -o root /dev/null root_pw                  # 빈 비밀번호 파일(처음부터 600) — 세 컨테이너가 같이 씀, git·settings.yaml에 넣지 않음
 read -rs p && printf '%s\n' "$p" | sudo tee root_pw >/dev/null && unset p   # 비밀번호를 쳐서 넣음(화면·셸 기록에 안 남음)
+sudo install -m 600 -o root /dev/null pg_pw && read -rs p && printf '%s\n' "$p" | sudo tee pg_pw >/dev/null && unset p   # PG 비밀번호 — 벌 settings.yaml required.pg.pg_password와 같게
+sudo mkdir -p /data/pg/pipeline                               # PG 데이터 폴더 — 비어 있으면 처음 시작 때 DB를 만든다(이 때만 pg_pw를 씀)
 for n in 0 1; do mkdir -p sbl_data_parsing-main-$n/{output,home}; done; mkdir -p sbl_data_parsing-main-0/home/mcp   # home/mcp = mcp-server-0 홈
 #   벌 폴더마다 코드·settings.yaml이 있어야 한다(§6-3 ②·③) — 이미지 판은 sudo가 든 0.4.0 이상(§0-2 ①)
 ```
-- pgvector를 서버의 모든 주소로 다시 띄운다: `-p 0.0.0.0:5433:5432`(옛 `-p 127.0.0.1:5433:5432` 대신 — 데이터 볼륨은 그대로 두고 컨테이너만 다시 만든다).
-- 벌마다 settings.yaml `required.env.run_env`: `dev` · `required.pg.pg_host`: `host.docker.internal`, `pg_port`: `5433`.
+- 따로 띄운 옛 pgvector 컨테이너가 5433을 쓰고 있으면 먼저 멈춘다(`docker stop <이름>` — 포트가 겹침). 그 데이터를 이어 쓰려면 `PG_DATA`에 그 데이터 폴더를 준다(docker 볼륨이었으면 멈춘 뒤 `docker volume inspect <볼륨> --format '{{.Mountpoint}}'` 폴더의 내용을 `/data/pg/pipeline`으로 복사).
+- 벌마다 settings.yaml `required.env.run_env`: `dev` · `required.pg`: `pg_host` `pgvector` · `pg_port` `5432` · `pg_database`·`pg_user` = `rag`(compose `PG_DB`·`PG_USER`와 같게) · `pg_password` = `pg_pw`의 값.
 - 벌 0 settings.yaml `search.server`: `host: auto` · `port: 8080` · `token: <MCP 토큰>`(루프백이 아니라 필수) · `allowed_hosts: <서버 IP>:8051`(예 `10.10.1.20:8051`).
 
 **② 띄우기·확인**
@@ -2103,6 +2106,7 @@ ssh -p 8020 root@<서버 IP>     # data-pipeline-0 — 비밀번호 = root_pw �
 ssh -p 8021 root@<서버 IP>     # data-pipeline-1
 ssh -p 8050 root@<서버 IP>     # mcp-server-0
 curl http://<서버 IP>:8051/health   # 검색 MCP — 기대: 200
+psql -h <서버 IP> -p 5433 -U rag -d rag -c 'select 1'   # 검색 DB(psql이 있는 PC에서) — 비밀번호 = pg_pw
 ```
 - 들어가면 `/app/deploy`(벌 폴더 — 쓰기 가능)에서 고치고 git을 쓴다(§6-4). `sudo`·`su`도 있다.
 - 비밀번호를 바꾸려면 `root_pw`를 고치고 `docker compose -f deploy/host/compose/docker-compose.yml restart`(시작할 때마다 그 파일 값으로 다시 건다).

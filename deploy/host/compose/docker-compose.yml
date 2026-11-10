@@ -7,7 +7,7 @@
 #     컨테이너마다 ports(서버 포트:컨테이너 포트)·cpus·mem_limit·memswap_limit(메모리+스왑 합 — 같으면 스왑 안 씀)는 아래 각 칸에 직접 적는다
 #     (모든 컨테이너의 cpus 합 ≤ 서버 CPU 수 — server-guide §0-2 ②). 벌을 늘리려면 data-pipeline-1 칸을 복사해 번호·포트·폴더를 바꾼다.
 #   네트워크: docker 자체 네트워크(bridge) — 포트를 서버의 모든 주소(0.0.0.0)에 연다. 컨테이너 안 127.0.0.1은 컨테이너 자신이라
-#     PG·모델 주소는 서버 주소로(PG는 host.docker.internal:<PG 포트> — pgvector도 0.0.0.0으로 열어 둠 · settings.yaml required.pg).
+#     모델 주소는 서버 주소로. PG는 이 묶음의 pgvector — 컨테이너끼리는 pgvector:5432, 서버 바깥에서는 <서버 IP>:5433(settings.yaml required.pg).
 name: sbl-devset                             # compose 묶음 이름 — host_ctl.sh 묶음과 따로
 x-dev: &dev
   restart: unless-stopped
@@ -76,3 +76,36 @@ services:
     cpus: 3
     mem_limit: 12g
     memswap_limit: 12g
+
+  # 검색 DB(PostgreSQL 16 + pgvector) — 데이터 폴더 PG_DATA(기본 /data/pg/pipeline). 서버 바깥 5433 → 컨테이너 5432.
+  #   비밀번호 = <SBL_ROOT>/pg_pw 첫 줄 — 데이터 폴더가 비었을 때(처음 한 번)만 쓰인다(그 뒤 바꾸려면 psql ALTER USER).
+  #   DB·계정 이름: PG_DB·PG_USER(기본 rag) — 벌 settings.yaml required.pg와 같게. 메모리 값은 서버 메모리에 맞춰 고친다
+  #   (대략 shared_buffers 1/8 · effective_cache_size 3/8 · maintenance_work_mem 1/16 · shm_size ≥ maintenance_work_mem + 1g).
+  pgvector:
+    image: pgvector/pgvector:pg16
+    container_name: pgvector-pipeline          # 서버의 다른 pgvector 컨테이너와 이름이 겹치지 않게 · 묶음 안 주소는 서비스 이름 pgvector
+    restart: unless-stopped
+    ports: ["0.0.0.0:5433:5432"]
+    environment:
+      POSTGRES_DB: ${PG_DB:-rag}
+      POSTGRES_USER: ${PG_USER:-rag}
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_pw
+    volumes:
+      - ${PG_DATA:-/data/pg/pipeline}:/var/lib/postgresql/data:z
+      - {type: bind, source: "${SBL_ROOT:-/home/sbl}/pg_pw", target: /run/secrets/pg_pw, read_only: true,
+         bind: {create_host_path: false, selinux: z}}
+    command: >
+      postgres -c shared_buffers=4GB -c effective_cache_size=12GB -c work_mem=64MB
+               -c maintenance_work_mem=2GB -c max_parallel_maintenance_workers=2
+               -c max_parallel_workers_per_gather=2 -c max_connections=100
+    shm_size: 3g
+    cpus: 4
+    mem_limit: 12g
+    memswap_limit: 12g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      options: {max-size: "50m", max-file: "3"}
