@@ -11,6 +11,7 @@ set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트
 if [ -n "${DC_ROOT:-}" ]; then RAG_ROOT=$DC_ROOT; fi   # 시험 루트(init) — load_settings.sh는 이미 있는 RAG_ROOT를 씀
 . deploy/host/scripts/load_settings.sh   # 루트 RAG_ROOT·load_settings 한 곳(값은 아래 load_settings에서)
+M0=mcp-server-0      # 검색 MCP 컨테이너(compose 파일의 container_name)
 P0=data-pipeline-0   # 0번 벌 — 새벽 배치·점검이 docker exec로 들어가는 컨테이너(compose 파일의 container_name)
 
 # init — 서버 루트(이 코드 폴더 자체)를 한 번에 채운다(값·파일 내용은 찍지 않음). 여러 번 불러도 안전.
@@ -80,11 +81,11 @@ PY
 #   PG·Redis를 띄우기 전에 한 번(비밀번호를 바꾸면 다시 — 바뀐 파일이 있으면 다시 띄울 것을 알림). 종료 코드: 0 · 2 비밀번호 없음·설정·권한 문제.
 dc_secrets() {
   local dir out
-  dir=${SBL_ROOT:-$(dirname "$RAG_ROOT")}/secrets
+  dir=$SBL_ROOT/secrets
   out=$("${PY:-python3}" deploy/host/scripts/settings_to_env.py --file "$SETTINGS_FILE" --secrets-dir "$dir") || return 2
   echo "[host_ctl secrets] $dir — pg_pw · redis/(redis.conf·start.sh·health.sh) 권한 600(값은 찍지 않음)"
   if [ "$out" = changed ]; then
-    echo "  바뀜 — Redis: SBL_ROOT=${dir%/secrets} docker compose -f deploy/host/compose/compose-redis.yml up -d --force-recreate"
+    echo "  바뀜 — Redis: SBL_ROOT=$SBL_ROOT docker compose -f deploy/host/compose/compose-redis.yml up -d --force-recreate"
     echo "         PG: 비밀번호 파일은 데이터 폴더가 비었을 때(처음)만 쓰임 — 이미 띄운 PG는 psql ALTER USER로 같게"
   fi
 }
@@ -120,13 +121,13 @@ dc_check() {
   _step check_env "출력의 FAIL 줄 확인(server-guide §1-9)" bash deploy/host/scripts/pipe_exec.sh check_env || return 1
   _step ping_models "모델 주소·키(settings.yaml required.models) — 서버는 내부망 모델만" bash deploy/host/scripts/pipe_exec.sh ping_models || return 1
   _step "migrate check" "migrate up --target all · master load(server-guide §4-7)" bash deploy/host/scripts/pipe_exec.sh migrate check --target all || return 1
-  _img "$P0"
-  # shellcheck disable=SC2086
-  _step "selftest data-pipeline" "FAIL 줄의 시험 이름으로 원인 찾기(server-guide §5-5)" bash deploy/release/selftest_gate.sh $DOCKER run --rm "${gate[@]}" ${vol[@]+"${vol[@]}"} "$img" selftest || return 1
-  _img mcp-server-0
-  # shellcheck disable=SC2086
-  _step "selftest mcp-server" "FAIL 줄의 시험 이름으로 원인 찾기(server-guide §5-5)" bash deploy/release/selftest_gate.sh $DOCKER run --rm "${gate[@]}" ${vol[@]+"${vol[@]}"} "$img" selftest || return 1
-  _step "검색 MCP" "\`$DOCKER logs mcp-server-0\` 마지막 줄 — mcp_keepalive.sh가 다시 띄웠는데도 /health 응답 없음" bash deploy/host/scripts/mcp_keepalive.sh || return 1
+  local c
+  for c in "$P0" "$M0"; do
+    _img "$c"
+    # shellcheck disable=SC2086
+    _step "selftest ${c%-0}" "FAIL 줄의 시험 이름으로 원인 찾기(server-guide §5-5)" bash deploy/release/selftest_gate.sh $DOCKER run --rm "${gate[@]}" ${vol[@]+"${vol[@]}"} "$img" selftest || return 1
+  done
+  _step "검색 MCP" "\`$DOCKER logs $M0\` 마지막 줄 — mcp_keepalive.sh가 다시 띄웠는데도 /health 응답 없음" bash deploy/host/scripts/mcp_keepalive.sh || return 1
   echo "[host_ctl check] 통과 — ${n}개"
 }
 
@@ -151,6 +152,7 @@ case "${1:-}" in
   init) shift; dc_init "$@"; exit $? ;;
 esac
 load_settings || exit $?
+export SBL_ROOT=${SBL_ROOT:-$(dirname "$RAG_ROOT")}   # 벌 폴더들의 위 폴더 — secrets/·compose 파일의 폴더 자리
 case "${1:-}" in
   secrets) dc_secrets; exit $? ;;
   timers) dc_timers; exit $? ;;
@@ -159,5 +161,5 @@ esac
 F=deploy/host/compose/compose-${RUN_ENV:-}.yml   # 환경 = settings.yaml required.env.run_env(load_settings가 RUN_ENV로 냄)
 [ -f "$F" ] || { echo "[host_ctl] $F 없음 — settings.yaml required.env.run_env는 local·dev·prd 중 하나" >&2; exit 2; }
 # shellcheck disable=SC2086 — DOCKER(sudo docker처럼 두 낱말)는 낱말 나눔
-export SBL_ROOT=${SBL_ROOT:-$(dirname "$RAG_ROOT")} PRD_DIR=${PRD_DIR:-$RAG_ROOT}   # compose 파일의 폴더 자리 = 이 코드 폴더(폴더 이름이 기본값과 달라도)
+export PRD_DIR=${PRD_DIR:-$RAG_ROOT}   # 운영 compose의 폴더 자리 = 이 코드 폴더(폴더 이름이 기본값과 달라도)
 exec $DOCKER compose -f "$F" "$@"   # compose 변수 DOC_SRC(ops.host.host_docs_dir)는 load_settings가 셸 env로 냄

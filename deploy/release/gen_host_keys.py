@@ -20,7 +20,8 @@ HOST_SKIP = (
     "pipeline.host.run_pipeline",
     "pipeline.host.run_pipeline_dir",
     "common.host.pg_container",  # 위 셋: run_pipeline.py가 settings.yaml에서 직접 읽음(셸 env로 안 냄)
-    *(f"common.host.devbox.{k}" for k in ("git_user_name", "git_user_email")),  # 컨테이너 git_cred.py만 읽음
+    "common.host.devbox.git_user_name",
+    "common.host.devbox.git_user_email",  # 위 둘: 컨테이너 git_cred.py만 읽음
 )
 IMAGE_CONSTS = ("code_root", "docs_mount", "output_root")  # run_pipeline.py가 쓰는 약속 경로
 HOST_TABLE = DEPLOY_ROOT / "deploy" / "host" / "scripts" / "host_settings.tsv"

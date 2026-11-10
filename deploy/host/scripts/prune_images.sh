@@ -29,7 +29,9 @@ done
 case "$KEEP" in ""|*[!0-9]*|0) echo "[prune_images] --keep은 1 이상 정수(지금 판은 항상 남김): $KEEP" >&2; exit 2 ;; esac
 
 # 저장소 = 두 앱 이미지와 그 짝(실행 이미지 <이름>-runtime ↔ 코드가 든 이미지 <이름>) — compose-<환경>.yml·image_names.sh와 같은 이름
-REPOS="data-pipeline data-pipeline-runtime mcp-server mcp-server-runtime"
+. "$(dirname "$0")/../../release/image_names.sh"   # image_name_of — 이미지 이름 한 곳
+REPOS=$(for t in pipeline pipeline-runtime mcp mcp-runtime; do image_name_of "$t"; done | tr '
+' ' ')
 USED=" $($DOCKER ps -a --format '{{.Image}}' 2>/dev/null | tr '\n' ' ') "   # 컨테이너가 쓰는 이미지(멈춘 것 포함)
 echo "== 이미지($REPOS) — 최신 ${KEEP}개(지금 판 + 직전 판) + 컨테이너가 쓰는 태그 유지 =="
 for repo in $REPOS; do

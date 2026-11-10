@@ -3,7 +3,6 @@
 비밀번호가 비거나 줄바꿈이 있으면 종료 2. 호스트 PyYAML 경로 그대로(PC 전용)."""
 
 import contextlib
-import importlib.util
 import io
 import json
 import os
@@ -15,6 +14,7 @@ from pathlib import Path
 from unittest import mock
 
 from common.core.paths import DEPLOY_ROOT
+from tests.general.deploy.test_host_env import _load
 
 TOOL = DEPLOY_ROOT / "deploy" / "host" / "scripts" / "settings_to_env.py"
 PG = "pg-dummy-1"
@@ -79,9 +79,7 @@ def test_secret_files():
 
 
 def test_permission_error_hides_value():
-    spec = importlib.util.spec_from_file_location("secrets_host", TOOL)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = _load("secrets_host", TOOL.relative_to(DEPLOY_ROOT))
     doc = {"common": {"connections": {"pg": {"password": PG}, "redis": {"redis_password": REDIS}}}}  # 모델 배치(load_model)
     with tempfile.TemporaryDirectory() as d:
         errors = io.StringIO()

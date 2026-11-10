@@ -8,7 +8,6 @@ from pathlib import Path
 from common.core.paths import EDW_CHAIN_FILE
 from common.store.db.models import search_tables as ST
 
-CHAIN_FILE = EDW_CHAIN_FILE
 FILE = "file"  # 열쇠 — 문서 원본 경로(FileStorageMap.s3_key = gold doc.file_path)
 ENTITY_COLS = ("Id", "Type", "Class")  # sfdc_entity 단계가 내는 칸
 TYPES = ("text", "date", "flag")
@@ -23,11 +22,11 @@ _FIELD_KEYS = {"from", "filter", "evidence", "type", "max"}
 
 
 def chain_path():
-    """쓸 사슬 파일 — 설정 common.paths.edw_chain(= settings.yaml ops.paths.edw_chain_file — 적재·검색 MCP가 같은 칸), 비우면 기본 CHAIN_FILE."""
+    """쓸 사슬 파일 — 설정 common.paths.edw_chain(= settings.yaml ops.paths.edw_chain_file — 적재·검색 MCP가 같은 칸), 비우면 기본 EDW_CHAIN_FILE."""
     from common.config.settings import cfg
 
     p = cfg().paths.edw_chain
-    return Path(p) if p else CHAIN_FILE
+    return Path(p) if p else EDW_CHAIN_FILE
 
 
 def load(path=None):
