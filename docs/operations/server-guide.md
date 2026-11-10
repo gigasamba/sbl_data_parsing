@@ -2072,7 +2072,7 @@ git tag -l 'v*'                                       #    기대: … v0.3.1 v0
 | `data-pipeline-0` | `/home/sbl/sbl_data_parsing-main-0` | 8020 → 22(SSH) | 4 · 12g(스왑 4g 더 — `memswap_limit` 16g) |
 | `data-pipeline-1` | `/home/sbl/sbl_data_parsing-main-1` | 8021 → 22(SSH) | 2 · 8g |
 | `mcp-server-0` | `/home/sbl/sbl_data_parsing-main-0`(벌 0과 같음) | 8050 → 22(SSH) · 8051 → 8080(HTTP) | 3 · 12g |
-| `pgvector-pipeline`(묶음 안 주소 `pgvector`) | 데이터 `/data/pg/pipeline`(`PG_DATA`) | 5433 → 5432(PG) | 4 · 12g |
+| `pgvector` | 데이터 `/data/pg/pipeline`(`PG_DATA`) | 5433 → 5432(PG) | 4 · 12g |
 
 - CPU·메모리·포트는 그 파일의 컨테이너 칸(`cpus`·`mem_limit`·`memswap_limit`·`ports`)에 직접 적는다(`memswap_limit` = 메모리+스왑 합 — `mem_limit`과 같으면 스왑 안 씀). 모든 컨테이너의 `cpus` 합 ≤ 서버 CPU 수([§0-2 ②](#0-2-dev--개발-서버-개발자별-벌)). 벌을 늘리려면 `data-pipeline-1` 칸을 복사해 번호·포트·폴더를 바꾼다.
 - 포트는 서버의 모든 주소(`0.0.0.0`)에 열린다. 컨테이너는 docker 자체 네트워크에 있어 컨테이너 안 `127.0.0.1`은 컨테이너 자신이다 — 모델 주소는 서버 주소로, PG는 `pgvector:5432`(같은 묶음 — 이름으로 찾음)로 적는다. 서버 바깥(DB 도구 등)에서는 `<서버 IP>:5433`.
@@ -2087,7 +2087,7 @@ sudo mkdir -p /data/pg/pipeline                               # PG 데이터 폴
 for n in 0 1; do mkdir -p sbl_data_parsing-main-$n/{output,home}; done; mkdir -p sbl_data_parsing-main-0/home/mcp   # home/mcp = mcp-server-0 홈
 #   벌 폴더마다 코드·settings.yaml이 있어야 한다(§6-3 ②·③) — 이미지 판은 sudo가 든 0.4.0 이상(§0-2 ①)
 ```
-- 따로 띄운 옛 pgvector 컨테이너가 5433을 쓰고 있으면 먼저 멈춘다(`docker stop <이름>` — 포트가 겹침). 그 데이터를 이어 쓰려면 `PG_DATA`에 그 데이터 폴더를 준다(docker 볼륨이었으면 멈춘 뒤 `docker volume inspect <볼륨> --format '{{.Mountpoint}}'` 폴더의 내용을 `/data/pg/pipeline`으로 복사).
+- 따로 띄운 옛 pgvector 컨테이너가 있으면 먼저 내린다(`docker stop pgvector && docker rm pgvector` — 이 묶음의 컨테이너 이름 `pgvector`·포트 5433과 겹침, 데이터 폴더·볼륨은 지우지 않음). 그 데이터를 이어 쓰려면 `PG_DATA`에 그 데이터 폴더를 준다(docker 볼륨이었으면 멈춘 뒤 `docker volume inspect <볼륨> --format '{{.Mountpoint}}'` 폴더의 내용을 `/data/pg/pipeline`으로 복사).
 - 벌마다 settings.yaml `required.env.run_env`: `dev` · `required.pg`: `pg_host` `pgvector` · `pg_port` `5432` · `pg_database`·`pg_user` = `rag`(compose `PG_DB`·`PG_USER`와 같게) · `pg_password` = `pg_pw`의 값.
 - 벌 0 settings.yaml `search.server`: `host: auto` · `port: 8080` · `token: <MCP 토큰>`(루프백이 아니라 필수) · `allowed_hosts: <서버 IP>:8051`(예 `10.10.1.20:8051`).
 
