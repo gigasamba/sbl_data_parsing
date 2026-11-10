@@ -315,6 +315,8 @@ def test_submit_response_lost():
                 out = parse_proxy.do_parse_document(content_b64="eA==", filename="a.txt")
                 assert "연결 실패" in out["error"] and out["job_id"]
                 assert (Path(d) / out["job_id"]).exists() == verify_fails
+                note = " — 제출 여부 확인 불가(job_id로 수집 서버 담당자 확인)"
+                assert out["error"].endswith(note) == verify_fails
             with TestCase().assertRaises(ValueError):
                 parse_proxy._submit({}, r)
 
@@ -337,3 +339,37 @@ def test_proxy_missing_server_password_is_connection_error():
     with patch.object(redisq, "client", side_effect=redisq.RedisConfigError("Redis 비밀번호 없음")):
         out = parse_proxy.do_parse_document(path="/input/a.txt")
         assert "연결 실패" in out["error"] and "Redis 비밀번호 없음" in out["error"]
+
+
+def test_presubmit_connection_error_has_no_job_id():
+    for stage in ("client", "read_policy"):
+        r = FakeRedis()
+        with (
+            tempfile.TemporaryDirectory() as d,
+            patch.object(redisq, "JOBS_DIR", Path(d)),
+            patch.object(redisq, "client", return_value=r),
+            patch.object(redisq, stage, side_effect=ConnectionError("Redis down")),
+            patch.object(redisq, "submit") as submit,
+        ):
+            out = parse_proxy.do_parse_document(content_b64="eA==", filename="a.txt")
+            assert set(out) == {"error"} and "연결 실패" in out["error"]
+            assert "제출 여부 확인 불가" not in out["error"]
+            assert not list(Path(d).iterdir())
+            submit.assert_not_called()
+
+
+def test_proxy_accepts_symlink_policy_roots():
+    r = FakeRedis()
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        actual = root / "actual"
+        actual.mkdir()
+        alias = root / "alias"
+        alias.symlink_to(actual, target_is_directory=True)
+        configured = alias / "docs"
+        configured.mkdir()
+        redisq.publish_policy(r, [".pdf"], [configured, configured.resolve()], 100)
+        with patch.object(redisq, "JOBS_DIR", root / "jobs"):
+            for path in (configured / "a.pdf", configured.resolve() / "a.pdf"):
+                jid, _ = parse_proxy._submit({"path": str(path)}, r)
+                assert (root / "jobs" / jid).is_dir()

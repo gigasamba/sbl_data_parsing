@@ -62,7 +62,8 @@ _PM = pc.cfg().service.data_parsing  # S7c — 설정 객체(모듈 상수 — �
 PROCS = str(
     max(1, _PM.procs if _PM.procs is not None else min(2, (os.cpu_count() or 2) - 1))
 )  # worker마다 엔진 병렬 — 기본 worker 2 × 엔진 2 = 4(사용자 결정 2026-11-09)
-ROOTS = [Path(p).resolve() for p in (_PM.roots or [str(SERVICE_DIR / "inbox")])]  # 쉼표 목록은 객체가 strip·빈 것 버림
+ROOT_PATHS = [Path(os.path.normpath(p)) for p in (_PM.roots or [str(SERVICE_DIR / "inbox")])]  # resolve 전 설정 경로도 정책에 보존
+ROOTS = [p.resolve() for p in ROOT_PATHS]  # 실제 파일 접근 검사는 resolve된 경로로
 JOB_TIMEOUT = _PM.job_timeout_sec
 QUEUE_MAX = common_cfg().parse_queue.queue_max
 
@@ -271,7 +272,7 @@ def _receive(r, consumer, min_idle_ms=None):
 
 def _publish_policy(r):
     try:
-        redisq.publish_policy(r, allowed_exts(), ROOTS, common_cfg().runtime.parse_max_mb)
+        redisq.publish_policy(r, allowed_exts(), list(dict.fromkeys([*ROOT_PATHS, *ROOTS])), common_cfg().runtime.parse_max_mb)
     except (Exception, SystemExit) as exc:
         _log(redisq.redact(f"정책 갱신 실패: {type(exc).__name__}: {exc}"))
 

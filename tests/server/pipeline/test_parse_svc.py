@@ -486,3 +486,30 @@ def test_main_missing_password_exit_two():
     ):
         assert S.main() == 2
     stack.assert_not_called()
+
+
+def test_policy_accepts_unresolved_symlink_root():
+    from common.store import redisq
+    from pipeline import run_mcp_parsing as S
+    from tests.server.common.test_redisq import FakeRedis
+
+    r = FakeRedis()
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        actual = root / "actual"
+        actual.mkdir()
+        alias = root / "alias"
+        alias.symlink_to(actual, target_is_directory=True)
+        configured = Path(S.os.path.normpath(str(alias / "docs")))
+        configured.mkdir()
+        doc = configured / "a.pdf"
+        doc.write_bytes(b"test")
+        with (
+            mock.patch.object(S, "ROOT_PATHS", [configured]),
+            mock.patch.object(S, "ROOTS", [configured.resolve()]),
+            mock.patch.object(S, "allowed_exts", return_value={".pdf"}),
+            mock.patch.object(redisq, "JOBS_DIR", root / "jobs"),
+        ):
+            S._publish_policy(r)
+            assert set(redisq.read_policy(r)["roots"]) == {str(configured), str(configured.resolve())}
+            assert S._jail(str(doc)) == doc.resolve()

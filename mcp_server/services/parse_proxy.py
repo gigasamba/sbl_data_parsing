@@ -18,8 +18,9 @@ from mcp_server.services.tool_runner import PARSE_MAX_SEC
 class RedisFailure(RuntimeError):
     """클라이언트 명령에서 발생한 Redis/소켓 오류(파일 I/O와 구분)."""
 
-    def __init__(self, error, job_id=None):
+    def __init__(self, error, job_id=None, *, submission_unknown=False):
         self.error, self.job_id = error, job_id
+        self.submission_unknown = submission_unknown
         super().__init__(str(error))
 
 
@@ -103,11 +104,11 @@ def _submit(source, r):
             if committed:
                 job = _redis_call(r.hgetall, redisq.key("job", job_id))
                 ahead = int(job["queue_position"])
-            else:
-                shutil.rmtree(ws, ignore_errors=True)
-                raise RedisFailure(exc.error, job_id) from exc
         except RedisFailure as check:
-            raise RedisFailure(check.error, job_id) from check
+            raise RedisFailure(check.error, job_id, submission_unknown=True) from check
+        if not committed:
+            shutil.rmtree(ws, ignore_errors=True)
+            raise RedisFailure(exc.error, job_id) from exc
     except (redisq.QueueFull, ValueError, JobFileError):
         shutil.rmtree(ws, ignore_errors=True)
         raise
@@ -143,7 +144,10 @@ def do_parse_document(path=None, content_b64=None, filename=None, time_out_thres
                     return _file_error(exc, job_id)
             return _parse_shaped(job, max_chars)
     except RedisFailure as exc:
-        return {"error": redisq.connection_error(exc.error), **({"job_id": exc.job_id or job_id} if exc.job_id or job_id else {})}
+        error = redisq.connection_error(exc.error)
+        if exc.submission_unknown:
+            error += " — 제출 여부 확인 불가(job_id로 수집 서버 담당자 확인)"
+        return {"error": error, **({"job_id": exc.job_id or job_id} if exc.job_id or job_id else {})}
     except JobFileError as exc:
         return _file_error(exc.error, exc.job_id)
     except (ValueError, redisq.QueueFull) as exc:
