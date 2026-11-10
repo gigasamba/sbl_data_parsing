@@ -146,7 +146,7 @@ search:
     mcp_bind_host: 127.0.0.1                  # 바인드 주소 · 127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부
     mcp_manifest_file: null                   # 수집 manifest · 예 /app/output/parse/_source/manifest.jsonl (null = output/parse/_source/manifest.jsonl)
     mcp_max_concurrent_tools: 8               # 도구 동시 실행 상한 · 정수
-    mcp_port: 8765                            # 검색 MCP 포트 · 서버는 8080(컨테이너 안 — compose가 서버 8051로 게시) · 비우면 8765(PC) · 정수
+    mcp_port: 8765                            # 검색 MCP 포트 · 서버는 8051(컨테이너 안팎 같음) · 비우면 8765(PC) · 정수
   # ---- EDW 도구 ----
   edw_meta:
     edw_meta_catalog_dir: null                # edw_meta 도구 카탈로그 폴더 · 예 /app/output/edw_meta (null = /app/config/edw_meta)

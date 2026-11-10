@@ -17,7 +17,7 @@ FILES = {
         None,
         {
             "data-pipeline-0": ("data-pipeline-runtime:", ["idle"], None),
-            "mcp-server-0": ("mcp-server-runtime:", ["mcp"], ["0.0.0.0:8051:8080"]),
+            "mcp-server-0": ("mcp-server-runtime:", ["mcp"], ["0.0.0.0:8051:8051"]),
             "mcp-data-parsing-0": ("data-pipeline-runtime:", ["run-mcp-parsing"], None),
         },
     ),
@@ -27,7 +27,7 @@ FILES = {
         {
             "data-pipeline-0": ("data-pipeline-runtime:", ["devbox"], ["0.0.0.0:8020:22"]),
             "data-pipeline-1": ("data-pipeline-runtime:", ["devbox"], ["0.0.0.0:8021:22"]),
-            "mcp-server-0": ("mcp-server-runtime:", ["devbox", "mcp"], ["0.0.0.0:8050:22", "0.0.0.0:8051:8080"]),
+            "mcp-server-0": ("mcp-server-runtime:", ["devbox", "mcp"], ["0.0.0.0:8050:22", "0.0.0.0:8051:8051"]),
             "mcp-data-parsing-0": ("data-pipeline-runtime:", ["run-mcp-parsing"], None),
         },
     ),
@@ -36,7 +36,7 @@ FILES = {
         "always",
         {
             "data-pipeline-0": ("data-pipeline:", ["devbox"], ["0.0.0.0:8020:22"]),
-            "mcp-server-0": ("mcp-server:", ["devbox", "mcp"], ["0.0.0.0:8050:22", "0.0.0.0:8051:8080"]),
+            "mcp-server-0": ("mcp-server:", ["devbox", "mcp"], ["0.0.0.0:8050:22", "0.0.0.0:8051:8051"]),
             "mcp-data-parsing-0": ("data-pipeline:", ["run-mcp-parsing"], None),
         },
     ),

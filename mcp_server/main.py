@@ -263,7 +263,7 @@ if __name__ == "__main__":
             mc.token_text(mc.common_cfg().tokens.mcp),
         )  # 공백뿐인 토큰 = 토큰 없음(사용자 결정 10-27)
         if host == "auto":  # 브리지 네트워크 컨테이너: 자기 사설 IP(포트 게시로 밖에서 부름) — 토큰 필수
-            # 서버 compose(compose-<환경>.yml)는 안 8080을 서버 8051로 게시 — mcp_keepalive.sh는 서버에서 127.0.0.1:8051/health
+            # 서버 compose(compose-<환경>.yml)는 안팎 8051로 게시 — mcp_keepalive.sh는 서버에서 127.0.0.1:8051/health
             import socket
 
             host = socket.gethostbyname(socket.gethostname())

@@ -3,7 +3,7 @@
 #   /health가 응답하면 검색 MCP는 그대로 · 컨테이너가 없거나 꺼졌으면 up -d · 떠 있는데 응답 없으면 restart.
 #   bash deploy/host/scripts/mcp_keepalive.sh   (사람이 한 번) · systemd 타이머 deploy/host/systemd/mcp-server-keepalive.timer가 2분마다
 #   Redis(compose-redis.yml — 이름 redis)는 꺼졌으면 그 파일로 up -d, 건강하지 않으면 restart. 앱 컨테이너는 host_ctl.sh up -d <서비스>
-#   (이 코드 폴더 settings.yaml run_env의 compose-<환경>.yml). /health는 서버에서 http://127.0.0.1:8051/health(compose가 안 8080을 8051로 게시).
+#   (이 코드 폴더 settings.yaml run_env의 compose-<환경>.yml). /health는 서버에서 http://127.0.0.1:8051/health(compose가 안팎 8051로 게시).
 # 설정: settings.yaml(<루트>/settings.yaml — 루트 = 코드 폴더 자체) — DOCKER(셸 env > ops.host.container_cli > docker, 없으면 podman)
 # 종료 코드: 0 응답 확인(원래 떠 있었거나 다시 띄움) · 1 다시 띄웠는데도 응답 없음(로그 마지막 줄 출력)
 set -uo pipefail

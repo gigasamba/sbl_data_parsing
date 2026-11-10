@@ -123,7 +123,7 @@ Redis 인증(#177): 서버(dev·prd)의 `settings.yaml`에는 `common.connection
 | 이름 | 기본 | 메모 |
 |---|---|---|
 | `MCP_HOST`(`search.server.mcp_bind_host`) | `127.0.0.1` | 사내 IP로 열면 `MCP_TOKEN` 필수, `0.0.0.0`은 거부. 서버 컨테이너는 `auto`(컨테이너 자기 주소 — compose가 포트를 서버에 게시) |
-| `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 서버 컨테이너는 `mcp_port: 8080`(compose가 컨테이너 8080을 서버 8051에 게시 — 호출은 `http://<서버 IP>:8051/mcp`, `mcp_allowed_hosts`에 `<서버 IP>:8051`). 토큰은 `required.tokens.mcp_token` 하나 — 검색 MCP·`parse_document` 작업 서비스가 함께 쓴다(호출 쪽은 같은 값을 `Authorization: Bearer`로) · 공백만인 토큰은 없음과 같음 |
+| `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 서버 컨테이너는 `mcp_port: 8051`(compose가 컨테이너 안팎 8051로 게시 — 호출은 `http://<서버 IP>:8051/mcp`, `mcp_allowed_hosts`에 `<서버 IP>:8051`). 토큰은 `required.tokens.mcp_token` 하나 — 검색 MCP·`parse_document` 작업 서비스가 함께 쓴다(호출 쪽은 같은 값을 `Authorization: Bearer`로) · 공백만인 토큰은 없음과 같음 |
 | `FULLTEXT_SIGN_SECRET`(`required.tokens.fulltext_sign_key`) | 비움 | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키(비밀). 비면 두 도구가 `not_configured`. 바꾸면 이미 발급된 `sfid`가 모두 무효 |
 | `DATA_PARSING_PORT`(`ops.services.data_parsing.data_parsing_port`) | `8766` | `parse_document` 작업 서비스 포트(127.0.0.1) — 작업 서비스가 듣고 검색 MCP가 이 값으로 부름(칸 하나). 여러 벌이면 벌마다 다르게(기본값이면 시작 거부) |
 | `DATA_PARSING_MAX_MB`(`ops.services.data_parsing.mcp_parse_max_file_mb`) | `100` | `parse_document` 파일 1건 크기 상한(MB) — 검색 MCP와 파싱 서비스가 같은 칸을 읽음 |

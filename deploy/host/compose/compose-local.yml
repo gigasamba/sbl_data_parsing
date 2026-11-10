@@ -4,7 +4,7 @@
 #     PC 빌드: ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline-runtime|mcp-runtime TAG=<이미지>-runtime:<판> bash deploy/release/build_ship.sh
 #   컨테이너는 모두 root로 뜬다. PC(local)는 root SSH를 열지 않는다(dev_entry.sh가 dev·prd에서만) — 앱 명령만 돈다.
 #   PG·Redis는 PC에 띄운 것(서버와 같은 compose-pgvector.yml·compose-redis.yml이나 PC 시험 DB)에 host.docker.internal로 붙는다.
-#   검색 MCP: settings.yaml search.server — mcp_bind_host auto · mcp_port 8080 · required.tokens.mcp_token → PC에서 http://127.0.0.1:8051/mcp.
+#   검색 MCP: settings.yaml search.server — mcp_bind_host auto · mcp_port 8051 · required.tokens.mcp_token → PC에서 http://127.0.0.1:8051/mcp.
 #   바꿀 자리: IMAGE_TAG(이미지 판) · DOC_SRC(원본 문서 폴더 — 기본 저장소의 valid_env/object_storage) — 셸 env나 이 파일 옆 .env
 name: sbl-local                              # compose 묶음 이름
 x-local: &local
@@ -34,7 +34,7 @@ services:
     image: mcp-server-runtime:${IMAGE_TAG:-0.4.0}
     container_name: mcp-server-0
     command: ["mcp"]
-    ports: ["0.0.0.0:8051:8080"]              # HTTP 8051 → 8080
+    ports: ["0.0.0.0:8051:8051"]              # HTTP 8051
     volumes:
       - ../../..:/app/deploy:ro,z
       - ../../../output:/app/output:ro,z

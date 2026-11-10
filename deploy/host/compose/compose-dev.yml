@@ -10,7 +10,7 @@
 #     (컨테이너 하나의 cpus ≤ 서버 CPU 수 — docker가 거부). 벌을 늘리려면 data-pipeline-1 칸을 복사해 번호·포트·폴더를 바꾼다.
 #   네트워크: docker 자체 네트워크(bridge) — 포트를 서버의 모든 주소(0.0.0.0)에 연다. 컨테이너 안 127.0.0.1은 컨테이너 자신이라
 #     서버에 있는 PG(5433)·Redis(8010)·모델은 host.docker.internal로(settings.yaml required.pg.pg_host · common.connections.redis.redis_host).
-#   검색 MCP: 벌 0 settings.yaml search.server — mcp_bind_host auto · mcp_port 8080 · required.tokens.mcp_token · mcp_allowed_hosts <서버 IP>:8051.
+#   검색 MCP: 벌 0 settings.yaml search.server — mcp_bind_host auto · mcp_port 8051 · required.tokens.mcp_token · mcp_allowed_hosts <서버 IP>:8051.
 name: sbl-devset                             # compose 묶음 이름
 x-dev: &dev
   restart: unless-stopped
@@ -63,7 +63,7 @@ services:
     image: mcp-server-runtime:${IMAGE_TAG:-0.4.0}
     container_name: mcp-server-0
     command: ["devbox", "mcp"]
-    ports: ["0.0.0.0:8050:22", "0.0.0.0:8051:8080"]   # SSH 8050 → 22 · HTTP 8051 → 8080
+    ports: ["0.0.0.0:8050:22", "0.0.0.0:8051:8051"]   # SSH 8050 → 22 · HTTP 8051
     environment: {SSH_PORT: "22", SETTINGS_FILE: /app/deploy/settings.yaml}
     volumes:
       - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-0:/app/deploy:z

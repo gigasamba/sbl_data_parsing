@@ -169,7 +169,7 @@ NOTES = {
     "pipeline.load.bm25_threads": "BM25 계산 스레드",
     # search
     "mcp.server.host": "바인드 주소 · 127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부",
-    "mcp.server.port": "검색 MCP 포트 · 서버는 8080(컨테이너 안 — compose가 서버 8051로 게시) · 비우면 8765(PC)",
+    "mcp.server.port": "검색 MCP 포트 · 서버는 8051(컨테이너 안팎 같음) · 비우면 8765(PC)",
     "mcp.server.allowed_hosts": "더 허용할 Host 이름(리버스 프록시) · 쉼표 구분 · 예 rag.corp.local, rag2.corp.local",
     "mcp.server.manifest": "수집 manifest · 예 /app/output/parse/_source/manifest.jsonl (null = output/parse/_source/manifest.jsonl)",
     "mcp.server.max_concurrency": "도구 동시 실행 상한",

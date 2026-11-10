@@ -8,7 +8,7 @@
 #     · DOC_SRC(원본 문서 폴더 — host_ctl.sh가 settings.yaml required.deploy.host_docs_dir에서 냄) — 셸 env나 이 파일 옆 .env
 #     컨테이너마다 ports·cpus·mem_limit·memswap_limit(메모리+스왑 합 — 같으면 스왑 안 씀)는 아래 각 칸에 직접 적는다.
 #   네트워크: docker 자체 네트워크(bridge) — 포트를 서버의 모든 주소(0.0.0.0)에 연다. 서버에 있는 PG(5433)·Redis(8010)·모델은 host.docker.internal로.
-#   검색 MCP: settings.yaml search.server — mcp_bind_host auto · mcp_port 8080 · required.tokens.mcp_token · mcp_allowed_hosts <서버 IP>:8051.
+#   검색 MCP: settings.yaml search.server — mcp_bind_host auto · mcp_port 8051 · required.tokens.mcp_token · mcp_allowed_hosts <서버 IP>:8051.
 name: sbl-prd                                 # compose 묶음 이름
 x-prd: &prd
   restart: always
@@ -46,7 +46,7 @@ services:
     image: mcp-server:${IMAGE_TAG:-0.4.0}
     container_name: mcp-server-0
     command: ["devbox", "mcp"]
-    ports: ["0.0.0.0:8050:22", "0.0.0.0:8051:8080"]   # SSH 8050 → 22 · HTTP 8051 → 8080
+    ports: ["0.0.0.0:8050:22", "0.0.0.0:8051:8051"]   # SSH 8050 → 22 · HTTP 8051
     environment: {SSH_PORT: "22", SETTINGS_FILE: /etc/rag/settings.yaml, APP_ENTRY: /app/docker/entrypoint.sh}
     volumes:
       - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/settings.yaml:/etc/rag/settings.yaml:ro,z

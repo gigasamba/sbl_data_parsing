@@ -44,7 +44,7 @@
 | `<DB>` · `<DB 이름>` · `<required.pg.pg_database>` | PG 데이터베이스 | `rag` | settings.yaml `required.pg.pg_database` |
 | `<스키마>` · `<pg_schema>` · `<db_schema>` · `<기준>` · `<required.pg.pg_schema>` | 검색 기준 스키마 | `data_parsing` | settings.yaml `required.pg.pg_schema`(비우면 `data_parsing`) |
 | `<임베딩 차원>` | 임베딩 모델 출력 길이 | `1024` | 모델 담당 · 묶음 `meta.json`의 `dim` |
-| `<MCP 포트>` · `<search.server.mcp_port>` | 검색 MCP 컨테이너 안 포트(서버 포트는 8051) | `8080` | settings.yaml `search.server.mcp_port` |
+| `<MCP 포트>` · `<search.server.mcp_port>` | 검색 MCP 컨테이너 안 포트(서버 포트는 8051) | `8051` | settings.yaml `search.server.mcp_port` |
 | `<벌마다 다른 포트>` · `<내 포트>` | SSH 작업 공간 포트(서버 쪽) | `8020`(벌 0) · `8021`(벌 1) · `8050`(`mcp-server-0`) | `compose-<환경>.yml`의 `ports` |
 | `<서버>` | 개발 서버 주소 | `10.0.0.12` | 서버 관리자 |
 | `<버킷>` · `<silver_bucket>` | 게시 버킷 | `rag-silver` | settings.yaml `required.publish.publish_bucket` |
@@ -415,7 +415,7 @@ docker exec pgvector psql -U rag -d rag -c 'CREATE EXTENSION IF NOT EXISTS vecto
 | `required.tokens.mcp_token` | MCP 토큰 하나 — 검색 MCP 외부 호출 인증에 씀(내부 전달은 Redis 권한) | `openssl rand -hex 32` | 64자 16진수 | dev·prd | `host_ctl.sh check` ⑥ `/health` · `parse_document` 호출이 토큰 오류 |
 | `required.tokens.fulltext_sign_key` | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키 — 비우면 두 도구가 `not_configured`, 바꾸면 이미 발급한 sfid가 모두 무효 | 같은 명령 | 64자 16진수 | dev·prd | 원문 도구 호출이 `not_configured` |
 | `common.connections.redis.redis_password` | `parse_document` 작업 큐(Redis) 비밀번호 — `host_ctl.sh secrets`가 Redis 설정 파일에 넣음. `redis_host`·`redis_port`는 비움(기본 `host.docker.internal`·`8010`) | `openssl rand -hex 32` | 64자 16진수 | dev·prd | `redis` 컨테이너 상태 검사 · `parse_document` 호출 |
-| `search.server.mcp_bind_host` · `mcp_port` · `mcp_allowed_hosts` | 검색 MCP 바인드·컨테이너 안 포트·허용 Host(벌 0 — 운영은 그 한 벌) | 정해진 값 · 서버 관리자 | `auto` · `8080` · `<서버 IP>:8051` | dev·prd | `host_ctl.sh check` ⑥ `/health` |
+| `search.server.mcp_bind_host` · `mcp_port` · `mcp_allowed_hosts` | 검색 MCP 바인드·컨테이너 안 포트·허용 Host(벌 0 — 운영은 그 한 벌) | 정해진 값 · 서버 관리자 | `auto` · `8051` · `<서버 IP>:8051` | dev·prd | `host_ctl.sh check` ⑥ `/health` |
 | `required.deploy.host_docs_dir` | 원본 문서 폴더(서버에 이미 있는 폴더 — compose 파일의 `DOC_SRC`로 넘어감) | 서버 관리자 | `/data/docs` | dev·prd | `host_ctl.sh up`이 `:?` 안내로 멈춤 |
 | `required.deploy.pg_container_name` | `pg_dump`·`psql`을 exec할 PG 컨테이너 이름 | DB 담당 | `<컨테이너>` | dev·prd | 백업 명령([§4-3](#4-3-백업)) |
 | `ops.host.container_cli` | 컨테이너 도구 | 정해진 값 | `docker` | dev·prd | 호스트 스크립트가 다른 도구를 부름 |
@@ -428,7 +428,7 @@ docker exec pgvector psql -U rag -d rag -c 'CREATE EXTENSION IF NOT EXISTS vecto
 |---|---|---|---|
 | SSH — `data-pipeline-0` · `data-pipeline-1`(개발) | 8020 · 8021 → 22 | compose 파일 `ports` | 개발자(root 비밀번호) |
 | SSH — `mcp-server-0` | 8050 → 22 | 같음 | 개발자·운영자 |
-| 검색 MCP | 8051 → 8080 | compose 파일 `ports` · 컨테이너 안 포트 `search.server.mcp_port: 8080`(바인드 `mcp_bind_host: auto`) | AI 클라이언트 · `mcp_keepalive.sh`(`127.0.0.1:8051/health`) |
+| 검색 MCP | 8051(안팎 같음) | compose 파일 `ports` · 컨테이너 안 포트 `search.server.mcp_port: 8051`(바인드 `mcp_bind_host: auto`) | AI 클라이언트 · `mcp_keepalive.sh`(`127.0.0.1:8051/health`) |
 | PostgreSQL(pgvector) | 5433 → 5432 | `compose-pgvector.yml` · 앱 `required.pg.pg_port: 5433` | 파이프라인·검색 MCP(`host.docker.internal`) · DB 도구 |
 | Redis | 8010 → 6379 | `compose-redis.yml` · 앱 `common.connections.redis.redis_port`(기본 8010) | 검색 MCP·작업 컨테이너(`host.docker.internal`) |
 | EDW(SQL Server) | — | `required.edw.edw_port`(주소·계정도 `required.edw`) — 기본 1433 | 파이프라인·`query_edw` |
@@ -536,7 +536,7 @@ selftest는 종료 코드가 아니라 `[판정]` 줄로 판정한다([§5-5](#5
 ### 1-11. 밖에서 붙기(다른 서버의 AI 클라이언트)
 
 검색 MCP(`mcp-server-0`)에 다른 서버가 붙을 때.
-- 컨테이너 안은 벌 0 settings.yaml `search.server.mcp_bind_host: auto`(컨테이너 사설 IP — `0.0.0.0`은 거부) · `mcp_port: 8080`이고, compose 파일이 서버 `0.0.0.0:8051`로 연다. 클라이언트 주소는 `http://<서버 IP>:8051/mcp`.
+- 컨테이너 안은 벌 0 settings.yaml `search.server.mcp_bind_host: auto`(컨테이너 사설 IP — `0.0.0.0`은 거부) · `mcp_port: 8051`이고, compose 파일이 서버 `0.0.0.0:8051`로 연다. 클라이언트 주소는 `http://<서버 IP>:8051/mcp`.
 - `required.tokens.mcp_token`이 꼭 있어야 한다(없으면 시작 거부). 만들기: `openssl rand -hex 32`.
 - `search.server.mcp_allowed_hosts`에 클라이언트가 보내는 Host를 적는다 — 예 `<서버 IP>:8051`(이름으로 붙으면 그 이름도, 쉼표 구분).
 - 방화벽에서 8051을 연다 — 예: `firewall-cmd --add-port=8051/tcp --permanent && firewall-cmd --reload`.
@@ -665,7 +665,7 @@ common:
 search:
   server:                                     # 벌 0만(검색 MCP 컨테이너가 이 설정을 읽음)
     mcp_bind_host: auto
-    mcp_port: 8080
+    mcp_port: 8051
     mcp_allowed_hosts: <서버 IP>:8051
 ops:
   host:
@@ -1444,7 +1444,7 @@ GROUP BY except_type, reason, source_system ORDER BY docs DESC;
 |---|---|---|
 | 환경마다 compose 파일 하나(`compose-dev.yml`·`compose-prd.yml`·`compose-local.yml`) — 컨테이너 이름(`data-pipeline-0`·`mcp-server-0`·`mcp-data-parsing-0` …)·이미지·포트·자원이 파일에 직접 | 옛 컨테이너를 내리고 새 이름으로 띄움 · 이미지·자원·컨테이너 칸을 settings.yaml에서 지움 | §4-6 · [§6-6](#6-6-서버-묶음--compose-파일과-root-ssh) |
 | PG(`compose-pgvector.yml` — 서버 5433)·Redis(`compose-redis.yml` — 공식 `redis:7.4.8-alpine`, 서버 8010)를 서버마다 하나, 손으로 한 번 띄움 · 비밀 파일은 `host_ctl.sh secrets` | `mcp-redis`를 내리고 `redis`를 띄움 · `redis_password` 채움 | §4-6 · [§6-7](#6-7-redis--compose-redisyml) |
-| 앱이 PG·Redis에 `host.docker.internal`로 붙음 · 검색 MCP는 컨테이너 안 8080, 서버 8051 | settings.yaml `required.pg.pg_host`·`pg_port`, `search.server` 고침 | §4-6 · [§1-11](#1-11-밖에서-붙기다른-서버의-ai-클라이언트) |
+| 앱이 PG·Redis에 `host.docker.internal`로 붙음 · 검색 MCP는 컨테이너 안팎 8051 | settings.yaml `required.pg.pg_host`·`pg_port`, `search.server` 고침 | §4-6 · [§1-11](#1-11-밖에서-붙기다른-서버의-ai-클라이언트) |
 | `edw_chain.yaml`이 코드 폴더 맨 위(git — 운영 이미지에 들어감) | 서버에서 고친 사본은 git 파일로 옮김 | §4-6 · [§3-9-2](#3-9-2-edw-조인-사슬-파일-고쳐-쓰기) |
 | 타이머·keepalive·새벽 배치는 벌 0만(단위 이름 끝 번호 없음) | 옛 `-<번호>` 단위를 지우고 `host_ctl.sh timers` | §4-6 · §3-1 |
 
@@ -1589,7 +1589,7 @@ chown 10001:<운영 그룹> settings.yaml && chmod 640 settings.yaml
 2. settings.yaml을 고친다 — 아래 "서버 settings.yaml에서 지울 칸"을 지우고, 채울 칸:
    - `common.connections.redis.redis_password` — 서버마다 새 값(`openssl rand -hex 32`). `redis_host`·`redis_port`는 비운다(기본 `host.docker.internal`·`8010`).
    - `required.pg.pg_host: host.docker.internal` · `pg_port: 5433`(`compose-pgvector.yml`로 띄울 때 — DB 담당이 따로 둔 PG면 그 값 그대로).
-   - 벌 0(운영은 그 한 벌) `search.server`: `mcp_bind_host: auto` · `mcp_port: 8080` · `mcp_allowed_hosts: <서버 IP>:8051`.
+   - 벌 0(운영은 그 한 벌) `search.server`: `mcp_bind_host: auto` · `mcp_port: 8051` · `mcp_allowed_hosts: <서버 IP>:8051`.
    - `ops.paths.edw_chain_file`에 `/etc/rag/edw_chain.yaml`을 적었으면 지운다(비움 = 코드 폴더 맨 위 `edw_chain.yaml`).
 3. 비밀 파일: `bash deploy/host/scripts/host_ctl.sh secrets` → `<공용 폴더>/secrets/`(700 · 파일 600). 손으로 만든 옛 비밀번호 파일(`<공용 폴더>/pg_pw`·`redis_pw`·`root_pw`)과 옛 Redis 설정 폴더(`<루트>/redis-conf`)는 더 쓰지 않으니 지운다. root SSH 비밀번호는 이미지에 들어간다([§6-6](#6-6-서버-묶음--compose-파일과-root-ssh)).
 4. PG: 옛 `pgvector` 컨테이너를 멈추고 지운 뒤(`docker stop pgvector && docker rm pgvector` — 데이터 폴더는 그대로) `docker compose -f deploy/host/compose/compose-pgvector.yml up -d`(같은 데이터 폴더 `PG_DATA` — 기본 `/data/pg/pipeline`). 비밀번호 파일은 빈 데이터 폴더에서만 쓰이므로 settings.yaml `pg_password`가 기존 DB 비밀번호와 같아야 한다. docker 볼륨이었으면 멈춘 뒤 `docker volume inspect <볼륨> --format '{{.Mountpoint}}'` 폴더의 내용을 데이터 폴더로 복사한다.
@@ -2048,14 +2048,14 @@ git tag -l 'v*'                                       #    기대: … v0.3.1 v0
 |---|---|---|
 | `data-pipeline-0` | 8020 → 22(SSH) | 4 · 12g(스왑 4g 더 — `memswap_limit` 16g) |
 | `data-pipeline-1` | 8021 → 22(SSH) | 2 · 8g |
-| `mcp-server-0` | 8050 → 22(SSH) · 8051 → 8080(HTTP) | 3 · 12g |
+| `mcp-server-0` | 8050 → 22(SSH) · 8051(HTTP — 안팎 같음) | 3 · 12g |
 | `mcp-data-parsing-0` | — | 4 · 12g(`cpu_shares` 4096) |
 | `pgvector` | 5433 → 5432 | 4 · 12g |
 | `redis` | 8010 → 6379 | 1 · 2g |
 
 - 앱 컨테이너는 모두 root로 뜬다. SSH 컨테이너(`data-pipeline-*`·`mcp-server-0`)는 root 비밀번호 SSH를 연다 — 비밀번호는 **이미지에 넣은 값**이다(이미지 빌드 때 BuildKit 비밀 `BUILD_ARGS="--secret id=root_pw,src=<git 밖 파일>"` — 첫 줄 · 저장소·`docker history`에 남지 않음 · 바꾸려면 `--no-cache`로 다시 빌드). 벌 settings.yaml `required.env.run_env`가 `dev`·`prd`가 아니면 SSH 컨테이너가 시작을 거부한다.
 - 포트는 서버의 모든 주소(`0.0.0.0`)에 열린다. 컨테이너는 docker 자체 네트워크(bridge)에 있어 컨테이너 안 `127.0.0.1`은 컨테이너 자신이다 — 서버에 있는 PG(5433)·Redis(8010)·모델은 `host.docker.internal`로 적는다(settings.yaml `required.pg.pg_host` · `common.connections.redis.redis_host` 기본값). 서버 바깥(DB 도구 등)에서는 `<서버 IP>:5433`.
-- 검색 MCP: 벌 0(운영은 그 한 벌) settings.yaml `search.server` — `mcp_bind_host: auto` · `mcp_port: 8080` · `required.tokens.mcp_token`(루프백이 아니라 필수) · `mcp_allowed_hosts: <서버 IP>:8051`(예 `10.10.1.20:8051`). 서버의 `mcp_keepalive.sh`는 `http://127.0.0.1:8051/health`를 본다.
+- 검색 MCP: 벌 0(운영은 그 한 벌) settings.yaml `search.server` — `mcp_bind_host: auto` · `mcp_port: 8051` · `required.tokens.mcp_token`(루프백이 아니라 필수) · `mcp_allowed_hosts: <서버 IP>:8051`(예 `10.10.1.20:8051`). 서버의 `mcp_keepalive.sh`는 `http://127.0.0.1:8051/health`를 본다.
 - CPU·메모리·포트를 바꾸려면 그 파일의 컨테이너 칸을 고친다([§2-14](#2-14-컨테이너-이름볼륨-바꾸기)). 모든 컨테이너의 `cpus` 합 ≤ 서버 CPU 수([§1-10](#1-10-자원)).
 
 **① 준비(서버, 한 번)**
