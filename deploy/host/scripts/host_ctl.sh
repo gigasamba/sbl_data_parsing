@@ -179,7 +179,8 @@ if [ -z "${INSTANCE:-}" ]; then
     up|create|start)
       if [ "$DOCKER" != echo ] && [ -z "$base" ]; then
         prepare_jobs || { rc=$?; echo "[host_ctl] jobs 준비 실패 — host_ctl.sh init --group <운영 그룹> 확인" >&2; exit "$rc"; }
-        prepare_redis || { rc=$?; echo "[host_ctl] Redis 설정 준비 실패 — 데이터 폴더·설정 파일 권한 확인" >&2; exit "$rc"; }
+        prepare_redis || { rc=$?; echo "[host_ctl] Redis 설정 준비 실패 — 설정 폴더·설정 파일 권한 확인" >&2; exit "$rc"; }
+        restart_redis_changed || { rc=$?; echo "[host_ctl] Redis 설정 반영 재시작 실패" >&2; exit "$rc"; }
       fi ;;
   esac
 fi

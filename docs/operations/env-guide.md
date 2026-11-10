@@ -56,9 +56,13 @@
 | `tuning.ops.services.data_parsing.mcp_parse_engine_processes` | 비움 | worker마다 max(1, min(2, CPU − 1)), 보통 2 workers × 2 engines = 총 4개 |
 | `ops.containers.data_parsing.data_parsing_cpus` · `data_parsing_mem_limit` · `data_parsing_cpu_shares` | 4.0 · 12g · 4096 | 호스트 4 CPU 이상·12g 메모리 여유 확인. 4 CPU 미만이면 CPU 상한을 낮추고 엔진 수 1. cpus는 예약이 아닌 상한, 공유 시 우선순위는 cpu_shares |
 | `tuning.ops.services.data_parsing.mcp_parse_max_attempts` · `mcp_parse_result_ttl_sec` | 3 · 86400 | 유실 작업 최대 전달 횟수 · 완료 HASH/LIST 보존 초 |
-| `ops.host.redis_image` · `redis_mem_limit` · `redis_data_dir` | redis:7.4.2-alpine · 512m · `<루트>/redis` | 이미지 반입·메모리·AOF/보호 설정 호스트 폴더 |
+| `ops.host.redis_image` · `redis_mem_limit` · `redis_data_dir` | redis:7.4.2-alpine · 512m · `<루트>/redis` | 이미지 반입·메모리·AOF 데이터 호스트 폴더 |
 | `tuning.ops.services.data_parsing.mcp_parse_max_queued_jobs` | 8 | 대기+실행 작업 상한. YAML 경로·alias DATA_PARSING_QUEUE_MAX·기본값은 그대로, 모델만 common으로 이동 |
 | `ops.services.data_parsing.data_parsing_port` | 8766 | 더 쓰지 않음(#113 Redis 큐로 대체) — 다음 판 삭제 여부는 C-116 |
+
+Redis 인증(#177): 서버(dev·prd)의 `settings.yaml`에는 `common.connections.redis.redis_password`를 반드시 채운다. 비움·공백은 호스트 prepare_redis와 앱 client가 거부하며 worker 시작은 종료 코드 2다. local에서만 무인증을 허용한다. Redis는 루프백 bind와 `protected-mode yes`를 함께 사용한다. 비밀값 처리 변경은 검토 등급 A로 다른 사람의 승인이 필요하다(C-117).
+
+Redis 보호 설정은 운영 계정 소유 `${REDIS_CONF_DIR:-$RAG_ROOT/redis-conf}`(폴더 700, 파일 600)에 두고 `/conf:ro,z`로 붙인다. `REDIS_CONF_DIR`는 호스트 셸에서만 덮을 수 있으며 settings.yaml 항목은 추가하지 않는다. `/data`는 Redis가 소유하는 AOF 데이터 폴더다. prepare_redis는 파일 내용이 같으면 다시 쓰지 않고, 바뀌면 `REDIS_CONF_CHANGED=1`로 알려 host_ctl·keepalive가 실행 중인 Redis → 파싱 MCP → 검색 MCP를 재시작한다.
 
 기동·건강 확인·키 조회는 [server-guide §1-3-1](server-guide.md#1-3-1-parse_document-redis-큐113). 외부 MCP Bearer 토큰은 계속 필요하며 내부 parse HTTP 토큰 검사는 없어졌다.
 
@@ -240,5 +244,3 @@ PC는 `.venv/bin/python -m pipeline.config`(루트 `settings.yaml`)가 같은 �
 - 그래서 서버 settings.yaml의 경로 칸(`ops.paths.*`·`ops.log.log_fallback_dir`·`search.edw_meta.edw_meta_catalog_dir` 등)은 **컨테이너 안 절대 경로**로 적고, 무엇이든 쓰는 자리는 `/app/output/…` 아래로 둔다(예 `/app/output/edw_meta`). 비워 두면 기본값이 이미 `/app/output` 아래다.
 - 호스트 쪽 칸(`ops.host.host_output_dir`·`required.deploy.host_docs_dir`·`ops.run_pipeline.run_pipeline_work_dir`·`option.devbox.opencode_config`)은 **호스트 절대 경로**다.
 - PC에서 Docker로 시험할 때 `valid_env`의 자료를 쓰려면 `/app/valid_env/…`에 붙이고, 시험 설정의 경로도 그 자리(절대 경로)로 적는다.
-
-Redis 인증(#177): 서버(dev·prd)의 `settings.yaml`에는 `common.connections.redis.redis_password`를 반드시 채운다. 비움·공백은 호스트 prepare_redis와 앱 client가 거부하며 worker 시작은 종료 코드 2다. local에서만 무인증을 허용한다. Redis는 루프백 bind와 `protected-mode yes`를 함께 사용한다. 비밀값 처리 변경은 검토 등급 A로 다른 사람의 승인이 필요하다(C-117).

@@ -106,8 +106,26 @@ EOF
 
 # Redis 설정·인증은 보호 파일(600)에만. compose env·argv에는 비밀번호를 내보내지 않는다.
 prepare_redis() {
-  local folder=${REDIS_DATA_DIR:-$RAG_ROOT/redis}
-  "${PY:-python3}" "$_SETTINGS_ROOT/deploy/host/scripts/settings_to_env.py" --file "$SETTINGS_FILE" --redis-dir "$folder"
+  local folder=${REDIS_CONF_DIR:-$RAG_ROOT/redis-conf} out
+  REDIS_CONF_CHANGED=0; export REDIS_CONF_CHANGED
+  out=$("${PY:-python3}" "$_SETTINGS_ROOT/deploy/host/scripts/settings_to_env.py" --file "$SETTINGS_FILE" --redis-dir "$folder") || return $?
+  [ "$out" != changed ] || REDIS_CONF_CHANGED=1
+  export REDIS_CONF_CHANGED
+  return 0
+}
+
+# 파일 교체만으로 실행 중 Redis는 바뀌지 않는다. 두 앱도 새 비밀번호를 다시 읽는다.
+restart_redis_changed() {
+  [ "${REDIS_CONF_CHANGED:-0}" = 1 ] || return 0
+  [ "$($DOCKER inspect -f '{{.State.Running}}' mcp-redis 2>/dev/null)" = true ] || return 0
+  echo "[설정] Redis 보호 설정 변경 — Redis와 실행 중인 파싱·검색 MCP 재시작"
+  $DOCKER restart mcp-redis >/dev/null || return $?
+  local name
+  for name in "$DATA_PARSING_CNAME" "$MCP_CNAME"; do
+    if [ "$($DOCKER inspect -f '{{.State.Running}}' "$name" 2>/dev/null)" = true ]; then
+      $DOCKER restart "$name" >/dev/null || return $?
+    fi
+  done
 }
 
 # UID 10001 작업 폴더 — 컨테이너보다 먼저 만들고 권한을 확인(기존 결과 폴더와 같은 주인·그룹).

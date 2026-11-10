@@ -142,13 +142,14 @@ def lines(doc, sections, fmt="sh"):
 
 def redis_files(doc, directory):
     """Redis 이미지에는 Python이 없음 — 호스트가 설정에서 비밀을 읽어 보호 파일로만 전달.
-    requirepass는 argv·compose env에 싣지 않는다. redis entrypoint가 /data 주인을 맞춘다.
+    requirepass는 argv·compose env에 싣지 않는다. 설정은 운영 계정 소유의 별도 /conf, 데이터는 /data.
     """
     password = get(doc, "common.connections.redis.redis_password")
     if get(doc, "common.run_env") in ("dev", "prd") and not str(password or "").strip():
         raise ValueError("Redis 비밀번호 없음 — 서버(dev·prd)는 settings.yaml common.connections.redis.redis_password 필수")
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
+    directory.chmod(0o700)
     port = get(doc, "common.connections.redis.redis_port") or 6379
     try:
         port = int(port)
@@ -163,8 +164,14 @@ def redis_files(doc, directory):
         config += "requirepass " + json.dumps(str(password), ensure_ascii=False) + "\n"
         health += "export REDISCLI_AUTH='" + str(password).replace("'", "'\\''") + "'\n"
     health += f"exec redis-cli --no-auth-warning -p {port} ping\n"
-    for name, body in (("redis.conf", config), ("health.sh", health)):
+    start = "#!/bin/sh\nset -eu\ncp /conf/redis.conf /data/redis.conf\nchmod 600 /data/redis.conf\nexec docker-entrypoint.sh redis-server /data/redis.conf\n"
+    changed = False
+    for name, body in (("redis.conf", config), ("health.sh", health), ("start.sh", start)):
         target = directory / name
+        if target.is_file() and target.read_text(encoding="utf-8") == body:
+            target.chmod(0o600)
+            continue
+        changed = True
         # 처음부터 600 — 기존 파일을 다시 쓸 때도 공개하지 않음.
         fd, temporary = tempfile.mkstemp(prefix=name + ".", dir=directory)
         tmp = Path(temporary)
@@ -174,6 +181,8 @@ def redis_files(doc, directory):
             tmp.replace(target)
         finally:
             tmp.unlink(missing_ok=True)
+
+    return changed
 
 
 def main(argv=None):
@@ -191,7 +200,8 @@ def main(argv=None):
     try:
         out = [] if err or a.redis_dir else lines(doc, a.sections, a.format)
         if not err and a.redis_dir:
-            redis_files(doc, a.redis_dir)
+            if redis_files(doc, a.redis_dir):
+                out = ["changed"]
     except ValueError as e:
         err = f"설정 파일 값 오류({path}): {e}"
     if err:

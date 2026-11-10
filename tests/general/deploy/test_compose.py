@@ -105,3 +105,11 @@ def test_parse_resource_defaults():
     assert host.data_parsing_mem_limit == "12g"
     assert service["mem_limit"] == service["memswap_limit"] == "${DATA_PARSING_MEM_LIMIT:-12g}"
     assert host.data_parsing_cpu_shares == _default(service["cpu_shares"]) == 4096
+
+
+def test_redis_separate_configuration_mount():
+    service = _services("compose.redis.yml")["mcp-redis"]
+    assert service["command"] == ["sh", "/conf/start.sh"]
+    assert "${REDIS_CONF_DIR:-${RAG_ROOT}/redis-conf}:/conf:ro,z" in service["volumes"]
+    assert "${REDIS_DATA_DIR:-${RAG_ROOT}/redis}:/data:z" in service["volumes"]
+    assert service["healthcheck"]["test"] == ["CMD", "sh", "/conf/health.sh"]

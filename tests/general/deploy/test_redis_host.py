@@ -19,7 +19,17 @@ def test_redis_config_and_secret():
     secret = "dummy ' quoted $secret\\line"
     doc = {"common": {"connections": {"redis": {"redis_port": 56379, "redis_password": secret}}}}
     with tempfile.TemporaryDirectory() as directory:
-        module.redis_files(doc, directory)
+        assert module.redis_files(doc, directory)
+        files = [Path(directory) / n for n in ("redis.conf", "health.sh", "start.sh")]
+        before = [p.stat().st_mtime_ns for p in files]
+        assert not module.redis_files(doc, directory)
+        assert before == [p.stat().st_mtime_ns for p in files]
+        assert stat.S_IMODE(Path(directory).stat().st_mode) == 0o700
+        assert all(stat.S_IMODE(p.stat().st_mode) == 0o600 for p in files)
+        start = files[2].read_text(encoding="utf-8")
+        assert "cp /conf/redis.conf /data/redis.conf" in start
+        assert "chmod 600 /data/redis.conf" in start
+        assert "exec docker-entrypoint.sh redis-server /data/redis.conf" in start
         cfg = Path(directory) / "redis.conf"
         health = Path(directory) / "health.sh"
         assert stat.S_IMODE(cfg.stat().st_mode) == stat.S_IMODE(health.stat().st_mode) == 0o600
@@ -36,7 +46,7 @@ def test_redis_config_and_secret():
         script.write_text(shell + 'exec "$1" "$2" "$3"\n', encoding="utf-8")
         result = subprocess.run(["sh", str(script), sys.executable, str(check), secret], capture_output=True)
         assert result.returncode == 0 and not result.stdout and not result.stderr
-        module.redis_files({"common": {}}, directory)
+        assert module.redis_files({"common": {}}, directory)
         assert "requirepass" not in cfg.read_text(encoding="utf-8") and "REDISCLI_AUTH" not in health.read_text(encoding="utf-8")
 
 
@@ -46,9 +56,10 @@ def test_redis_compose_and_health():
     compose = DEPLOY_ROOT / "deploy" / "host" / "compose"
     service = yaml.safe_load((compose / "compose.redis.yml").read_text(encoding="utf-8"))["services"]["mcp-redis"]
     assert service["network_mode"] == "host" and service["restart"] == "unless-stopped"
-    assert service["command"] == ["redis-server", "/data/redis.conf"]
-    assert service["healthcheck"]["test"] == ["CMD", "sh", "/data/health.sh"]
-    assert all(str(v).endswith(":z") for v in service["volumes"])
+    assert service["command"] == ["sh", "/conf/start.sh"]
+    assert service["healthcheck"]["test"] == ["CMD", "sh", "/conf/health.sh"]
+    assert all(str(v).endswith((":z", ":ro,z")) for v in service["volumes"])
+    assert "${REDIS_CONF_DIR:-${RAG_ROOT}/redis-conf}:/conf:ro,z" in service["volumes"]
     parsing = yaml.safe_load((compose / "compose.data-parsing.yml").read_text(encoding="utf-8"))["services"]["mcp-data-parsing"]
     assert parsing["healthcheck"]["test"] == ["CMD", "python", "-m", "pipeline.run_mcp_parsing", "--health"]
     mcp = yaml.safe_load((compose / "compose.mcp-server.yml").read_text(encoding="utf-8"))["services"]["mcp"]
@@ -184,3 +195,55 @@ def test_redis_host_password_required():
                 else:
                     module.redis_files(doc, target)
                     assert "protected-mode yes" in (target / "redis.conf").read_text(encoding="utf-8")
+
+
+def test_prepare_redis_change_and_restart():
+    import shlex
+
+    script = DEPLOY_ROOT / "deploy" / "host" / "scripts" / "load_settings.sh"
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        settings = root / "settings.yaml"
+        settings.write_text(
+            "required:\n  env:\n    run_env: local\ncommon:\n  connections:\n    redis:\n      redis_port: 56379\n", encoding="utf-8"
+        )
+        calls = root / "calls"
+        shell = f"""set -eu
+. {shlex.quote(str(script))}
+RAG_ROOT={shlex.quote(str(root))}
+SETTINGS_FILE={shlex.quote(str(settings))}
+PY={shlex.quote(sys.executable)}
+DATA_PARSING_CNAME=parsing
+MCP_CNAME=mcp
+DOCKER=docker_stub
+docker_stub() {{
+  case "$1" in
+    inspect) case "$*" in *parsing) echo false ;; *) echo true ;; esac ;;
+    restart) echo "$2" >> {shlex.quote(str(calls))} ;;
+  esac
+}}
+prepare_redis
+[ "$REDIS_CONF_CHANGED" = 1 ]
+restart_redis_changed
+prepare_redis
+[ "$REDIS_CONF_CHANGED" = 0 ]
+restart_redis_changed
+"""
+        result = subprocess.run(["bash", "-c", shell], capture_output=True, text=True, encoding="utf-8")
+        assert result.returncode == 0, (result.stdout, result.stderr)
+        assert calls.read_text(encoding="utf-8").splitlines() == ["mcp-redis", "mcp"]
+        assert (root / "redis-conf" / "start.sh").is_file() and not (root / "redis").exists()
+        assert "Redis 보호 설정 변경" in result.stdout
+        # CLI는 값 없이 변경 여부만 출력하고 동일 내용은 조용히 끝냄.
+        command = [
+            sys.executable,
+            str(script.parent / "settings_to_env.py"),
+            "--file",
+            str(settings),
+            "--redis-dir",
+            str(root / "other-conf"),
+        ]
+        first = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+        again = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+        assert first.returncode == again.returncode == 0
+        assert first.stdout == "changed\n" and not again.stdout

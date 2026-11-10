@@ -246,7 +246,7 @@ B=/home/sbl/sbl_data_parsing-main; cd $B
   $DOCKER run -d --name mcp-redis --restart unless-stopped --network host \
     --memory "${REDIS_MEM_LIMIT:-512m}" \
     -v "${REDIS_DATA_DIR:-$RAG_ROOT/redis}:/data:z" \
-    --health-cmd='sh /data/health.sh' --health-interval=15s --health-timeout=5s --health-retries=3 \
+    --health-cmd='sh /conf/health.sh' --health-interval=15s --health-timeout=5s --health-retries=3 \
     "${REDIS_IMAGE:-redis:7.4.2-alpine}" redis-server /data/redis.conf )
 # 예: <원본 문서 폴더> = /data/docs · <VERSION> = 0.3.1(끝 줄 data-pipeline:0.3.1 idle · mcp-server:0.3.1 mcp) · 자원 값은 dev ②의 확인 명령으로 정함
 docker run -d --name data-pipeline --restart unless-stopped --network host --init \
@@ -393,20 +393,26 @@ bash deploy/host/scripts/host_ctl.sh up -d mcp-redis
 bash deploy/host/scripts/host_ctl.sh up -d mcp-data-parsing
 bash deploy/host/scripts/host_ctl.sh up -d mcp
 bash deploy/host/scripts/host_ctl.sh ps
-$DOCKER exec mcp-redis sh /data/health.sh                  # PONG(비밀번호 있으면 보호 파일에서 인증)
+$DOCKER exec mcp-redis sh /conf/health.sh                  # PONG(비밀번호 있으면 보호 파일에서 인증)
 $DOCKER exec mcp-data-parsing python -m pipeline.run_mcp_parsing --health
 $DOCKER exec mcp-redis redis-cli -p <설정 포트> SCARD mcp_parse:active
 $DOCKER exec mcp-redis redis-cli -p <설정 포트> XPENDING mcp_parse:queue mcp_parse:workers
 $DOCKER exec mcp-redis redis-cli -p <설정 포트> HGETALL mcp_parse:job:<job_id>
 ```
 
-위 키 조회 예시는 비밀번호가 없을 때다. 인증이 있으면 컨테이너 셸에서 보호 파일(`/data/health.sh`의 REDISCLI_AUTH 선언)을 이용하며 비밀번호를 명령 인자·로그에 적지 않는다. Redis·mcp-data-parsing·mcp는 서버당 한 벌이며 번호 벌은 파싱 MCP가 없다. 접두는 설정값 그대로 사용한다(자동 접미사 없음). `KEYS *`·FLUSHALL 대신 해당 접두의 SCAN을 쓴다.
+위 직접 redis-cli 키 조회 예시는 local 무인증 시험용이다. 서버(dev·prd)는 비밀번호가 필수이므로 컨테이너 셸에서 보호 파일(`/conf/health.sh`의 REDISCLI_AUTH 선언)을 이용하며 비밀번호를 명령 인자·로그에 적지 않는다. Redis·mcp-data-parsing·mcp는 서버당 한 벌이며 번호 벌은 파싱 MCP가 없다. 접두는 설정값 그대로 사용한다(자동 접미사 없음). `KEYS *`·FLUSHALL 대신 해당 접두의 SCAN을 쓴다.
 
-AOF 데이터는 `ops.host.redis_data_dir`(비우면 `<루트>/redis`)에 남는다. 호스트 스크립트가 settings.yaml의 redis_password를 권한 600인 redis.conf·health.sh로 만들어 인증을 설정한다. Redis 시작 스크립트가 데이터 주인을 맞추므로 이후 파일 갱신도 root로 한다. 비밀번호 변경은 Redis와 두 앱을 함께 재시작한다. AOF everysec는 장애 시 최근 약 1초 쓰기를 잃을 수 있다. 완료 STREAM 항목은 XACK+XDEL로 제거하고, AOF는 Redis 기본 auto-rewrite(100% 증가·최소 64MB)를 사용하므로 디스크 여유를 살핀다. 완료 HASH·LIST는 기본 하루 TTL, 폴더는 수정 시간순 최근 30개를 남기되 active와 최근 10분 폴더는 등록 전 업로드까지 보호한다. 미완료 작업은 pending에서 회수되며 최대 전달 횟수를 넘으면 failed 알림을 준다.
+AOF 데이터는 `ops.host.redis_data_dir`(비우면 `<루트>/redis`)에 남는다. 호스트 스크립트가 settings.yaml의 redis_password를 권한 600인 redis.conf·health.sh로 만들어 인증을 설정한다. 설정은 운영 계정 소유 `${REDIS_CONF_DIR:-$RAG_ROOT/redis-conf}`(폴더 700, 파일 600)에 두고 `/conf:ro,z`로 붙인다. 데이터 폴더는 Redis 전용이며 운영 계정이 쓰지 않는다. start.sh는 root로 설정을 /data/redis.conf에 복사·chmod 600한 뒤 공식 entrypoint를 redis-server 인자로 실행해 Redis 계정으로 내린다. 호스트 prepare_redis는 같은 내용이면 파일을 다시 쓰지 않고, 바뀌면 host_ctl·keepalive가 실행 중인 Redis와 두 앱을 순서대로 재시작한다. AOF everysec는 장애 시 최근 약 1초 쓰기를 잃을 수 있다. 완료 STREAM 항목은 XACK+XDEL로 제거하고, AOF는 Redis 기본 auto-rewrite(100% 증가·최소 64MB)를 사용하므로 디스크 여유를 살핀다. 완료 HASH·LIST는 기본 하루 TTL, 폴더는 수정 시간순 최근 30개를 남기되 active와 최근 10분 폴더는 등록 전 업로드까지 보호한다. 미완료 작업은 pending에서 회수되며 최대 전달 횟수를 넘으면 failed 알림을 준다.
 
 검색 MCP의 keepalive는 jobs/Redis 준비·기동이 실패해도 검색 MCP 확인과 재기동을 계속한다. parse health는 컨테이너 로컬 임시 폴더의 supervisor 식별자를 읽고 그 소비자의 heartbeat만 확인하므로 호스트 네트워크에서도 다른 컨테이너를 정상으로 오인하지 않는다.
 
 상태 흐름: queued → running → done/failed/rejected. 완료 알림 전에 result-<attempts>.json을 쓴다. 제한 시간 응답을 받아도 worker는 작업을 계속한다. `service.json`에는 supervisor PID·Redis host:port·worker 수만 적고 비밀번호는 넣지 않는다. 작업·대기·파싱 추적과 `perf_report --mcp`는 §3-4-1을 따른다.
+
+parse_document 회수 보강(#177): 종료 확인·running 소유권 변경은 WATCH로 묶고, 시도별 `a<n>/`에서 파싱한 뒤 HASH의 `result_file` 이름으로 결과를 읽는다. heartbeat가 없는 소비자는 idle 60초 뒤 한 건씩 회수하며, 살아 있지만 멈춘 소비자는 기존 (job_timeout+60)초 XAUTOCLAIM으로 회수한다. 손상된 HASH는 failed로 끝내고 일반 worker 오류는 traceback으로 기록한다.
+
+parse_document 빠른 거절·제출 복구(#177): worker가 확장자·허용 루트·크기 정책을 시작 때와 10초 heartbeat마다 Redis에 TTL 120초로 공개한다. proxy는 정책이 있으면 확장자와 정규화한 절대경로를 폴더 생성 전에 검사한다(존재·실제 크기·심볼릭 링크는 worker가 검사). 정책이 없으면 제출한다. 제출 EXEC 응답이 유실되면 새 EXISTS로 등록 여부를 확인해 등록된 작업은 계속 기다리고, 미등록이 확실할 때만 폴더를 지운다. 확인도 실패하면 폴더를 보존하고 job_id와 연결 오류를 반환한다.
+
+Redis 인증(#177): 서버(dev·prd)의 `settings.yaml`에는 `common.connections.redis.redis_password`를 반드시 채운다. 비움·공백은 호스트 prepare_redis와 앱 client가 거부하며 worker 시작은 종료 코드 2다. local에서만 무인증을 허용한다. Redis는 루프백 bind와 `protected-mode yes`를 함께 사용한다. 비밀값 처리 변경은 검토 등급 A로 다른 사람의 승인이 필요하다(C-117).
 
 <a id="서버-pg-띄우기"></a>
 ### 1-4. 서버 PG(pgvector) 띄우기
@@ -1673,6 +1679,13 @@ chown 10001:<운영 그룹> settings.yaml && chmod 640 settings.yaml
 - **경로 칸은 컨테이너 안 절대 경로로** 적고, 쓰는 자리는 `/app/output/…` 아래여야 한다 — [env-guide §5](env-guide.md#5-서버-경로-칸--컨테이너-안-절대-경로).
 - `설정-읽힘` 확인을 건너뛰어도 §4-7에서 컨테이너가 뜰 때 같은 칸 이름을 알리고 멈춘다 — 고치고 다시 띄운다.
 
+**Redis 옛 /data 설정 배치 이전(#177, 번호 없는 주 벌)** — 이 순서로 한 번 옮긴다(C-118).
+
+1. keepalive 타이머를 잠시 멈추고 새 제출을 막는다. 실행 중 작업이 끝났는지 확인한 뒤 파싱 MCP·검색 MCP·Redis 순서로 멈춘다. AOF 데이터 폴더를 백업한다.
+2. 새 코드·compose를 배치하고 서버 settings.yaml의 `common.connections.redis.redis_password`를 채운다. 운영 계정으로 load_settings 후 prepare_redis를 실행해 별도 redis-conf 폴더(700)와 redis.conf·health.sh·start.sh(600)를 만든다. REDIS_CONF_DIR를 덮었다면 같은 셸 값을 이후 모든 호스트 실행에도 적용한다.
+3. 새 `/conf:ro,z` 마운트를 적용하려면 기존 Redis 컨테이너를 **재생성**한다: `bash deploy/host/scripts/host_ctl.sh up -d --force-recreate mcp-redis`. 기존 AOF 데이터 폴더는 그대로 유지한다. `/conf/health.sh` PONG과 컨테이너 사용자 전환·설정 파일 권한을 확인한다.
+4. 파싱 MCP·검색 MCP를 새 코드로 띄워 parse_document 한 건과 pending·완료 알림을 확인하고 keepalive 타이머를 다시 켠다. root 권한으로 옛 데이터 폴더의 health.sh만 제거한다. /data/redis.conf는 시작 때 새 설정 복사본으로 덮이므로 지울 필요가 없다. 비밀번호 값은 확인 과정에서 출력하지 않는다.
+
 ### 4-7. DB 판 올리기 — `migrate up`
 
 ```bash
@@ -2124,9 +2137,3 @@ git tag -l 'v*'                                       #    기대: … v0.3.1 v0
 - 공용 main 벌을 이 판으로 올릴 때는 [§4](#4-운영-중인-서버를-새-판으로-올리기) 순서 — 코드 받기는 공용 벌의 git 셸에서(공용 벌 컨테이너는 코드를 읽기 전용으로 붙이므로 (나) — `B=/home/sbl/sbl_data_parsing-main-1`) `git fetch origin --tags && git switch --detach v0.3.2 && git rev-parse --short HEAD > CODE_COMMIT && git update-index --skip-worktree CODE_COMMIT`(판에 고정 — 다음 판도 태그로 옮긴다).
 - 태그는 한 번 올리면 옮기지 않는다. 잘못 붙였으면 다음 판 번호로 새로 낸다(남이 이미 받았을 수 있다).
 - `release/*` 브랜치는 병합 뒤에도 지우지 않는다(그 판을 고칠 때 다시 씀).
-
-parse_document 회수 보강(#177): 종료 확인·running 소유권 변경은 WATCH로 묶고, 시도별 `a<n>/`에서 파싱한 뒤 HASH의 `result_file` 이름으로 결과를 읽는다. heartbeat가 없는 소비자는 idle 60초 뒤 한 건씩 회수하며, 살아 있지만 멈춘 소비자는 기존 (job_timeout+60)초 XAUTOCLAIM으로 회수한다. 손상된 HASH는 failed로 끝내고 일반 worker 오류는 traceback으로 기록한다.
-
-parse_document 빠른 거절·제출 복구(#177): worker가 확장자·허용 루트·크기 정책을 시작 때와 10초 heartbeat마다 Redis에 TTL 120초로 공개한다. proxy는 정책이 있으면 확장자와 정규화한 절대경로를 폴더 생성 전에 검사한다(존재·실제 크기·심볼릭 링크는 worker가 검사). 정책이 없으면 제출한다. 제출 EXEC 응답이 유실되면 새 EXISTS로 등록 여부를 확인해 등록된 작업은 계속 기다리고, 미등록이 확실할 때만 폴더를 지운다. 확인도 실패하면 폴더를 보존하고 job_id와 연결 오류를 반환한다.
-
-Redis 인증(#177): 서버(dev·prd)의 `settings.yaml`에는 `common.connections.redis.redis_password`를 반드시 채운다. 비움·공백은 호스트 prepare_redis와 앱 client가 거부하며 worker 시작은 종료 코드 2다. local에서만 무인증을 허용한다. Redis는 루프백 bind와 `protected-mode yes`를 함께 사용한다. 비밀값 처리 변경은 검토 등급 A로 다른 사람의 승인이 필요하다(C-117).

@@ -15,7 +15,11 @@ cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트
 # 번호 벌은 data-pipeline만 실행 — 준비·컨테이너 조회 전에 끝낸다.
 if [ -n "${INSTANCE:-}" ]; then exit 0; fi
 prepare_jobs || echo "[mcp_keepalive] jobs 준비 실패 — parse_document 파일 오류 가능, 검색 MCP 확인은 계속" >&2
-prepare_redis || echo "[mcp_keepalive] Redis 설정 준비 실패 — parse_document 연결 오류 가능, 검색 MCP 확인은 계속" >&2
+if prepare_redis; then
+  restart_redis_changed || echo "[mcp_keepalive] Redis 설정 반영 재시작 실패 — 검색 MCP 확인은 계속" >&2
+else
+  echo "[mcp_keepalive] Redis 설정 준비 실패 — parse_document 연결 오류 가능, 검색 MCP 확인은 계속" >&2
+fi
 UP="bash deploy/host/scripts/host_ctl.sh base up -d"
 redis_state=$($DOCKER inspect -f '{{.State.Running}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' mcp-redis 2>/dev/null || true)
 case "$redis_state" in
