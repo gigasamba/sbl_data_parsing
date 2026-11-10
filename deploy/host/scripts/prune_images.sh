@@ -28,15 +28,8 @@ while [ $# -gt 0 ]; do
 done
 case "$KEEP" in ""|*[!0-9]*|0) echo "[prune_images] --keep은 1 이상 정수(지금 판은 항상 남김): $KEEP" >&2; exit 2 ;; esac
 
-# 저장소 = 설정의 이미지(required.deploy.pipeline_image·mcp_image — 태그 뗌)와 그 짝(실행 이미지 <이름>-runtime ↔ 코드가 든 이미지 <이름>)
-#   설정에 이미지가 없으면(설정 파일 없이 부름) 기본 이름(data-pipeline·mcp-server — image_names.sh와 같은 이름)
-REPOS=
-for img in "${DATA_PIPELINE_IMAGE:-data-pipeline}" "${MCP_SERVER_IMAGE:-mcp-server}"; do
-  img=${img%@*}                                      # 다이제스트(@sha256:…) 뗌
-  case "${img##*/}" in *:*) img=${img%:*} ;; esac   # 태그 뗌(레지스트리 주소의 :포트는 둠)
-  REPOS="$REPOS ${img%-runtime} ${img%-runtime}-runtime"
-done
-REPOS=${REPOS# }
+# 저장소 = 두 앱 이미지와 그 짝(실행 이미지 <이름>-runtime ↔ 코드가 든 이미지 <이름>) — compose-<환경>.yml·image_names.sh와 같은 이름
+REPOS="data-pipeline data-pipeline-runtime mcp-server mcp-server-runtime"
 USED=" $($DOCKER ps -a --format '{{.Image}}' 2>/dev/null | tr '\n' ' ') "   # 컨테이너가 쓰는 이미지(멈춘 것 포함)
 echo "== 이미지($REPOS) — 최신 ${KEEP}개(지금 판 + 직전 판) + 컨테이너가 쓰는 태그 유지 =="
 for repo in $REPOS; do

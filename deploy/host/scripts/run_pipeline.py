@@ -43,11 +43,13 @@ ROOT = Path(__file__).resolve().parent
 # 운영 접속 값·비밀·운영 고정값은 코드에 두지 않고 서버 settings.yaml에서 읽는다(configure() — 시작 때 한 번).
 #   파일: --settings 또는 SETTINGS_FILE, 없으면 <루트>/settings.yaml(루트 = 코드 폴더 자체). 호스트 python에 PyYAML이 있어야 한다(pymssql처럼 —
 #   refactor.md C-09). 필요한 칸이 없으면 칸 경로만 찍고 종료 코드 2(값은 찍지 않음). required.env.run_env가 dev·prd가 아니면 거부(로컬 실행 금지 — CLAUDE.md 3절).
-#   docker exec로 부르는 상주 컨테이너(data-pipeline)는 같은 파일을 붙여 읽으므로(compose x-settings) 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
+#   docker exec로 부르는 상주 컨테이너(0번 data-pipeline-0)는 같은 파일을 붙여 읽으므로 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
 #   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.run_pipeline.run_pipeline_work_dir(비우면 이 스크립트 옆 test_space/), 결과 공유 폴더는
-#   ops.host.host_output_dir(RAG_OUT — 컨테이너 /app/output의 원본 그대로), 비우면 <루트>/output(load_settings.sh와 같음).
+#   <루트>/output(compose-<환경>.yml이 컨테이너 /app/output으로 붙이는 원본 그대로).
 TEST = PROG = DOCSPACE = DOCFLOW = STAGING = None  # configure()가 채움
-PIPE_C = None  # docker exec 대상 상주 컨테이너(목록·받기·파싱·게시·구조화·정리) — configure()가 밑 이름 + 벌 번호로 채움
+PIPE_C = (
+    "data-pipeline-0"  # docker exec 대상 상주 컨테이너(목록·받기·파싱·게시·구조화·정리) — 새벽 배치는 0번만(compose-<환경>.yml 이름 그대로)
+)
 DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.container_cli(없으면 docker, 그것도 없으면 podman)로 채움
 CODE_DIR = None  # --code(설정 배치 모듈 layout.py·이미지 경로 표를 찾을 코드 폴더 — 운영자 폴더에서 돌릴 때, 기본 배치 경로 없음)
 SOURCE_BUCKET = PG_CONTAINER = PG_USER = PG_DB = PG_SCHEMA = None  # staging 파일 이름의 원천 버킷 · 문서 수 세기(psql)
@@ -78,14 +80,8 @@ def _code_root():
 
 
 def _root():
-    """서버 루트(settings.yaml·edw_chain.yaml·output/이 바로 아래) = 코드 폴더 자체 — 셸에 남은 다른 벌의 RAG_ROOT는 보지 않는다."""
+    """서버 루트(settings.yaml·output/이 바로 아래) = 코드 폴더 자체 — 셸에 남은 다른 벌의 RAG_ROOT는 보지 않는다."""
     return _code_root().resolve()
-
-
-def instance_of(root):
-    """벌 번호 — 루트(코드 폴더) 이름 끝 -<1~99>(예 sbl_data_parsing-main-2 → "2"), 없으면 ""(한 벌 — 날짜 꼴 숫자도). load_settings.sh와 같은 규칙."""
-    m = re.search(r"-([1-9][0-9]?)$", Path(root).name)
-    return m.group(1) if m else ""
 
 
 def _inside(seq, sub=""):
@@ -100,7 +96,7 @@ def _img(name):
 
 @functools.cache
 def _const(key):
-    """고정값(약속 경로 image.*·코드 기본 포트 default.*): 코드 폴더 deploy/host/scripts/host_settings.tsv(없으면 이 스크립트 옆)의 const 줄(deploy/release/gen_host_keys.py가 만듦)."""
+    """고정값(약속 경로 image.*): 코드 폴더 deploy/host/scripts/host_settings.tsv(없으면 이 스크립트 옆)의 const 줄(deploy/release/gen_host_keys.py가 만듦)."""
     f = next(
         (p for p in (_code_root() / "deploy" / "host" / "scripts" / "host_settings.tsv", ROOT / "host_settings.tsv") if p.is_file()),
         None,
@@ -149,7 +145,7 @@ def work_dir(doc):
 def configure(settings_file=None):
     """서버 settings.yaml을 한 번 읽어 모듈 값(경로·접속)을 채운다 — 문제 목록(빈 목록이면 통과). 값은 찍지 않는다."""
     global TEST, PROG, DOCSPACE, DOCFLOW, STAGING, MCP_JOBS_DIR, SOURCE_BUCKET, PG_CONTAINER, PG_USER, PG_DB, PG_SCHEMA
-    global DOCKER, PIPE_C, STAGING_TARGET, STAGING_WORKERS, STRUCT_WORKERS, VLM_CAP, LANE_WORKERS, _BACKLOG_SETTING
+    global DOCKER, STAGING_TARGET, STAGING_WORKERS, STRUCT_WORKERS, VLM_CAP, LANE_WORKERS, _BACKLOG_SETTING
     doc, err = read_settings(settings_file)
     if err:
         return [err]
@@ -168,12 +164,7 @@ def configure(settings_file=None):
     _BACKLOG_SETTING = policy["struct_backlog"]
     TEST = work_dir(doc)
     PROG = TEST / "batch_progress"
-    # 컨테이너 /app/output 공유 볼륨 — load_settings가 낸 RAG_OUT(셸 env > common.host.output_root > <루트>/output), 없으면 같은 규칙
-    DOCSPACE = Path(
-        os.environ.get("RAG_OUT")  # env 남김 — 호스트 도구(load_settings.sh load_settings가 냄)
-        or _host().get(doc, "common.host.output_root")
-        or _root() / "output"
-    )
+    DOCSPACE = _root() / "output"  # 컨테이너 /app/output 공유 볼륨의 원본(compose-<환경>.yml과 같은 자리)
     DOCFLOW = DOCSPACE / "_docflow"  # 문서별 임시 디렉토리(종료 시 삭제)
     STAGING = DOCSPACE / "_staging"  # SOURCE_STAGING 대기열 저장소
     DOCKER = (
@@ -181,16 +172,6 @@ def configure(settings_file=None):
         or _host().get(doc, "common.host.docker")
         or ("docker" if shutil.which("docker") else "podman")
     )
-    inst = instance_of(_root())
-    if inst and run_env == "prd":
-        return [f"코드 폴더 이름 끝 -{inst}(벌 번호)는 개발 서버(dev)에서만 — 운영(prd)은 한 벌(폴더 이름을 바꿀 것)"]
-    # 컨테이너 이름 — load_settings가 낸 PIPELINE_CNAME, 없으면 같은 규칙으로: 밑 이름(ops.containers.pipeline.pipeline_container_name > 코드 기본값) + 벌 번호
-    PIPE_C = os.environ.get("PIPELINE_CNAME") or (  # env 남김 — 호스트 도구(load_settings.sh load_settings가 냄)
-        (_host().get(doc, "common.host.pipeline_container") or _const("default.common.host.pipeline_container"))
-        + (f"-{inst}" if inst else "")
-    )
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", PIPE_C):  # 명령 줄에 그대로 들어감 — 설정 모델과 같은 꼴
-        return [f"{_host().layout().to_yaml('common.host.pipeline_container')}: 컨테이너 이름 꼴이 아님(영문·숫자·_.-)"]
     MCP_JOBS_DIR = DOCSPACE / "_mcp_parse" / "jobs"  # mcp-data-parsing의 작업 폴더(같은 결과 폴더 — run_mcp_parsing.JOBS_DIR)
     SOURCE_BUCKET = _host().get(doc, "pipeline.connections.rdb.bucket")
     PG_CONTAINER = _host().get(doc, "common.host.pg_container")

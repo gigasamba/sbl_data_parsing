@@ -1,14 +1,14 @@
 """EDW 조인 사슬 파일 읽기·검사 — 두 앱이 함께 쓴다: 적재(pipeline/load/edw_doc_meta.py — 사슬을 따라 EDW를
-읽음)와 검색 MCP(거르기 이름 → attrs 키, 근거 키). 파일 꼴은 resources/config/edw_chain.yaml 머리 주석(모든 원천이 같은 꼴 — steps·fields·
+읽음)와 검색 MCP(거르기 이름 → attrs 키, 근거 키). 파일 꼴은 코드 폴더 맨 위 edw_chain.yaml 머리 주석(모든 원천이 같은 꼴 — steps·fields·
 client_edw·created). 이름은 SQL 글자에 들어가므로 여기서 검사하고, 값은 늘 바인딩한다. 틀리면 ValueError(어디가 왜 틀렸는지 모두)."""
 
 import re
 from pathlib import Path
 
-from common.core.paths import RES_ROOT
+from common.core.paths import EDW_CHAIN_FILE
 from common.store.db.models import search_tables as ST
 
-CHAIN_FILE = RES_ROOT / "config" / "edw_chain.yaml"
+CHAIN_FILE = EDW_CHAIN_FILE
 FILE = "file"  # 열쇠 — 문서 원본 경로(FileStorageMap.s3_key = gold doc.file_path)
 ENTITY_COLS = ("Id", "Type", "Class")  # sfdc_entity 단계가 내는 칸
 TYPES = ("text", "date", "flag")

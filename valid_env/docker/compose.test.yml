@@ -1,5 +1,5 @@
 # 모듈 컨테이너 연결 시험(개발 PC·개발 서버) — 브리지 네트워크 + 시험용 PostgreSQL(pgvector) + 검색 MCP(포트 게시).
-# 운영 구성(호스트 네트워크·기존 rag-postgres)은 deploy/host/compose/compose.pipeline.yml. 이 파일은 시험 전용(PostgreSQL 데이터는 컨테이너와 함께 지워짐).
+# 운영 구성은 deploy/host/compose/compose-<환경>.yml(compose-dev·prd·local). 이 파일은 시험 전용(PostgreSQL 데이터는 컨테이너와 함께 지워짐).
 #   bash valid_env/docker/smoke_test.sh   ← 아래를 차례로: pg 띄우기 → parse → structure → load → mcp 띄우기 → 밖에서 MCP 호출 → 정리
 #   문서 위치: DOC_SRC 폴더(/data/docs) 하나(Object Storage·게시 시험은 없음) · SMOKE_LIMIT=몇 건
 # 필요한 환경: DATA_PIPELINE_IMAGE · MCP_SERVER_IMAGE · DOC_SRC(시험 문서) · RAG_OUT(결과)

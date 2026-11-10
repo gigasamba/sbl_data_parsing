@@ -50,6 +50,7 @@ RES_ROOT = DEPLOY_ROOT / "resources"
 CRITERIA_FILE = RES_ROOT / "config" / "criteria.json"  # 판정 문턱값 정본
 STACK_FILE = RES_ROOT / "config" / "pipeline_stack.json"  # 엔진 구성(DB 표의 시드·PC 대체)
 GLOSSARY_ROOT = RES_ROOT / "vocab" / "glossary"  # 용어집·명부 예시·고객 seed(코드 기본값·selftest용)
+EDW_CHAIN_FILE = DEPLOY_ROOT / "edw_chain.yaml"  # EDW 조인 사슬 정본 — 코드 폴더 맨 위(git 관리, 이미지에도 COPY — common.store.edw_chain)
 APP_ROOT = PROJ_ROOT  # 런타임 루트(output/·assets/가 있는 곳) — PC=저장소 루트, 이미지=/app
 LOG_DIR = APP_ROOT / "output" / "logs"  # 파일 로그 한 곳 — PC JSON 로그·DB 실패 예비 기록의 기본 폴더
 LOCAL_EDW_SEED = PROJ_ROOT / "valid_env" / "edw" / "edw.sqlite"  # PC 가짜 EDW 원본(git — 쓰지 않음)

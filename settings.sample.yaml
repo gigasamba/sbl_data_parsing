@@ -59,11 +59,9 @@ required:
   tokens:
     mcp_token:                                # [필수 · dev·prd(mcp)] MCP 토큰(Authorization: Bearer — 검색 MCP 인증 · MCP를 띄우기 전에 정함 · 부르는 쪽도 같은 값) · 서버에서 openssl rand -hex 32를 실행해 나온 64자를 그대로 · 예 9f2c…(64자 16진수) [비밀]
     fulltext_sign_key:                        # [필수 · dev·prd(mcp — 원문 도구를 쓸 때)] 원문 도구 sfid 서명 키 — 원문 도구가 내주는 문서 번호(sfid)에 붙이는 서명용 비밀(바꾸면 이미 준 sfid 무효 · mcp_token과 다른 값) · 8자 이상 · 서버에서 openssl rand -hex 32를 실행해 나온 64자를 그대로 · 예 4be1…(64자 16진수) [비밀]
-  # ---- 서버 배포(이미지·호스트 폴더) ----
+  # ---- 서버 배포(호스트 폴더·컨테이너) ----
   deploy:
-    pipeline_image:                           # [필수 · dev·prd(호스트 compose)] data-pipeline 이미지:태그 · 예 data-pipeline-runtime:0.2.0(dev)
-    mcp_image:                                # [필수 · dev·prd(호스트 compose)] mcp-server 이미지:태그 · 예 mcp-server-runtime:0.2.0(dev)
-    host_docs_dir:                            # [필수 · dev·prd(호스트 compose)] 호스트 원본 문서 폴더 — 서버에 이미 있는 폴더(절대 경로 · UID 10001이 읽을 수 있게 — 컨테이너 /data/docs로 붙음 · 벌끼리 같아도 됨) · 예 /data/docs
+    host_docs_dir:                            # [필수 · dev·prd(호스트 compose — 원본 문서 폴더)] 호스트 원본 문서 폴더 — 서버에 이미 있는 폴더(절대 경로 · UID 10001이 읽을 수 있게 — 컨테이너 /data/docs로 붙음 · 벌끼리 같아도 됨) · 예 /data/docs
     pg_container_name:                        # [필수 · dev·prd(호스트 run_pipeline·백업)] 호스트 PG(pgvector) 컨테이너 이름(run_pipeline 문서 수·백업) · 예 pgvector
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -76,9 +74,9 @@ common:
     edw:
       edw_extra_connect_args: null            # EDW pymssql 추가 인자 JSON · 예 {"login_timeout": 10} (null = 추가 인자 없음) [비밀]
     redis:
-      redis_host: 127.0.0.1                   # parse_document Redis 주소 · 루프백 전용 권장
-      redis_port: 6379                        # Redis 포트 · 서버당 한 벌(번호 벌은 파싱 MCP 없음) · 정수
-      redis_password: null                    # Redis 비밀번호 (null = 인증 없음, 루프백에만 bind) [비밀]
+      redis_host: host.docker.internal        # parse_document Redis 주소 · 컨테이너에서 서버 자신(compose-redis.yml)
+      redis_port: 8010                        # Redis 포트 · 서버마다 하나(compose-redis.yml이 8010에 연다) · 정수
+      redis_password: null                    # Redis 비밀번호(필수 — 서버마다 채움 · 비면 host_ctl.sh secrets가 거부) · 예 서버에서 openssl rand -hex 32를 실행해 나온 64자 [비밀]
       redis_db: 0                             # Redis 데이터베이스 번호 · 정수 0 이상
       redis_key_prefix: mcp_parse             # Redis 키 접두 · 설정값 그대로(서버당 한 벌)
   # ---- 모델 호출 — 임베딩·LLM·VLM ----
@@ -148,7 +146,7 @@ search:
     mcp_bind_host: 127.0.0.1                  # 바인드 주소 · 127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부
     mcp_manifest_file: null                   # 수집 manifest · 예 /app/output/parse/_source/manifest.jsonl (null = output/parse/_source/manifest.jsonl)
     mcp_max_concurrent_tools: 8               # 도구 동시 실행 상한 · 정수
-    mcp_port: 8765                            # 검색 MCP 포트(운영 서버 — 개발자 벌은 검색 MCP를 띄우지 않음) · 정수
+    mcp_port: 8765                            # 검색 MCP 포트 · 서버는 8080(컨테이너 안 — compose가 서버 8051로 게시) · 비우면 8765(PC) · 정수
   # ---- EDW 도구 ----
   edw_meta:
     edw_meta_catalog_dir: null                # edw_meta 도구 카탈로그 폴더 · 예 /app/output/edw_meta (null = /app/config/edw_meta)
@@ -173,40 +171,18 @@ ops:
     source_docs_dir: null                     # 원본 문서 폴더(PC는 저장소 기준 상대 가능) (null = 이미지 /data/docs · PC는 --src)
     prepared_docs_dir: null                   # 준비 끝난 문서 폴더 · 예 /app/output/prepared (null = output/prepared)
     glossary_draft_file: null                 # 용어 초안 CSV · 예 /app/output/glossary_draft/terms.csv (null = output/glossary_draft/domain_terms_draft_auto.csv)
-    edw_chain_file: null                      # EDW 사슬 파일 · 서버 예 /etc/rag/edw_chain.yaml (null = resources/config/edw_chain.yaml)
+    edw_chain_file: null                      # EDW 사슬 파일 — 보통 비움 (null = 코드 폴더 맨 위 edw_chain.yaml — git으로 고침)
     source_manifest_file: null                # 원본 manifest.jsonl · 예 /data/docs/manifest.jsonl (null = docs_dir 기준 file://)
     figure_images_dir: null                   # 그림 PNG 폴더 · 예 /app/output/parse/_images (null = output/parse/_images)
     container_output_dir: null                # 파이프라인 결과 폴더(컨테이너 안) · 예 /app/output (null = <루트>/output)
     parse_temp_dir: null                      # 파싱 임시 폴더(output 아래 2단 이상) · 예 /app/output/_tmp_parse/stream (null = output/_tmp_parse/stream)
     raw_cache_dir: null                       # raw·VLM 캐시 폴더 (null = 원본 층 캐시 안 씀)
     soffice_path: null                        # soffice 실행 파일 (null = PATH · 이미지 /usr/bin/soffice)
-  # ---- 호스트 — 컨테이너 도구·여러 벌·이미지 정리 ----
+  # ---- 호스트 — 컨테이너 도구·이미지 정리 ----
   host:
-    compose_project: compose                  # compose 묶음 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>) · 예 compose(벌 1이면 compose-1로 붙음)
-    redis_image: redis:7.4.2-alpine           # Redis AOF 이미지 · 폐쇄망 반입 필요
-    redis_mem_limit: 512m                     # Redis 컨테이너 메모리 상한
-    redis_data_dir: null                      # Redis AOF 호스트 폴더 (null = <서버 루트>/redis)
     container_cli: null                       # 컨테이너 명령 · docker·podman (null = podman, 없으면 docker)
-    host_edw_chain_file: null                 # 호스트 EDW 사슬 사본 파일(루트 기준 상대 또는 절대 경로) · 예 /srv/rag/edw_chain.yaml (null = <루트>/edw_chain.yaml)
-    extra_compose: null                       # 더 붙일 compose 파일(루트 기준 상대 또는 절대 경로 — 없는 파일이면 host_ctl.sh 종료 2) · 쉼표 구분 · 예 compose.extra.yml 또는 compose.extra.yml, /srv/rag/compose.gpu.yml (null = 없음)
     prune_stage_dir: null                     # prune_images.sh가 정리할 조각·tar 폴더 (null = 정리 안 함)
-    host_output_dir: null                     # 호스트 결과 폴더(절대 경로) · 예 /srv/rag/output (null = <루트>/output)
     prune_keep_versions: 2                    # 남길 이미지 판 수 · 정수
-  # ---- 서버 컨테이너 — CPU·메모리 한도 ----
-  containers:
-    data_parsing:
-      data_parsing_container_name: mcp-data-parsing  # parse MCP 서비스 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>) · 예 mcp-data-parsing(벌 1이면 mcp-data-parsing-1)
-      data_parsing_cpus: 4.0                  # parse MCP 컨테이너 CPU 상한 · worker 2 × 엔진 2 · 숫자
-      data_parsing_mem_limit: 12g             # parse MCP 서비스 메모리 · worker 2개 기준 12g
-      data_parsing_cpu_shares: 4096           # parse MCP 서비스 CPU 나눔 비율(일괄 작업 1024) · 정수
-    mcp:
-      mcp_container_name: mcp-server          # 검색 MCP 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>) · 예 mcp-server(벌 1이면 mcp-server-1)
-      mcp_cpus: 1.0                           # mcp-server 컨테이너 CPU · 숫자
-      mcp_mem_limit: 4g                       # mcp-server 메모리 · 예 4g
-    pipeline:
-      pipeline_container_name: data-pipeline  # 일괄 data-pipeline 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>) · 예 data-pipeline(벌 1이면 data-pipeline-1)
-      pipeline_cpus: 5.0                      # data-pipeline 컨테이너 CPU(호스트 CPU 수 이하) · 숫자
-      pipeline_mem_limit: 24g                 # data-pipeline 메모리 · 예 16g
   # ---- 상주 서비스 — parse MCP ----
   services:
     data_parsing:
@@ -446,9 +422,6 @@ dev:
 option:
   # ---- 개발 작업 공간 — SSH·opencode(개발 서버 dev만) ----
   devbox:
-    ssh_port: null                            # 개발 작업 공간 SSH 포트(dev만 — 개발자마다 다르게) · 예 2222 (null = 끔) · 정수
-    opencode_config: null                     # opencode 설정 파일(호스트 절대 경로) · 예 /home/sbl/opencode.json (null = 이미지의 틀)
-    home_dir: null                            # 개발 작업 공간 홈 폴더(루트 기준 상대 또는 절대 경로) · 예 /srv/rag/home-hong (null = <루트>/home)
     gitea_url: null                           # 내부망 gitea 주소(http(s)://호스트[:포트][/경로] — http는 토큰이 암호화 없이 감) · 예 https://gitea.corp.local:3000 (null = git 계정 설정 안 함 — 주소·계정·토큰을 모두 적어야 씀)
     gitea_user: null                          # gitea 계정 이름 · 예 hong (null = 설정 안 함)
     gitea_token: null                         # gitea 접근 토큰 · 예 gitea 설정 > 응용 > 토큰에서 만든 값 (null = 설정 안 함) [비밀]

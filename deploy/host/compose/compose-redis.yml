@@ -1,21 +1,26 @@
-# Redis(op-19): 서버마다 1개 — 이미지 sbl-redis:<판>(deploy/docker/Dockerfile.redis — 공식 redis 7.4.8 + 노드 설정).
-#   포트: 8010(REDIS_PORT) — 서버의 모든 주소(0.0.0.0)에 연다.
-#   비밀번호 = <SBL_ROOT>/redis_pw 첫 줄(" 와 \ 는 못 씀) — env·명령 인자에 두지 않는다. 데이터 = REDIS_DATA(기본 /data/redis).
-#   띄우기: docker compose -f compose-redis.yml up -d     내리기: … down(데이터 폴더는 그대로)
-#   바꿀 자리: SBL_ROOT(기본 /home/sbl) · IMAGE_TAG(sbl-redis 판) · REDIS_PORT · REDIS_DATA — 셸 env나 이 파일 옆 .env
+# Redis(parse_document 작업 큐): 서버마다 하나 — 공식 이미지 redis:7.4.8-alpine. 따로 한 번 띄운다(compose-<환경>.yml보다 먼저). 재시작 정책 always.
+#   먼저: bash deploy/host/scripts/host_ctl.sh secrets — settings.yaml common.connections.redis.redis_password → <SBL_ROOT>/secrets/redis/
+#     (redis.conf·start.sh·health.sh, 600 — requirepass는 이 파일에만: env·명령 인자에 두지 않아 inspect·ps에 안 보임)
+#   띄우기: docker compose -f deploy/host/compose/compose-redis.yml up -d     내리기: … down(데이터 폴더는 그대로)
+#     비밀번호를 바꾼 뒤: secrets → up -d --force-recreate(두 앱 컨테이너도 다시 시작 — 새 비밀번호를 읽게)
+#   포트: 서버 8010 → 컨테이너 6379, 서버의 모든 주소(0.0.0.0)에 연다(protected-mode + 비밀번호 필수). 컨테이너에서는 host.docker.internal:8010.
+#   바꿀 자리: SBL_ROOT(secrets/의 위 폴더 — 기본 /home/sbl) · REDIS_DATA(AOF 데이터 폴더 — 기본 /data/redis) — 셸 env나 이 파일 옆 .env
 name: sbl-redis
 services:
   redis:
-    image: sbl-redis:${IMAGE_TAG:-0.4.0}
+    image: redis:7.4.8-alpine
     container_name: redis
     restart: always
-    environment:
-      REDIS_PORT: "${REDIS_PORT:-8010}"
-    ports: ["0.0.0.0:${REDIS_PORT:-8010}:${REDIS_PORT:-8010}"]
+    command: ["sh", "/conf/start.sh"]          # /conf/redis.conf를 /data로 복사해 redis-server(공식 entrypoint — redis 사용자로 내려감)
+    ports: ["0.0.0.0:8010:6379"]
     volumes:
       - ${REDIS_DATA:-/data/redis}:/data:z
-      - {type: bind, source: "${SBL_ROOT:-/home/sbl}/redis_pw", target: /run/secrets/redis_pw, read_only: true,
-         bind: {create_host_path: false, selinux: z}}
+      - ${SBL_ROOT:-/home/sbl}/secrets/redis:/conf:ro,z
+    healthcheck:
+      test: ["CMD", "sh", "/conf/health.sh"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     pids_limit: 1024
     cpus: 1
     mem_limit: 2g

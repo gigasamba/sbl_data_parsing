@@ -62,8 +62,7 @@ IMAGE_PATHS = {
     "docs_mount": "/data/docs",  # 원본 폴더를 읽기 전용으로 붙이는 자리(compose DOC_SRC → 이 자리 · pipeline DOC_DIR 기본값)
 }
 # 코드가 읽지 않는 약속 자리(compose·Dockerfile·dev_entry.sh에만 같은 글자 — 바꾸면 그 파일들을 함께):
-#   /etc/rag/settings.yaml(설정 파일 — compose x-settings·SETTINGS_FILE) · /etc/rag/edw_chain.yaml(EDW 사슬 사본 — 호스트 ops.host.host_edw_chain_file)
-#   · /home/rag(개발 작업 공간 홈 — 호스트 option.devbox.home_dir) · /etc/devbox(작업 공간 부품 — git_cred.py·compose.opencode.yml)
+#   /etc/rag/settings.yaml(설정 파일 — 운영 compose-prd.yml·SETTINGS_FILE) · /etc/devbox(작업 공간 부품 — dev_entry.sh·git_cred.py)
 IMAGE_PATHS["prepared_out"] = IMAGE_PATHS["output_root"] + "/prepared"  # 원본 사본(prepare) 자리(pipeline DOC_DIR_PREPARED 기본값)
 # 이미지 안 모델 기본값 — 규칙은 "settings.yaml > 코드 기본값" 하나라 Dockerfile ENV로 굽지 않고 여기 둔다.
 # 이미지 신호 RAG_MODULE로 그 이미지 값만 고른다. PC·시험 하위 프로세스(RAG_MODULE 없음)는 PC 기본값.
@@ -1317,9 +1316,15 @@ class CommonConnectionsPg(Section):
 
 
 class CommonConnectionsRedis(Section):
-    redis_host: str = F("127.0.0.1", "REDIS_HOST", "parse_document Redis 호스트(루프백 권장)")
-    redis_port: Port = F(6379, "REDIS_PORT", "parse_document Redis 포트 — 서버당 한 벌(번호 벌은 파싱 MCP 없음)")
-    redis_password: SecretStr | None = F(None, "REDIS_PASSWORD", "Redis 비밀번호 — 로그·셸 env에 내보내지 않음")
+    redis_host: str = F(
+        "host.docker.internal", "REDIS_HOST", "parse_document Redis 호스트 — 컨테이너에서 서버 자신(compose-redis.yml, 서버마다 하나)"
+    )
+    redis_port: Port = F(8010, "REDIS_PORT", "parse_document Redis 포트(compose-redis.yml이 서버 8010에 연다)")
+    redis_password: SecretStr | None = F(
+        None,
+        "REDIS_PASSWORD",
+        "Redis 비밀번호(필수 — 서버마다 채움) — host_ctl.sh secrets가 Redis 설정 파일(600)에 씀. 로그·셸 env에 내보내지 않음",
+    )
     redis_db: int = F(0, "REDIS_DB", "Redis 데이터베이스 번호", ge=0)
     redis_key_prefix: str = F("mcp_parse", "REDIS_KEY_PREFIX", "Redis 큐 키 접두 — 설정값 그대로(서버당 한 벌)", min_length=1)
 
@@ -1443,22 +1448,6 @@ class CommonDev(Section):
 
 
 class CommonHostDevbox(Section):
-    ssh_port: int | None = F(
-        None,
-        "DEVBOX_SSH_PORT",
-        "개발 작업 공간(선택 — 개발 서버 dev만): data-pipeline 컨테이너를 SSH 작업 공간으로 띄울 포트(호스트 네트워크 그대로 — 개발자마다 다르게)."
-        " 비우면 끔. 적으면 host_ctl.sh가 compose.dev.yml을 더함(코드 폴더 쓰기 가능·홈 폴더 <루트>/home) — prd면 거부",
-    )
-    opencode_config: str | None = F(
-        None,
-        "DEVBOX_OPENCODE_CONFIG",
-        "개발 작업 공간의 opencode 설정 파일(호스트 경로, 선택) — 읽기 전용으로 붙이고 OPENCODE_CONFIG로 가리킴. 비우면 이미지의 틀(홈의 ~/.config/opencode/opencode.json)",
-    )
-    home_dir: str | None = F(
-        None,
-        "DEVBOX_HOME",
-        "개발 작업 공간 홈 폴더(호스트 경로) — 컨테이너 /home/rag로 붙임(SSH 열쇠·opencode 설정·작업 기록). 비우면 <루트>/home(host_ctl.sh init이 만듦 — 10001, 700)",
-    )
     gitea_url: str | None = F(
         None,
         "DEVBOX_GITEA_URL",
@@ -1472,51 +1461,15 @@ class CommonHostDevbox(Section):
     git_user_email: str | None = F(None, "DEVBOX_GIT_USER_EMAIL", "개발 작업 공간의 git 커밋 메일(git config user.email, 선택)")
 
 
-_CONTAINER_NAME = r"^[A-Za-z0-9][A-Za-z0-9_.-]*$"  # docker·podman 컨테이너 이름 꼴(명령 줄에 그대로 들어감)
-
-
-def _cname(default, env, what):
-    return F(
-        default,
-        env,
-        f"{what} 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>가 붙음). host_ctl.sh·mcp_keepalive.sh·pipe_exec.sh·run_pipeline.py가 이 이름으로 찾음",
-        pattern=_CONTAINER_NAME,
-    )
-
-
 class CommonHost(Section):
-    compose_project: str = F(
-        "compose",
-        "COMPOSE_PROJECT",
-        "compose 묶음(project) 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>). host_ctl.sh·mcp_keepalive.sh가 -p로 줌 — 바꾸면 옛 묶음은 down으로 먼저 내림",
-        pattern=r"^[a-z0-9][a-z0-9_-]*$",
-    )
-    data_parsing_container: str = _cname("mcp-data-parsing", "DATA_PARSING_CONTAINER", "parse_document 작업 서비스 전용")
     devbox: CommonHostDevbox = Field(default_factory=CommonHostDevbox)
-    redis_image: str = F("redis:7.4.2-alpine", "REDIS_IMAGE", "Redis AOF 컨테이너 이미지 — 폐쇄망 반입 필요")
-    redis_mem_limit: str = F("512m", "REDIS_MEM_LIMIT", "Redis 컨테이너 메모리 상한")
-    redis_data_dir: str | None = F(None, "REDIS_DATA_DIR", "Redis AOF 호스트 폴더 — 비우면 <서버 루트>/redis")
-    doc_src: str | None = F(None, "DOC_SRC", "호스트 원본 문서 폴더 — compose가 컨테이너 /data/docs에 읽기 전용으로 붙임")
+    doc_src: str | None = F(
+        None,
+        "DOC_SRC",
+        "호스트 원본 문서 폴더 — host_ctl.sh가 compose 변수 DOC_SRC로 넘겨 컨테이너 /data/docs에 읽기 전용으로 붙임(비우면 /data/docs)",
+    )
     docker: str | None = F(None, "DOCKER", "호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등 — op-10)")
-    edw_chain_src: str | None = F(
-        None,
-        "EDW_CHAIN_SRC",
-        "호스트의 EDW 조인 사슬 사본 파일 — compose가 컨테이너 /etc/rag/edw_chain.yaml로 읽기 전용으로 붙이는 원본. 비우면 <루트>/edw_chain.yaml(host_ctl.sh init이 없을 때만 만듦)",
-    )
-    extra_compose: CsvList | None = F(
-        None,
-        "EXTRA_COMPOSE",
-        "더 붙일 compose 파일 목록(볼륨·env 더하기 — 틀 deploy/host/compose/extra.example.yml — 예 compose.extra.yml = <루트>/compose.extra.yml). 상대 경로는 루트(코드 폴더) 기준."
-        " host_ctl.sh·mcp_keepalive.sh가 늘 맨 뒤에 -f로 더함",
-    )
     image_stage_dir: str | None = F(None, "IMAGE_STAGE_DIR", "prune_images.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값)")
-    mcp_container: str = _cname("mcp-server", "MCP_CONTAINER", "검색 MCP")
-    output_root: str | None = F(
-        None,
-        "RAG_OUT",
-        "호스트의 결과(output) 폴더(서버 경로) — compose가 컨테이너 /app/output으로 마운트하는 원본. 비우면 <루트>/output",
-    )
-    pipeline_container: str = _cname("data-pipeline", "PIPELINE_CONTAINER", "일괄 상주 파이프라인")
     pg_container: str | None = F(
         None,
         "PG_CONTAINER",
@@ -1543,8 +1496,7 @@ class CommonPaths(Section):
         None,
         "EDW_CHAIN_FILE",
         "EDW 조인 사슬 파일 경로 — 적재(EDW 조인)와 검색 MCP(search attrs·edw_meta search_attrs)가 함께 읽음(pl-29·pl-52). 비우면 "
-        "resources/config/edw_chain.yaml · 서버 사본은 컨테이너 안 /etc/rag/edw_chain.yaml(원본 <루트>/edw_chain.yaml — host_ctl.sh init이 "
-        "없을 때만 복사, 적었을 때만 쓰임) · 점검: python -m pipeline.load.edw_doc_meta --check",
+        "코드 폴더 맨 위 edw_chain.yaml(git으로 관리 — 이미지에도 들어감) · 점검: python -m pipeline.load.edw_doc_meta --check",
     )
     source_manifest: str | None = F(None, "SOURCE_MANIFEST", "원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응)")
 

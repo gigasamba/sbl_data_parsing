@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Image ENTRYPOINT (under `tini -s`, so `docker run` without --init also reaps orphans).
 #   devbox [cmd]   -> sshd: developer SSH workspace on $SSH_PORT (as rag, key login; as root, also root password login —
-#                     dev set compose); with cmd, that app command also runs in the background
+#                     server compose compose-dev.yml / compose-prd.yml); with cmd, that app command also runs in the background
 #   anything else  -> the image's own entry ($APP_ENTRY: runtime_entry.sh or entrypoint.sh), unchanged
 set -eu
 if [ "${1:-}" != devbox ]; then
@@ -22,8 +22,8 @@ O=$HOME/.config/opencode/opencode.json
 # never goes through env. A failure only warns; the workspace still starts.
 python /etc/devbox/git_cred.py || echo "[devbox] git account setup failed — check option.devbox.gitea_*" >&2
 [ -f "$K/ssh_host_ed25519_key" ] || ssh-keygen -q -t ed25519 -N '' -f "$K/ssh_host_ed25519_key"
-# root (set compose compose-dev.yml / compose-prd.yml, user "0"): root password from the mounted file (if non-empty), else the
-# one built into the image (Dockerfile secret root_pw); root password login. Servers only (dev, prd). Never via env or the repo.
+# root (server compose compose-dev.yml / compose-prd.yml, user "0"): the root password built into the image (Dockerfile secret root_pw),
+# or a file mounted at /run/secrets/root_pw if one is given (non-empty); root password login. Servers only (dev, prd). Never via env or the repo.
 SSHD_OPTS=()
 if [ "$(id -u)" = 0 ]; then
   # run_env as the apps resolve it (env RUN_ENV, else the mounted settings.yaml) — only dev or prd opens root login
@@ -36,7 +36,7 @@ if [ "$(id -u)" = 0 ]; then
   elif [ "$(getent shadow root | cut -d: -f2 | cut -c1)" = '$' ]; then
     echo "[devbox] $P missing or empty — using the root password built into the image" >&2
   else
-    echo "[devbox] $P missing or empty and the image has no root password — fill <SBL_ROOT>/root_pw (server-guide §6-6)" >&2; exit 2
+    echo "[devbox] the image has no root password and $P is missing or empty — rebuild with the root_pw build secret (server-guide §6-6)" >&2; exit 2
   fi
   unset W
   git config --global --replace-all safe.directory '*'   # code folder is owned by 10001; root git would refuse it

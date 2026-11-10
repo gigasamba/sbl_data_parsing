@@ -1,115 +1,97 @@
-"""상주 컨테이너 배치(규칙: rn-03·op-10): 컨테이너마다 compose 파일 하나 — compose.pipeline.yml = 일괄 data-pipeline,
-compose.data-parsing.yml = parse_document 전용 mcp-data-parsing, compose.mcp-server.yml = mcp-server(코드 폴더 덧붙임도 파일마다 짝 하나),
-전용 컨테이너가 CPU 나눔 비율이 더 높고 작업 서비스를 주 프로세스로 돌린다. 오버레이 패치 compose(compose.patch*.yml)는 없다."""
-
-import re
+"""서버 compose 파일(op-18·op-19·op-20): 환경마다 하나(compose-<run_env>.yml) + 따로 띄우는 PG·Redis.
+이름·이미지·포트·재시작 정책은 파일에 직접 적혀 있다(설정 칸 없음). parse_document 작업 컨테이너는 세 환경 모두에 있다.
+옛 덧붙임 파일(compose.*.yml)·EDW 사슬 사본 마운트·root_pw 마운트는 없다(사슬은 코드 폴더·이미지 안 edw_chain.yaml)."""
 
 import yaml
 
 from common.core.paths import DEPLOY_ROOT
 
 COMPOSE = DEPLOY_ROOT / "deploy" / "host" / "compose"
+HEALTH = ["CMD", "python", "-m", "pipeline.run_mcp_parsing", "--health"]
+JOBS = ":/app/output/_mcp_parse/jobs:z"  # parse_document 업로드·결과(검색 MCP는 결과가 읽기 전용이라 이 폴더만 쓰기)
 
-
-def _default(v):
-    """`${X:-기본}` → 기본(숫자), 그냥 숫자면 그대로."""
-    m = re.fullmatch(r"\$\{\w+:-(\d+)\}", str(v))
-    return int(m.group(1)) if m else int(v)
-
-
-FILES = {  # compose 파일 → (서비스, 컨테이너 이름 변수(load_settings — 밑 이름 + 벌 번호), 코드 폴더 짝)
-    "compose.pipeline.yml": ("data-pipeline", "PIPELINE_CNAME", "compose.code.yml"),
-    "compose.data-parsing.yml": ("mcp-data-parsing", "DATA_PARSING_CNAME", "compose.code.data-parsing.yml"),
-    "compose.mcp-server.yml": ("mcp", "MCP_CNAME", "compose.code.mcp-server.yml"),
+# 파일 → (묶음 이름, 재시작 정책(None = 없음), {서비스: (이미지 앞부분, 명령, 포트)})
+FILES = {
+    "compose-local.yml": (
+        "sbl-local",
+        None,
+        {
+            "data-pipeline-0": ("data-pipeline-runtime:", ["idle"], None),
+            "mcp-server-0": ("mcp-server-runtime:", ["mcp"], ["0.0.0.0:8051:8080"]),
+            "mcp-data-parsing-0": ("data-pipeline-runtime:", ["run-mcp-parsing"], None),
+        },
+    ),
+    "compose-dev.yml": (
+        "sbl-devset",
+        "unless-stopped",
+        {
+            "data-pipeline-0": ("data-pipeline-runtime:", ["devbox"], ["0.0.0.0:8020:22"]),
+            "data-pipeline-1": ("data-pipeline-runtime:", ["devbox"], ["0.0.0.0:8021:22"]),
+            "mcp-server-0": ("mcp-server-runtime:", ["devbox", "mcp"], ["0.0.0.0:8050:22", "0.0.0.0:8051:8080"]),
+            "mcp-data-parsing-0": ("data-pipeline-runtime:", ["run-mcp-parsing"], None),
+        },
+    ),
+    "compose-prd.yml": (
+        "sbl-prd",
+        "always",
+        {
+            "data-pipeline-0": ("data-pipeline:", ["devbox"], ["0.0.0.0:8020:22"]),
+            "mcp-server-0": ("mcp-server:", ["devbox", "mcp"], ["0.0.0.0:8050:22", "0.0.0.0:8051:8080"]),
+            "mcp-data-parsing-0": ("data-pipeline:", ["run-mcp-parsing"], None),
+        },
+    ),
+    "compose-pgvector.yml": ("sbl-pgvector", "always", {"pgvector": ("pgvector/pgvector:pg16", None, ["0.0.0.0:5433:5432"])}),
+    "compose-redis.yml": ("sbl-redis", "always", {"redis": ("redis:7.4.8-alpine", ["sh", "/conf/start.sh"], ["0.0.0.0:8010:6379"])}),
 }
 
 
-def render(text, env):
-    """compose 치환 `${X}`·`${X:-기본}`·`${X:?안내}`만(시험용 — docker 없이). 없는 `:?` 변수는 KeyError."""
-
-    def one(m):
-        name, op, arg = m.group(1), m.group(2) or "", m.group(3) or ""
-        if env.get(name):
-            return env[name]
-        if op == ":-":
-            return arg
-        if op == ":?":
-            raise KeyError(name)
-        return ""
-
-    return re.sub(r"\$\{(\w+)(:[-?])?([^}]*)\}", one, text)
+def _load(name):
+    return yaml.safe_load((COMPOSE / name).read_text(encoding="utf-8"))
 
 
-def _services(name):
-    return yaml.safe_load((COMPOSE / name).read_text(encoding="utf-8"))["services"]
+def test_compose_files():
+    assert sorted(p.name for p in COMPOSE.glob("*.yml")) == sorted(FILES)  # 옛 덧붙임 파일 없음
+    for f, (project, restart, services) in FILES.items():
+        doc = _load(f)
+        assert doc["name"] == project and set(doc["services"]) == set(services), f
+        for name, (image, cmd, ports) in services.items():
+            s = doc["services"][name]
+            vols = [str(v) for v in s.get("volumes", [])]
+            assert s["image"].startswith(image) and s["container_name"] == name, (f, name)
+            assert (cmd is None or s.get("command") == cmd) and s.get("ports") == ports and s.get("restart") == restart, (f, name)
+            assert not any("edw_chain" in v or "root_pw" in v or "redis_pw" in v for v in vols), (f, name, vols)
+            if name.startswith(("data-pipeline", "mcp-")):
+                assert s["user"] == "0" and "RUN_ENV" not in s.get("environment", {}), (f, name)  # root · 환경은 settings.yaml
+            if name == "mcp-data-parsing-0":
+                assert s["healthcheck"]["test"] == HEALTH and s["cpu_shares"] == 4096 and "ports" not in s, (f, s)
+                assert s.get("entrypoint") is None, f  # SSH 없음 — 이미지 entrypoint.sh 그대로
+            if name == "mcp-server-0":
+                assert any(v.endswith(JOBS) for v in vols), (f, vols)
+            if f == "compose-prd.yml" and name != "mcp-data-parsing-0":  # 구운 이미지 ENTRYPOINT를 작업 공간(SSH)으로
+                assert s["entrypoint"][-1] == "/etc/devbox/dev_entry.sh" and s["environment"]["APP_ENTRY"] == "/app/docker/entrypoint.sh"
+            if f == "compose-prd.yml":
+                assert not any(":/app/deploy" in v for v in vols), (name, vols)  # 코드는 이미지 안
 
 
-def test_resident_containers():
-    svc = {}
-    for f, (name, container, code) in FILES.items():
-        s = _services(f)
-        # 이름은 load_settings가 만든 변수 하나(밑 이름 ops.containers.* + 벌 번호 — 고정 글자 없음)
-        assert set(s) == {name} and s[name]["container_name"].startswith("${" + container + ":?"), (f, set(s))
-        assert set(_services(code)) == {name}, code  # 짝 파일은 그 컨테이너만 — 혼자 띄워도 됨
-        svc[name] = s[name]
-    assert svc["data-pipeline"]["command"] == ["idle"] and svc["mcp-data-parsing"]["command"] == ["run-mcp-parsing"]
-    assert _default(svc["mcp-data-parsing"]["cpu_shares"]) > _default(svc["data-pipeline"]["cpu_shares"])
-    up = (DEPLOY_ROOT / "deploy" / "host" / "scripts" / "mcp_keepalive.sh").read_text(encoding="utf-8")
-    assert "host_ctl.sh base up -d" in up and "$UP mcp-data-parsing" in up  # 띄우기는 host_ctl.sh — 같은 compose 파일 묶음
+def test_secret_mounts():
+    """PG·Redis 비밀번호는 host_ctl.sh secrets가 <SBL_ROOT>/secrets/에 쓴 파일로만 붙는다(env·명령 인자에 값 없음)."""
+    pg = _load("compose-pgvector.yml")["services"]["pgvector"]
+    assert pg["environment"]["POSTGRES_PASSWORD_FILE"] == "/run/secrets/pg_pw" and "POSTGRES_PASSWORD" not in pg["environment"]
+    pw = [v for v in pg["volumes"] if isinstance(v, dict)]
+    assert pw == [
+        {
+            "type": "bind",
+            "source": "${SBL_ROOT:-/home/sbl}/secrets/pg_pw",
+            "target": "/run/secrets/pg_pw",
+            "read_only": True,
+            "bind": {"create_host_path": False, "selinux": "z"},
+        }
+    ], pw
+    redis = _load("compose-redis.yml")["services"]["redis"]
+    assert "${SBL_ROOT:-/home/sbl}/secrets/redis:/conf:ro,z" in redis["volumes"] and "environment" not in redis, redis
+    assert redis["healthcheck"]["test"] == ["CMD", "sh", "/conf/health.sh"]
 
 
-def test_no_patch_overlay():
-    assert not list(COMPOSE.glob("compose.patch*.yml"))
+def test_entry_commands():
     entry = (DEPLOY_ROOT / "deploy" / "docker" / "entrypoint.sh").read_text(encoding="utf-8")
     assert "  run-mcp-parsing)" in entry and "pipeline.run_mcp_parsing" in entry
-
-
-def test_edw_chain_mount():
-    """EDW 사슬 서버 사본 — 파일 하나를 data-pipeline(적재)·mcp-server(search attrs)에 읽기 전용(:ro,z)으로
-    /etc/rag/edw_chain.yaml(settings.yaml과 같은 방식) — 원본은 EDW_CHAIN_SRC(ops.host.host_edw_chain_file). parse_document 전용 컨테이너는 안 씀."""
-    for f, (name, _, _) in FILES.items():
-        vols = [str(v) for v in _services(f)[name]["volumes"]]
-        chain = [v for v in vols if "edw_chain.yaml" in v]
-        if name in ("data-pipeline", "mcp"):
-            assert (
-                len(chain) == 1
-                and render(chain[0], {"EDW_CHAIN_SRC": "/srv/a/chain.yaml"}) == "/srv/a/chain.yaml:/etc/rag/edw_chain.yaml:ro,z"
-            ), chain
-        else:
-            assert not chain, (name, chain)
-
-
-def test_mcp_healthcheck_host():
-    """healthcheck 주소 = MCP_HOST(기본 127.0.0.1) · auto면 mcp_server.main처럼 자기 IP(socket.gethostbyname(gethostname()))."""
-    import socket
-    import urllib.request
-    from unittest import mock
-
-    code = _services("compose.mcp-server.yml")["mcp"]["healthcheck"]["test"][-1]
-    for host, url in (
-        ("", "http://127.0.0.1:8765/health"),
-        ("10.1.1.5", "http://10.1.1.5:8765/health"),
-        ("auto", "http://10.9.8.7:8765/health"),
-    ):
-        with mock.patch.object(socket, "gethostbyname", return_value="10.9.8.7"), mock.patch.object(urllib.request, "urlopen") as op:
-            exec(render(code, {"MCP_HOST": host}))  # 저장소 compose 파일의 python 한 줄을 그대로 실행
-        assert op.call_args.args[0] == url, (host, op.call_args)
-
-
-def test_parse_resource_defaults():
-    from pipeline.config import PipelineHost
-
-    service = _services("compose.data-parsing.yml")["mcp-data-parsing"]
-    host = PipelineHost(data_parsing_cpus=None, data_parsing_mem_limit=None)
-    assert host.data_parsing_cpus == _default(service["cpus"]) == 4
-    assert host.data_parsing_mem_limit == "12g"
-    assert service["mem_limit"] == service["memswap_limit"] == "${DATA_PARSING_MEM_LIMIT:-12g}"
-    assert host.data_parsing_cpu_shares == _default(service["cpu_shares"]) == 4096
-
-
-def test_redis_separate_configuration_mount():
-    service = _services("compose.redis.yml")["mcp-redis"]
-    assert service["command"] == ["sh", "/conf/start.sh"]
-    assert "${REDIS_CONF_DIR:-${RAG_ROOT}/redis-conf}:/conf:ro,z" in service["volumes"]
-    assert "${REDIS_DATA_DIR:-${RAG_ROOT}/redis}:/data:z" in service["volumes"]
-    assert service["healthcheck"]["test"] == ["CMD", "sh", "/conf/health.sh"]

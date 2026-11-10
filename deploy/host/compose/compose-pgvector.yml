@@ -1,12 +1,13 @@
-# 검색 DB(op-18): PostgreSQL 16 + pgvector 하나 — 개발·운영 서버 모두 이 파일로 따로 띄운다(compose-dev.yml·compose-prd.yml보다 먼저).
-#   띄우기: docker compose -f compose-pgvector.yml up -d     내리기: … down(데이터 폴더는 그대로)
-#   바꿀 자리: SBL_ROOT(기본 /home/sbl — pg_pw 자리) · PG_DATA(데이터 폴더) · PG_DB·PG_USER — 셸 env나 이 파일 옆 .env
-#   접속: 다른 묶음의 컨테이너는 host.docker.internal:5433 · 서버 바깥은 <서버 IP>:5433(0.0.0.0에 연다). 재시작 정책 always.
+# 검색 DB: PostgreSQL 16 + pgvector 하나 — 개발·운영 서버 모두 이 파일로 따로 한 번 띄운다(compose-<환경>.yml보다 먼저). 재시작 정책 always.
+#   먼저: bash deploy/host/scripts/host_ctl.sh secrets — settings.yaml required.pg.pg_password → <SBL_ROOT>/secrets/pg_pw(600)
+#   띄우기: docker compose -f deploy/host/compose/compose-pgvector.yml up -d     내리기: … down(데이터 폴더는 그대로)
+#   바꿀 자리: SBL_ROOT(secrets/의 위 폴더 — 기본 /home/sbl) · PG_DATA(데이터 폴더) · PG_DB·PG_USER — 셸 env나 이 파일 옆 .env
+#   접속: 다른 묶음의 컨테이너는 host.docker.internal:5433 · 서버 바깥은 <서버 IP>:5433(0.0.0.0에 연다).
 name: sbl-pgvector
 services:
   # 검색 DB(PostgreSQL 16 + pgvector) — 데이터 폴더 PG_DATA(기본 /data/pg/pipeline). 서버 바깥 5433 → 컨테이너 5432.
-  #   비밀번호 = <SBL_ROOT>/pg_pw 첫 줄 — 데이터 폴더가 비었을 때(처음 한 번)만 쓰인다(그 뒤 바꾸려면 psql ALTER USER).
-  #   DB·계정 이름: PG_DB·PG_USER(기본 rag) — 벌 settings.yaml required.pg와 같게. 메모리 값은 서버 메모리에 맞춰 고친다
+  #   비밀번호 파일은 데이터 폴더가 비었을 때(처음 한 번)만 쓰인다(그 뒤 바꾸려면 psql ALTER USER — settings.yaml과 같은 값으로).
+  #   DB·계정 이름: PG_DB·PG_USER(기본 rag) — settings.yaml required.pg와 같게. 메모리 값은 서버 메모리에 맞춰 고친다
   #   (대략 shared_buffers 1/8 · effective_cache_size 3/8 · maintenance_work_mem 1/16 · shm_size ≥ maintenance_work_mem + 1g).
   pgvector:
     image: pgvector/pgvector:pg16
@@ -19,8 +20,8 @@ services:
       POSTGRES_PASSWORD_FILE: /run/secrets/pg_pw
     volumes:
       - ${PG_DATA:-/data/pg/pipeline}:/var/lib/postgresql/data:z
-      - {type: bind, source: "${SBL_ROOT:-/home/sbl}/pg_pw", target: /run/secrets/pg_pw, read_only: true,
-         bind: {create_host_path: false, selinux: z}}
+      - {type: bind, source: "${SBL_ROOT:-/home/sbl}/secrets/pg_pw", target: /run/secrets/pg_pw, read_only: true,
+         bind: {create_host_path: false, selinux: z}}   # host_ctl.sh secrets가 만든 파일(없으면 compose가 멈춤)
     command: >
       postgres -c shared_buffers=4GB -c effective_cache_size=12GB -c work_mem=64MB
                -c maintenance_work_mem=2GB -c max_parallel_maintenance_workers=2

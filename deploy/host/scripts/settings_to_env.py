@@ -140,64 +140,66 @@ def lines(doc, sections, fmt="sh"):
     return out
 
 
-def redis_files(doc, directory):
-    """보호 파일 권한 오류를 값이나 traceback 없이 호스트 준비 안내로 돌려줌."""
+REDIS_PORT_IN = 6379  # 컨테이너 안 Redis 포트 — compose-redis.yml이 서버 8010에 게시(서버마다 하나)
+
+
+def secret_files(doc, directory):
+    """settings.yaml 비밀번호 → 보호 파일(폴더 700 · 파일 600): PG 비밀번호 pg_pw(compose-pgvector.yml POSTGRES_PASSWORD_FILE)와
+    Redis 설정 redis/(redis.conf·start.sh·health.sh — compose-redis.yml /conf). 값은 찍지 않는다. 바뀐 파일이 있으면 True.
+    권한 오류는 값·traceback 없이 안내로(ValueError)."""
     try:
-        return _redis_files(doc, directory)
+        return _secret_files(doc, Path(directory))
     except OSError as exc:
         path = exc.filename or directory
-        raise ValueError(f"Redis 설정 폴더/파일을 읽거나 쓰지 못함: {path} — 소유자·권한 확인(server-guide §4-6)") from None
+        raise ValueError(f"비밀 파일 폴더/파일을 읽거나 쓰지 못함: {path} — 소유자·권한 확인(server-guide §6-6)") from None
 
 
-def _redis_files(doc, directory):
-    """Redis 이미지에는 Python이 없음 — 호스트가 설정에서 비밀을 읽어 보호 파일로만 전달.
-    requirepass는 argv·compose env에 싣지 않는다. 설정은 운영 계정 소유의 별도 /conf, 데이터는 /data.
-    """
-    password = get(doc, "common.connections.redis.redis_password")
-    if get(doc, "common.run_env") in ("dev", "prd") and not str(password or "").strip():
-        raise ValueError("Redis 비밀번호 없음 — 서버(dev·prd)는 settings.yaml common.connections.redis.redis_password 필수")
-    directory = Path(directory)
-    directory.mkdir(parents=True, exist_ok=True)
-    directory.chmod(0o700)
-    port = get(doc, "common.connections.redis.redis_port") or 6379
-    try:
-        port = int(port)
-    except (TypeError, ValueError):
-        raise ValueError("Redis 포트는 정수여야 함") from None
-    if not 1 <= port <= 65535:
-        raise ValueError("Redis 포트는 1~65535")
-    password = get(doc, "common.connections.redis.redis_password")
-    config = f"protected-mode yes\nbind 127.0.0.1\nport {port}\nappendonly yes\nappendfsync everysec\ndir /data\n"
-    health = "#!/bin/sh\n"
-    if password:
-        config += "requirepass " + json.dumps(str(password), ensure_ascii=False) + "\n"
-        health += "export REDISCLI_AUTH='" + str(password).replace("'", "'\\''") + "'\n"
-    health += f"exec redis-cli --no-auth-warning -p {port} ping\n"
+def _secret_files(doc, directory):
+    pg = str(get(doc, "common.connections.pg.password") or "")
+    redis = str(get(doc, "common.connections.redis.redis_password") or "")
+    missing = [n for n, v in (("required.pg.pg_password", pg), ("common.connections.redis.redis_password", redis)) if not v.strip()]
+    if missing:
+        raise ValueError("비밀번호 없음 — settings.yaml " + "·".join(missing) + " 필수")
+    if any(c in pg + redis for c in "\r\n"):
+        raise ValueError("비밀번호에 줄바꿈은 쓸 수 없음")
+    # Redis 이미지에는 Python이 없음 — 호스트가 설정에서 비밀을 읽어 보호 파일로만 전달(argv·compose env에 싣지 않음 — inspect·ps에 안 보임).
+    #   모든 주소에서 받되(docker 포트 게시) protected-mode + requirepass. 데이터는 /data(AOF).
+    config = (
+        f"protected-mode yes\nbind 0.0.0.0\nport {REDIS_PORT_IN}\nappendonly yes\nappendfsync everysec\ndir /data\n"
+        "requirepass " + json.dumps(redis, ensure_ascii=False) + "\n"
+    )
+    auth = "export REDISCLI_AUTH='" + redis.replace("'", "'\\''") + "'\n"
+    health = f"#!/bin/sh\n{auth}exec redis-cli --no-auth-warning -p {REDIS_PORT_IN} ping\n"
     start = "#!/bin/sh\nset -eu\ncp /conf/redis.conf /data/redis.conf\nchmod 600 /data/redis.conf\nexec docker-entrypoint.sh redis-server /data/redis.conf\n"
     changed = False
-    for name, body in (("redis.conf", config), ("health.sh", health), ("start.sh", start)):
-        target = directory / name
+    for folder, name, body in (
+        (directory, "pg_pw", pg),
+        (directory / "redis", "redis.conf", config),
+        (directory / "redis", "health.sh", health),
+        (directory / "redis", "start.sh", start),
+    ):
+        folder.mkdir(parents=True, exist_ok=True)
+        folder.chmod(0o700)
+        target = folder / name
         if target.is_file() and target.read_text(encoding="utf-8") == body:
             target.chmod(0o600)
             continue
         changed = True
-        # 처음부터 600 — 기존 파일을 다시 쓸 때도 공개하지 않음.
-        fd, temporary = tempfile.mkstemp(prefix=name + ".", dir=directory)
+        fd, temporary = tempfile.mkstemp(prefix=name + ".", dir=folder)  # 처음부터 600 — 다시 쓸 때도 공개하지 않음
         tmp = Path(temporary)
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
                 stream.write(body)
             tmp.replace(target)
         finally:
             tmp.unlink(missing_ok=True)
-
     return changed
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     ap.add_argument("sections", nargs="*", help="모델 경로 절(없으면 표 전부 — 호스트 칸 모두)")
-    ap.add_argument("--redis-dir", help="Redis config·health 파일을 이 보호 폴더에 씀(값 출력 없음)")
+    ap.add_argument("--secrets-dir", help="PG 비밀번호 파일·Redis 설정을 이 보호 폴더에 씀(값 출력 없음 — host_ctl.sh secrets)")
     ap.add_argument("--file", help="설정 파일(없으면 SETTINGS_FILE)")
     ap.add_argument("--format", choices=("env", "sh"), default="env")
     a = ap.parse_args(argv)
@@ -207,10 +209,9 @@ def main(argv=None):
         return 2
     doc, err = load_or_error(path)
     try:
-        out = [] if err or a.redis_dir else lines(doc, a.sections, a.format)
-        if not err and a.redis_dir:
-            if redis_files(doc, a.redis_dir):
-                out = ["changed"]
+        out = [] if err or a.secrets_dir else lines(doc, a.sections, a.format)
+        if not err and a.secrets_dir and secret_files(doc, a.secrets_dir):
+            out = ["changed"]
     except ValueError as e:
         err = f"설정 파일 값 오류({path}): {e}"
     if err:

@@ -5,7 +5,8 @@
 #   상한: run_pipeline --max-docs·--deadline(ops.nightly.nightly_max_docs·nightly_stop_time) + TimeoutStartSec(아래 — 마지막 안전판). 사람이 따로 돌린 run_pipeline과는
 #   run_pipeline 잠금(batch_progress/run_pipeline.lock — 도는 중이면 종료 코드 75)으로 겹치지 않는다(pl-18).
 # 서버 설정은 settings.yaml 한 파일(<루트>/settings.yaml — 루트 = 코드 폴더 자체, env-guide.md §0). nightly_batch.sh가 load_settings.sh load_settings로
-#   호스트 칸(NIGHTLY_TIME·DATA_PIPELINE_IMAGE·RAG_OUT·DOC_SRC·RUN_ENV 등)을 셸 env로 받는다(RUN_ENV는 settings.yaml required.env.run_env에만 — unit에 적지 않음).
+#   호스트 칸(NIGHTLY_TIME·RUN_ENV 등)을 셸 env로 받는다(RUN_ENV는 settings.yaml required.env.run_env에만 — unit에 적지 않음).
+#   배치는 0번 벌 컨테이너 data-pipeline-0 안에서 돈다 — 0번 벌 폴더에서 설치한다.
 #   설정 파일이 없거나 틀리면 종료 코드 2. 설정 파일을 다른 자리에 두면 Environment=SETTINGS_FILE=<파일>을 더한다.
 #   호스트 python에는 PyYAML이 있어야 한다(load_settings.sh — settings_to_env.py).
 [Unit]
