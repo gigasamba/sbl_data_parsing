@@ -12,6 +12,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -139,9 +140,43 @@ def lines(doc, sections, fmt="sh"):
     return out
 
 
+def redis_files(doc, directory):
+    """Redis 이미지에는 Python이 없음 — 호스트가 설정에서 비밀을 읽어 보호 파일로만 전달.
+    requirepass는 argv·compose env에 싣지 않는다. redis entrypoint가 /data 주인을 맞춘다.
+    """
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    port = get(doc, "common.connections.redis.redis_port") or 6379
+    try:
+        port = int(port)
+    except (TypeError, ValueError):
+        raise ValueError("Redis 포트는 정수여야 함") from None
+    if not 1 <= port <= 65535:
+        raise ValueError("Redis 포트는 1~65535")
+    password = get(doc, "common.connections.redis.redis_password")
+    config = f"bind 127.0.0.1\nport {port}\nappendonly yes\nappendfsync everysec\ndir /data\n"
+    health = "#!/bin/sh\n"
+    if password:
+        config += "requirepass " + json.dumps(str(password), ensure_ascii=False) + "\n"
+        health += "export REDISCLI_AUTH='" + str(password).replace("'", "'\\''") + "'\n"
+    health += f"exec redis-cli --no-auth-warning -p {port} ping\n"
+    for name, body in (("redis.conf", config), ("health.sh", health)):
+        target = directory / name
+        # 처음부터 600 — 기존 파일을 다시 쓸 때도 공개하지 않음.
+        fd, temporary = tempfile.mkstemp(prefix=name + ".", dir=directory)
+        tmp = Path(temporary)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                stream.write(body)
+            tmp.replace(target)
+        finally:
+            tmp.unlink(missing_ok=True)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     ap.add_argument("sections", nargs="*", help="모델 경로 절(없으면 표 전부 — 호스트 칸 모두)")
+    ap.add_argument("--redis-dir", help="Redis config·health 파일을 이 보호 폴더에 씀(값 출력 없음)")
     ap.add_argument("--file", help="설정 파일(없으면 SETTINGS_FILE)")
     ap.add_argument("--format", choices=("env", "sh"), default="env")
     a = ap.parse_args(argv)
@@ -151,7 +186,9 @@ def main(argv=None):
         return 2
     doc, err = load_or_error(path)
     try:
-        out = [] if err else lines(doc, a.sections, a.format)
+        out = [] if err or a.redis_dir else lines(doc, a.sections, a.format)
+        if not err and a.redis_dir:
+            redis_files(doc, a.redis_dir)
     except ValueError as e:
         err = f"설정 파일 값 오류({path}): {e}"
     if err:

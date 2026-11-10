@@ -104,6 +104,36 @@ EOF
   return 0
 }
 
+# Redis 설정·인증은 보호 파일(600)에만. compose env·argv에는 비밀번호를 내보내지 않는다.
+prepare_redis() {
+  local folder=${REDIS_DATA_DIR:-$RAG_ROOT/redis}
+  "${PY:-python3}" "$_SETTINGS_ROOT/deploy/host/scripts/settings_to_env.py" --file "$SETTINGS_FILE" --redis-dir "$folder"
+}
+
+# UID 10001 작업 폴더 — 컨테이너보다 먼저 만들고 권한을 확인(기존 결과 폴더와 같은 주인·그룹).
+# 호스트가 root면 주인 10001, 일반 운영 계정은 기존 RAG_OUT 그룹의 쓰기 권한을 쓴다.
+prepare_jobs() {
+  local jobs=$RAG_OUT/_mcp_parse/jobs owner mode created=
+  if [ ! -d "$jobs" ]; then
+    mkdir -p "$jobs" || return 2
+    created=1
+  fi
+  if [ "$(id -u)" = 0 ]; then
+    chown 10001 "$jobs" || return 2
+    chgrp "$(ls -nd "$RAG_OUT" | awk '{print $4}')" "$jobs" || return 2
+    chmod 2775 "$jobs" || return 2
+  else
+    [ -z "$created" ] || chmod 2775 "$jobs" || return 2
+    owner=$(ls -nd "$jobs" | awk '{print $3}')
+    mode=$(ls -ld "$jobs" | awk '{print $1}')
+    if [ "$owner" = 10001 ]; then
+      case "$mode" in ?????w*) return 0 ;; esac
+    fi
+    echo "[설정] $jobs 주인은 UID 10001이어야 함(그룹 쓰기 권한 필요) — root로 host_ctl.sh init --group <운영 그룹> 실행" >&2
+    return 2
+  fi
+}
+
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then        # 실행(source가 아님)
   set -euo pipefail
   if [ -n "${SETTINGS_FILE:-}" ]; then

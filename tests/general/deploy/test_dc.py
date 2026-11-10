@@ -12,7 +12,7 @@ from common.core.paths import DEPLOY_ROOT
 from tests.general.deploy.test_trigger_gate import _bash
 
 SCRIPT = DEPLOY_ROOT / "deploy" / "host" / "scripts" / "host_ctl.sh"
-BASE = ["compose.pipeline.yml", "compose.data-parsing.yml", "compose.mcp-server.yml"]
+BASE = ["compose.redis.yml", "compose.pipeline.yml", "compose.data-parsing.yml", "compose.mcp-server.yml"]
 CODE = ["compose.code.yml", "compose.code.data-parsing.yml", "compose.code.mcp-server.yml"]
 DEV = ["compose.dev.yml"]
 PORTS = {"MCP_PORT": "8775", "DATA_PARSING_PORT": "8776"}  # 포트 칸 — 여러 벌(개발자 벌은 data-pipeline만)은 기본값이어도 됨
@@ -99,16 +99,19 @@ def test_dc_command():
                     p.write_text("services: {}\n", encoding="utf-8")
             if code:
                 env["CODE_DIR"] = code
+            numbered = name.endswith("-2")
+            service = "data-pipeline" if numbered else "mcp"
             r = subprocess.run(
-                [bash, str(SCRIPT), "up", "-d", "mcp"], env=env, capture_output=True, text=True, encoding="utf-8", timeout=30
+                [bash, str(SCRIPT), "up", "-d", service], env=env, capture_output=True, text=True, encoding="utf-8", timeout=30
             )
             if project.startswith("!"):
                 assert r.returncode == 2 and project[1:] in r.stderr, (name, extra, r.returncode, r.stderr)
                 continue
             assert r.returncode == 0, (image, code, r.stderr)
             files = [w.rsplit("/", 1)[-1] for w in r.stdout.split() if w.endswith(".yml")]
-            assert r.stdout.split()[:3] == ["compose", "-p", project] and r.stdout.split()[-3:] == ["up", "-d", "mcp"], r.stdout
-            assert files == BASE + more, (image, code, extra, files)
+            assert r.stdout.split()[:3] == ["compose", "-p", project] and r.stdout.split()[-3:] == ["up", "-d", service], r.stdout
+            expected = (["compose.pipeline.yml"] + [f for f in more if f not in CODE[1:]]) if numbered else BASE + more
+            assert files == expected, (image, code, extra, files)
 
 
 STUB = "from pathlib import Path\nprint(f\"export DATA_PIPELINE_IMAGE='{Path(__file__).parents[3].name}'\")\n"  # settings_to_env.py 대역 — 루트 이름을 냄
@@ -258,7 +261,7 @@ def test_keepalive_extra_compose():
             "SETTINGS_FILE": sp,
             "SETTINGS_LOADED": sp,
             "DOCKER": "dk",
-            "RAG_ROOT": _posix(Path(d) / "sbl_data_parsing-main-3"),
+            "RAG_ROOT": _posix(Path(d) / "sbl_data_parsing-main"),
             **PORTS,
             "DATA_PIPELINE_IMAGE": "data-pipeline:0.2.0",
             "MCP_SERVER_IMAGE": "mcp-server-runtime:0.2.0",  # 검색 MCP만 실행 이미지 — 그 짝만 붙음(이미지마다)
@@ -267,7 +270,7 @@ def test_keepalive_extra_compose():
             **SSH,
             "DEVBOX_HOME": "/nonexistent/home",  # 작업 공간 관문(홈 없음)이 살리기를 막지 않음 — base
         }
-        root = Path(d) / "sbl_data_parsing-main-3"
+        root = Path(d) / "sbl_data_parsing-main"
         root.mkdir()
         (root / "extra.yml").write_text("services: {}\n", encoding="utf-8")
         # 대역을 PATH 맨 앞에 — Git Bash(Windows) 입구는 시작 때 /usr/bin을 앞에 붙이므로 셸 안에서 붙이고 bash를 다시 부름
@@ -280,11 +283,15 @@ def test_keepalive_extra_compose():
             run_env = {**env, "MCP_HOST": host}  # env 남김 — 시험(호스트 셸이 load_settings로 받는 MCP_HOST)
             r = subprocess.run([bash, "-c", cmd], env=run_env, capture_output=True, text=True, encoding="utf-8", timeout=60)
             ups = [w.split() for w in r.stdout.splitlines() if w.startswith("compose ")]
-            assert r.returncode == 1 and [u[-1] for u in ups] == ["mcp-data-parsing", "mcp"], (r.returncode, r.stdout, r.stderr)
+            assert r.returncode == 1 and [u[-1] for u in ups] == ["mcp-redis", "mcp-data-parsing", "mcp"], (
+                r.returncode,
+                r.stdout,
+                r.stderr,
+            )
             for u in ups:
                 files = [w.rsplit("/", 1)[-1] for w in u if w.endswith(".yml")]
-                assert u[:3] == ["compose", "-p", "rag-3"] and files == BASE + CODE[2:] + ["extra.yml"], u
-            seen = calls.read_text(encoding="utf-8")
+                assert u[:3] == ["compose", "-p", "rag"] and files == BASE + CODE[2:] + ["extra.yml"], u
+            seen = "\n".join(line for line in calls.read_text(encoding="utf-8").splitlines() if line.startswith("-c "))
             assert (probe in seen) if probe else not seen, (host, seen)
-            ex = [w for w in execs.read_text(encoding="utf-8").splitlines() if w.startswith("exec mcp-server-3 python -c ")]
+            ex = [w for w in execs.read_text(encoding="utf-8").splitlines() if w.startswith("exec mcp-server python -c ")]
             assert bool(ex) == inside and all("gethostbyname(socket.gethostname())" in w and ":8775/health" in w for w in ex), host

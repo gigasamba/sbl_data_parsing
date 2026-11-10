@@ -81,7 +81,7 @@
 |---|---|---|---|---|
 | local | 개발 PC | (보통 이미지 없이 `.venv`) · 시험 이미지 | 저장소 그대로 | 시험 PG(pgvector) 하나 |
 | dev | 개발 서버 — 개발자마다 벌 하나 | 실행 이미지 `data-pipeline-runtime:<이미지 판>`(코드 없음) | 벌 폴더(코드 폴더)를 `/app/deploy`에 붙임 | 벌마다 `data-pipeline-<번호>` **하나만** |
-| prd | 운영 서버 — 한 벌 | 코드가 든 이미지 `data-pipeline:<VERSION>` · `mcp-server:<VERSION>` | 이미지 안(붙이지 않음) | `data-pipeline` · `mcp-data-parsing` · `mcp-server` 셋 |
+| prd | 운영 서버 — 한 벌 | 코드가 든 이미지 `data-pipeline:<VERSION>` · `mcp-server:<VERSION>` | 이미지 안(붙이지 않음) | `mcp-redis` · `data-pipeline` · `mcp-data-parsing` · `mcp-server` 넷 |
 
 **두 가지 방법** — 같은 일을 한다. 한 서버에서는 한 방법만 쓴다.
 - **직접 명령**: 아래 `docker run`·`docker exec`·`systemctl`을 한 줄씩 친다. 무엇이 어디에 붙는지 눈으로 보인다.
@@ -115,7 +115,7 @@ PC 설치·문서 몇 건 돌리기·검증 페이지는 [README §4](../../READ
 
 ### 0-2. dev — 개발 서버, 개발자별 벌
 
-개발자마다 벌 폴더 하나(`sbl_data_parsing-main-<번호>`)와 컨테이너 `data-pipeline-<번호>` 하나다. 기능 개발·파싱·적재·검색 기능 시험은 모두 이 컨테이너 안에서 한다 — 코드 폴더를 붙이므로 코드를 고치면 바로 반영된다. 검색 MCP 컨테이너는 따로 띄우지 않고, MCP가 필요하면 이 컨테이너 안에서 잠깐 연다(④). 전체 e2e·성능·worker 수 시험은 운영판(컨테이너 셋)으로 한다(⑦).
+개발자마다 벌 폴더 하나(`sbl_data_parsing-main-<번호>`)와 컨테이너 `data-pipeline-<번호>` 하나다. 기능 개발·파싱·적재·검색 기능 시험은 모두 이 컨테이너 안에서 한다 — 코드 폴더를 붙이므로 코드를 고치면 바로 반영된다. 검색 MCP 컨테이너는 따로 띄우지 않고, MCP가 필요하면 이 컨테이너 안에서 잠깐 연다(④). 전체 e2e·성능·worker 수 시험은 번호 없는 주 벌(컨테이너 넷)으로 한다(⑦).
 
 **① 이미지 불러오기**(서버에 한 번 — 공용 폴더에서)
 `<이미지 판>`은 `sbl_images-main/` 아래 판 폴더 이름이다(실행 이미지를 만든 버전 — 예 `0.3.0`). 코드만 바뀐 판(PATCH — 예 코드 0.3.1)은 실행 이미지를 새로 만들지 않으므로 이미지 판은 그대로 `0.3.0`이다. 고를 판은 그 폴더의 `BUILD.txt` DEPS_HASH가 코드의 `deploy/docker/DEPS_HASH`와 같은 판이다.
@@ -214,18 +214,13 @@ systemctl list-timers 'data-pipeline-nightly*'              # 기대: 다음 실
 
 **⑥ 개발을 마치면** — 시험한 코드 폴더를 운영 이미지로 굽는다(아래 prd ①).
 
-**⑦ 운영판으로 전체 시험**(개발 서버 — 전체 e2e·성능·worker 수)
+**⑦ 전체 e2e·성능·worker 수 시험**
 
-구운 이미지(`data-pipeline:<VERSION>`·`mcp-server:<VERSION>`)를 개발 서버에서 운영과 같은 컨테이너 셋으로 띄워 본다. 자기 개발 벌과 이름이 겹치지 않게 **시험용 벌 폴더를 따로** 만든다(예 `sbl_data_parsing-main-9` — 굽기가 만든 코드 묶음 `code-<판>-<커밋>.tar.gz`를 푼 폴더).
-- 그 벌의 settings.yaml: 이미지 칸에 구운 이미지 태그, `required.env.run_env: dev` 그대로, `search.server.mcp_port`·`ops.services.data_parsing.data_parsing_port`는 다른 벌이 연 MCP 포트와 겹치지 않게.
-- 띄우기: 아래 prd ③의 직접 명령 셋(이름 끝에 `-9`, `-e RUN_ENV=dev`, 경로는 이 벌 폴더) 또는 `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp`.
-- 점검: `host_ctl.sh check`는 개발 서버라 data-pipeline 넷에서 멈추므로, 검색 MCP는 `bash deploy/host/scripts/mcp_keepalive.sh`(응답 확인)와 `mcp_smoke`로 따로 본다.
-- worker 수·자원을 바꿔 가며 잴 때는 그 벌의 settings.yaml(`ops.containers.*`·`tuning.*`)을 고치고 `host_ctl.sh up -d --force-recreate …`(직접 명령이면 `docker rm -f` 뒤 다시 `docker run`).
-- 끝나면 `host_ctl.sh down`(또는 `docker rm -f data-pipeline-9 mcp-data-parsing-9 mcp-server-9`)으로 내린다. 타이머는 켜지 않는다.
+Redis·파싱 MCP·검색 MCP는 서버당 번호 없는 주 벌 한 벌에서만 실행한다. 번호 벌은 `data-pipeline`만 띄운다. 전체 시험은 주 벌의 settings.yaml과 아래 prd 절의 구성을 사용하되 `RUN_ENV=dev`로 실행한다. Redis 포트와 키 접두를 벌마다 나누거나 자동 접미사를 붙이지 않는다. worker·엔진·자원 설정은 [§1-3-1](#1-3-1-parse_document-redis-큐113)을 따른다.
 
 ### 0-3. prd — 운영 서버, 코드를 구운 이미지
 
-운영 서버는 번호 없는 한 벌(`sbl_data_parsing-main`)이고 코드 폴더를 붙이지 않는다 — 코드는 이미지 안에 있다. 컨테이너는 셋이다.
+운영 서버는 번호 없는 한 벌(`sbl_data_parsing-main`)이고 코드 폴더를 붙이지 않는다 — 코드는 이미지 안에 있다. 컨테이너는 Redis를 포함해 넷이다.
 
 **① 굽기**(개발 서버에서 — 개발에 쓴 실행 이미지 판 + 시험한 코드 폴더 → 코드가 든 이미지)
 ```bash
@@ -241,11 +236,18 @@ cd /home/sbl && bash sbl_images/load.sh <VERSION>                # 예 <VERSION>
 docker image ls | grep -E '^(data-pipeline|mcp-server) '        # 기대: 두 줄, TAG 칸에 <VERSION>(예 0.3.1)
 ```
 
-**③ 띄우기** — `data-pipeline` → (처음이면 DB 표 만들기 — [설치 순서 6번](#서버-설치-순서)) → `mcp-data-parsing`·`mcp-server`(검색 MCP는 시작할 때 마스터 표를 읽음)
+**③ 띄우기** — 먼저 [§1-3-1](#1-3-1-parse_document-redis-큐113)의 Redis 보호 설정을 준비하고 `mcp-redis`를 띄운다. 이어서 `data-pipeline` → (처음이면 DB 표 만들기 — [설치 순서 6번](#서버-설치-순서)) → `mcp-data-parsing`·`mcp-server`(검색 MCP는 시작할 때 마스터 표를 읽음)
 
 직접 명령:
 ```bash
 B=/home/sbl/sbl_data_parsing-main; cd $B
+# Redis 보호 설정·jobs는 컨테이너보다 먼저(값·비밀번호는 출력하지 않음)
+( . deploy/host/scripts/load_settings.sh && load_settings && prepare_jobs && prepare_redis &&
+  $DOCKER run -d --name mcp-redis --restart unless-stopped --network host \
+    --memory "${REDIS_MEM_LIMIT:-512m}" \
+    -v "${REDIS_DATA_DIR:-$RAG_ROOT/redis}:/data:z" \
+    --health-cmd='sh /data/health.sh' --health-interval=15s --health-timeout=5s --health-retries=3 \
+    "${REDIS_IMAGE:-redis:7.4.2-alpine}" redis-server /data/redis.conf )
 # 예: <원본 문서 폴더> = /data/docs · <VERSION> = 0.3.1(끝 줄 data-pipeline:0.3.1 idle · mcp-server:0.3.1 mcp) · 자원 값은 dev ②의 확인 명령으로 정함
 docker run -d --name data-pipeline --restart unless-stopped --network host --init \
   --memory 24g --memory-swap 24g --cpus 5 --cpu-shares 1024 --pids-limit 4096 \
@@ -258,7 +260,7 @@ docker run -d --name data-pipeline --restart unless-stopped --network host --ini
   data-pipeline:<VERSION> idle
 
 docker run -d --name mcp-data-parsing --restart unless-stopped --network host --init \
-  --memory 8g --memory-swap 8g --cpus 3 --cpu-shares 4096 --pids-limit 1024 \
+  --memory 12g --memory-swap 12g --cpus 4 --cpu-shares 4096 --pids-limit 1024 \
   --log-opt max-size=50m --log-opt max-file=3 \
   -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=prd \
   -v $B/settings.yaml:/etc/rag/settings.yaml:ro,z \
@@ -273,17 +275,18 @@ docker run -d --name mcp-server --restart unless-stopped --network host --init \
   -v $B/settings.yaml:/etc/rag/settings.yaml:ro,z \
   -v $B/edw_chain.yaml:/etc/rag/edw_chain.yaml:ro,z \
   -v $B/output:/app/output:ro,z \
+  -v $B/output/_mcp_parse/jobs:/app/output/_mcp_parse/jobs:z \
   mcp-server:<VERSION> mcp
-docker ps --format '{{.Names}} {{.Status}}'                 # 기대: 세 줄 Up
+docker ps --format '{{.Names}} {{.Status}}'                 # 기대: 네 줄 Up
 ```
 - `mcp-data-parsing`은 `data-pipeline` 이미지로 작업 서비스(`run-mcp-parsing`)를 띄운다. 자원 값은 settings.yaml `ops.containers.<pipeline|data_parsing|mcp>.*`와 같게.
 - `host_ctl.sh`는 여기에 상태 검사(`/health`)도 붙인다. 직접 명령으로 띄웠으면 `bash deploy/host/scripts/mcp_keepalive.sh`로 검색 MCP 응답을 본다.
 
 `host_ctl.sh`로:
 ```bash
-bash deploy/host/scripts/host_ctl.sh up -d data-pipeline
+bash deploy/host/scripts/host_ctl.sh up -d mcp-redis data-pipeline
 bash deploy/host/scripts/host_ctl.sh up -d mcp-data-parsing mcp
-bash deploy/host/scripts/host_ctl.sh ps                     # 기대: 세 줄 Up
+bash deploy/host/scripts/host_ctl.sh ps                     # 기대: 네 줄 Up
 ```
 
 **④ 점검** — dev ③의 넷(시작 스크립트는 `E=/app/docker/entrypoint.sh`, selftest는 코드 마운트 없이 `-e RUN_ENV=prd`와 `data-pipeline:<VERSION>`)에 둘을 더한다:
@@ -309,7 +312,7 @@ systemctl list-timers 'data-pipeline-nightly*' 'mcp-server-keepalive*'   # 기�
 
 MCP 살리기 타이머는 `/health`에 응답이 없으면 떠 있는 컨테이너를 `docker restart`하고, 컨테이너가 멈췄거나 없으면 `host_ctl.sh`(compose)로 다시 띄운다. 직접 명령으로 띄운 서버에서는 이 둘째 경우가 이름이 겹쳐 실패하므로 `docker start <이름>`(예 `docker start mcp-server`)으로 손으로 띄운다.
 
-**⑥ 재부팅** — 세 컨테이너는 `--restart unless-stopped`라 docker 서비스가 다시 띄운다(`systemctl is-enabled docker` — 기대 `enabled`). 손으로 멈춘 컨테이너는 다시 띄우지 않으니 `docker start <이름>`(예 `docker start data-pipeline`)(또는 `host_ctl.sh up -d`).
+**⑥ 재부팅** — 네 컨테이너는 `--restart unless-stopped`라 docker 서비스가 다시 띄운다(`systemctl is-enabled docker` — 기대 `enabled`). 손으로 멈춘 컨테이너는 다시 띄우지 않으니 `docker start <이름>`(예 `docker start data-pipeline`)(또는 `host_ctl.sh up -d`).
 
 ---
 
@@ -368,6 +371,42 @@ MCP 살리기 타이머는 `/health`에 응답이 없으면 떠 있는 컨테이
 | 운영 그룹 | `id -gn <운영 계정>` · `getent group <그룹>` | 서버 관리자에게 받는다 |
 
 **컨테이너 도구는 docker 하나로 쓴다.** 셸을 열면 먼저 `export DOCKER=docker`(운영 계정 `~/.bashrc`에 두어도 됨), settings.yaml에 `ops.host.container_cli: docker`. 일반 사용자 셸이면 `DOCKER="sudo docker"`. 같은 서버에 podman도 있으면 이미지를 podman에 불러오지 않는다(두 도구는 이미지를 따로 보관 — docker로 띄우면 podman에 넣은 이미지는 안 보임).
+
+### 1-3-1. parse_document Redis 큐(#113)
+
+앱 이미지 2개 외에 `mcp-redis`(`compose.redis.yml`, 기본 redis:7.4.2-alpine)를 우리가 운영한다. `host_ctl.sh init --group <운영 그룹>`으로 `<결과 폴더>/_mcp_parse/jobs`를 UID 10001·2775로 준비한다. 검색 MCP의 전체 결과 마운트는 읽기 전용이고 jobs만 쓰기 가능하다. `host_ctl.sh`·keepalive도 띄우기 전에 폴더를 확인하므로 root로 실행한다.
+
+현재 worker는 기본 2개이며 허용 범위는 1~2다(사용자 결정 2026-11-09). 상한을 늘릴 때는 CPU·메모리·worker마다 엔진 수를 함께 조정한다.
+
+| 자원 칸 | 기본 | 산정·확인 |
+|---|---|---|
+| `ops.services.data_parsing.mcp_parse_workers` | 2(최대 2) | 독립 spawn 소비자 |
+| `tuning.ops.services.data_parsing.mcp_parse_engine_processes` | 비움 | worker마다 max(1, min(2, CPU − 1)), 보통 2 × 2 = 총 엔진 4개 |
+| `ops.containers.data_parsing.data_parsing_cpus` | 4.0 | CPU 상한이며 예약이 아님 |
+| 같은 절 `data_parsing_mem_limit` | 12g | worker 2개와 엔진 자식에 필요한 메모리 여유 확인 |
+| 같은 절 `data_parsing_cpu_shares` | 4096 | 일괄 data-pipeline(1024)보다 CPU 우선순위가 높음 |
+
+docker/podman은 호스트 CPU 수보다 큰 cpus를 거부한다. 4 CPU 미만이면 data_parsing_cpus를 호스트 이하로 낮추고 mcp_parse_engine_processes를 1로 적는다. 4 vCPU 개발 서버도 data-pipeline·mcp와 CPU를 공유한다. cpus=4는 CPU 예약이 아니며 경합 때 cpu_shares가 우선순위를 정한다. 메모리는 컨테이너 상한 12g 외에 두 앱·Redis·호스트 여유까지 합산한다.
+
+```bash
+bash deploy/host/scripts/host_ctl.sh up -d mcp-redis
+bash deploy/host/scripts/host_ctl.sh up -d mcp-data-parsing
+bash deploy/host/scripts/host_ctl.sh up -d mcp
+bash deploy/host/scripts/host_ctl.sh ps
+$DOCKER exec mcp-redis sh /data/health.sh                  # PONG(비밀번호 있으면 보호 파일에서 인증)
+$DOCKER exec mcp-data-parsing python -m pipeline.run_mcp_parsing --health
+$DOCKER exec mcp-redis redis-cli -p <설정 포트> SCARD mcp_parse:active
+$DOCKER exec mcp-redis redis-cli -p <설정 포트> XPENDING mcp_parse:queue mcp_parse:workers
+$DOCKER exec mcp-redis redis-cli -p <설정 포트> HGETALL mcp_parse:job:<job_id>
+```
+
+위 키 조회 예시는 비밀번호가 없을 때다. 인증이 있으면 컨테이너 셸에서 보호 파일(`/data/health.sh`의 REDISCLI_AUTH 선언)을 이용하며 비밀번호를 명령 인자·로그에 적지 않는다. Redis·mcp-data-parsing·mcp는 서버당 한 벌이며 번호 벌은 파싱 MCP가 없다. 접두는 설정값 그대로 사용한다(자동 접미사 없음). `KEYS *`·FLUSHALL 대신 해당 접두의 SCAN을 쓴다.
+
+AOF 데이터는 `ops.host.redis_data_dir`(비우면 `<루트>/redis`)에 남는다. 호스트 스크립트가 settings.yaml의 redis_password를 권한 600인 redis.conf·health.sh로 만들어 인증을 설정한다. Redis 시작 스크립트가 데이터 주인을 맞추므로 이후 파일 갱신도 root로 한다. 비밀번호 변경은 Redis와 두 앱을 함께 재시작한다. AOF everysec는 장애 시 최근 약 1초 쓰기를 잃을 수 있다. 완료 STREAM 항목은 XACK+XDEL로 제거하고, AOF는 Redis 기본 auto-rewrite(100% 증가·최소 64MB)를 사용하므로 디스크 여유를 살핀다. 완료 HASH·LIST는 기본 하루 TTL, 폴더는 수정 시간순 최근 30개를 남기되 active와 최근 10분 폴더는 등록 전 업로드까지 보호한다. 미완료 작업은 pending에서 회수되며 최대 전달 횟수를 넘으면 failed 알림을 준다.
+
+검색 MCP의 keepalive는 jobs/Redis 준비·기동이 실패해도 검색 MCP 확인과 재기동을 계속한다. parse health는 컨테이너 로컬 임시 폴더의 supervisor 식별자를 읽고 그 소비자의 heartbeat만 확인하므로 호스트 네트워크에서도 다른 컨테이너를 정상으로 오인하지 않는다.
+
+상태 흐름: queued → running → done/failed/rejected. 완료 알림 전에 result.json을 쓴다. 제한 시간 응답을 받아도 worker는 작업을 계속한다. `service.json`에는 supervisor PID·Redis host:port·worker 수만 적고 비밀번호는 넣지 않는다. 작업·대기·파싱 추적과 `perf_report --mcp`는 §3-4-1을 따른다.
 
 <a id="서버-pg-띄우기"></a>
 ### 1-4. 서버 PG(pgvector) 띄우기
@@ -458,7 +497,7 @@ docker exec pgvector psql -U <계정> -d rag -c 'CREATE EXTENSION IF NOT EXISTS 
 | `required.object_storage.object_storage_endpoint`·`object_storage_access_key`·`object_storage_secret_key` | Object Storage(S3 호환) 접속 | 스토리지 담당 | `https://os.example.local:9000` · `<비밀>` · `<비밀>` | dev·prd | `run_pipeline` 시작 · publish `--apply` |
 | `common.connections.object_storage.object_storage_region`·`object_storage_verify_tls` | 리전(비우면 `us-east-1`)·TLS 검증(비우면 `1` — 사내 CA면 CA 파일 경로). **`required` 아래가 아니다** | 스토리지 담당 | (비움) · (비움) | dev·prd | 설정을 읽을 때(자리가 틀리면 시작 거부) |
 | `extract.source.source_input_location`·`source_default_bucket`·`source_uri_prefix` | 원본 위치 — `source_default_bucket`은 서버에서 **필수**(`run_pipeline`이 비면 멈춤) | 운영 담당 | `rdb:csv:<루트>/list.csv` · `<버킷>` · `s3://<버킷>/<접두>` | dev·prd | 첫 `run_pipeline` |
-| `required.tokens.mcp_token` | MCP 토큰 하나 — 검색 MCP와 `parse_document` 작업 서비스가 함께 씀 | `openssl rand -hex 32` | 64자 16진수 | dev·prd | `host_ctl.sh check` ⑥ `/health` · `parse_document` 호출이 토큰 오류 |
+| `required.tokens.mcp_token` | MCP 토큰 하나 — 검색 MCP 외부 호출 인증에 씀(내부 전달은 Redis 권한) | `openssl rand -hex 32` | 64자 16진수 | dev·prd | `host_ctl.sh check` ⑥ `/health` · `parse_document` 호출이 토큰 오류 |
 | `required.tokens.fulltext_sign_key` | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키 — 비우면 두 도구가 `not_configured`, 바꾸면 이미 발급한 sfid가 모두 무효 | 같은 명령 | 64자 16진수 | dev·prd | 원문 도구 호출이 `not_configured` |
 | `required.deploy.pipeline_image` · `mcp_image` | 띄울 이미지 태그(같은 배포 묶음) | §1-5 2번 `load.sh` | dev: `data-pipeline-runtime:<이미지 판>` · prd: `data-pipeline:<VERSION>` | dev·prd | `host_ctl.sh up`이 이미지 없음으로 멈춤 |
 | `required.deploy.host_docs_dir` | 원본 문서 폴더(서버에 이미 있는 폴더) | 서버 관리자 | `/data/docs` | dev·prd | `host_ctl.sh up`이 `:?` 안내로 멈춤 |
@@ -474,7 +513,7 @@ docker exec pgvector psql -U <계정> -d rag -c 'CREATE EXTENSION IF NOT EXISTS 
 |---|---|---|---|
 | PostgreSQL(pgvector) | `required.pg.pg_port` | 없음(필수) | 파이프라인·검색 MCP |
 | 검색 MCP 서버(운영) | `search.server.mcp_port`(바인드 `search.server.mcp_bind_host`) | 8765(127.0.0.1) | AI 클라이언트 |
-| MCP 파싱 작업 서비스(운영) | `ops.services.data_parsing.data_parsing_port` — 검색 MCP도 이 값으로 `http://127.0.0.1:<포트>`를 부름 | 8766 | 검색 MCP의 `parse_document` |
+| Redis 파싱 큐(번호 없는 주 벌) | `common.connections.redis.redis_port` — 루프백 Redis(옛 data_parsing_port는 미사용) | 6379 | 검색 MCP의 `parse_document` |
 | 개발 작업 공간 SSH(개발 — 켰을 때만) | `option.devbox.ssh_port` | 없음 | 개발자 |
 | EDW(SQL Server) | `required.edw.edw_port`(주소·계정도 `required.edw`) | 1433 | 파이프라인·`query_edw` |
 | 검증 페이지(PC만) | `dev.search_ui.search_ui_port` | 8790 | 사람(브라우저) |
@@ -500,7 +539,7 @@ docker exec pgvector psql -U <계정> -d rag -c 'CREATE EXTENSION IF NOT EXISTS 
 | 이미지 불러오기(서버에 한 번) | 공용 폴더(`/home/sbl`) | `bash sbl_images-main/load.sh <이미지 판>` | `== <이미지> — load` 줄들 → `BUILD.txt` 내용 → `== 끝 — settings.yaml 이미지 칸(…)을 위 태그로` |
 | 벌 폴더 처음 채우기 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>` | `[host_ctl init] 루트: …` → `만듦 …settings.yaml` 등 → 빈 필수 칸 **이름** 목록 |
 | 설정 확인(값은 안 찍음) | `<루트>` | `bash deploy/host/scripts/host_ctl.sh config --quiet && echo 설정 OK` | `설정 OK` |
-| 띄우기 | `<루트>` | 운영 `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp` · 개발 `… up -d data-pipeline` | 아래 `ps`에 운영 세 줄 · 개발 한 줄 `Up` |
+| 띄우기 | `<루트>` | 운영 `bash deploy/host/scripts/host_ctl.sh up -d mcp-redis data-pipeline mcp-data-parsing mcp` · 개발 `… up -d data-pipeline` | 아래 `ps`에 운영 네 줄 · 개발 한 줄 `Up` |
 | 상태 · 로그 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh ps` · `… logs --tail 100 data-pipeline`(서비스 이름) | 이 벌의 컨테이너만 · 그 컨테이너 로그 |
 | 전체 점검 | `<루트>` | `bash deploy/host/scripts/host_ctl.sh check` | 마지막 줄 운영 `[host_ctl check] 통과 — 6개` · 개발 `[host_ctl check] 통과 — 4개(개발 서버 — data-pipeline만)` |
 | DB 표 만들기(처음 한 번 — 공용 DB) | `<루트>`(`data-pipeline`이 떠 있어야 함) | [§1-8](#1-8-db-표-만들기--migrate) 순서 — 검토용 SQL → `migrate up --target all --dim <임베딩 차원>` → `migrate master load` → `migrate check` | `[migrate] <갈래> <스키마>: 판 [...] (끝 …)` · `[pipe_exec] … 끝 (종료 코드 0)` |
@@ -569,7 +608,7 @@ selftest는 종료 코드가 아니라 `[판정]` 줄로 판정한다([§5-5](#5
 | 컨테이너 | CPU · 메모리 기본 | settings.yaml 칸 |
 |---|---|---|
 | `data-pipeline` | 5 · 24g | `ops.containers.pipeline.pipeline_cpus` · `pipeline_mem_limit` |
-| `mcp-data-parsing`(운영) | 3 · 8g(CPU 나눔 비율 4096 — 일괄 1024보다 먼저) | `ops.containers.data_parsing.data_parsing_cpus` · `data_parsing_mem_limit` · `data_parsing_cpu_shares` |
+| `mcp-data-parsing`(운영) | 4 · 12g(CPU 나눔 비율 4096 — 일괄 1024보다 먼저) | `ops.containers.data_parsing.data_parsing_cpus` · `data_parsing_mem_limit` · `data_parsing_cpu_shares` |
 | `mcp-server`(운영) | 1 · 4g | `ops.containers.mcp.mcp_cpus` · `mcp_mem_limit` |
 
 서버 CPU 수보다 큰 값은 컨테이너 도구가 거부한다. CPU 4개 서버라면 예: `ops.containers.pipeline.pipeline_cpus: 2`, `data_parsing_cpus: 1`(그러면 `tuning.ops.services.data_parsing.mcp_parse_engine_processes`도 1 이하), `ops.containers.mcp.mcp_cpus: 1`. 개발 서버에 벌이 여럿이면 모든 벌의 `data-pipeline` 합이 서버 CPU·메모리를 넘지 않게 벌마다 줄인다. 바꾼 뒤 `host_ctl.sh up -d --force-recreate …`.
@@ -609,7 +648,7 @@ selftest는 종료 코드가 아니라 `[판정]` 줄로 판정한다([§5-5](#5
 
 **벌 폴더(코드 폴더) 하나가 한 벌이고, 폴더 이름 끝 `-<숫자>`(1~99)가 벌 번호다.** 설정 칸은 따로 없다. 끝이 `-<숫자>`가 아니면(`sbl_data_parsing-main`, `sbl_data_parsing-0.3.0`, `sbl_data_parsing-20261106` 같은 날짜) 한 벌로 보고 이름을 그대로 쓴다. 이미지는 공용 폴더에서 한 번 불러오면 모든 벌이 같이 쓴다.
 
-**개발 서버의 벌은 `data-pipeline` 하나만 띄운다.** 검색 MCP(`mcp-server`)·파싱 작업 서비스(`mcp-data-parsing`)는 운영 서버에만 있다. 검색 확인은 `data-pipeline` 안에서 한다(§2-10 — 실행 이미지가 `mcp_server`를 불러올 수 있음). 그래서 벌마다 검색 MCP 포트를 나눌 필요가 없다.
+**개발 서버의 벌은 `data-pipeline` 하나만 띄운다.** Redis(`mcp-redis`)·검색 MCP(`mcp-server`)·파싱 작업 서비스(`mcp-data-parsing`)는 서버당 번호 없는 주 벌 한 벌에서만 띄운다. 검색 확인은 `data-pipeline` 안에서 한다(§2-10 — 실행 이미지가 `mcp_server`를 불러올 수 있음). 그래서 벌마다 검색 MCP 포트를 나눌 필요가 없다.
 
 | 벌 번호가 저절로 정하는 것 | 기본 이름 → 벌 1 · 벌 2 |
 |---|---|
@@ -1025,7 +1064,7 @@ bash deploy/host/scripts/host_ctl.sh timers        # 단위의 코드 폴더 자
 
 - 검색 MCP가 응답하나: `curl -s http://127.0.0.1:<search.server.mcp_port>/health`.
 - 타이머 기록: `journalctl -u mcp-server-keepalive.service -n 50`.
-- 끄고 다시 켜기(운영): 끌 때는 타이머부터(안 그러면 2분 안에 검색 MCP를 다시 띄운다) → `host_ctl.sh stop`. 켤 때는 `host_ctl.sh up -d data-pipeline mcp-data-parsing mcp` → `systemctl start mcp-server-keepalive.timer data-pipeline-nightly.timer`.
+- 끄고 다시 켜기(운영): 끌 때는 타이머부터(안 그러면 2분 안에 검색 MCP를 다시 띄운다) → `host_ctl.sh stop`. 켤 때는 `host_ctl.sh up -d mcp-redis data-pipeline mcp-data-parsing mcp` → `systemctl start mcp-server-keepalive.timer data-pipeline-nightly.timer`.
 
 ### 3-2. 설정 값 바꾸기
 
@@ -1107,10 +1146,32 @@ MCP 토큰은 settings.yaml `required.tokens.mcp_token`, 모델은 `required.mod
 | 검색 MCP(운영) | `curl -s http://127.0.0.1:<search.server.mcp_port>/health` | `{"ok":true,"ready":true,…}` |
 | 디스크 | `df -h <루트> <결과 폴더>` · `du -sh <결과 폴더>/_docflow <결과 폴더>/_staging` | 쓰기 여유 20% 넘음 · `_docflow`·`_staging`이 계속 늘지 않음 |
 | 로그 예비 파일 | `ls -la <결과 폴더>/logs/` | 비어 있음 — 파일이 있으면 DB 로그 쓰기 실패(파일 안 오류를 보고 DB를 고친 뒤 지움) |
-| 컨테이너 | `bash deploy/host/scripts/host_ctl.sh ps` | 운영 세 줄 · 개발 한 줄 Up |
+| 컨테이너 | `bash deploy/host/scripts/host_ctl.sh ps` | 운영 네 줄 · 개발 한 줄 Up |
 
 - `<작업 폴더>` = `ops.run_pipeline.run_pipeline_work_dir`(비우면 코드 폴더 안 `deploy/host/scripts/test_space/`). `<결과 폴더>` = `<루트>/output`(또는 `ops.host.host_output_dir`).
 - 문제가 있으면 §3-11 형식으로 `issues.md`에 적는다. DB에서 더 보려면 §3-12의 SQL.
+
+#### 3-4-1. MCP 파싱 작업 성능
+
+`docker exec mcp-data-parsing python -m pipeline.tools.perf_report --mcp --since 24 --top 10`으로 최근 작업 수·fail/timeout 수와 전체(큐 대기+파싱)·대기·파싱·주요 단계의 p50/p95/최대를 본다. `--since` 기본은 24시간이다. 파싱은 파일 복사·준비부터 대표 결과까지이고, 주요 단계(엔진·채점·대표 결과)는 `proc.run` 벽시계 시간이다(병렬 엔진별 시간의 합이 아님). 진행 중 실행은 건수만 세고 시간 표에서는 뺀다. VLM 미설정 스캔 PDF도 완료 작업으로 기록하며 `metrics.note`에 안내가 남는다. DB를 못 쓰는 PC는 `--file <logsink 대체 jsonl>…`, 원인별 단계·엔진 상세는 `perf_report <run_id>`로 본다. 모두 읽기 전용이다.
+
+검색 MCP가 잰 총 응답 시간은 `mcp_log.duration_ms`, 서비스 큐 대기는 `mcp_parse.job.metrics.queue_wait_ms`, 파싱은 그 행의 `duration_ms`다. 같은 `job_id`로 아래처럼 잇는다(응답에는 업로드·Redis 대기 등도 포함되므로 서비스 전체와 차이가 날 수 있음). 실패 응답에 job_id가 없으면 작업 행만 따로 조회한다.
+
+```sql
+SELECT m.requested_at, m.request_id,
+       e.metrics->>'job_id' AS job_id, e.doc_id, e.run_id,
+       m.duration_ms AS response_ms,
+       (e.metrics->>'queue_wait_ms')::numeric AS queue_wait_ms,
+       e.duration_ms AS parsing_ms, e.status, e.metrics->>'note' AS note
+FROM applog.mcp_log AS m
+JOIN applog.pipe_event AS e
+  ON e.stage = 'mcp_parse.job'
+ AND e.metrics->>'job_id' = m.result_keys->>'job_id'
+WHERE m.tool_name = 'parse_document'
+  AND m.requested_at >= now() - interval '24 hours'
+  AND e.ts_start >= now() - interval '24 hours'
+ORDER BY m.requested_at DESC;
+```
 
 ### 3-5. 서버를 다시 켠 뒤
 
@@ -1118,8 +1179,8 @@ docker 서비스가 부팅 때 컨테이너를 다시 띄운다(`restart: unless
 ```bash
 export DOCKER=docker
 systemctl is-active docker                                                # 기대: active
-bash deploy/host/scripts/host_ctl.sh ps                                   # 기대: 운영 세 줄 · 개발 한 줄 Up — 없으면 다음 줄
-bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp   # 개발은 up -d data-pipeline
+bash deploy/host/scripts/host_ctl.sh ps                                   # 기대: 운영 네 줄 · 개발 한 줄 Up — 없으면 다음 줄
+bash deploy/host/scripts/host_ctl.sh up -d mcp-redis data-pipeline mcp-data-parsing mcp   # 개발은 up -d data-pipeline
 systemctl start mcp-server-keepalive.timer data-pipeline-nightly.timer   # 꺼져 있었으면(개발은 data-pipeline-nightly-<번호>.timer만)
 systemctl list-timers 'mcp-server-keepalive*' 'data-pipeline-nightly*'   # 기대: 타이머 다음 실행 시각
 bash deploy/host/scripts/host_ctl.sh check                                # 기대 마지막 줄: 운영 [host_ctl check] 통과 — 6개 · 개발 [host_ctl check] 통과 — 4개(개발 서버 — data-pipeline만)

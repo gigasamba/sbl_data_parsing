@@ -1,5 +1,5 @@
 #!/bin/bash
-# 상주 컨테이너 3개(data-pipeline·mcp-data-parsing·mcp)를 부르는 compose 입구.
+# 상주 컨테이너 4개(mcp-redis·data-pipeline·mcp-data-parsing·mcp)를 부르는 compose 입구.
 #   bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp   (서비스 하나만도 됨 · ps·logs·down 등 compose 하위 명령 그대로)
 #   bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>   서버 루트(이 코드 폴더 자체 = 한 벌) 채우기(root — 여러 번 불러도 안전)
 #   bash deploy/host/scripts/host_ctl.sh timers                      systemd 타이머(새벽 배치·MCP 살리기)를 이 코드 폴더 기준으로 설치·켬(root)
@@ -172,15 +172,28 @@ esac
 base=; [ "${1:-}" = base ] && { base=1; shift; }   # 작업 공간 파일·관문 없이(mcp_keepalive.sh)
 . deploy/host/scripts/in_container.sh
 C=deploy/host/compose
-files="-f $C/compose.pipeline.yml -f $C/compose.data-parsing.yml -f $C/compose.mcp-server.yml"
+files="-f $C/compose.pipeline.yml"
+if [ -z "${INSTANCE:-}" ]; then
+  files="-f $C/compose.redis.yml $files -f $C/compose.data-parsing.yml -f $C/compose.mcp-server.yml"
+  case "${1:-}" in
+    up|create|start)
+      if [ "$DOCKER" != echo ] && [ -z "$base" ]; then
+        prepare_jobs || { rc=$?; echo "[host_ctl] jobs 준비 실패 — host_ctl.sh init --group <운영 그룹> 확인" >&2; exit "$rc"; }
+        prepare_redis || { rc=$?; echo "[host_ctl] Redis 설정 준비 실패 — 데이터 폴더·설정 파일 권한 확인" >&2; exit "$rc"; }
+      fi ;;
+  esac
+fi
 # 코드 폴더 짝 — 이미지마다(셸에 CODE_DIR를 주면 셋 다). 붙이는 코드 폴더는 CODE_DIR(없으면 이 코드 폴더)
 pipe_code=; mcp_code=
 if [ -n "${CODE_DIR:-}" ]; then pipe_code=1; mcp_code=1; fi
 runtime_image DATA_PIPELINE_IMAGE && pipe_code=1
 runtime_image MCP_SERVER_IMAGE && mcp_code=1
 if [ -n "$pipe_code$mcp_code" ]; then CODE_DIR=${CODE_DIR:-$(pwd)}; export CODE_DIR; fi
-[ -n "$pipe_code" ] && files="$files -f $C/compose.code.yml -f $C/compose.code.data-parsing.yml"
-[ -n "$mcp_code" ] && files="$files -f $C/compose.code.mcp-server.yml"
+if [ -n "$pipe_code" ]; then
+  files="$files -f $C/compose.code.yml"
+  [ -n "${INSTANCE:-}" ] || files="$files -f $C/compose.code.data-parsing.yml"
+fi
+if [ -n "$mcp_code" ] && [ -z "${INSTANCE:-}" ]; then files="$files -f $C/compose.code.mcp-server.yml"; fi
 # 개발 작업 공간(선택 — option.devbox.ssh_port를 적었을 때만): data-pipeline을 SSH 작업 공간으로(compose.dev.yml) + opencode 설정 파일(compose.opencode.yml)
 if [ -n "${DEVBOX_SSH_PORT:-}" ] && [ -z "$base" ]; then
   [ "${RUN_ENV:-}" = prd ] && { echo "[host_ctl] option.devbox.ssh_port는 개발 서버(dev)에서만 — 운영(prd)은 비워 둠" >&2; exit 2; }
