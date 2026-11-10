@@ -1,9 +1,36 @@
 """pipeline.run_mcp_parsing — 작업 자식 설정(10-29): 서비스 쪽당 제한·첫 시도 하한·보통 우선순위."""
 
+import base64
+import json
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
 from unittest import mock
 
-from common.core import parse_limit
+from common.config import settings
+from common.core import jsonlog, parse_limit, span
 from pipeline import config as pc
+
+
+def _submit(source, r):
+    import uuid
+
+    from common.store import redisq
+    from pipeline import run_mcp_parsing as S
+
+    jid = time.strftime("%Y%m%d") + "-" + uuid.uuid4().hex[:12]
+    ws = S.JOBS_DIR / jid
+    (ws / "in").mkdir(parents=True)
+    if source.get("content_b64"):
+        raw = base64.b64decode(source["content_b64"])
+        (ws / "in" / source["filename"]).write_bytes(raw)
+        meta = {"mode": "base64", "filename": source["filename"], "bytes": len(raw)}
+    else:
+        meta = {"mode": "path", "filename": Path(source["path"]).name, "bytes": 0, "path": source["path"]}
+    meta["submitted_at"] = time.time()
+    return jid, redisq.submit(r, jid, meta, settings.cfg().parse_queue.queue_max)
 
 
 def test_job_env_overrides():
@@ -59,64 +86,35 @@ def test_scan_pdf_note():
 
 
 def test_size_limit():
-    """사용자 11-03 — 파일 크기 상한 한 칸(common.runtime.parse_max_mb)을 path·content_b64 두 길에 같게, HTTP 본문 상한은 base64 크기 기준
-    (전에는 파일 상한 + 64KB라 base64 본문이 파일 상한의 3/4에서 막혔음). 상한 1MB로 덮고 루프백 임시 포트의 실제 HTTP 서버로 본다."""
-    import base64
-    import json
-    import tempfile
-    import threading
-    import urllib.error
-    import urllib.request
-    from http.server import ThreadingHTTPServer
-    from pathlib import Path
-
-    from common.config.settings import COMMON
+    """크기 상한은 proxy 업로드와 worker path·base64 모두 같음(HTTP 전송·폴링 없음)."""
+    from common.store import redisq
     from pipeline import run_mcp_parsing as S
+    from tests.server.common.test_redisq import FakeRedis
 
     mb = 1048576
-    with tempfile.TemporaryDirectory() as td:
+    r = FakeRedis()
+    with tempfile.TemporaryDirectory() as td, settings.isolated(DATA_PARSING_MAX_MB="1"):
         root = Path(td, "inbox")
         root.mkdir()
         (root / "ok.txt").write_bytes(b"x" * int(0.9 * mb))
         (root / "big.txt").write_bytes(b"x" * int(1.1 * mb))
-        srv = ThreadingHTTPServer(("127.0.0.1", 0), S.Handler)
-        threading.Thread(target=srv.serve_forever, daemon=True).start()
-
-        def post(source):
-            req = urllib.request.Request(f"http://127.0.0.1:{srv.server_address[1]}/jobs", data=json.dumps(source).encode(), method="POST")
-            req.add_header("Authorization", "Bearer t")
-            try:
-                with urllib.request.urlopen(req, timeout=10) as r:
-                    return r.status, json.loads(r.read())
-            except urllib.error.HTTPError as e:
-                return e.code, json.loads(e.read())
-
-        def b64(n):
-            return {"content_b64": base64.b64encode(b"x" * n).decode(), "filename": "a.txt"}
-
-        try:
-            with (
-                COMMON.env(DATA_PARSING_MAX_MB="1"),
-                mock.patch.multiple(S, TOKEN="t", ROOTS=[root.resolve()], JOBS_DIR=Path(td, "jobs")),
-                mock.patch.object(S, "_purge_old"),
+        with (
+            mock.patch.object(S, "_run_job", side_effect=lambda jid, j, ws, fname, t0: S._result(jid, fname)),
+            mock.patch.multiple(S, ROOTS=[root.resolve()], JOBS_DIR=Path(td, "jobs")),
+            mock.patch.object(redisq, "JOBS_DIR", S.JOBS_DIR),
+        ):
+            assert parse_limit.max_bytes() == mb
+            for source in (
+                {"path": str(root / "ok.txt")},
+                {"content_b64": base64.b64encode(b"x" * int(0.9 * mb)).decode(), "filename": "a.txt"},
             ):
-                assert parse_limit.max_bytes() == mb
-                assert post(b64(int(0.9 * mb)))[0] == 202
-                assert post({"path": str(root / "ok.txt")})[0] == 202
-                # 1.1MB의 base64 본문(약 1.47MB)은 옛 본문 상한(파일 상한 + 64KB)이면 "본문 크기 상한 초과"였음 — 이제 크기를 알려 주는 거부
-                for source in (b64(int(1.1 * mb)), {"path": str(root / "big.txt")}):
-                    code, body = post(source)
-                    assert code == 400 and "크기 상한(1MB)" in body["error"] and "1.1MB" in body["error"], (code, body)
-        finally:
-            srv.shutdown()
-            srv.server_close()
-            with S._lock:
-                for j in [
-                    k for k, v in S.JOBS.items() if str(Path(td)) in str(v.get("path", "")) or v.get("filename") in ("a.txt", "ok.txt")
-                ]:
-                    S.JOBS.pop(j, None)
-            while not S.Q.empty():
-                S.Q.get_nowait()
+                jid, _ = _submit(source, r)
+                S._process(r, *S._receive(r, "worker"))
+                assert r.hgetall(redisq.key("job", jid))["status"] != "rejected"
+            jid, _ = _submit({"path": str(root / "big.txt")}, r)
+            S._process(r, *S._receive(r, "worker"))
+            job = r.hgetall(redisq.key("job", jid))
+            assert job["status"] == "rejected" and "1.1MB" in job["error"]
 
 
 def test_result_shape():
@@ -144,3 +142,215 @@ def test_result_shape():
     assert got["engine"] == "e" and got["text"] == "t" and got["tables"] == [1] and got["facts"] is None, got
     assert got["all_keys"] == ["rep", "tables", "text", "x"] and "status" not in got and "note" not in got, got
     assert (got["rep_path"], got["workspace"], got["ms"]) == ("r", "w", 2.0), got
+
+
+def _worker_rows(run_job, count=1, scan=False):
+    """실제 제출·worker를 Redis 대역으로 돌린다. 로그 logger만 가로채 DB·sink·모델 없이 행을 확인."""
+    from pipeline import run_mcp_parsing as S
+
+    rows, jobs = [], {}
+    from common.store import redisq
+    from tests.server.common.test_redisq import FakeRedis
+
+    r = FakeRedis()
+    log = mock.Mock()
+    log.log.side_effect = lambda *a, extra: rows.append({"table": extra["log_table"], "row": extra["log_row"]})
+    with (
+        tempfile.TemporaryDirectory() as directory,
+        settings.isolated(APPLOG_DB_ENABLED="0", VLM_BASE_URL=None, VLM_MODEL=None),
+        mock.patch.object(S, "JOBS_DIR", Path(directory)),
+        mock.patch.object(redisq, "JOBS_DIR", Path(directory)),
+        mock.patch.object(S, "_JOB_ENVS", {}),
+        mock.patch.object(S, "_is_scan", return_value=scan),
+        mock.patch.object(S, "_purge_old"),
+        mock.patch.object(S, "_run_job", run_job),
+        mock.patch.object(span, "_logger", return_value=log),
+        mock.patch.object(S.runtrace, "_STATE", {"info": {}, "docs": {}}),
+        jsonlog.context(run_id="service-parent", span_id="service-span"),
+    ):
+        ids = []
+        for _ in range(count):
+            jid, ahead = _submit({"content_b64": base64.b64encode(b"text").decode(), "filename": "a.txt"}, r)
+            assert int(r.hgetall(redisq.key("job", jid))["queue_position"]) == ahead == len(ids)
+            r.hset(redisq.key("job", jid), mapping={"submitted_at": time.time() - 1})
+            ids.append(jid)
+        for jid in ids:
+            S._process(r, *S._receive(r, "test-worker"))
+            jobs[jid] = redisq.decode_job(r.hgetall(redisq.key("job", jid)))
+        assert jsonlog.get_context()["run_id"] == "service-parent"
+    return jobs, rows
+
+
+def test_worker_trace_and_child_context():
+    from pipeline import run_mcp_parsing as S
+
+    children, overlays = [], []
+
+    def run_job(job_id, job, ws, fname, t0):
+        env = S._job_env("supsub")
+        overlays.append(env["SETTINGS_FILE"])
+        # 실제 자식 import가 컨텍스트를 읽고 runtrace.run(run_all)이 새 실행을 만들지 않는지 확인.
+        code = """import json
+from common.core.jsonlog import get_context
+from pipeline.shared.runtrace import run
+with run('run_all') as created:
+    print(json.dumps({'context': get_context(), 'created': created}))
+"""
+        children.append(json.loads(subprocess.check_output([sys.executable, "-c", code], env=env, text=True)))
+        return S._result(job_id, fname, {"text": "text"})
+
+    jobs, rows = _worker_rows(run_job, count=2)
+    events = [r["row"] for r in rows if r["table"] == "pipe_event"]
+    starts = [r["row"] for r in rows if r["table"] == "pipe_run" and r["row"]["status"] == "running"]
+    ends = [r["row"] for r in rows if r["table"] == "pipe_run" and r["row"]["status"] != "running"]
+    assert len(events) == len(starts) == len(ends) == 2 and overlays[0] == overlays[1]  # 덮기 파일은 재사용
+    assert len({r["run_id"] for r in starts}) == 2 and "service-parent" not in {r["run_id"] for r in starts}
+    for i, row in enumerate(events):
+        assert row["stage"] == "mcp_parse.job" and row["status"] == "ok" and row["inflight"] == 1
+        assert (row["doc_id"], row["ext"], row["file_bytes"]) == ("a.txt", ".txt", 4)
+        metrics = row["metrics"]
+        assert metrics["job_id"] in jobs and metrics["queue_wait_ms"] >= 1000 and metrics["queue_position"] == i
+        assert metrics["mode"] == "base64" and metrics["scan"] is False
+        assert starts[i]["command"] == "mcp_parse" and metrics["job_id"] in starts[i]["args"]
+        assert children[i]["context"] == {"run_id": row["run_id"], "span_id": row["span_id"]} and children[i]["created"] is None
+        assert starts[i]["run_id"] == ends[i]["run_id"] == row["run_id"] and ends[i]["status"] == "ok"
+    assert all(j["status"] == "done" for j in jobs.values())
+
+
+def test_worker_fail_timeout_and_continue():
+    from pipeline import run_mcp_parsing as S
+
+    attempts = [RuntimeError("문서 본문은 추적 행에 남지 않음"), subprocess.TimeoutExpired("parse", 1), None]
+
+    def run_job(job_id, job, ws, fname, t0):
+        exc = attempts.pop(0)
+        if exc:
+            raise exc
+        return S._result(job_id, fname, note=S.DRM_NOTE)
+
+    jobs, rows = _worker_rows(run_job, count=3)
+    events = [r["row"] for r in rows if r["table"] == "pipe_event"]
+    assert [j["status"] for j in jobs.values()] == ["failed", "failed", "done"]
+    assert [r["status"] for r in events] == ["fail", "timeout", "ok"]
+    assert [r["err_kind"] for r in events] == ["doc", "timeout", None]
+    assert events[0]["err"] == "RuntimeError" and events[-1]["metrics"]["note"] == S.DRM_NOTE
+    ends = [r["row"] for r in rows if r["table"] == "pipe_run" and "ended_at" in r["row"]]
+    assert [r["status"] for r in ends] == ["fail", "fail", "ok"]  # pipe_run은 timeout을 fail로 묶고 span이 세분
+
+
+def test_worker_scan_without_pipeline():
+    from pipeline import run_mcp_parsing as S
+
+    run_job = mock.Mock(side_effect=AssertionError("파이프라인을 부르면 안 됨"))
+    jobs, rows = _worker_rows(run_job, scan=True)
+    run_job.assert_not_called()
+    event = next(r["row"] for r in rows if r["table"] == "pipe_event")
+    assert event["status"] == "ok" and event["metrics"]["scan"] is True and event["metrics"]["note"] == S.VLM_UNSET_NOTE
+    assert next(iter(jobs.values()))["status"] == "done"
+
+
+def test_rejected_and_reclaimed_attempts():
+    from common.store import redisq
+    from pipeline import run_mcp_parsing as S
+    from tests.server.common.test_redisq import FakeRedis
+
+    r = FakeRedis()
+    with tempfile.TemporaryDirectory() as d, mock.patch.object(redisq, "JOBS_DIR", Path(d)), mock.patch.object(S, "JOBS_DIR", Path(d)):
+        for source, expected in (
+            ({"path": "/etc/passwd"}, "허용 경로 아님"),
+            ({"content_b64": "eA==", "filename": "a.exe"}, "지원하지 않는 확장자"),
+        ):
+            jid, _ = _submit(source, r)
+            S._process(r, *S._receive(r, "worker"))
+            job = r.hgetall(redisq.key("job", jid))
+            assert job["status"] == "rejected" and expected in job["error"]
+        jid, _ = _submit({"content_b64": "eA==", "filename": "a.txt"}, r)
+        item = S._receive(r, "dead")
+        mid = item[0]
+        r.pending[mid].update(dead=True, times_delivered=3)
+        recovered = S._receive(r, "rescuer", min_idle_ms=1)
+        assert recovered[3] == 4
+        with mock.patch.object(S, "_run_job", side_effect=AssertionError("시도 상한을 넘겨 실행하면 안 됨")):
+            S._process(r, *recovered)
+        job = r.hgetall(redisq.key("job", jid))
+        assert job["status"] == "failed" and "worker가 3번 중단됨 — 작업 포기" in job["error"]
+        assert jid not in r.sets[redisq.key("active")] and r.lists[redisq.key("done", jid)]
+
+
+def test_purge_order_and_upload_grace():
+    import os
+
+    from common.store import redisq
+    from pipeline import run_mcp_parsing as S
+    from tests.server.common.test_redisq import FakeRedis
+
+    r = FakeRedis()
+    with tempfile.TemporaryDirectory() as directory, mock.patch.multiple(S, JOBS_DIR=Path(directory), MAX_JOBS_KEPT=1):
+        now = time.time()
+        old, newer = Path(directory) / "z-old", Path(directory) / "a-newer"
+        for folder, age in ((old, 2000), (newer, 1000)):
+            folder.mkdir()
+            os.utime(folder, (now - age, now - age))
+        S._purge_old(r)
+        assert not old.exists() and newer.exists()  # 이름순이 아니라 수정 시간순으로 최근 폴더 유지
+        upload, recent, active = (Path(directory) / name for name in ("0-upload", "1-recent", "2-active"))
+        for folder, age in ((upload, 0), (recent, 599), (active, 3000)):
+            folder.mkdir()
+            os.utime(folder, (now - age, now - age))
+        r.sadd(redisq.key("active"), active.name)
+        S._purge_old(r)
+        assert upload.exists() and recent.exists() and active.exists()
+        assert not newer.exists()  # 등록 전·최근 10분 폴더·active만 유예
+
+
+def test_terminal_job_ack_deletes_stream():
+    from common.store import redisq
+    from pipeline import run_mcp_parsing as S
+    from tests.server.common.test_redisq import FakeRedis
+
+    r = FakeRedis()
+    redisq.submit(r, "terminal", {"filename": "a.txt"}, 1)
+    item = S._receive(r, "worker")
+    r.hset(redisq.key("job", "terminal"), mapping={"status": "done"})
+    S._process(r, *item)
+    assert r.transactions[-1] == ["xack", "xdel"] and not r.streams[redisq.key("queue")] and not r.pending
+
+
+def test_health_is_local_to_supervisor():
+    from common.store import redisq
+    from pipeline import run_mcp_parsing as S
+    from tests.server.common.test_redisq import FakeRedis
+
+    r = FakeRedis()
+    with (
+        tempfile.TemporaryDirectory() as directory,
+        mock.patch.object(S, "_token_file", return_value=Path(directory) / "worker.id"),
+        mock.patch.object(redisq, "client", return_value=r),
+    ):
+        # 같은 hostname·prefix의 다른 컨테이너 heartbeat만으로 정상 판정하지 않음.
+        r.set(redisq.key("worker", "shared-host-111-deadbeef-222"), "1", ex=30)
+        assert S.health() is False  # 로컬 token 파일이 없음
+        token = "shared-host-333-cafebabe"
+        S._token_file().write_text(token, encoding="utf-8")
+        assert S.health() is False
+        r.set(redisq.key("worker", token + "-444"), "1", ex=30)
+        assert S.health() is True
+        S._token_file().write_text("*", encoding="utf-8")
+        assert S.health() is False  # 손상된 token으로 다른 worker를 찾지 않음
+
+
+def test_engine_process_default_per_worker():
+    import importlib
+
+    from pipeline import run_mcp_parsing as S
+
+    try:
+        for cores, wanted in ((None, 1), (1, 1), (2, 1), (3, 2), (16, 2)):
+            with pc.PIPE.env(DATA_PARSING_PROCS=None), mock.patch.object(S.os, "cpu_count", return_value=cores):
+                importlib.reload(S)
+                assert S.PROCS == str(wanted), (cores, S.PROCS)
+        with pc.PIPE.env(DATA_PARSING_PROCS=1), mock.patch.object(S.os, "cpu_count", return_value=16):
+            importlib.reload(S)
+            assert S.PROCS == "1"  # 작은 호스트의 명시적 엔진 수를 보존
+    finally:
+        importlib.reload(S)

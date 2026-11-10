@@ -1,45 +1,47 @@
-"""parse_document 서비스 — mcp-data-parsing 컨테이너(11-03 — 옛 data-pipeline-parse; 작업 서비스가 주 프로세스, compose.data-parsing.yml)의 작업 서비스(run_mcp_parsing)에 넘기는 프록시.
-S5(10-26, refactor_plan 5-1·D-007 — 코디네이터 답 Q5 a)에 mcp_server/main.py(옛 data_retrieval/mcp_server.py)에서 옮김 — 내용 그대로
-(설정 상수만 mcp_server/config.py의 CFG로). S7d(D-028 ⑨): 토큰은 설정 객체에서, 코드에 박혀 있던 대체 토큰은 지움 — 설정 필수.
-"""
+"""parse_document — 공유 작업 폴더 + Redis Streams 제출, 완료 LIST에서 즉시 깨어남."""
 
+import base64
 import json
+import shutil
 import time
+import uuid
+from pathlib import Path
 
+from common.config.settings import cfg
 from common.core import parse_limit
-from mcp_server import config as mc
-from mcp_server.config import CFG
+from common.store import redisq
 from mcp_server.services.tool_runner import PARSE_MAX_SEC
 
-_NO_TOKEN = "parse 서비스 토큰 없음 — settings.yaml required.tokens.mcp_token를 설정(두 컨테이너가 같은 칸을 읽음)"
+
+class RedisFailure(RuntimeError):
+    """클라이언트 명령에서 발생한 Redis/소켓 오류(파일 I/O와 구분)."""
+
+    def __init__(self, error):
+        self.error = error
+        super().__init__(str(error))
 
 
-class NoToken(RuntimeError):
-    """parse 서비스 토큰이 설정에 없음(공백만인 값 포함) — 값은 메시지에 넣지 않는다."""
+class JobFileError(RuntimeError):
+    """작업 폴더를 준비하지 못함 — 제출 함수가 아직 반환하지 않았어도 job_id를 보존."""
+
+    def __init__(self, error, job_id):
+        self.error, self.job_id = error, job_id
+        super().__init__(str(error))
 
 
-def _token():
-    """required.tokens.mcp_token(작업 서비스도 같은 칸). 없거나 공백만이면 NoToken. 요청마다 읽음."""
-    tok = mc.token_text(mc.common_cfg().tokens.mcp)
-    if not tok:
-        raise NoToken(_NO_TOKEN)
-    return tok
+def _redis_call(command, *args, **kwargs):
+    """redis-py를 import하지 않고 RedisError 계열과 클라이언트 소켓 오류만 가름."""
+    try:
+        return command(*args, **kwargs)
+    except Exception as exc:
+        redis_error = any(cls.__module__ == "redis.exceptions" for cls in type(exc).__mro__)
+        if redis_error or isinstance(exc, OSError):
+            raise RedisFailure(exc) from exc
+        raise
 
 
-# ── 텍스트 파싱 프록시(2026-10-21 사용자 요청) — mcp-data-parsing 컨테이너(11-03 — 옛 data-pipeline-parse)의 작업 서비스(run_mcp_parsing,
-#    그 컨테이너의 주 프로세스 — 토큰은 두 컨테이너가 같은 칸 required.tokens.mcp_token)
-#    를 localhost HTTP로 호출 — 구조화·임베딩·EDW/OS 적재·그림[VLM] 파싱 없이 text 파싱 대표 결과만. ──
-def _run_mcp_parsing(method, path, payload=None, timeout=10):
-    """parse 서비스 HTTP — 토큰은 _token()."""
-    import urllib.request
-
-    data = json.dumps(payload).encode() if payload is not None else None
-    tok = _token()
-    req = urllib.request.Request(
-        CFG.PARSE_URL + path, data=data, method=method, headers={"Authorization": f"Bearer {tok}", "Content-Type": "application/json"}
-    )
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read())
+def _file_error(exc, job_id=None):
+    return {"error": f"parse 작업 파일 오류: {type(exc).__name__}: {exc}", **({"job_id": job_id} if job_id else {})}
 
 
 def _parse_shaped(j, max_chars):
@@ -55,52 +57,85 @@ def _parse_shaped(j, max_chars):
     return res
 
 
-def do_parse_document(path=None, content_b64=None, filename=None, time_out_threshold=300, max_chars=200000):
-    """비정형 파일 1건 → text 파싱 대표 결과. path(컨테이너 허용 루트 하위) 또는 content_b64+filename 둘 중 하나.
-    time_out_threshold(기본 300초) 안에 파싱이 끝나야 결과를 돌려주고, 못 끝내면
-    {"error": "시간 안에 수행 못했습니다", "job_id": …}를 반환한다(작업 자체는 서버에서 계속 진행 — 결과는
-    수집 서버 _mcp_parse/jobs/<job_id>/에 만들어진다). 노출 도구는 이것 하나뿐이다(결과 수령 도구는 미노출 — 사용자 결정 10-21)."""
-    import urllib.error
+def _submit(source, r):
+    """업로드 파일·작업 메타를 공유 폴더에 쓴 뒤 Redis에 원자적 제출. path 검사는 worker가 함."""
+    path, b64 = source.get("path"), source.get("content_b64")
+    if not path and not b64:
+        raise ValueError("path 또는 content_b64(+filename) 필요")
+    raw = None
+    if b64:
+        fname = redisq.filename(source.get("filename"))
+        try:
+            raw = base64.b64decode(b64, validate=False)
+        except Exception as exc:
+            raise ValueError(f"base64 디코딩 실패: {exc}") from exc
+        if msg := parse_limit.too_big(len(raw)):
+            raise ValueError(msg)
+        meta = {"filename": fname, "mode": "base64", "bytes": len(raw)}
+    else:
+        fname = Path(path).name
+        meta = {"filename": fname, "mode": "path", "path": str(path), "bytes": 0}
+    job_id = time.strftime("%Y%m%d") + "-" + uuid.uuid4().hex[:12]
+    ws = redisq.JOBS_DIR / job_id
+    try:
+        try:
+            (ws / "in").mkdir(parents=True, exist_ok=True)
+            if raw is not None:
+                (ws / "in" / fname).write_bytes(raw)
+            meta["submitted_at"] = time.time()
+            (ws / "job.json").write_text(json.dumps({"job_id": job_id, **meta}, ensure_ascii=False), encoding="utf-8")
+        except Exception as exc:
+            raise JobFileError(exc, job_id) from exc
+        ahead = _redis_call(redisq.submit, r, job_id, meta, cfg().parse_queue.queue_max)
+    except Exception:
+        shutil.rmtree(ws, ignore_errors=True)
+        raise
+    return job_id, ahead
 
-    payload = {"path": path, "content_b64": content_b64, "filename": filename}
+
+def do_parse_document(path=None, content_b64=None, filename=None, time_out_threshold=300, max_chars=200000):
+    """비정형 파일 1건 → 기존 도구 응답. 제한 시간이 지나도 서버 작업은 계속 진행."""
     if not path and not content_b64:
         return {"error": "path 또는 content_b64(+filename) 필요"}
-    if content_b64:  # 11-03 — 상한을 넘으면 서비스로 보내지 않고 여기서 거름(path는 서비스가 같은 칸으로 거름)
-        # 원래 바이트 수 — 서비스(b64decode validate=False)처럼 줄바꿈·공백·'='는 빼고 셈(MIME 줄바꿈 base64도 같은 값)
+    if content_b64:
         n = (len(content_b64) - sum(map(content_b64.count, ("\r", "\n", " ", "\t", "=")))) * 3 // 4
         if msg := parse_limit.too_big(n):
             return {"error": msg}
-    t0 = time.time()  # 등록(큰 본문 전송) 시간도 time_out_threshold 안 — 바깥 창구(_bg_long, 기준 + 10초)보다 먼저 job_id를 돌려주게
+    t0 = time.monotonic()
+    thr = min(max(2.0, float(time_out_threshold or 0)), PARSE_MAX_SEC)
+    r, job_id = None, None
     try:
-        job = _run_mcp_parsing("POST", "/jobs", payload, timeout=60)  # 11-03 — 100MB(base64 약 133MB) 본문을 받아 풀고 쓰는 동안 기다림
-    except NoToken as e:
-        return {"error": str(e)}  # S7d — 설정 없음(연결 실패와 가름, 값 없음)
-    except urllib.error.HTTPError as e:
-        try:
-            return {"error": json.loads(e.read()).get("error", f"HTTP {e.code}")}
-        except Exception:
-            return {"error": f"parse 서비스 오류: HTTP {e.code}"}
-    except Exception as e:
-        return {
-            "error": f"parse 서비스 연결 실패({CFG.PARSE_URL}) — mcp-data-parsing 컨테이너(작업 서비스가 주 프로세스) 기동 확인: {type(e).__name__}: {e}"
-        }
-    job_id = job.get("job_id")
-    if not job_id:
-        return {"error": f"작업 등록 실패: {job}"}
-    ahead = job.get("queue_position", 0)  # 2026-10-22 — 클대기 순번(지연 원인 추적용)
-    thr = min(max(2.0, float(time_out_threshold or 0)), PARSE_MAX_SEC)  # 바깥 창구(_bg_long)와 같은 10분 상한
-    while time.time() - t0 < thr:
-        time.sleep(1.0)
-        try:
-            j = _run_mcp_parsing("GET", f"/jobs/{job_id}")
-        except Exception:
-            continue
-        if j.get("status") in ("done", "failed"):
-            return _parse_shaped(j, max_chars)
+        r = _redis_call(redisq.client, wait_timeout=thr)
+        job_id, ahead = _submit({"path": path, "content_b64": content_b64, "filename": filename}, r)
+        remaining = thr - (time.monotonic() - t0)
+        if remaining > 0 and _redis_call(r.blpop, redisq.key("done", job_id), timeout=remaining):
+            job = redisq.decode_job(_redis_call(r.hgetall, redisq.key("job", job_id)))
+            if job.get("status") == "rejected":
+                return {"error": job.get("error")}
+            if job.get("status") == "done":
+                try:
+                    job["result"] = json.loads((redisq.JOBS_DIR / job_id / "result.json").read_text(encoding="utf-8"))
+                except Exception as exc:
+                    return _file_error(exc, job_id)
+            return _parse_shaped(job, max_chars)
+    except RedisFailure as exc:
+        return {"error": redisq.connection_error(exc.error)}
+    except JobFileError as exc:
+        return _file_error(exc.error, exc.job_id)
+    except (ValueError, redisq.QueueFull) as exc:
+        return {"error": str(exc)}
+    except Exception as exc:
+        return {"error": f"parse 작업 오류: {type(exc).__name__}: {exc}", **({"job_id": job_id} if job_id else {})}
+    finally:
+        if r is not None:
+            try:
+                r.close()
+            except Exception:
+                pass
     return {
         "error": f"시간 안에 수행 못했습니다 — time_out_threshold({int(thr)}초) 내 파싱 미완료",
         "job_id": job_id,
-        "elapsed_s": round(time.time() - t0, 1),
+        "elapsed_s": round(time.monotonic() - t0, 1),
         "queue_position_at_submit": ahead,
         "note": f"작업은 수집 서버에서 계속 진행(대기열 {ahead}건 뒤) — 결과는 _mcp_parse/jobs/<job_id>/ 아래에 만들어진다(수집 서버 담당자 확인)",
     }

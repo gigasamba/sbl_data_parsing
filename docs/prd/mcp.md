@@ -146,10 +146,10 @@
 ## mc-08 · `parse_document` 도구 — 파일 하나를 바로 파싱
 - 이유: 클라이언트가 아직 적재되지 않은 파일을 묻는다.
 - 규칙:
-  1. 경로(inbox 루트 아래) 또는 base64 내용을 파싱 서비스(`http://127.0.0.1:<ops.services.data_parsing.data_parsing_port>` — 기본 8766)에 Bearer 토큰(`required.tokens.mcp_token` — 검색 MCP와 같은 값)으로 넘긴다. 글·표·사실·엔진·시간을 돌려주고, 시간 초과면 `job_id`.
+  1. 경로(inbox 루트 아래) 또는 base64 내용을 공유 작업 폴더와 Redis 큐(`common.connections.redis`)로 넘긴다(#113). base64는 검색 MCP가 파일로 쓰고 path는 worker 컨테이너에서 검사한다. 둘 다 주면 기존 계약대로 base64가 우선이다. Redis 연결 권한이 내부 전달을 보호하며 외부 MCP Bearer 인증은 그대로다. 완료 LIST를 BLPOP으로 기다려 HTTP 폴링 없이 결과를 읽는다. 글·표·사실·엔진·시간을 돌려주고, 시간 초과면 `job_id`.
   2. 파일 크기 상한 `ops.services.data_parsing.mcp_parse_max_file_mb`(기본 100, MB = 1024×1024바이트)를 검색 MCP와 파싱 서비스가 같이 읽는다. base64 크기는 줄바꿈·공백을 빼고 센다. 넘는 `content_b64`는 서비스로 보내지 않고 `{"error": "파일이 크기 상한(100MB)보다 큼(…MB) — ops.services.data_parsing.mcp_parse_max_file_mb"}`. 경로로 준 파일도 같은 상한.
-  3. HTTP 요청 본문 상한 = 파일 상한 × 1.5 + 1 MiB(검색 MCP·파싱 서비스 같음). 4 MiB보다 크거나 길이를 밝히지 않은 요청은 동시에 2개까지만 처리하고 나머지는 본문을 읽기 전에 기다린다(`mcp_server/main.py` `_BIG_SLOTS`).
-  4. 서비스 등록 요청 대기 60초.
+  3. MCP HTTP 요청 본문 상한 = 파일 상한 × 1.5 + 1 MiB. 4 MiB보다 크거나 길이를 밝히지 않은 요청은 동시에 2개까지만 처리하고 나머지는 본문을 읽기 전에 기다린다(`mcp_server/main.py` `_BIG_SLOTS`).
+  4. 제출 시간도 time_out_threshold 안에 센다. 시간 초과 응답의 job_id·elapsed_s·queue_position_at_submit·note와 결과 키는 그대로. worker 입력 거부는 `{error}`이고 실패는 job_id·filename·status·error·elapsed_ms다. 대기열 상한(tuning…mcp_parse_max_queued_jobs, 기본 8)은 대기+실행 active SET으로 판정한다.
   5. 받는 확장자 = 엔진 구성의 parse 키(`pipeline/transform/parse/engine_check.py` `allowed_exts()`).
 - 운영과 다른 점: 파일 크기 상한 기본 100MB(운영 64MB) · 스캔 PDF를 내부망 VLM으로 파싱([mc-18](#mc-18)) · 받는 확장자가 더 많다.
 - 파일: `common/core/parse_limit.py`(크기 상한·본문 상한 — 두 쪽이 함께 씀), `mcp_server/services/parse_proxy.py`, `pipeline/run_mcp_parsing.py`, `mcp_server/main.py`.
@@ -211,5 +211,5 @@
 |---|---|
 | `query_edw` | `required.edw` 읽기 계정, 또는 PC sqlite 대역 |
 | `edw_meta` | `search.edw_meta.edw_meta_catalog_dir`의 자료 |
-| `parse_document` | `mcp-data-parsing`(파싱 서비스) + `required.tokens.mcp_token` |
+| `parse_document` | `mcp-redis` + `mcp-data-parsing` + 공유 jobs 폴더(외부 MCP 인증은 기존 토큰) |
 | 원문 도구 | `required.tokens.fulltext_sign_key` · Object Storage 읽기 · EDW 읽기 계정 |

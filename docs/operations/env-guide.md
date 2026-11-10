@@ -45,6 +45,23 @@
 - 서버(dev·prd)는 값이 있는 비밀 칸이 8자 미만이면 시작을 거부한다(종료 2, 칸 경로만 찍음).
 - 파이프라인 성능 분석: `python -m pipeline.tools.perf_report [<run_id>]`(`--runs` 목록, `--compare` 비교, DB가 꺼져 있으면 `--file output/logs/*.jsonl`).
 
+### parse_document Redis 설정(#113)
+
+| YAML 자리 | 기본 | 뜻 |
+|---|---|---|
+| `common.connections.redis.redis_host` · `redis_port` | 127.0.0.1 · 6379 | 두 앱의 Redis 접속. compose Redis는 루프백 bind, 서버당 한 벌 — 번호 벌은 파싱 MCP 없음 |
+| 같은 절 `redis_password` · `redis_db` | 비움 · 0 | 비밀값은 settings.yaml에만 작성. 호스트가 Redis용 보호 파일(600)로 전달, 비밀값은 셸 export·argv에 안 실음 |
+| 같은 절 `redis_key_prefix` | mcp_parse | 설정값 그대로 사용(자동 접미사 없음) |
+| `ops.services.data_parsing.mcp_parse_workers` | 2 | spawn 소비자 프로세스 수, 현재 1~2만 허용(사용자 결정 2026-11-09). 늘리려면 상한·CPU·메모리·엔진 수를 함께 조정 |
+| `tuning.ops.services.data_parsing.mcp_parse_engine_processes` | 비움 | worker마다 max(1, min(2, CPU − 1)), 보통 2 workers × 2 engines = 총 4개 |
+| `ops.containers.data_parsing.data_parsing_cpus` · `data_parsing_mem_limit` · `data_parsing_cpu_shares` | 4.0 · 12g · 4096 | 호스트 4 CPU 이상·12g 메모리 여유 확인. 4 CPU 미만이면 CPU 상한을 낮추고 엔진 수 1. cpus는 예약이 아닌 상한, 공유 시 우선순위는 cpu_shares |
+| `tuning.ops.services.data_parsing.mcp_parse_max_attempts` · `mcp_parse_result_ttl_sec` | 3 · 86400 | 유실 작업 최대 전달 횟수 · 완료 HASH/LIST 보존 초 |
+| `ops.host.redis_image` · `redis_mem_limit` · `redis_data_dir` | redis:7.4.2-alpine · 512m · `<루트>/redis` | 이미지 반입·메모리·AOF/보호 설정 호스트 폴더 |
+| `tuning.ops.services.data_parsing.mcp_parse_max_queued_jobs` | 8 | 대기+실행 작업 상한. YAML 경로·alias DATA_PARSING_QUEUE_MAX·기본값은 그대로, 모델만 common으로 이동 |
+| `ops.services.data_parsing.data_parsing_port` | 8766 | 더 쓰지 않음(#113 Redis 큐로 대체) — 다음 판 삭제 여부는 C-116 |
+
+기동·건강 확인·키 조회는 [server-guide §1-3-1](server-guide.md#1-3-1-parse_document-redis-큐113). 외부 MCP Bearer 토큰은 계속 필요하며 내부 parse HTTP 토큰 검사는 없어졌다.
+
 ### 0-1. 읽는 규칙
 - **비밀값**(비밀번호·키·토큰)과 **접속 정보**(주소·포트·DB 이름)는 전부 이 파일 하나에만. 각 컨테이너는 common + 자기 앱 절만 읽는다.
 - **env로 준 값은 읽지 않는다** — 셸·compose·systemd·`docker exec -e`의 `X=값`은 효과가 없고 시작 때 이름만 경고한다.

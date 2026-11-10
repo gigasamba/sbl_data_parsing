@@ -4,14 +4,18 @@ HTTP 본문 상한(SDK 기본 4MiB)은 base64 크기에 맞춰 올린다. 상한
 import asyncio
 import base64
 import json
+import tempfile
+from pathlib import Path
 from unittest.mock import patch
 
 import httpx
 
 from common.config.settings import COMMON
 from common.core import parse_limit
+from common.store import redisq
 from mcp_server import main
 from mcp_server.services import parse_proxy, tool_runner
+from tests.server.common.test_redisq import FakeRedis
 
 MB = 1048576
 
@@ -21,9 +25,14 @@ def _b64(n):
 
 
 def _stub(sent):
-    def fake(method, path, payload=None, timeout=10):
-        sent.append((method, path))
-        return {"job_id": "j1"} if method == "POST" else {"status": "done", "result": {"text": "ok"}}
+    def fake(source, r):
+        sent.append(source)
+        ws = redisq.JOBS_DIR / "j1"
+        ws.mkdir(parents=True, exist_ok=True)
+        (ws / "result.json").write_text(json.dumps({"text": "ok"}), encoding="utf-8")
+        r.hset(redisq.key("job", "j1"), mapping={"status": "done"})
+        r.lpush(redisq.key("done", "j1"), "done")
+        return "j1", 0
 
     return fake
 
@@ -32,9 +41,14 @@ def test_proxy_limit():
     with COMMON.env(DATA_PARSING_MAX_MB="1"):
         assert parse_limit.max_bytes() == MB and parse_limit.body_cap() == MB * 3 // 2 + MB
         sent: list = []
-        with patch.object(parse_proxy, "_run_mcp_parsing", _stub(sent)):  # 완료까지 폴링 1회(1초)
+        with (
+            tempfile.TemporaryDirectory() as td,
+            patch.object(redisq, "JOBS_DIR", Path(td)),
+            patch.object(redisq, "client", return_value=FakeRedis()),
+            patch.object(parse_proxy, "_submit", _stub(sent)),
+        ):
             ok = parse_proxy.do_parse_document(content_b64=_b64(int(0.9 * MB)), filename="a.txt")
-            assert ok == {"text": "ok", "status": "done"} and sent[0] == ("POST", "/jobs"), (ok, sent)
+            assert ok == {"text": "ok", "status": "done"} and sent[0]["filename"] == "a.txt", (ok, sent)
             sent.clear()
             big = parse_proxy.do_parse_document(content_b64=_b64(int(1.1 * MB)), filename="a.txt")
             assert "크기 상한(1MB)" in big["error"] and "1.1MB" in big["error"] and not sent, (big, sent)
@@ -74,15 +88,161 @@ def test_http_body_cap():
     free: list = []
     stub = _stub(sent)
 
-    def watched(method, path, payload=None, timeout=10):
+    def watched(source, r):
         free.append(holder[0].value)
-        return stub(method, path, payload, timeout)
+        return stub(source, r)
 
-    with COMMON.env(DATA_PARSING_MAX_MB="1"), patch.object(parse_proxy, "_run_mcp_parsing", watched), patch.object(main, "_BIG_BODY", 1000):
+    with (
+        tempfile.TemporaryDirectory() as td,
+        patch.object(redisq, "JOBS_DIR", Path(td)),
+        patch.object(redisq, "client", return_value=FakeRedis()),
+        COMMON.env(DATA_PARSING_MAX_MB="1"),
+        patch.object(parse_proxy, "_submit", watched),
+        patch.object(main, "_BIG_BODY", 1000),
+    ):
         try:
             asyncio.run(run())
         finally:
             tool_runner._LANES.clear()
-    assert [m for m, _ in sent].count("POST") == 1, sent  # 1.1MB는 서비스로 안 감
+    assert len(sent) == 1, sent  # 1.1MB는 서비스로 안 감
     assert free and set(free) == {main._BIG_SLOTS - 1}, free  # 처리 중엔 자리 하나를 쥠
     assert holder[0].value == main._BIG_SLOTS  # 끝나면 돌려줌
+
+
+def test_proxy_completion_and_contract():
+    from mcp_server.services import parse_proxy as P
+
+    r = FakeRedis()
+    with (
+        tempfile.TemporaryDirectory() as directory,
+        patch.object(redisq, "JOBS_DIR", Path(directory)),
+        patch.object(redisq, "client", return_value=r),
+    ):
+
+        def done():
+            job_id = next(iter(r.sets[redisq.key("active")]))
+            result = {"job_id": job_id, "filename": "a.txt", "text": "abcdef", "engine": "plain"}
+            (Path(directory) / job_id / "result.json").write_text(json.dumps(result), encoding="utf-8")
+            redisq.finish(r, "1-0", job_id, "done", elapsed_ms=1)
+
+        r.on_wait = done
+        out = P.do_parse_document(content_b64="dGV4dA==", filename="a.txt", max_chars=3)
+        assert out["status"] == "done" and out["text"] == "abc" and out["text_truncated"] is True
+        assert set(out) == {"job_id", "filename", "text", "engine", "status", "text_truncated"}
+        r.on_wait = None
+        timeout = P.do_parse_document(path="/worker/in/a.txt", time_out_threshold=2)
+        assert "시간 안에 수행 못했습니다" in timeout["error"] and timeout["queue_position_at_submit"] == 0
+        assert set(timeout) == {"error", "job_id", "elapsed_s", "queue_position_at_submit", "note"}
+        r.on_wait = lambda: redisq.finish(r, "2-0", timeout["job_id"], "failed", error="parse failed", elapsed_ms=2)
+
+        # 다음 제출 작업에 대한 rejected 응답
+        def rejected():
+            jid = next(j for j in r.sets[redisq.key("active")] if j != timeout["job_id"])
+            redisq.finish(r, "3-0", jid, "rejected", error="허용 경로 아님")
+
+        r.on_wait = rejected
+        assert P.do_parse_document(path="/etc/secret") == {"error": "허용 경로 아님"}
+
+
+def test_proxy_failed_full_and_connection():
+    from common.config import settings
+
+    r = FakeRedis()
+    with (
+        tempfile.TemporaryDirectory() as directory,
+        settings.isolated(DATA_PARSING_QUEUE_MAX=1),
+        patch.object(redisq, "JOBS_DIR", Path(directory)),
+        patch.object(redisq, "client", return_value=r),
+    ):
+
+        def failed():
+            jid = next(iter(r.sets[redisq.key("active")]))
+            redisq.finish(r, "1-0", jid, "failed", error="parse failed", elapsed_ms=2.5)
+
+        r.on_wait = failed
+        out = parse_proxy.do_parse_document(content_b64="eA==", filename="a.txt")
+        assert out == {"job_id": out["job_id"], "filename": "a.txt", "status": "failed", "error": "parse failed", "elapsed_ms": 2.5}
+        redisq.submit(r, "busy", {"filename": "busy.txt"}, 1)
+        assert parse_proxy.do_parse_document(content_b64="eA==", filename="a.txt") == {"error": redisq.FULL_MESSAGE}
+    with patch.object(redisq, "client", side_effect=ConnectionError("connection refused")):
+        out = parse_proxy.do_parse_document(path="/worker/in/a.txt")
+        assert "연결 실패(Redis" in out["error"] and "connection refused" in out["error"]
+
+
+def test_base64_wins_over_path():
+    r = FakeRedis()
+    with (
+        tempfile.TemporaryDirectory() as directory,
+        patch.object(redisq, "JOBS_DIR", Path(directory)),
+        patch.object(redisq, "client", return_value=r),
+    ):
+        source = {"path": "/ignored/missing.docx", "content_b64": "dXBsb2Fk", "filename": "upload.txt"}
+        jid, _ = parse_proxy._submit(source, r)
+        job = r.hgetall(redisq.key("job", jid))
+        assert job["mode"] == "base64" and job["filename"] == "upload.txt" and "path" not in job
+        assert (Path(directory) / jid / "in" / "upload.txt").read_bytes() == b"upload"
+        redisq.finish(r, "1-0", jid, "done")
+
+        def done():
+            job_id = next(iter(r.sets[redisq.key("active")]))
+            result = {"filename": "upload.txt", "text": "upload"}
+            (Path(directory) / job_id / "result.json").write_text(json.dumps(result), encoding="utf-8")
+            redisq.finish(r, "2-0", job_id, "done")
+
+        r.on_wait = done
+        assert parse_proxy.do_parse_document(**source) == {"filename": "upload.txt", "text": "upload", "status": "done"}
+
+
+def test_failed_submit_cleans_upload():
+    r = FakeRedis()
+    for error in (redisq.QueueFull(redisq.FULL_MESSAGE), ConnectionError("Redis down")):
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(redisq, "JOBS_DIR", Path(directory)),
+            patch.object(redisq, "submit", side_effect=error),
+        ):
+            try:
+                parse_proxy._submit({"content_b64": "dGV4dA==", "filename": "a.txt"}, r)
+                raise AssertionError("제출 실패가 전달되어야 함")
+            except (redisq.QueueFull, parse_proxy.RedisFailure):
+                pass
+            assert list(Path(directory).iterdir()) == []
+
+
+def test_file_errors_are_not_redis_errors():
+    r = FakeRedis()
+    with (
+        tempfile.TemporaryDirectory() as directory,
+        patch.object(redisq, "JOBS_DIR", Path(directory)),
+        patch.object(redisq, "client", return_value=r),
+    ):
+        with patch.object(Path, "write_bytes", side_effect=OSError("disk full")):
+            result = parse_proxy.do_parse_document(content_b64="dGV4dA==", filename="a.txt")
+        assert result["error"] == "parse 작업 파일 오류: OSError: disk full" and result["job_id"]
+        assert list(Path(directory).iterdir()) == []
+
+        # 완료 알림 뒤 결과 파일이 사라져도 연결 실패로 표시하지 않음.
+        def done_without_file():
+            jid = next(iter(r.sets[redisq.key("active")]))
+            redisq.finish(r, "1-0", jid, "done")
+
+        r.on_wait = done_without_file
+        result = parse_proxy.do_parse_document(content_b64="dGV4dA==", filename="a.txt")
+        assert result["error"].startswith("parse 작업 파일 오류: FileNotFoundError:") and result["job_id"]
+        assert "연결 실패" not in result["error"]
+
+
+def test_redis_errors_without_redis_import():
+    # redis-py 없는 서버 이미지 시험에서도 RedisError의 하위 클래스를 식별.
+    error_type = type("RedisError", (Exception,), {"__module__": "redis.exceptions"})
+    for name in ("ConnectionError", "TimeoutError", "AuthenticationError"):
+        error = type(name, (error_type,), {})("Redis refused")
+        r = FakeRedis()
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(redisq, "JOBS_DIR", Path(directory)),
+            patch.object(redisq, "client", return_value=r),
+            patch.object(r, "blpop", side_effect=error),
+        ):
+            result = parse_proxy.do_parse_document(content_b64="dGV4dA==", filename="a.txt")
+            assert "연결 실패(Redis" in result["error"] and name in result["error"]
