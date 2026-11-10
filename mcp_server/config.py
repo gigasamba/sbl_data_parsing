@@ -6,7 +6,7 @@ mcp_server 코드가 읽는 객체는 설정 파일 기반 캐시 MCP다(S7e2 �
 요청마다 읽던 값(MCP_TOOL_TIMEOUT_SEC·SEARCH_* 등)은 쓰는 자리에서 요청마다 cfg()로 읽고, 시작 때 한 번 읽던 상수는 CFG(아래)에
 모은다(S5 — 이름·기본값은 옛 mcp_server.py 모듈 상수 그대로, 읽는 시점도 같음 — 이 모듈 import 때).
 SETTINGS(common + mcp 절)는 시험용(확인 명령 python -m mcp_server.config는 McpAppSettings를 직접 씀).
-사용: python -m mcp_server.config [--file 경로] · export --section mcp.host …
+사용: python -m mcp_server.config [--file 경로] · export --section mcp.server …
 """
 
 import contextlib
@@ -65,12 +65,6 @@ class McpEdwQuery(Section):
     timeout_sec: float | None = F(20.0, "EDW_QUERY_TIMEOUT_SEC", "query_edw 질의 시간 상한(초)")
 
 
-class McpHost(Section):
-    cpus: float | None = F(1.0, "MCP_CPUS", "mcp-server 컨테이너 CPU 한도(compose cpus)")
-    image: str | None = F(None, "MCP_SERVER_IMAGE", "mcp-server 컨테이너 이미지 이름:태그")
-    mem_limit: str | None = F("4g", "MCP_MEM_LIMIT", "mcp-server 컨테이너 메모리 한도(compose mem_limit)")
-
-
 class McpOutput(Section):
     max_chars: int | None = F(20000, "MCP_MAX_CHARS", "search 응답 크기 상한(JSON UTF-8 바이트) — 넘으면 근거 본문을 줄임")
 
@@ -113,7 +107,6 @@ class McpSettings(Section):
     dev: McpDev = Field(default_factory=McpDev)
     edw_meta: McpEdwMeta = Field(default_factory=McpEdwMeta)
     edw_query: McpEdwQuery = Field(default_factory=McpEdwQuery)
-    host: McpHost = Field(default_factory=McpHost)
     output: McpOutput = Field(default_factory=McpOutput)
     search: McpSearch = Field(default_factory=McpSearch)
     server: McpServer = Field(default_factory=McpServer)

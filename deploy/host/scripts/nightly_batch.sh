@@ -7,14 +7,14 @@
 #     run_pipeline 앞에 applog 월 파티션 정리(pipe_exec.sh migrate maintain --target applog) — 실패해도 경고만, 배치는 계속
 #   구조화·적재는 run_pipeline이 문서마다 부른다.
 #   설정: settings.yaml(SETTINGS_FILE, 기본 <루트>/settings.yaml — 루트 = 코드 폴더 자체)의
-#     호스트 칸(이미지·RAG_OUT·DOC_SRC·자원·NIGHTLY_* 등)을 load_settings.sh load_settings가 셸 env로 — 이미 셸에 있는 이름은 그대로.
+#     호스트 칸(NIGHTLY_* 등)을 load_settings.sh load_settings가 셸 env로 — 이미 셸에 있는 이름은 그대로. 대상 컨테이너는 0번 data-pipeline-0뿐.
 #     settings.yaml이 없으면 종료 코드 2.
 # 종료 코드: run_pipeline 그대로(0 끝남·건너뜀·대상 0건 · 1 실패 문서 있음 · 75 실행 중(잠금)·마감 · 2 설정 문제) · scheduled가 아니면 2
 #   겹침 잠금은 run_pipeline.py 안(flock batch_progress/run_pipeline.lock) — 사람이 이 스크립트 없이 run_pipeline을 돌려도 같은 잠금을 씀
 set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트
-# 서버 설정은 코드 폴더 밖 <루트>/settings.yaml(env-guide.md) — compose 치환 값은 셸 env로(--env-file 없음)
-. deploy/host/scripts/load_settings.sh && load_settings || exit $?   # 컨테이너는 같은 파일을 붙여 읽음(compose x-settings)
+# 서버 설정은 <루트>/settings.yaml(env-guide.md)
+. deploy/host/scripts/load_settings.sh && load_settings || exit $?   # 컨테이너는 같은 파일을 붙여 읽음
 mod=${1:?scheduled}; shift || true
 # scheduled = systemd 타이머가 5분마다 부름 — settings.yaml ops.nightly.nightly_start_time·nightly_max_docs·nightly_stop_time
 # (NIGHTLY_TIME·NIGHTLY_MAX_DOCS·NIGHTLY_DEADLINE) 중 하나라도 비면 조용히 끝(새벽 배치 없음), 지금이 시작 시각부터 5분 안이면 run_pipeline.py를 부름

@@ -100,13 +100,13 @@
 <a id="rn-03"></a>
 ## rn-03 · MCP `parse_document`에 CPU 먼저 주기
 - 이유: 일괄 파싱이 CPU를 다 쓰면 사람이 기다리는 `parse_document`가 느려진다. 컨테이너끼리는 cgroup CPU 가중치가 정한다(nice는 한 세션 안에서만).
-- 규칙: `parse_document` 작업 서비스는 전용 컨테이너 `mcp-data-parsing`(같은 이미지, entrypoint `run-mcp-parsing` = `pipeline.run_mcp_parsing`, Redis Streams 소비자). 자원 = settings.yaml `ops.containers.data_parsing.data_parsing_cpus`(기본 4)·`data_parsing_mem_limit`(12g)·`data_parsing_cpu_shares`(4096 — 일괄 `data-pipeline`은 1024). worker마다 엔진 기본 수는 max(1, min(2, CPU − 1))라 worker 2 × 엔진 2 = 총 4개다(사용자 결정 2026-11-09). 4 CPU 미만 호스트는 컨테이너 CPU 상한을 낮추고 worker마다 엔진 수를 1로 적는다. cpus는 예약이 아니라 상한이며, 4 vCPU 개발 서버에서 일괄 파싱·검색 MCP와 나눌 때 cpu_shares가 우선순위를 정한다. 결과 폴더를 붙인다. 검색 MCP는 `<결과 폴더>/_mcp_parse/jobs`에 업로드 파일·job.json을 쓰고 Redis HASH+active SET+STREAM에 한 트랜잭션으로 등록한다(#113). worker는 XREADGROUP(COUNT 1)으로 가져가 파싱하고 result-<attempts>.json을 쓴 뒤 완료 HASH+LIST+TTL+active 해제+XACK+XDEL을 한 트랜잭션으로 기록한다. 프록시는 BLPOP으로 즉시 깨어나며 1초 HTTP 폴링은 없다. `mcp_parse_workers`(기본 2, 허용 1~2)만큼 spawn 프로세스를 띄우고 죽은 자식은 주 프로세스가 재시작한다. heartbeat 없음 연속 30초 + idle 60초를 확인한 유실 소비자는 XCLAIM, 살아 있으나 멈춘 소비자는 (job_timeout+60)초 뒤 XAUTOCLAIM, 최대 3회 전달 뒤 포기한다. heartbeat(10초 갱신, TTL 30초)와 Redis PING으로 건강 상태를 확인한다. health는 컨테이너 로컬 supervisor 토큰에 해당하는 소비자만 확인한다. 미등록이 확실한 업로드만 정리하고, 수정 시간 기준 최근 10분 폴더는 active 등록 전에도 purge에서 보호한다. 죽으면 `restart`, 꺼지면 `mcp_keepalive.sh`(keepalive 타이머)가 띄운다. 일괄 엔진 자식은 nice +10.
+- 규칙: `parse_document` 작업 서비스는 전용 컨테이너 `mcp-data-parsing`(같은 이미지, entrypoint `run-mcp-parsing` = `pipeline.run_mcp_parsing`, Redis Streams 소비자). 자원 = compose 파일 `mcp-data-parsing-0` 칸 `cpus` 4·`mem_limit` 12g·`cpu_shares` 4096(일괄 `data-pipeline`은 1024). worker마다 엔진 기본 수는 max(1, min(2, CPU − 1))라 worker 2 × 엔진 2 = 총 4개다(사용자 결정 2026-11-09). 4 CPU 미만 호스트는 컨테이너 CPU 상한을 낮추고 worker마다 엔진 수를 1로 적는다. cpus는 예약이 아니라 상한이며, 4 vCPU 개발 서버에서 일괄 파싱·검색 MCP와 나눌 때 cpu_shares가 우선순위를 정한다. 결과 폴더를 붙인다. 검색 MCP는 `<결과 폴더>/_mcp_parse/jobs`에 업로드 파일·job.json을 쓰고 Redis HASH+active SET+STREAM에 한 트랜잭션으로 등록한다(#113). worker는 XREADGROUP(COUNT 1)으로 가져가 파싱하고 result-<attempts>.json을 쓴 뒤 완료 HASH+LIST+TTL+active 해제+XACK+XDEL을 한 트랜잭션으로 기록한다. 프록시는 BLPOP으로 즉시 깨어나며 1초 HTTP 폴링은 없다. `mcp_parse_workers`(기본 2, 허용 1~2)만큼 spawn 프로세스를 띄우고 죽은 자식은 주 프로세스가 재시작한다. heartbeat 없음 연속 30초 + idle 60초를 확인한 유실 소비자는 XCLAIM, 살아 있으나 멈춘 소비자는 (job_timeout+60)초 뒤 XAUTOCLAIM, 최대 3회 전달 뒤 포기한다. heartbeat(10초 갱신, TTL 30초)와 Redis PING으로 건강 상태를 확인한다. health는 컨테이너 로컬 supervisor 토큰에 해당하는 소비자만 확인한다. 미등록이 확실한 업로드만 정리하고, 수정 시간 기준 최근 10분 폴더는 active 등록 전에도 purge에서 보호한다. 죽으면 `restart`, 꺼지면 `mcp_keepalive.sh`(keepalive 타이머)가 띄운다. 일괄 엔진 자식은 nice +10.
 - 측정: 작업마다 새 `pipe_run(command=mcp_parse, args에 job_id)` 1건과 `pipe_event(stage=mcp_parse.job)` 1행을 남긴다. 파일 이름·확장자·바이트·동시 실행 수, `metrics.job_id`·`queue_wait_ms`·제출 때 앞 작업 수(`queue_position`)·mode·scan·빈 결과 note를 기록하고 자식 단계는 같은 run_id를 잇는다. 실패·시간 초과도 기록하며 worker는 다음 작업을 계속한다. `perf_report --mcp [--since 시간]`과 `mcp_log.result_keys.job_id` 조인으로 응답·대기·파싱 시간을 비교한다([서버 가이드 §3-4-1](../operations/server-guide.md#3-4-1-mcp-파싱-작업-성능)).- parse_document 회수 보강(#177): 종료 확인·running 소유권 변경은 WATCH로 묶고, 시도별 `a<n>/`에서 파싱한 뒤 HASH의 `result_file` 이름으로 결과를 읽는다. heartbeat 없음 연속 30초 + idle 60초를 모두 확인한 소비자는 한 건씩 회수하며, 살아 있지만 멈춘 소비자는 기존 (job_timeout+60)초 XAUTOCLAIM으로 회수한다. 손상된 HASH는 failed로 끝내고 일반 worker 오류는 traceback으로 기록한다.
 - parse_document 빠른 거절·제출 복구(#177): worker가 확장자·허용 루트(설정 경로의 normpath와 resolve된 실제 경로 모두)·크기 정책을 시작 때와 10초 heartbeat마다 Redis에 TTL 120초로 공개한다. proxy는 정책이 있으면 확장자와 정규화한 절대경로를 폴더 생성 전에 검사한다(존재·실제 크기·심볼릭 링크는 worker가 검사). 정책이 없으면 제출한다. 제출 EXEC 응답이 유실되면 새 EXISTS로 등록 여부를 확인해 등록된 작업은 계속 기다리고, 미등록이 확실할 때만 폴더를 지운다. 확인도 실패하면 폴더를 보존하고 job_id와 연결 오류 끝에 “— 제출 여부 확인 불가(job_id로 수집 서버 담당자 확인)”를 반환한다. 제출 전 연결 실패에는 job_id를 붙이지 않는다.
-- Redis 호스트 설정 배치(#177): 데이터 /data와 운영 계정 소유의 보호 설정 /conf를 분리한다. 같은 설정은 다시 쓰지 않으며 변경 시 실행 중 Redis와 두 앱을 재시작한다(Redis가 꺼져 있어도 실행 중 두 앱은 재시작). 보호 파일 권한 오류는 경로·소유자 확인 안내로 보고한다. 이전·공식 entrypoint 서버 확인은 C-118, 인증 사람 검토는 C-117을 따른다. 앱 이미지 의존성은 그대로이며 호스트 코드·compose 교체와 Redis 컨테이너 재생성이 필요하다.
+- Redis 비밀번호(#177·op-20): 코드 폴더 맨 위 `.env`의 `REDIS_PASSWORD`(settings.yaml과 같은 값 — 사람이 적음)로 `redis-server --requirepass`를 띄운다. 데이터는 /data(`REDIS_DATA`)에만 둔다. 비밀번호를 바꾸면 Redis를 다시 만들고 두 앱을 다시 시작한다. 인증 사람 검토는 C-117.
 
 
-- 파일: `common/store/redisq.py`, `mcp_server/services/parse_proxy.py`, `pipeline/run_mcp_parsing.py`, `deploy/host/compose/{compose.redis.yml,compose.data-parsing.yml,compose.mcp-server.yml}`(개발 서버 앱 코드 짝은 그대로), 호스트 `host_ctl.sh`·`mcp_keepalive.sh`·`load_settings.sh`. Redis는 AOF everysec, 루프백 bind. 기동은 Redis → worker → MCP.
+- 파일: `common/store/redisq.py`, `mcp_server/services/parse_proxy.py`, `pipeline/run_mcp_parsing.py`, `deploy/host/compose/compose-{local,dev,prd,redis}.yml`, 호스트 `host_ctl.sh`·`mcp_keepalive.sh`·`settings_to_env.py`. Redis는 AOF everysec. 기동은 Redis → worker → MCP.
 - QA: `tests/server/common/test_redisq.py`(원자성·상한·순번·TTL), `tests/general/pipeline/test_parse_redis.py`(실 Redis 완료·죽은 소비자 회수), `tests/general/deploy/test_compose.py` · `tests/server/pipeline/test_parse_svc.py`(작업별 자식 run_id·성공·실패·timeout·VLM 미설정) · `test_perf.py`(순수 집계·DB 읽기·대체 파일) · 통과.
 - Status: dev — 서버에서 일괄 파싱 중 `parse_document` 응답 시간 확인(refactor.md C-83 ①)만 남음.
 
@@ -299,14 +299,14 @@
 1. 개발 도구는 Dockerfile `base` 단계에 있어 네 이미지(`data-pipeline-runtime`·`mcp-server-runtime`·`data-pipeline`·`mcp-server`)가 모두 담는다 — apt(openssh-server·git·curl·ripgrep·sqlite3·tini·tmux·vim 등) + pip `uv` + `requirements-dev.txt`(PC 개발 도구와 같은 판). 의존성 지문(`DEPS_HASH`)은 requirements-core·image만 본다(그대로).
 2. opencode 실행 파일은 `assets/opencode/opencode`(git 밖 — `assets.py pack`이 `<ASSET_SRC>/dl/opencode`에서 채움). 없으면 opencode 없이 빌드(`ALLOW_NO_ASSETS=1`). 이미지 env로 외부 모델 목록 받기·자동 업데이트를 끄고, 설정 틀(`deploy/docker/devbox/opencode.json`)은 내부망 모델만(자리 표시만 — 주소·키 없음).
 3. 이미지 ENTRYPOINT는 `tini -s -- dev_entry.sh`: `devbox`면 sshd(컨테이너 사용자 UID 10001, 열쇠 로그인만, 호스트 열쇠는 홈), 그 밖의 명령은 인자 그대로 이미지의 시작 스크립트(`APP_ENTRY` — 실행 이미지 `runtime_entry.sh`, 코드가 든 이미지 `entrypoint.sh`)로.
-4. 설정은 settings.yaml 맨 아래 선택 절 `option.devbox` — `ssh_port`(비우면 끔)·`opencode_config`(opencode 설정 파일의 호스트 경로, 비우면 이미지의 틀). `host_ctl.sh`는 `ssh_port`가 있을 때만 `compose.dev.yml`(+ `opencode_config`면 `compose.opencode.yml`)을 더한다. prd·코드가 든 이미지면 종료 2. gitea 계정 `gitea_url`·`gitea_user`·`gitea_token`(비밀)·`git_user_name`·`git_user_email`(선택) — 주소·계정·토큰을 모두 적으면 `dev_entry.sh`가 `git_cred.py`로 붙인 settings.yaml에서 읽어 `~/.git-credentials`(600)의 그 호스트 줄만 바꾸고 `credential.helper store`, 비우면 그 줄을 지운다(토큰은 env로 안 넘김, 사용자 11-06).
-5. `compose.dev.yml`: `data-pipeline` 명령 `devbox`, 코드 폴더를 `compose.code.yml`과 같은 자리에 쓰기 가능으로, `<루트>/home` → `/home/rag`(`host_ctl.sh init`이 만듦 — 10001, 700). 컨테이너 env에는 비밀이 없다(설정은 붙인 settings.yaml에서만) — SSH 접속 셸이 그 env를 홈에 저장해 다시 읽기 때문.
+4. 설정은 settings.yaml 맨 아래 선택 절 `option.devbox` — `git_user_name`·`git_user_email`(선택). 적으면 `dev_entry.sh`가 `git_cred.py`로 붙인 settings.yaml에서 읽어 `git config --global user.name`·`user.email`을 쓴다. gitea 로그인은 개발자가 컨테이너 안에서 직접 한다(설정에 토큰을 두지 않음). SSH 컨테이너·포트는 compose 파일([op-18](#op-18)·[op-20](#op-20)).
+5. 컨테이너 env에는 비밀이 없다(설정은 붙인 settings.yaml에서만) — SSH 접속 셸이 그 env를 홈에 저장해 다시 읽기 때문.
 
 ### 비고
 - 운영용 굽기(`Dockerfile.bake`)는 ENTRYPOINT를 `entrypoint.sh` 그대로 둔다 — 운영은 작업 공간을 쓰지 않고, 굽는 바탕이 개발 도구가 없는 옛 실행 이미지일 수도 있어서.
 
 ### QA
-- `tests/general/deploy/test_dc.py`(포트를 적으면 `compose.dev.yml`, opencode 설정이면 `compose.opencode.yml`, prd·코드가 든 이미지 종료 2) · `test_devbox.py`(`dev_entry.sh` 인자 넘김 표 · `compose.dev.yml` 마운트 자리 · `git_cred.py` 그 호스트 줄만 바꿈·다른 줄 유지·권한·비우면 지움·링크 안 따라감) · `test_dc_init.py`(`<루트>/home`) · 이미지 시험(`pipeline-runtime` 빌드 → 도구 확인·`selftest` `[판정] 통과`·`devbox` sshd) · 통과.
+- `tests/general/deploy/test_devbox.py`(`dev_entry.sh` 인자 넘김 표 · `git_cred.py` 이름·메일만 씀·비운 칸은 그대로·자격 파일 안 씀) · 이미지 시험(`pipeline-runtime` 빌드 → 도구 확인·`selftest` `[판정] 통과`·`devbox` sshd) · 통과.
 - Status: done
 
 <a id="op-17"></a>
@@ -316,11 +316,11 @@
 개발 서버에서 개발자마다 자기 문서만 파싱·적재·검색해 시험한다(사용자 11-06). 벌끼리는 원천 이름(`DEV-1`·`DEV-2`)으로 나뉘고, 처리 기록은 EDW가 아니라 pgvector에서만 관리한다. 0.3.0에 넣는다.
 
 ### 정한 것(사용자 11-06)
-1. 벌 폴더 = 코드 폴더 자체(`/home/sbl/sbl_data_parsing-main-1/`). 그 안에 `settings.yaml`·`edw_chain.yaml`·`output/`(+ SSH 작업 공간을 켜면 `home/`). `backup/`은 만들지 않는다. 공용 폴더(`/home/sbl/`)에는 이미지 폴더와 공용 `opencode.json`.
-2. `init`의 권한 정리(`a+rX`)는 settings.yaml·edw_chain.yaml·output/·home/을 건드리지 않는다(비밀값 파일 640 유지). `home/`은 `ssh_port`를 켤 때만 만든다. git 제외 목록에 `edw_chain.yaml`(루트)·`home/`.
+1. 벌 폴더 = 코드 폴더 자체(`/home/sbl/sbl_data_parsing-main-1/`). 그 안에 `settings.yaml`·`output/`·`home/`(SSH 컨테이너의 root 홈). `backup/`은 만들지 않는다. 공용 폴더(`/home/sbl/`)에는 이미지 폴더와 공용 `opencode.json`.
+2. `init`의 권한 정리(`a+rX`)는 settings.yaml·output/·home/을 건드리지 않는다(비밀값 파일 640 유지). git 제외 목록에 `home/`.
 3. 판 올리기는 사람이 한다 — 새 zip을 풀어 `-main-N`으로 이름을 바꿔 덮어쓴다(옛 것은 각자 백업, gitea에도 올림).
 4. 벌마다 compose 실행법(폴더 구조·명령)은 README "한 서버에 여러 벌" 절에 둔다.
-5. 벌 번호는 코드 폴더 이름 끝 `-<숫자>`에서 저절로 정해지고(설정 칸 없음 — `ops.host.instance_name` 없앰) 컨테이너·compose 묶음·타이머 이름 끝(`-<숫자>`)에만 붙는다. PG 스키마·EDW 표·게시 경로에 붙이던 `_<벌>` 접미사는 없앤다. 적재 판(`gold_version`)에도 벌 표시를 붙이지 않는다.
+5. 벌 컨테이너 이름(`data-pipeline-<n>`)·포트는 `compose-dev.yml`에 벌마다 직접 적는다(설정 칸 없음). PG 스키마·EDW 표·게시 경로에 붙이던 `_<벌>` 접미사는 없앤다. 적재 판(`gold_version`)에도 벌 표시를 붙이지 않는다.
 6. 원천 `DEV-<숫자>`(대소문자 무관)를 dev 서버에서만 받는다. 원천 스키마는 `<기준 스키마>_dev_<숫자>` — 다른 원천과 같은 표·뷰. 메타는 Other처럼 없다(EDW 사슬 없음).
 7. 원천 스키마는 설정에 따라 만든다(동적) — 마이그레이션 도구가 설정의 DEV 원천 스키마가 없으면 만들고, 뒤의 표 변경은 DB에 있는 `_dev_*` 스키마에도 적용한다. 검색 MCP의 원천 목록 = 5개 + DB에 있는 DEV 스키마.
 8. 파싱할 원천은 settings.yaml 맨 위 `required`의 목록 칸. 비우면 운영 5개 원천 전부. prd에서 `DEV-…`이면 시작 거부.
@@ -345,3 +345,79 @@ DB 스키마(마이그레이션 — `doc` 칸·`doc` 색인·`except_doc_info`·
 
 - 비고: 규칙 1~5·8·9·11·12·14~22 반영 — 처리 기록 `doc` 칸(판 `0006_search` — `search_tables.DOC_RECORD`, 게시 `publish/silver.jsonl` → 적재 `--silver`), `doc` 찾기 색인 `ix_<스키마>_doc_sha256`·`_doc_silver`·`_doc_path`(판 `0007_search` — `search_tables.DOC_INDEX`), 끝난 문서·내용 중복 `pipeline/shared/gold_docs.py`, `applog.except_doc_info`(판 `0003_applog` — `pipeline/shared/except_docs.py` · 판 `0004_applog` `file_ext`·`file_size`), 원문 도구는 `doc` 칸에서 읽음, EDW 쓰기 없음. 규칙 6·7(DEV 원천 스키마) 반영 — `search_tables.source_of`(`DEV-<n>` → `dev_<n>` → `<기준>_dev_<n>`), `dbtool up --target search`·적재 deploy가 함께 쓰는 `dbtool.upgrade_search`가 설정의 DEV 원천 스키마를 만들고 DB에 있는 `_dev_*`도 올림(판 기록 표는 그 스키마 안 · 판 파일은 `migrations/search_parts.sources()`로 그 스키마만 — 시험이 판 파일마다 확인 · 적재 전 판 확인 `require_current`도 `_dev_*`를 봄 · prd는 DEV를 찾지 않음 · `--sql`은 설정의 DEV 스키마를 빈 스키마부터, DB에 있는 다른 `_dev_*`는 `-- 수동:` 줄), 적재는 스키마가 없으면 멈춤(DDL 없음)·EDW 메타 없음, 끝난 문서·원문 도구·run_pipeline 건수·PC 폴더 원천(`DEV-<n>/`, 원천 목록으로 거름)이 `_dev_*`를 봄, 원천 목록이 비면 운영 5개 원천만(규칙 8 — `candidate_pick.picked`)(시험 `tests/server/pipeline/test_dev_source.py`). 마스터 표 `glossary`(판 `0002_master` — 옛 마스터 표 일곱 개를 지움, 원본 `resources/vocab/glossary/glossary.csv`, 옛 행 모양으로 되돌리기 `common/store/master.py` `to_tables`, 해시는 읽을 때 계산, 시험 `test_master.py`). 옛 CSV → `glossary.csv` 옮기기 `python -m common.store.master convert`(시험 `test_convert_old_csv`), 명부 도구 `gen_roster --kind client`는 glossary 고객 줄을 씀(있는 파일은 고객 줄만 바꿈). 서버 `migrate up --target master`·실명 자료 옮기기 실행은 사람(refactor.md C-108). 규칙 7의 검색 MCP 원천 목록·10 반영 — 검색 MCP가 시작 때 5벌 + 있는 `_dev_*`를 싣고(`server_state.connect_sources` — `ST.all_sources`, prd는 5벌만), `DEV-<n>` 꼴 값이 오면 DB를 한 번 다시 찾아 그사이 생긴 스키마는 그 원천만 더하고 사라진 것은 뺌(`server_state.dev_served` — 재시작 없음, 표 없는 등 깨진 DEV 스키마는 경고 한 줄 뒤 그 원천만 뺌), `search`·`list_doc_fulltext`가 dev·local에서 있는 `DEV-<n>`을 받음(prd는 모르는 값과 같은 오류, 출력·메아리 `DEV-<n>`), 도구 설명에 "(개발 서버: DEV-<숫자>)", `edw_meta` `search_attrs`에 DEV 원천(빈 칸)(시험 `tests/server/mcp/test_dev_search.py`). 검증 페이지 원천 고르기는 고정 목록이라 그대로. 남은 것: 13(서버의 ParsingMeta 기록 옮기기 — 사람, refactor.md C-107). 쓰기 계정·`parsing_meta_table` 칸은 없앴다(남은 settings.yaml은 시작 거부 — C-107). 대상 목록 표는 `required.edw.edw_file_table`(기본 `AI.FileStorageMap`, `<스키마>.<표>`만 — 사용자 11-06, 시험 `test_target_list.py` `TABLES`).
 - Status: todo
+
+<a id="op-18"></a>
+## op-18 · 서버 묶음 — root SSH 컨테이너(compose 파일: 개발 `compose-dev.yml` · 운영 `compose-prd.yml`)
+
+### 무엇·왜
+개발·운영 서버에서 컨테이너를 띄우고, 서버 바깥에서 root 비밀번호로 바로 SSH 접속해 코드를 고치고 시험하거나(개발) 상태를 본다(운영). `host_ctl.sh`의 작업 공간(op-16 — rag, 열쇠 로그인)과 따로 쓰는 길이다.
+
+### 규칙
+1. `deploy/host/compose/compose-dev.yml` 한 파일: `data-pipeline-0`·`data-pipeline-1`(실행 이미지 `data-pipeline-runtime`, SSH 서버 포트 8020·8021 → 22), `mcp-server-0`(`mcp-server-runtime`, SSH 8050 → 22 · HTTP 8051), `mcp-data-parsing-0`(SSH 없음). 포트는 `0.0.0.0`, 네트워크는 docker bridge. 검색 DB는 `compose-pgvector.yml`(`pgvector/pgvector:pg16`, 5433 → 5432, 데이터 `PG_DATA` 기본 `/data/pg/pipeline`, 비밀번호 파일 `<SBL_ROOT>/secrets/pg_pw` — `POSTGRES_PASSWORD_FILE`, 처음 만들 때만)로 따로 띄우고, 컨테이너는 `host.docker.internal:5433`으로 붙는다.
+2. 벌 폴더 `<SBL_ROOT>/sbl_data_parsing-main-<n>` 전체를 `/app/deploy`에 쓰기 가능으로, 그 `settings.yaml`은 같은 자리에 읽기 전용으로 다시, `output/` → `/app/output`, `home/` → `/root`. `mcp-server-0`은 벌 0을 쓰고(결과는 읽기 전용) 홈만 `home/mcp/`(홈은 git·굽기 묶음에서 빠짐).
+3. 컨테이너마다 `cpus`·`mem_limit`·`memswap_limit`(메모리+스왑 합)·`ports`를 그 칸에 직접 적는다. 바꿀 env: `SBL_ROOT`(기본 `/home/sbl`)·`IMAGE_TAG`·`DOC_SRC`.
+4. 컨테이너는 root(`user: "0"`)로 `devbox`를 띄운다. `dev_entry.sh`가 root면 실행 환경(앱과 같은 풀이 — 붙인 settings.yaml `required.env.run_env`, compose는 env `RUN_ENV`를 주지 않음)이 `dev`·`prd`일 때만 sshd에 root·비밀번호 로그인을 연다(비밀번호 = 이미지에 넣은 값 — [op-20](#op-20) 규칙 4). dev·prd가 아니면 종료 2.
+5. `devbox <명령>`이면 그 앱 명령도 뒤에서 함께 돈다(`mcp-server-0` = `devbox mcp` — 따로 지켜보지 않음, 멈추면 손으로 다시 시작).
+6. `compose-prd.yml`(운영): `data-pipeline-0`·`mcp-server-0`·`mcp-data-parsing-0`, 포트는 `compose-dev.yml`과 같다. 이미지는 구운 이미지(`data-pipeline:<판>`·`mcp-server:<판>` — 코드 폴더 마운트 없음), SSH 컨테이너는 ENTRYPOINT를 `dev_entry.sh`로 바꾸고 `APP_ENTRY` = `entrypoint.sh`. 설정·결과·홈은 `PRD_DIR`(기본 `<SBL_ROOT>/sbl_data_parsing-main`). 재시작 `always`(사용자 결정).
+7. 이미지에 `sudo`(개발 도구 줄). rag에는 sudo 권한을 주지 않는다 — rag로 뜨는 길(op-16·운영)은 그대로.
+
+### 비고
+- root로 쓴 파일은 서버에서도 root 소유다.
+- `sudo`는 모든 이미지(운영 포함)에 들어간다 — rag에 권한이 없어 쓸 수 없지만 setuid 프로그램이 하나 는다(사람 검토).
+
+### QA
+- `tests/general/deploy/test_devbox.py`(`devbox <명령>` 인자 넘김) · `test_compose.py`(파일마다 서비스·이미지·명령·포트·재시작·root) · PC 시험(실행 이미지 + sudo·새 `dev_entry.sh`): 컨테이너를 띄워 PC 사설 IP로 8020·8021·8050 root 비밀번호 로그인, 틀린 비밀번호 거부, 다시 시작 뒤 로그인, `/app/deploy` 쓰기, `sudo`·`su`, run_env가 dev·prd가 아니면 종료 2. 운영 묶음(구운 이미지 대역): 8020·8050 root 로그인, restart always, run_env local 거부.
+- Status: dev
+
+### 사람 검토
+보안 경계(root 비밀번호 SSH — 운영 서버 포함, 모든 주소에 연 포트 — 운영 PG 5433 포함, 운영 이미지에도 sudo).
+
+<a id="op-19"></a>
+## op-19 · Redis — 공식 이미지 하나(compose-redis.yml)
+
+### 무엇·왜
+parse_document 작업 큐(Redis Streams)를 서버마다 Redis 하나로 띄운다. 우리 이미지를 만들지 않고 공식 이미지를 쓴다(사용자 결정).
+
+### 규칙
+1. 이미지는 공식 `redis:7.4.8-alpine` 그대로(패키지 설치 없음). 반입은 다른 이미지와 같은 배치(`stage_images.sh redis` → `sbl_images/<판>/redis/` 조각 + sha256 — `load.sh`가 함께 불러옴).
+2. `deploy/host/compose/compose-redis.yml`: 서비스·컨테이너 `redis`, 서버 `0.0.0.0:8010` → 컨테이너 6379, 데이터 `REDIS_DATA`(기본 `/data/redis`, AOF everysec), 재시작 `always`. 사람이 한 번 따로 띄운다(`compose-<환경>.yml`보다 먼저).
+3. 비밀번호는 settings.yaml `common.connections.redis.redis_password` 하나(필수 — sample은 비움, 서버마다 채움). Redis 컨테이너는 settings.yaml을 읽지 않으므로 사람이 같은 값을 코드 폴더 맨 위 `.env`(git 제외, 600)의 `REDIS_PASSWORD`에 적고, compose가 `redis-server --requirepass … --protected-mode yes --bind 0.0.0.0`(AOF)로 띄운다(`--env-file .env` — 값이 비면 멈춤). 비밀번호는 명령 인자로 `docker inspect`에 보인다(서버 root·docker 권한자만 — 사용자 결정). 상태 검사는 비밀번호 없이 `redis-cli ping`의 PONG·NOAUTH.
+4. 앱 컨테이너는 `host.docker.internal:8010`으로 붙는다(`redis_host`·`redis_port` 코드 기본값).
+5. 클러스터는 두지 않는다.
+
+### QA
+- `tests/general/deploy/test_compose.py`(이미지·포트·재시작·`--requirepass ${REDIS_PASSWORD:?…}`·데이터 마운트만·비밀번호 없는 상태 검사) · 서버 시험(띄우기 → 앱 컨테이너에서 PING → 틀린 비밀번호 거부 → 다시 시작 뒤 값 유지).
+- Status: dev
+
+### 사람 검토
+보안 경계(Redis 포트를 모든 주소에 — protected-mode + 비밀번호), 새 외부 이미지(`redis:7.4.8-alpine` — 반입 승인).
+
+<a id="op-20"></a>
+## op-20 · 실행 묶음 — `host_ctl.sh` + 환경별 compose 파일(`compose-local.yml`·`compose-dev.yml`·`compose-prd.yml`)
+
+### 무엇·왜
+서버 컨테이너를 환경마다 compose 파일 하나로 띄운다. 겹쳐 쓰는 compose 파일과 settings.yaml의 컨테이너 칸 없이, 무엇이 어떻게 뜨는지 파일 하나에서 보이게 한다.
+
+### 규칙
+1. 파일: `compose-local.yml`(PC — 0번 한 벌, 재시작 정책 없음) · `compose-dev.yml`(개발 서버 — 벌 0·1, `unless-stopped`) · `compose-prd.yml`(운영 — 0번, `always`, 구운 이미지). 각 파일에 `data-pipeline-<n>`, `mcp-server-0`, 파싱 worker `mcp-data-parsing-0`.
+2. 네트워크는 docker 자체 네트워크 + 포트 연결. 바깥은 `0.0.0.0`, 컨테이너 안 SSH는 22(서버 쪽 8020·8021·8050), 검색 MCP는 안팎 8051. 서버에 있는 것(PG 5433, Redis 8010, 모델)은 `host.docker.internal`로 붙는다.
+3. 컨테이너 이름·이미지·CPU·메모리·포트는 compose 파일에 직접 적는다. settings.yaml에는 컨테이너 칸이 없다.
+4. 모든 앱 컨테이너는 root(파싱 worker 포함). SSH 컨테이너의 root 비밀번호는 이미지에 넣은 값(예외 승인 — 이미지 빌드 때 BuildKit 비밀값).
+5. `host_ctl.sh`는 얇다: `up`·`down` 등은 settings.yaml `run_env`(부른 폴더)에 맞는 `compose-<환경>.yml` 하나로 `docker compose`를 부른다. `init`·`secrets`·`timers`·`check`는 하위 명령. 덧붙임 파일·벌 번호 계산은 없다.
+6. PG(`compose-pgvector.yml`)·Redis(`compose-redis.yml`)는 사람이 따로 한 번 띄우고 늘 `always`. 비밀번호는 settings.yaml 하나(`required.pg.pg_password`·`common.connections.redis.redis_password`) — PG·Redis 컨테이너에는 같은 값을 코드 폴더 맨 위 `.env`(`REDIS_PASSWORD`·`PG_USER`·`PG_DB`·`PG_PASSWORD`, 600, git 제외)에 사람이 적어 `docker compose --env-file .env`로 넘긴다. 다른 비밀번호 파일은 없다.
+7. Redis는 공식 `redis:7.4.8-alpine` 하나, 포트 8010, 모든 주소에서 받고 비밀번호 필수. 클러스터는 없다(나중에).
+8. 밤 배치·MCP 살리기는 0번만 본다(`data-pipeline-0`, `mcp-server-0`, `mcp-data-parsing-0`, Redis). MCP 살리기는 서버에서 `http://127.0.0.1:8051/health`로 확인한다.
+9. EDW 사슬 파일 `edw_chain.yaml`은 저장소 맨 위(git)에 있고 이미지에도 들어간다 — 서버 사본·복사 단계는 없다.
+10. 검색 MCP는 settings.yaml `search.server` — `mcp_bind_host auto`(컨테이너 자기 주소)·`mcp_port 8051`(코드 기본값 8765는 PC용).
+
+### 비고
+- `compose-local.yml`은 SSH를 열지 않는다 — `dev_entry.sh`가 local에서 root SSH를 거부하므로 앱 명령(`idle`·`mcp`·`run-mcp-parsing`)만 띄운다.
+- `host_ctl.sh timers`·`check`는 dev·prd 모두 같은 단계(타이머 4개, 점검 6단계).
+- 남은 것: 서버·PC에서 실제로 띄워 보는 시험(QA의 PC·서버 항목).
+
+### QA
+- 시험: `tests/general/deploy/test_compose.py`(compose 파일마다 서비스·이미지·포트·재시작 정책) · `test_dc.py`(`host_ctl.sh`가 환경에 맞는 파일 하나만 부름 · 모르는 run_env 종료 2 · MCP 살리기 0번만) · `test_dc_init.py`(init·timers·check) · keyscan(지운 설정 칸 없음) — 통과. PC: compose-local로 0번 띄워 MCP·`parse_document` 큐 동작, PG·Redis 접속. 서버: compose-dev·prd로 띄워 SSH·MCP.
+- Status: dev
+
+### 사람 검토
+보안 경계(모든 앱 컨테이너 root, 모든 주소에 연 PG·Redis·SSH 포트), 설정 칸 삭제(서버 settings.yaml 정리 필요).

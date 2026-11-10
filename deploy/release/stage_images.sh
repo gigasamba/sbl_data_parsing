@@ -34,16 +34,9 @@ repo_of() {    # 대상 검사만 — 이미지 저장소는 하나(mono repo)
 stage_one() {
   local target="$1" tag name dir n
   repo_of "$target" >/dev/null || { echo "[stage_images] 모르는 대상: $target (pipeline·mcp·pipeline-runtime·mcp-runtime·redis)"; return 2; }
-  if [ "$target" = redis ]; then
-    # 앱 판과 Redis 판은 별개. 호스트 설정 표로 이미지 칸만 읽음(비밀값 없음), 기본값도 설정 모델 한 곳.
-    local value
-    if [ -z "${REDIS_IMAGE:-}" ]; then
-      load_settings || return 2
-      value=$(settings_export sh common.host.redis_image) || return 2
-      [ -z "$value" ] || eval "$value"
-    fi
-    tag=${REDIS_IMAGE:-redis:7.4.2-alpine}
-    name=mcp-redis
+  if [ "$target" = redis ]; then   # 공식 Redis 이미지(compose-redis.yml과 같은 판 — 앱 판과 별개, 이름 그대로 반입)
+    tag=$(sed -n 's/^ *image: *//p' deploy/host/compose/compose-redis.yml | head -n1)   # 판은 compose-redis.yml 한 곳
+    name=redis
   else
     name=$(image_name_of "$target")
     tag="$name:$TAG"

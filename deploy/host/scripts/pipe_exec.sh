@@ -1,6 +1,6 @@
 #!/bin/bash
 # 서버에서 파이프라인 단계(parse·publish)·cli 도구·판 관리를 한 번 돌리는 얇은 래퍼(새벽 배치는 nightly_batch.sh). 상주 컨테이너
-#   data-pipeline 안에서 이미지 시작 스크립트로 돈다(docker exec — in_container.sh in_pipeline). 컨테이너가 안 떠 있으면 종료 코드 2.
+#   data-pipeline-0(0번 벌) 안에서 이미지 시작 스크립트로 돈다(docker exec — in_container.sh in_pipeline). 컨테이너가 안 떠 있으면 종료 코드 2.
 #   bash deploy/host/scripts/pipe_exec.sh <도구 이름(.py 생략 가능)> [도구 인자…]   (코드 폴더 루트에서)
 #     단계: parse(원천 → <결과 폴더>/parse/_rep) · publish(대표 결과(.md) Object Storage 업로드 + EDW 메타 · --dry-run은 쓰기 0)
 #     도구: rdb_discover·check_env·ping_models(엔트리포인트 `tool <이름>`) · migrate(pgvector 판 관리 — `migrate current|check|up|stamp …`)
@@ -21,7 +21,7 @@ case "$tool" in
   *) echo "[pipe_exec] 모르는 도구: $tool — parse·publish·rdb_discover·check_env·ping_models·migrate·show-stack·check 중 하나" >&2; exit 2 ;;
 esac
 
-echo "[pipe_exec] $(date '+%F %T') $tool 시작(data-pipeline 안에서)"
-in_pipeline "$PIPELINE_CNAME" "$@"; rc=$?   # 컨테이너 이름 — load_settings(ops.containers.pipeline.pipeline_container_name + 벌 번호)
+echo "[pipe_exec] $(date '+%F %T') $tool 시작(data-pipeline-0 안에서)"
+in_pipeline data-pipeline-0 "$@"; rc=$?   # 0번 벌 컨테이너(compose-<환경>.yml container_name)
 echo "[pipe_exec] $(date '+%F %T') $tool 끝 (종료 코드 $rc)"
 exit $rc

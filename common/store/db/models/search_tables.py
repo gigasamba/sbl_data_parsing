@@ -23,7 +23,7 @@ _DEV_SRC = re.compile(r"dev_[1-9][0-9]?")
 _SCHEMA_SRC = re.compile(r"(.+)_(sfdc|crms|las|faq|other|dev_[1-9][0-9]?)")
 
 # 원천마다 다른 문서 메타는 doc.attrs(JSONB) 한 칸의 키(판 0005).
-# 키·EDW 칸·검색 거르기 이름·근거 표시는 사슬 파일(resources/config/edw_chain.yaml — common/store/edw_chain.py). 날짜 값은 'YYYY-MM-DD' 글자.
+# 키·EDW 칸·검색 거르기 이름·근거 표시는 사슬 파일(코드 폴더 맨 위 edw_chain.yaml — common/store/edw_chain.py). 날짜 값은 'YYYY-MM-DD' 글자.
 ATTRS = "attrs"
 LOAD_ATTRS = {"sfdc": ("doc_class",), "las": ("doc_class",)}  # 사슬이 아니라 적재(분류)가 쓰는 attrs 키 — 검색 거르기 doc_class
 CHUNK_EXTRA = {"faq": (("faq_group", Text),)}  # faq.chunk만 시트 이름

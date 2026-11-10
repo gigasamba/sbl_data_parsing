@@ -5,7 +5,7 @@
   · --format env(기본 — 사람이 compose `--env-file <(…)`로 줄 때): `KEY=VALUE` — compose가 env 파일 값의 `$`를 다시 치환하므로 값에 `$`가
     있으면 거부한다(오류에는 이름만). 셸 env로 넘기는 sh 꼴은 다시 치환되지 않는다.
 사용: python -m common.config.export --section pipeline.host [--section common.host] [--section mcp.server.port] [--file settings.yaml] [--format sh]
-      호스트 절(common.host·pipeline.host·pipeline.host.nightly·mcp.host·common.dev.docker)이 주 용도. 앱 칸도 낼 수 있음(비밀 빼고 —
+      호스트 절(common.host·pipeline.host·pipeline.host.nightly·common.dev.docker)이 주 용도. 앱 칸도 낼 수 있음(비밀 빼고 —
       compose가 앱 칸을 덮는 MCP_HOST·TRIGGER_HOST 등). pipeline·mcp 절을 한 번에 줘도 된다(앱마다 읽어 이름 겹침 없이 합침).
 """
 

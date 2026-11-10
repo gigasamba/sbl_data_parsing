@@ -235,7 +235,7 @@ FAILED = [  # (이름, 파일 이름, 내용, 설정, 꺼낸 안 이름, 못 꺼
 
 
 def test_failed_parts():
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory() as td, pc.PIPE.env(ATTACH_MAX_DEPTH="2"):  # 표는 기본 깊이 2 기준 — 서버 settings.yaml 값과 상관없이
         for label, fname, data, env, names, failed in FAILED:
             d = Path(td) / label.replace(" ", "_")
             d.mkdir()
@@ -255,7 +255,7 @@ def test_miss_reason_short():
 
 
 def test_unpack_cases():
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory() as td, pc.PIPE.env(ATTACH_MAX_DEPTH="2"):  # 표는 기본 깊이 2 기준 — 서버 settings.yaml 값과 상관없이
         for label, fname, data, want in CASES:
             d = Path(td) / label.replace(" ", "_")
             d.mkdir()

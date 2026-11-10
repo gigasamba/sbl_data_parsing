@@ -434,7 +434,7 @@ sequenceDiagram
 | 단계 | 파일·함수 | 하는 일 | 입력 → 출력 |
 |---|---|---|---|
 | 진입·검사 | `pipeline.load.pgvector_load.load()` | 판 기록(`alembic_version`) 확인, 임베딩 없는 묶음·다른 모델 묶음 거부 | `bundle/` → — |
-| EDW 메타 | `pipeline.load.edw_doc_meta.fetch()` · `common/store/edw_chain.py` | 사슬 파일(`ops.paths.edw_chain_file` — 비우면 `resources/config/edw_chain.yaml`)을 따라 원본 경로마다 `client_edw`·`created_at`·원천 메타(`attrs`). EDW를 못 열면 메타를 비운 채 계속 | EDW(읽기 계정 `required.edw.edw_read_user`·`edw_read_password`, PC는 `dev.local.local_edw_sqlite_file`) → 문서 칸 |
+| EDW 메타 | `pipeline.load.edw_doc_meta.fetch()` · `common/store/edw_chain.py` | 사슬 파일(코드 폴더 맨 위 `edw_chain.yaml` — 다른 파일은 `ops.paths.edw_chain_file`)을 따라 원본 경로마다 `client_edw`·`created_at`·원천 메타(`attrs`). EDW를 못 열면 메타를 비운 채 계속 | EDW(읽기 계정 `required.edw.edw_read_user`·`edw_read_password`, PC는 `dev.local.local_edw_sqlite_file`) → 문서 칸 |
 | 분류 | `pipeline.load.doc_classify.apply()` → `pipeline.load.doc_classify.classify_one()` | SFDC·LAS 문서에 `doc_class`(지시서 `resources/prompts/pipeline/classify_sfdc`·`classify_las`). 실패한 문서는 이번에 적재 안 함(`applog.except_doc_info` `error`) → 다음 실행이 다시 고름 | `_rep` 본문 → 라벨, `classify_audit.jsonl` |
 | 쓰기 | `pipeline.load.pgvector_load._load_src()` | 문서의 source_system으로 원천 스키마(SFDC·CRMS·LAS·FAQ·other)를 고르고 `doc`·`chunk`·용어 행. 묶음에 없는 문서는 지우지 않음 | → PG |
 | 기록 | `pipeline.load.pgvector_load.load()`(`--silver <문서 폴더>/publish/silver.jsonl`) → `pipeline.load.pgvector_load._load_src()` | `doc`에 게시 기록(원본 키 `source_key` = `file_path`로 이음 — 이미 있는 행은 그 칸만 고침, `--replace`인데 줄이 없으면 옛 값 유지, 새 문서에 줄이 없으면 NULL)·`gold_version`(`<VERSION>+m<마스터 해시 앞 8자>`)·`loaded_at`(적재 시각) | → PG `doc` |
@@ -541,7 +541,7 @@ flowchart TD
 ### 7-4. 출력 폴더 모양(서버)
 
 ```text
-<루트>/                          서버 루트 — settings.yaml · edw_chain.yaml 사본 · output/
+<루트>/                          서버 루트 — settings.yaml · edw_chain.yaml(git) · output/
 └─ output/                       = 컨테이너 /app/output (RAG_OUT)
    ├─ _staging/<sha1>.bin        받은 원본(extract.source.source_staging_dir — 게시 성공 뒤 삭제)
    ├─ _faq_seen.txt              교체를 마친 FAQ 키(candidate_pick list)

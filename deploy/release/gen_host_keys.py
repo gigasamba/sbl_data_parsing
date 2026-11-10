@@ -10,32 +10,20 @@ from common.config import settings as S
 from common.core.console import utf8_stdout
 from common.core.paths import DEPLOY_ROOT
 
-# load_settings.sh HOST_SECTIONS와 같은 절 — 이미지·자원·포트·호스트 경로·RUN_ENV, compose·mcp_keepalive.sh가 쓰는 앱 칸 MCP_HOST·MCP_PORT
+# 호스트 셸이 읽는 절 — RUN_ENV(host_ctl.sh가 고르는 compose 파일)·호스트 칸(컨테이너 명령·원본 문서 폴더·이미지 정리·새벽 배치 시각)
 HOST_SECTIONS = (
     "common.run_env",
     "common.host",
-    "common.connections.redis.redis_port",
     "pipeline.host",
-    "mcp.host",
-    "mcp.server.host",
-    "mcp.server.port",
 )
 HOST_SKIP = (
     "pipeline.host.run_pipeline",
     "pipeline.host.run_pipeline_dir",
     "common.host.pg_container",  # 위 셋: run_pipeline.py가 settings.yaml에서 직접 읽음(셸 env로 안 냄)
-    *(f"common.host.devbox.{k}" for k in ("gitea_url", "gitea_user", "git_user_name", "git_user_email")),  # 컨테이너 git_cred.py만 읽음
+    "common.host.devbox.git_user_name",
+    "common.host.devbox.git_user_email",  # 위 둘: 컨테이너 git_cred.py만 읽음
 )
-IMAGE_CONSTS = ("code_root", "docs_mount", "output_root")  # compose·run_pipeline.py가 쓰는 약속 경로만
-# 코드 기본값을 고정값 줄로도 내는 칸 — 여러 벌 포트 거부·컨테이너·묶음 밑 이름(load_settings.sh·run_pipeline.py가 읽음 — 설정에 안 적었을 때)
-DEFAULTS = (
-    "common.runtime.data_parsing_port",
-    "mcp.server.port",
-    "common.host.compose_project",
-    "common.host.pipeline_container",
-    "common.host.data_parsing_container",
-    "common.host.mcp_container",
-)
+IMAGE_CONSTS = ("code_root", "docs_mount", "output_root")  # run_pipeline.py가 쓰는 약속 경로
 HOST_TABLE = DEPLOY_ROOT / "deploy" / "host" / "scripts" / "host_settings.tsv"
 
 
@@ -54,7 +42,7 @@ def _under(path, heads):
 
 def host_table():
     """host_settings.tsv 글자 — 줄마다 `모델 경로<TAB>옛 env 이름<TAB>종류`(text·num·bool·list·words·json), 이미지 약속 경로는 `…<TAB>const<TAB>값`. 비밀 칸은 넣지 않는다."""
-    rows, seen, defaults = [], set(), []
+    rows, seen = [], set()
     for cls in S.app_classes().values():
         for path, f, _ in S.walk(cls):
             e = S.env_name(f)
@@ -62,12 +50,8 @@ def host_table():
                 continue
             seen.add(e)
             rows.append(f"{path}\t{e}\t{_kind(f)}")
-            if path in DEFAULTS:  # 코드 기본값 — 고정값 줄 `default.<모델 경로><TAB><env 이름>_DEFAULT<TAB>const<TAB>값`
-                defaults.append(f"default.{path}\t{e}_DEFAULT\tconst\t{f.default}")
-    # 컨테이너 안 약속 경로(settings.IMAGE_PATHS 한 곳): 고정값 줄 `image.<이름><TAB>APP_<이름><TAB>const<TAB>값` — load_settings.sh가
-    # APP_* env로 내 compose가 쓰고, run_pipeline.py가 읽는다.
+    # 컨테이너 안 약속 경로(settings.IMAGE_PATHS 한 곳): 고정값 줄 `image.<이름><TAB>APP_<이름><TAB>const<TAB>값` — run_pipeline.py가 읽는다.
     rows += [f"image.{k}\tAPP_{k.upper()}\tconst\t{S.IMAGE_PATHS[k]}" for k in IMAGE_CONSTS]
-    rows += defaults
     return "# 자동 생성 — PYTHONPATH=. python deploy/release/gen_host_keys.py(고치지 말 것)\n" + "\n".join(rows) + "\n"
 
 

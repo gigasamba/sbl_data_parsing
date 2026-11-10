@@ -30,7 +30,7 @@
   - `source_system` — `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other` 중 하나. 끝에 `-test`가 붙은 값(`SFDC-test`)도 같은 뜻. 개발 서버(dev·local)는 `DEV-<숫자>`(대소문자 무관)도 — 그 원천 스키마 `<기준>_dev_<숫자>`가 있을 때만(op-17 — 부를 때 DB를 한 번 찾아 새로 생긴 스키마는 재시작 없이 더하고, 사라진 것은 뺀다 · 표 없는 등 깨진 DEV 스키마는 경고 한 줄 뒤 그 원천만 빼고 5벌은 그대로). 없으면 `{"error": "source_system is required — exactly one of SFDC, CRMS, LAS, FAQ, Other…"}`(있는 DEV 원천이 있으면 뒤에 덧붙임 · prd의 `DEV-…`는 모르는 값과 같은 오류). `filter` 메아리의 DEV 값은 `DEV-<숫자>` 꼴.
   - `client` — 글자 하나 또는 목록, 적재 때 EDW에서 조인한 고객 `client_edw`와 정확 일치. `client_like: true`면 부분 일치.
   - `created_since`·`created_until` — gold `doc.created_at`(원천 등록 시각)과 비교. 시간대 없는 값은 KST. 날짜만이면 since = 그날 00:00, until = 그날 끝까지. `created_at`이 없는 문서는 빠진다. 형식이 틀리면 오류.
-  - `attrs: {키: 값 또는 목록}` — 그 원천 `doc.attrs`(JSONB)의 키로 정확 일치(키끼리 AND, 목록 OR). 받는 키 = 사슬 파일(`resources/config/edw_chain.yaml`) `fields`에서 `filter`가 있는 키 + `doc_class`(SFDC·LAS). 모르는 키는 `{"error"}`에 그 원천의 키 목록을 담는다. SQL은 `attrs @> %s::jsonb`(GIN 색인).
+  - `attrs: {키: 값 또는 목록}` — 그 원천 `doc.attrs`(JSONB)의 키로 정확 일치(키끼리 AND, 목록 OR). 받는 키 = 사슬 파일(`edw_chain.yaml`) `fields`에서 `filter`가 있는 키 + `doc_class`(SFDC·LAS). 모르는 키는 `{"error"}`에 그 원천의 키 목록을 담는다. SQL은 `attrs @> %s::jsonb`(GIN 색인).
   - 이름 있는 거르기 `project_id`·`division`·`service_type`·`doc_class`·`sf_op_id`·`sf_op_name`·`contract_id`는 사슬의 `filter:`로 attrs 키에 이어진다(예 `project_id` → `project_code__c`). 그 원천에 이어진 키가 없으면 0건. `FAQ_group`은 청크 칸.
 - 출력:
   - 맨 위 5칸(`SEARCH_TOP_KEYS`): `question` · `evidence[]`(최대 k) · `evidence_status`(`found`·`weak`·`none`) · `filter`(정규화한 거르기 메아리 — 빈 값 뺌, `-test` 뗌) · `scope_docs`(맞은 문서 수 — 거르기가 `source_system`뿐이면 재적재 확인(기본 30초 간격)이 세어 둔 그 원천 스키마의 문서 수를 쓰고, 없을 때만 직접 센다). `filter`·`scope_docs`는 늘 나온다.
@@ -43,7 +43,7 @@
   - `chunk_key` = `<doc_id>:<seq>`(운영 `<file_path>:<순번>`), `file_path` = Object Storage 원본 경로(운영은 서버 안 경로).
   - 근거에 `file_path`·`attrs` 2칸을 더했고, 입력에 `attrs` 거르기를 더했다.
   - 크기 상한으로 근거를 줄여도 표시 칸을 붙이지 않는다. `notes` 칸은 없다.
-- 파일: `mcp_server/schemas/evidence.py`, `mcp_server/services/search/search_svc.py`, `resources/config/edw_chain.yaml`.
+- 파일: `mcp_server/schemas/evidence.py`, `mcp_server/services/search/search_svc.py`, `edw_chain.yaml`.
 - QA: `tests/server/mcp/test_search_svc.py`(`_selftest_contract` 사례 표) · `test_dev_search.py`(DEV 원천 사례 표 — op-17) · 통과. 서버 확인 [refactor.md](../refactoring/refactor.md) C-89.
 - Status: done
 
@@ -158,7 +158,7 @@
 
 - parse_document 회수 보강(#177): 종료 확인·running 소유권 변경은 WATCH로 묶고, 시도별 `a<n>/`에서 파싱한 뒤 HASH의 `result_file` 이름으로 결과를 읽는다. 배포 전환 중 옛 전체 경로의 마지막 요소가 result.json이면 받은 경로를 열지 않고 자기 job 폴더의 result.json만 읽는다(다음 판 제거, C-118). heartbeat 없음 연속 30초 + idle 60초를 모두 확인한 소비자는 한 건씩 회수하며, 살아 있지만 멈춘 소비자는 기존 (job_timeout+60)초 XAUTOCLAIM으로 회수한다. 손상된 HASH는 failed로 끝내고 일반 worker 오류는 traceback으로 기록한다.
 - parse_document 빠른 거절·제출 복구(#177): worker가 확장자·허용 루트(설정 경로의 normpath와 resolve된 실제 경로 모두)·크기 정책을 시작 때와 10초 heartbeat마다 Redis에 TTL 120초로 공개한다. proxy는 정책이 있으면 확장자와 정규화한 절대경로를 폴더 생성 전에 검사한다(존재·실제 크기·심볼릭 링크는 worker가 검사). 정책이 없으면 제출한다. 제출 EXEC 응답이 유실되면 새 EXISTS로 등록 여부를 확인해 등록된 작업은 계속 기다리고, 미등록이 확실할 때만 폴더를 지운다. 확인도 실패하면 폴더를 보존하고 job_id와 연결 오류 끝에 “— 제출 여부 확인 불가(job_id로 수집 서버 담당자 확인)”를 반환한다. 제출 전 연결 실패에는 job_id를 붙이지 않는다.
-- Redis 호스트 설정 배치(#177): 데이터 /data와 운영 계정 소유의 보호 설정 /conf를 분리한다. 같은 설정은 다시 쓰지 않으며 변경 시 실행 중 Redis와 두 앱을 재시작한다(Redis가 꺼져 있어도 실행 중 두 앱은 재시작). 보호 파일 권한 오류는 경로·소유자 확인 안내로 보고한다. 이전·공식 entrypoint 서버 확인은 C-118, 인증 사람 검토는 C-117을 따른다. 앱 이미지 의존성은 그대로이며 호스트 코드·compose 교체와 Redis 컨테이너 재생성이 필요하다.
+- Redis 비밀번호(#177): 코드 폴더 맨 위 `.env`의 `REDIS_PASSWORD`(settings.yaml과 같은 값)로 띄우고 데이터는 /data에만 둔다. 비밀번호를 바꾸면 Redis를 다시 만들고 두 앱을 재시작한다. 공식 entrypoint 서버 확인은 C-118, 인증 사람 검토는 C-117을 따른다. 앱 이미지 의존성은 그대로이며 compose 교체와 Redis 컨테이너 재생성이 필요하다.
 
 <a id="mc-18"></a>
 ## mc-18 · `parse_document` 스캔 PDF — 내부망 VLM
@@ -215,5 +215,5 @@
 |---|---|
 | `query_edw` | `required.edw` 읽기 계정, 또는 PC sqlite 대역 |
 | `edw_meta` | `search.edw_meta.edw_meta_catalog_dir`의 자료 |
-| `parse_document` | `mcp-redis` + `mcp-data-parsing` + 공유 jobs 폴더(외부 MCP 인증은 기존 토큰) |
+| `parse_document` | Redis(`compose-redis.yml`) + `mcp-data-parsing-0` + 공유 jobs 폴더(외부 MCP 인증은 기존 토큰) |
 | 원문 도구 | `required.tokens.fulltext_sign_key` · Object Storage 읽기 · EDW 읽기 계정 |

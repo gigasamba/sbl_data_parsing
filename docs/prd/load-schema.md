@@ -72,7 +72,7 @@ SFDC·CRMS·LAS·FAQ·Other는 메타가 다르고 BM25 통계도 원천마다 �
 ### 규칙
 1. `doc` 고정 칸(5벌 모두): `doc_id`·`file_path`·`summary`·`created_at`·`client_edw`·`clients_doc`·`content_date`·`embed_model`. 그 밖의 원천 메타(영업 기회·계약·분류 힌트 등)는 모두 `doc.attrs JSONB`(GIN 색인)의 키다. 값이 없는 키는 넣지 않는다. `faq.chunk.faq_group`은 청크 칸 그대로.
 2. 판 `0005_doc_attrs`: 5벌에 `attrs` + GIN 색인, `v_chunk_source`가 `attrs`를 낸다. 올리기는 판 0002·0003의 원천 칸 값을 같은 이름 키로 옮기고(날짜는 `YYYY-MM-DD` 글자) 그 칸을 뺀다. 되돌리기는 최선만(날짜가 아닌 글자는 NULL).
-3. 사슬 파일 꼴(`steps` → `fields` · `client_edw` · `created`, 단계 칸 `table`·`on`·`when`·`where`·`latest`·`optional`·`tz`·`sfdc_entity`, 칸 `from`·`filter`·`evidence`·`type`·`max`)은 [`resources/config/edw_chain.yaml`](../../resources/config/edw_chain.yaml) 머리 주석이 정본이다. 첫 단계는 `file`이어야 하고 그 단계에 행이 없는 문서는 메타가 없다. 한 단계의 칸을 못 읽으면 그 칸만 빈다.
+3. 사슬 파일 꼴(`steps` → `fields` · `client_edw` · `created`, 단계 칸 `table`·`on`·`when`·`where`·`latest`·`optional`·`tz`·`sfdc_entity`, 칸 `from`·`filter`·`evidence`·`type`·`max`)은 [`edw_chain.yaml`](../../edw_chain.yaml) 머리 주석이 정본이다. 첫 단계는 `file`이어야 하고 그 단계에 행이 없는 문서는 메타가 없다. 한 단계의 칸을 못 읽으면 그 칸만 빈다.
 4. 파일을 읽을 때 검사한다 — 빠진 이름, SQL에 넣을 수 없는 이름(표 `스키마.표`, 칸은 영문·숫자·_, 접두 3자), 단계·칸 참조, 원천 안에서 겹치는 거르기 이름이면 이유를 모두 말하고 멈춘다. 값은 늘 바인딩한다.
 5. `doc_class`는 분류가 쓰는 attrs 키다(`search_tables.LOAD_ATTRS` — 사슬 키로 못 씀).
 6. MCP `search`: `attrs: {키: 값}` 거르기는 그 원천에서 `filter`가 있는 키만 받는다 — 모르는 키는 그 원천의 키 목록과 함께 오류(빈 결과 아님). 이름 있는 거르기는 사슬의 `filter:`로 attrs 키에 잇는다(`project_id` → `project_code__c` 등). 근거 `attrs`는 `evidence: true` 키 모두(값 없으면 null), `contract_no` = `filter: contract_id` 키의 값. `edw_meta` 도구가 원천마다 거를 수 있는 키·근거 키를 보여 준다.
