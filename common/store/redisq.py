@@ -61,13 +61,20 @@ def filename(value):
     return name
 
 
+def is_redis_error(exc):
+    """redis-py 없는 시험에서도 Redis 예외와 소켓 오류를 식별."""
+    return isinstance(exc, OSError) or any(cls.__module__ == "redis.exceptions" for cls in type(exc).__mro__)
+
+
+def redact(value):
+    secret = reveal(cfg().connections.redis.redis_password)
+    return str(value).replace(secret, "[비밀값]") if secret else str(value)
+
+
 def connection_error(exc):
     """인증 실패에도 비밀번호·연결 URL은 출력하지 않는다."""
     s = cfg().connections.redis
-    detail = str(exc)
-    secret = reveal(s.redis_password)
-    if secret:
-        detail = detail.replace(secret, "[비밀값]")
+    detail = redact(exc)
     return f"parse 서비스 연결 실패(Redis {s.redis_host}:{s.redis_port}) — mcp-redis 기동·설정 확인: {type(exc).__name__}: {detail}"
 
 
@@ -90,6 +97,43 @@ def submit(r, job_id, meta, queue_max):
                 # redis-py는 연결할 때만 import — 서버 테스트는 redis 패키지 없이 가짜 클라이언트로 실행.
                 if type(exc).__name__ != "WatchError":
                     raise
+
+
+def claim(r, job_id, consumer, attempts, picked_at, queue_wait_s):
+    """종료 확인과 실행 소유권 변경을 같은 WATCH 트랜잭션으로 묶음."""
+    while True:
+        with r.pipeline(transaction=True) as tx:
+            try:
+                tx.watch(key("job", job_id))
+                job = tx.hgetall(key("job", job_id))
+                if not job or job.get("status") in ("done", "failed", "rejected"):
+                    return None
+                values = dict(status="running", picked_at=picked_at, worker=consumer, attempts=attempts, queue_wait_s=queue_wait_s)
+                tx.multi()
+                tx.hset(key("job", job_id), mapping=values)
+                tx.execute()
+                return {**job, **values}
+            except Exception as exc:
+                if type(exc).__name__ != "WatchError":
+                    raise
+
+
+def reclaim_dead(r, consumer):
+    """heartbeat가 끊긴 소비자의 pending을 한 건씩 회수."""
+    for item in r.xinfo_consumers(key("queue"), group()):
+        name = item["name"]
+        # heartbeat TTL 30초·갱신 10초보다 긴 60초 idle을 기다려 일시 지연과 구분.
+        if name == consumer or item["idle"] <= 60000 or r.exists(key("worker", name)):
+            continue
+        if not item["pending"]:
+            r.xgroup_delconsumer(key("queue"), group(), name)
+            continue
+        pending = r.xpending_range(key("queue"), group(), "-", "+", 1, consumername=name)
+        if pending:
+            rows = r.xclaim(key("queue"), group(), consumer, min_idle_time=60000, message_ids=[pending[0]["message_id"]])
+            if rows:
+                return rows[0]
+    return None
 
 
 def finish(r, message_id, job_id, status, *, worker=None, attempts=None, **values):

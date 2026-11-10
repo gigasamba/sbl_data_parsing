@@ -13,6 +13,7 @@ import socket
 import tempfile
 import threading
 import time
+import traceback
 import uuid
 from pathlib import Path
 
@@ -157,28 +158,42 @@ def _validate(j, ws):
     j["scan"] = _is_scan(source)
     if j["mode"] == "path":
         (ws / "in").mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, ws / "in" / fname)
+        fd, temporary = tempfile.mkstemp(dir=ws / "in", suffix=".tmp")
+        os.close(fd)
+        tmp = Path(temporary)
+        try:
+            shutil.copy2(source, tmp)
+            tmp.replace(ws / "in" / fname)
+        finally:
+            tmp.unlink(missing_ok=True)
 
 
 def _process(r, message_id, job_id, consumer, attempts=1):
     """작업 1건 = pipe_run 1건 + mcp_parse.job span. 프로세스마다 runtrace 전역을 따로 가짐."""
-    j = redisq.decode_job(r.hgetall(redisq.key("job", job_id)))
-    if not j or j.get("status") in ("done", "failed", "rejected"):
+    picked = time.time()
+    # claim이 반환한 HASH만 사용 — 완료와 경쟁해도 종료 상태를 running으로 덮지 않음.
+    raw = r.hgetall(redisq.key("job", job_id))
+    try:
+        wait_s = round(max(0, picked - float(raw.get("submitted_at", picked))), 1)
+    except (TypeError, ValueError):
+        wait_s = 0
+    j = redisq.claim(r, job_id, consumer, attempts, picked, wait_s)
+    if j is None:
         with r.pipeline(transaction=True) as tx:
             tx.multi()
             tx.xack(redisq.key("queue"), redisq.group(), message_id)
             tx.xdel(redisq.key("queue"), message_id)
             tx.execute()
         return
-    picked = time.time()
-    queue_wait_ms = round(max(0, picked - j.get("submitted_at", picked)) * 1000, 1)
-    j.update(status="running", picked_at=picked, worker=consumer, attempts=attempts, queue_wait_s=round(queue_wait_ms / 1000, 1))
-    r.hset(redisq.key("job", job_id), mapping={k: j[k] for k in ("status", "picked_at", "worker", "attempts", "queue_wait_s")})
+    queue_wait_ms = wait_s * 1000
     t0, status, error = time.time(), "done", ""
     ws = JOBS_DIR / job_id
     result_file = ""
     abandoned = attempts > common_cfg().parse_queue.mcp_parse_max_attempts
     try:
+        j = redisq.decode_job(j)
+        attempt_ws = ws / f"a{attempts}"
+        attempt_ws.mkdir(parents=True, exist_ok=True)
         with (
             jsonlog.context(run_id=None, span_id=None),
             runtrace.run("mcp_parse", ["--job-id", job_id]),
@@ -196,15 +211,15 @@ def _process(r, message_id, job_id, consumer, attempts=1):
             sp.set(file_bytes=j["bytes"])
             fname = j["filename"]
             note = skip_note(j.get("scan"))
-            result = _result(job_id, fname, note=note) if note else _run_job(job_id, j, ws, fname, t0)
+            result = _result(job_id, fname, note=note) if note else _run_job(job_id, j, attempt_ws, fname, t0)
             if result.get("note"):
                 sp.add(note=result["note"])
             # 각 시도 파일 → 최종 파일은 종료 직전에. 완료 알림보다 파일 기록이 먼저다.
-            result_path = ws / "result.json"
+            result_path = ws / f"result-{attempts}.json"
             temp_path = ws / f"result-{os.getpid()}.tmp"
             temp_path.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
             temp_path.replace(result_path)
-            result_file = str(result_path)
+            result_file = result_path.name
     except Exception as exc:
         if status != "rejected":
             status = "failed"
@@ -217,7 +232,7 @@ def _process(r, message_id, job_id, consumer, attempts=1):
         status,
         worker=consumer,
         attempts=attempts,
-        filename=j["filename"],
+        filename=j.get("filename", ""),
         bytes=j.get("bytes", 0),
         result_file=result_file,
         elapsed_ms=elapsed,
@@ -234,11 +249,14 @@ _CLAIM_CURSORS: dict[str, str] = {}
 def _receive(r, consumer, min_idle_ms=None):
     """유실 작업부터 회수, 없으면 새 STREAM 메시지 하나를 기다림."""
     idle = int((JOB_TIMEOUT + 60) * 1000) if min_idle_ms is None else min_idle_ms
-    claimed = r.xautoclaim(
-        redisq.key("queue"), redisq.group(), consumer, min_idle_time=idle, start_id=_CLAIM_CURSORS.get(consumer, "0-0"), count=1
-    )
-    _CLAIM_CURSORS[consumer] = claimed[0]
-    rows = claimed[1]
+    dead = redisq.reclaim_dead(r, consumer)
+    rows = [dead] if dead else []
+    if not rows:
+        claimed = r.xautoclaim(
+            redisq.key("queue"), redisq.group(), consumer, min_idle_time=idle, start_id=_CLAIM_CURSORS.get(consumer, "0-0"), count=1
+        )
+        _CLAIM_CURSORS[consumer] = claimed[0]
+        rows = claimed[1]
     if rows:
         message_id, fields = rows[0]
         pending = r.xpending_range(redisq.key("queue"), redisq.group(), message_id, message_id, 1)
@@ -273,14 +291,19 @@ def _worker(supervisor_token):
     pulse.start()
     r = redisq.client()
     try:
+        redisq.ensure_group(r)
         while not stop.is_set():
             try:
-                redisq.ensure_group(r)
                 item = _receive(r, consumer)
                 if item:
                     _process(r, *item)
             except Exception as exc:
-                _log(redisq.connection_error(exc))
+                if redisq.is_redis_error(exc):
+                    _log(redisq.connection_error(exc))
+                else:
+                    _log(redisq.redact(f"worker 오류: {type(exc).__name__}: {exc}\n{traceback.format_exc()}"))
+                if "NOGROUP" in str(exc):
+                    redisq.ensure_group(r)
                 stop.wait(2)
     finally:
         stop.set()
@@ -312,7 +335,7 @@ def _run_job(job_id, j, ws, fname, t0):
             return 0
 
         (ws / "only.txt").write_text(fname + "\n", encoding="utf-8")
-        step(["pipeline.extract.filter_and_rotate", "--src", ws / "in", "--out", ws / "prep", "--only", ws / "only.txt"])
+        step(["pipeline.extract.filter_and_rotate", "--src", ws.parent / "in", "--out", ws / "prep", "--only", ws / "only.txt"])
         empty = parse_steps.parse_chain(step, ws / "prep", ws / "parse", ws / "truth.json", ["--limit", "1", "--procs", PROCS])
     ms = round((time.time() - t0) * 1000, 1)
     rep_path = ws / "parse" / "_rep" / (fname + ".json")

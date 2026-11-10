@@ -354,3 +354,105 @@ def test_engine_process_default_per_worker():
             assert S.PROCS == "1"  # 작은 호스트의 명시적 엔진 수를 보존
     finally:
         importlib.reload(S)
+
+
+def test_claim_finish_race():
+    from common.store import redisq
+    from pipeline import run_mcp_parsing as S
+    from tests.server.common.test_redisq import FakeRedis
+
+    r = FakeRedis()
+    redisq.submit(r, "race", {"filename": "a.txt"}, 1)
+    item = S._receive(r, "rescuer")
+    claim = redisq.claim
+
+    def finish_first(*args):
+        redisq.finish(r, item[0], "race", "done", result_file="result-1.json")
+        return claim(*args)
+
+    with mock.patch.object(redisq, "claim", side_effect=finish_first), mock.patch.object(S, "_run_job") as run:
+        S._process(r, *item)
+    assert r.hgetall(redisq.key("job", "race"))["status"] == "done"
+    assert r.transactions[-1] == ["xack", "xdel"]
+    run.assert_not_called()
+
+
+def test_attempt_files_are_isolated():
+    from common.store import redisq
+    from pipeline import run_mcp_parsing as S
+    from tests.server.common.test_redisq import FakeRedis
+
+    r = FakeRedis()
+    with tempfile.TemporaryDirectory() as d, mock.patch.object(S, "JOBS_DIR", Path(d)):
+        jid, _ = _submit({"content_b64": "eA==", "filename": "a.txt"}, r)
+        item = S._receive(r, "first")
+        workspaces = []
+
+        def run(jid, j, ws, fname, t0):
+            workspaces.append(ws)
+            (ws / "run.log").write_text(str(j["attempts"]), encoding="utf-8")
+            if j["attempts"] == 1:
+                S._process(r, item[0], jid, "second", 2)
+            return S._result(jid, fname, text=str(j["attempts"]))
+
+        with mock.patch.object(S, "_run_job", side_effect=run):
+            S._process(r, *item)
+        job = r.hgetall(redisq.key("job", jid))
+        assert job["status"] == "done" and job["result_file"] == "result-2.json"
+        assert [p.name for p in workspaces] == ["a1", "a2"]
+        for n in (1, 2):
+            assert json.loads((Path(d) / jid / f"result-{n}.json").read_text(encoding="utf-8"))["text"] == str(n)
+            assert (Path(d) / jid / f"a{n}" / "run.log").read_text(encoding="utf-8") == str(n)
+
+
+def test_dead_consumer_heartbeat_and_cleanup():
+    from common.store import redisq
+    from pipeline import run_mcp_parsing as S
+    from tests.server.common.test_redisq import FakeRedis
+
+    r = FakeRedis()
+    redisq.submit(r, "j", {"filename": "a.txt"}, 1)
+    item = S._receive(r, "dead")
+    r.consumers.update(dead=60001, empty=60001)
+    r.set(redisq.key("worker", "dead"), "1", ex=30)
+    assert redisq.reclaim_dead(r, "rescuer") is None
+    assert "empty" not in r.consumers and r.pending[item[0]]["consumer"] == "dead"
+    r.delete(redisq.key("worker", "dead"))
+    got = S._receive(r, "rescuer")
+    assert got == (item[0], "j", "rescuer", 2)
+    assert r.pending[item[0]]["consumer"] == "rescuer"
+
+
+def test_corrupt_hash_finishes_failed():
+    from common.store import redisq
+    from pipeline import run_mcp_parsing as S
+    from tests.server.common.test_redisq import FakeRedis
+
+    r = FakeRedis()
+    redisq.submit(r, "bad", {"filename": "a.txt", "bytes": "broken"}, 1)
+    S._process(r, *S._receive(r, "worker"))
+    job = r.hgetall(redisq.key("job", "bad"))
+    assert job["status"] == "failed" and "ValueError" in job["error"]
+    assert not r.pending
+
+
+def test_worker_nonredis_error_log():
+    from common.store import redisq
+    from pipeline import run_mcp_parsing as S
+    from tests.server.common.test_redisq import FakeRedis
+
+    stop = mock.Mock()
+    stop.is_set.side_effect = [False, True]
+    with (
+        mock.patch.object(S.threading, "Event", return_value=stop),
+        mock.patch.object(S.threading, "Thread"),
+        mock.patch.object(S.signal, "signal"),
+        mock.patch.object(redisq, "client", return_value=FakeRedis()),
+        mock.patch.object(S, "_receive", side_effect=ValueError("bad hash")),
+        mock.patch.object(redisq, "ensure_group") as ensure,
+        mock.patch.object(S, "_log") as log,
+    ):
+        S._worker("supervisor")
+    ensure.assert_called_once()
+    assert "worker 오류: ValueError: bad hash" in log.call_args.args[0]
+    assert "Traceback" in log.call_args.args[0] and "연결 실패" not in log.call_args.args[0]

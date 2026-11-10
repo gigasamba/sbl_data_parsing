@@ -213,3 +213,5 @@
 | `edw_meta` | `search.edw_meta.edw_meta_catalog_dir`의 자료 |
 | `parse_document` | `mcp-redis` + `mcp-data-parsing` + 공유 jobs 폴더(외부 MCP 인증은 기존 토큰) |
 | 원문 도구 | `required.tokens.fulltext_sign_key` · Object Storage 읽기 · EDW 읽기 계정 |
+
+parse_document 회수 보강(#177): 종료 확인·running 소유권 변경은 WATCH로 묶고, 시도별 `a<n>/`에서 파싱한 뒤 HASH의 `result_file` 이름으로 결과를 읽는다. heartbeat가 없는 소비자는 idle 60초 뒤 한 건씩 회수하며, 살아 있지만 멈춘 소비자는 기존 (job_timeout+60)초 XAUTOCLAIM으로 회수한다. 손상된 HASH는 failed로 끝내고 일반 worker 오류는 traceback으로 기록한다.

@@ -2,6 +2,7 @@
 
 import base64
 import json
+import re
 import shutil
 import time
 import uuid
@@ -34,8 +35,7 @@ def _redis_call(command, *args, **kwargs):
     try:
         return command(*args, **kwargs)
     except Exception as exc:
-        redis_error = any(cls.__module__ == "redis.exceptions" for cls in type(exc).__mro__)
-        if redis_error or isinstance(exc, OSError):
+        if redisq.is_redis_error(exc):
             raise RedisFailure(exc) from exc
         raise
 
@@ -114,7 +114,10 @@ def do_parse_document(path=None, content_b64=None, filename=None, time_out_thres
                 return {"error": job.get("error")}
             if job.get("status") == "done":
                 try:
-                    job["result"] = json.loads((redisq.JOBS_DIR / job_id / "result.json").read_text(encoding="utf-8"))
+                    name = job.get("result_file", "")
+                    if not re.fullmatch(r"result-[0-9]+\.json", name):
+                        raise FileNotFoundError("완료 결과 파일 이름 없음 또는 잘못됨")
+                    job["result"] = json.loads((redisq.JOBS_DIR / job_id / name).read_text(encoding="utf-8"))
                 except Exception as exc:
                     return _file_error(exc, job_id)
             return _parse_shaped(job, max_chars)

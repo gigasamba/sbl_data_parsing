@@ -406,7 +406,7 @@ AOF 데이터는 `ops.host.redis_data_dir`(비우면 `<루트>/redis`)에 남는
 
 검색 MCP의 keepalive는 jobs/Redis 준비·기동이 실패해도 검색 MCP 확인과 재기동을 계속한다. parse health는 컨테이너 로컬 임시 폴더의 supervisor 식별자를 읽고 그 소비자의 heartbeat만 확인하므로 호스트 네트워크에서도 다른 컨테이너를 정상으로 오인하지 않는다.
 
-상태 흐름: queued → running → done/failed/rejected. 완료 알림 전에 result.json을 쓴다. 제한 시간 응답을 받아도 worker는 작업을 계속한다. `service.json`에는 supervisor PID·Redis host:port·worker 수만 적고 비밀번호는 넣지 않는다. 작업·대기·파싱 추적과 `perf_report --mcp`는 §3-4-1을 따른다.
+상태 흐름: queued → running → done/failed/rejected. 완료 알림 전에 result-<attempts>.json을 쓴다. 제한 시간 응답을 받아도 worker는 작업을 계속한다. `service.json`에는 supervisor PID·Redis host:port·worker 수만 적고 비밀번호는 넣지 않는다. 작업·대기·파싱 추적과 `perf_report --mcp`는 §3-4-1을 따른다.
 
 <a id="서버-pg-띄우기"></a>
 ### 1-4. 서버 PG(pgvector) 띄우기
@@ -2124,3 +2124,5 @@ git tag -l 'v*'                                       #    기대: … v0.3.1 v0
 - 공용 main 벌을 이 판으로 올릴 때는 [§4](#4-운영-중인-서버를-새-판으로-올리기) 순서 — 코드 받기는 공용 벌의 git 셸에서(공용 벌 컨테이너는 코드를 읽기 전용으로 붙이므로 (나) — `B=/home/sbl/sbl_data_parsing-main-1`) `git fetch origin --tags && git switch --detach v0.3.2 && git rev-parse --short HEAD > CODE_COMMIT && git update-index --skip-worktree CODE_COMMIT`(판에 고정 — 다음 판도 태그로 옮긴다).
 - 태그는 한 번 올리면 옮기지 않는다. 잘못 붙였으면 다음 판 번호로 새로 낸다(남이 이미 받았을 수 있다).
 - `release/*` 브랜치는 병합 뒤에도 지우지 않는다(그 판을 고칠 때 다시 씀).
+
+parse_document 회수 보강(#177): 종료 확인·running 소유권 변경은 WATCH로 묶고, 시도별 `a<n>/`에서 파싱한 뒤 HASH의 `result_file` 이름으로 결과를 읽는다. heartbeat가 없는 소비자는 idle 60초 뒤 한 건씩 회수하며, 살아 있지만 멈춘 소비자는 기존 (job_timeout+60)초 XAUTOCLAIM으로 회수한다. 손상된 HASH는 failed로 끝내고 일반 worker 오류는 traceback으로 기록한다.

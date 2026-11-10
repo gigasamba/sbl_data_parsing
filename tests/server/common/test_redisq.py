@@ -13,6 +13,7 @@ class FakeRedis:
         self.ttls, self.pending, self.transactions, self.values = {}, {}, [], {}
         self.on_wait = None
         self.sequence = 0
+        self.consumers = {}
 
     def pipeline(self, transaction=True):
         assert transaction
@@ -46,6 +47,7 @@ class FakeRedis:
         return mid
 
     def xreadgroup(self, group, consumer, streams, count, block):
+        self.consumers.setdefault(consumer, 0)
         name = next(iter(streams))
         for mid, fields in self.streams.get(name, []):
             if mid not in self.pending:
@@ -60,8 +62,32 @@ class FakeRedis:
                 return ["0-0", [(mid, dict(self.streams[name])[mid])], []]
         return ["0-0", [], []]
 
-    def xpending_range(self, name, group, low, high, count):
-        return [self.pending[low]] if low in self.pending else []
+    def xpending_range(self, name, group, low, high, count, consumername=None):
+        return [
+            {"message_id": mid, **item}
+            for mid, item in self.pending.items()
+            if (low == "-" or mid >= low) and (high == "+" or mid <= high) and (consumername is None or item["consumer"] == consumername)
+        ][:count]
+
+    def exists(self, name):
+        return int(name in self.hashes or name in self.values)
+
+    def xinfo_consumers(self, name, group):
+        return [
+            dict(name=c, idle=idle, pending=sum(p["consumer"] == c for p in self.pending.values())) for c, idle in self.consumers.items()
+        ]
+
+    def xgroup_delconsumer(self, name, group, consumer):
+        del self.consumers[consumer]
+
+    def xclaim(self, name, group, consumer, min_idle_time, message_ids):
+        rows = []
+        for mid in message_ids:
+            item = self.pending[mid]
+            if self.consumers[item["consumer"]] >= min_idle_time:
+                item.update(consumer=consumer, times_delivered=item["times_delivered"] + 1)
+                rows.append((mid, dict(self.streams[name])[mid]))
+        return rows
 
     def xack(self, name, group, message):
         # 완료 메시지는 다시 전달하지 않는다.

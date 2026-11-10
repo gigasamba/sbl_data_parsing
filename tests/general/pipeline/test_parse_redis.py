@@ -92,7 +92,7 @@ def test_redis_submit_and_wakeup():
             assert r.scard(redisq.key("active")) == 0 and r.xpending(redisq.key("queue"), redisq.group())["pending"] == 0
             assert r.xlen(redisq.key("queue")) == 0
             assert 0 < r.ttl(redisq.key("job", jid)) <= 86400
-            assert (Path(directory) / jid / "result.json").is_file()
+            assert (Path(directory) / jid / job["result_file"]).is_file()
         finally:
             if process and process.is_alive():
                 process.terminate()

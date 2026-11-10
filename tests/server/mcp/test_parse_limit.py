@@ -29,8 +29,8 @@ def _stub(sent):
         sent.append(source)
         ws = redisq.JOBS_DIR / "j1"
         ws.mkdir(parents=True, exist_ok=True)
-        (ws / "result.json").write_text(json.dumps({"text": "ok"}), encoding="utf-8")
-        r.hset(redisq.key("job", "j1"), mapping={"status": "done"})
+        (ws / "result-1.json").write_text(json.dumps({"text": "ok"}), encoding="utf-8")
+        r.hset(redisq.key("job", "j1"), mapping={"status": "done", "result_file": "result-1.json"})
         r.lpush(redisq.key("done", "j1"), "done")
         return "j1", 0
 
@@ -122,8 +122,8 @@ def test_proxy_completion_and_contract():
         def done():
             job_id = next(iter(r.sets[redisq.key("active")]))
             result = {"job_id": job_id, "filename": "a.txt", "text": "abcdef", "engine": "plain"}
-            (Path(directory) / job_id / "result.json").write_text(json.dumps(result), encoding="utf-8")
-            redisq.finish(r, "1-0", job_id, "done", elapsed_ms=1)
+            (Path(directory) / job_id / "result-1.json").write_text(json.dumps(result), encoding="utf-8")
+            redisq.finish(r, "1-0", job_id, "done", result_file="result-1.json", elapsed_ms=1)
 
         r.on_wait = done
         out = P.do_parse_document(content_b64="dGV4dA==", filename="a.txt", max_chars=3)
@@ -186,8 +186,8 @@ def test_base64_wins_over_path():
         def done():
             job_id = next(iter(r.sets[redisq.key("active")]))
             result = {"filename": "upload.txt", "text": "upload"}
-            (Path(directory) / job_id / "result.json").write_text(json.dumps(result), encoding="utf-8")
-            redisq.finish(r, "2-0", job_id, "done")
+            (Path(directory) / job_id / "result-1.json").write_text(json.dumps(result), encoding="utf-8")
+            redisq.finish(r, "2-0", job_id, "done", result_file="result-1.json")
 
         r.on_wait = done
         assert parse_proxy.do_parse_document(**source) == {"filename": "upload.txt", "text": "upload", "status": "done"}
