@@ -104,6 +104,55 @@ EOF
   return 0
 }
 
+# Redis 설정·인증은 보호 파일(600)에만. compose env·argv에는 비밀번호를 내보내지 않는다.
+prepare_redis() {
+  local folder=${REDIS_CONF_DIR:-$RAG_ROOT/redis-conf} out
+  REDIS_CONF_CHANGED=0; export REDIS_CONF_CHANGED
+  out=$("${PY:-python3}" "$_SETTINGS_ROOT/deploy/host/scripts/settings_to_env.py" --file "$SETTINGS_FILE" --redis-dir "$folder") || return $?
+  [ "$out" != changed ] || REDIS_CONF_CHANGED=1
+  export REDIS_CONF_CHANGED
+  return 0
+}
+
+# 파일 교체만으로 실행 중 Redis는 바뀌지 않는다. 두 앱도 새 비밀번호를 다시 읽는다.
+restart_redis_changed() {
+  [ "${REDIS_CONF_CHANGED:-0}" = 1 ] || return 0
+  echo "[설정] Redis 보호 설정 변경 — 실행 중인 Redis·파싱·검색 MCP 재시작"
+  if [ "$($DOCKER inspect -f '{{.State.Running}}' mcp-redis 2>/dev/null)" = true ]; then
+    $DOCKER restart mcp-redis >/dev/null || return $?
+  fi
+  local name
+  for name in "$DATA_PARSING_CNAME" "$MCP_CNAME"; do
+    if [ "$($DOCKER inspect -f '{{.State.Running}}' "$name" 2>/dev/null)" = true ]; then
+      $DOCKER restart "$name" >/dev/null || return $?
+    fi
+  done
+}
+
+# UID 10001 작업 폴더 — 컨테이너보다 먼저 만들고 권한을 확인(기존 결과 폴더와 같은 주인·그룹).
+# 호스트가 root면 주인 10001, 일반 운영 계정은 기존 RAG_OUT 그룹의 쓰기 권한을 쓴다.
+prepare_jobs() {
+  local jobs=$RAG_OUT/_mcp_parse/jobs owner mode created=
+  if [ ! -d "$jobs" ]; then
+    mkdir -p "$jobs" || return 2
+    created=1
+  fi
+  if [ "$(id -u)" = 0 ]; then
+    chown 10001 "$jobs" || return 2
+    chgrp "$(ls -nd "$RAG_OUT" | awk '{print $4}')" "$jobs" || return 2
+    chmod 2775 "$jobs" || return 2
+  else
+    [ -z "$created" ] || chmod 2775 "$jobs" || return 2
+    owner=$(ls -nd "$jobs" | awk '{print $3}')
+    mode=$(ls -ld "$jobs" | awk '{print $1}')
+    if [ "$owner" = 10001 ]; then
+      case "$mode" in ?????w*) return 0 ;; esac
+    fi
+    echo "[설정] $jobs 주인은 UID 10001이어야 함(그룹 쓰기 권한 필요) — root로 host_ctl.sh init --group <운영 그룹> 실행" >&2
+    return 2
+  fi
+}
+
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then        # 실행(source가 아님)
   set -euo pipefail
   if [ -n "${SETTINGS_FILE:-}" ]; then

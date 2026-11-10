@@ -4,6 +4,7 @@
     python -m pipeline.tools.perf_report <run_id>                 # 단계·엔진별 p50/p95/최대·비율, wait/작업, 느린 문서, 쪽당 시간, 캐시·재시도·실패
     python -m pipeline.tools.perf_report                           # run_id를 빼면 가장 최근 실행
     python -m pipeline.tools.perf_report --runs [N]                # 최근 실행 N개(기본 10) 목록
+    python -m pipeline.tools.perf_report --mcp --since 24 --top 10  # MCP 작업: 전체·큐 대기·파싱·주요 단계 시간(기본 최근 24시간)
     python -m pipeline.tools.perf_report <run_id> --compare <run_id> ...   # 실행 간 비교(code_fp·stack·settings_hash 차이 + 단계별 p50)
     python -m pipeline.tools.perf_report <run_id> --file output/logs/2026-10-30_123.jsonl   # DB가 안 켜진 PC — logsink 대체 기록 파일에서
     python -m pipeline.tools.perf_report <run_id> --top 20 --json  # 느린 문서 N개 · 표 대신 JSON
@@ -213,6 +214,63 @@ def _ratio(num, den):
     return round(num / den, 4) if den else None
 
 
+MCP_PHASES = {
+    "엔진": "pipeline.transform.parse.parse_engines",
+    "채점": "pipeline.transform.represent.parse_scoring",
+    "대표 결과": "pipeline.transform.represent.doc_represent",
+}
+
+
+def _timings(values):
+    return {"n": len(values), "p50_ms": percentile(values, 50), "p95_ms": percentile(values, 95), "max_ms": max(values, default=None)}
+
+
+def summarize_mcp(runs, events, top=10):
+    """pipe_run·pipe_event 행 목록 → MCP 작업 요약. 전체=큐 대기+파싱(복사·준비 포함), 주요 단계는 proc.run의 벽시계 시간.
+    엔진별 자식 span 합은 병렬 시간을 중복하므로 더하지 않는다. 아직 끝나지 않은 실행은 건수·진행 중에만 센다."""
+    selected = {str(r["run_id"]): r for r in runs if r.get("command") == "mcp_parse"}
+    jobs = []
+    phases = {name: defaultdict(float) for name in MCP_PHASES}
+    for row in events:
+        rid = str(row.get("run_id"))
+        if rid not in selected:
+            continue
+        metrics = _metrics(row)
+        if row.get("stage") == "mcp_parse.job":
+            wait = _num(metrics.get("queue_wait_ms"))
+            elapsed = _num(row.get("duration_ms"))
+            jobs.append(
+                {
+                    "run_id": rid,
+                    "job_id": metrics.get("job_id"),
+                    "doc_id": row.get("doc_id"),
+                    "queue_wait_ms": wait,
+                    "parsing_ms": elapsed,
+                    "total_ms": wait + elapsed,
+                    "status": row.get("status"),
+                }
+            )
+        elif row.get("stage") == "proc.run":
+            for name, module in MCP_PHASES.items():
+                if metrics.get("module") == module:
+                    phases[name][rid] += _num(row.get("duration_ms"))
+    status = {name: sum(j["status"] == name for j in jobs) for name in ("ok", "fail", "timeout")}
+    finished = {j["run_id"] for j in jobs}
+    return {
+        "n_runs": len(selected),
+        "n_jobs": len(jobs),
+        "running": sum(r.get("status") == "running" for r in selected.values()),
+        "status": status,
+        "timings": {
+            "전체(대기+파싱)": _timings([j["total_ms"] for j in jobs]),
+            "큐 대기": _timings([j["queue_wait_ms"] for j in jobs]),
+            "파싱(준비 포함)": _timings([j["parsing_ms"] for j in jobs]),
+            **{name: _timings([ms for rid, ms in values.items() if rid in finished]) for name, values in phases.items()},
+        },
+        "slow_jobs": sorted(jobs, key=lambda j: -j["total_ms"])[: max(0, top)],
+    }
+
+
 def compare(runs):
     """runs: [(pipe_run 행, 요약)] → code_fp·stack·settings_hash 차이와 (단계, 엔진)별 p50/p95 나란히."""
     keys = {}
@@ -312,6 +370,35 @@ def load_since_file(hours, paths, now=None):
     ]
 
 
+def load_mcp_db(hours, schema=None):
+    params = {"s": float(hours) * 3600}
+    where = "r.command = 'mcp_parse' AND r.started_at >= now() - make_interval(secs => %(s)s)"
+    runs = _db_rows("SELECT r.* FROM {S}.pipe_run r WHERE " + where + " ORDER BY r.started_at", params, schema)
+    events = _db_rows(
+        "SELECT e.* FROM {S}.pipe_event e JOIN {S}.pipe_run r ON r.run_id = e.run_id WHERE " + where + " ORDER BY e.ts_start",
+        params,
+        schema,
+    )
+    return runs, events
+
+
+def load_mcp_file(hours, paths, now=None):
+    """같은 실행의 시작·종료 행을 합쳐 DB UPSERT와 맞춘 뒤 실행 시작 시각으로 고른다."""
+    runs, events = {}, []
+    for table, row in _file_items(paths):
+        if table == "pipe_run":
+            runs.setdefault(str(row.get("run_id")), {}).update({k: v for k, v in row.items() if v is not None})
+        elif table == "pipe_event":
+            events.append(row)
+    cutoff = (now or datetime.now(UTC)) - timedelta(hours=float(hours))
+    selected = {
+        rid: r
+        for rid, r in runs.items()
+        if r.get("command") == "mcp_parse" and (ts := _ts(r.get("started_at"))) is not None and ts >= cutoff
+    }
+    return list(selected.values()), [r for r in events if str(r.get("run_id")) in selected]
+
+
 def latest_run_id():
     rows = _db_rows("SELECT run_id FROM {S}.pipe_run ORDER BY started_at DESC LIMIT 1", {})
     return str(rows[0]["run_id"]) if rows else None
@@ -341,6 +428,31 @@ def _table(headers, rows):
     lines = ["  ".join(str(h).ljust(w) for h, w in zip(headers, widths)), "  ".join("-" * w for w in widths)]
     lines += ["  ".join(str(c).ljust(w) for c, w in zip(r, widths)) for r in rows]
     return "\n".join(lines)
+
+
+def render_mcp(summary):
+    status = summary["status"]
+    return "\n".join(
+        [
+            f"MCP 작업 · 실행 {summary['n_runs']}건 · 완료 {summary['n_jobs']}건 · 진행 중 {summary['running']}건 · "
+            f"ok {status['ok']} · fail {status['fail']} · timeout {status['timeout']}",
+            "",
+            "■ 작업·주요 단계 시간(단계가 실행된 작업만 집계)",
+            _table(
+                ["항목", "건", "p50", "p95", "최대"],
+                [[name, t["n"], _ms(t["p50_ms"]), _ms(t["p95_ms"]), _ms(t["max_ms"])] for name, t in summary["timings"].items()],
+            ),
+            "",
+            f"■ 느린 작업 상위 {len(summary['slow_jobs'])}(대기+파싱 순)",
+            _table(
+                ["job_id", "파일", "대기", "파싱", "전체", "상태"],
+                [
+                    [j["job_id"], j["doc_id"], _ms(j["queue_wait_ms"]), _ms(j["parsing_ms"]), _ms(j["total_ms"]), j["status"]]
+                    for j in summary["slow_jobs"]
+                ],
+            ),
+        ]
+    )
 
 
 def render(summary):
@@ -490,12 +602,19 @@ def main(argv=None):
     ap.add_argument("--runs", nargs="?", const=10, type=int, metavar="N", help="최근 실행 N개 목록")
     ap.add_argument("--compare", nargs="+", metavar="RUN_ID", help="이 실행과 비교할 다른 run_id들")
     ap.add_argument("--file", nargs="+", help="DB 대신 logsink 대체 기록 JSON Lines 파일")
+    ap.add_argument("--mcp", action="store_true", help="MCP 작업 요약(--since 시간, 기본 24시간)")
     ap.add_argument(
         "--since", type=float, metavar="HOURS", help="최근 N시간의 모든 실행을 합쳐 분석(run_pipeline은 문서·단계마다 실행이 따로 생김)"
     )
     ap.add_argument("--top", type=int, default=10, help="느린 문서 개수")
     ap.add_argument("--json", action="store_true", help="표 대신 JSON")
     a = ap.parse_args(argv)
+    if a.mcp:
+        hours = a.since if a.since is not None else 24
+        runs, events = load_mcp_file(hours, a.file) if a.file else load_mcp_db(hours)
+        summary = summarize_mcp(runs, events, a.top)
+        print(json.dumps(summary, ensure_ascii=False, default=str, indent=1) if a.json else render_mcp(summary))
+        return 0
     if a.runs is not None:
         rows = recent_runs(a.runs)
         print(

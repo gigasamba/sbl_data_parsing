@@ -167,8 +167,9 @@ class PipelineLoadPublish(Section):
 
 class PipelineServiceDataParsing(Section):
     job_timeout_sec: float | None = F(600.0, "DATA_PARSING_JOB_TIMEOUT_SEC", "parse MCP 서비스 작업 1건 제한 시간(초)")
-    procs: int | None = F(None, "DATA_PARSING_PROCS", "parse MCP 서비스 엔진 묶음 병렬 프로세스 수(개)")
-    queue_max: int | None = F(8, "DATA_PARSING_QUEUE_MAX", "parse MCP 서비스 대기 작업 상한(건)")
+    procs: int | None = F(
+        None, "DATA_PARSING_PROCS", "parse MCP 서비스 worker마다 엔진 묶음 병렬 프로세스 수(개) — 비우면 max(1, min(2, CPU − 1))"
+    )
     roots: CsvList | None = F(
         None, "DATA_PARSING_ROOTS", "parse MCP 서비스가 읽을 수 있는 허용 루트 폴더(쉼표 목록) — 비면 코드가 정함(<서비스 폴더>/inbox)"
     )
@@ -342,12 +343,12 @@ class PipelineHost(Section):
     )
     parse_mem_limit: str | None = F("24g", "PARSE_MEM_LIMIT", "일괄 상주 컨테이너(data-pipeline) 메모리·스왑 상한(docker 형식)")
     data_parsing_cpus: float | None = F(
-        3.0,
+        4.0,
         "DATA_PARSING_CPUS",
-        "parse_document 작업 컨테이너(mcp-data-parsing — #107) CPU 개수 상한(개) — 줄이면 pipeline.service.data_parsing.procs도 그 이하로",
+        "parse_document 작업 컨테이너 CPU 상한(개) — 기본 4 = worker 2 × 엔진 2. 호스트가 4 CPU 미만이면 이 상한을 낮추고 worker마다 엔진 프로세스 수를 1로",
     )
     data_parsing_mem_limit: str | None = F(
-        "8g", "DATA_PARSING_MEM_LIMIT", "parse_document 작업 컨테이너(mcp-data-parsing) 메모리·스왑 상한(docker 형식)"
+        "12g", "DATA_PARSING_MEM_LIMIT", "parse_document 작업 컨테이너(mcp-data-parsing) 메모리·스왑 상한(docker 형식)"
     )
     data_parsing_cpu_shares: int | None = F(
         4096,

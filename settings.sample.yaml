@@ -57,7 +57,7 @@ required:
     object_storage_secret_key:                # [필수 · dev·prd(pipeline·mcp) — local은 무시(비움)] S3 시크릿 키 · 예 스토리지 담당이 준 값 [비밀]
   # ---- 서비스 토큰·서명 키 ----
   tokens:
-    mcp_token:                                # [필수 · dev·prd(mcp·parse MCP 서비스)] MCP 토큰(Authorization: Bearer — 검색·parse MCP 공용 · MCP를 띄우기 전에 정함 · 부르는 쪽도 같은 값) · 서버에서 openssl rand -hex 32를 실행해 나온 64자를 그대로 · 예 9f2c…(64자 16진수) [비밀]
+    mcp_token:                                # [필수 · dev·prd(mcp)] MCP 토큰(Authorization: Bearer — 검색 MCP 인증 · MCP를 띄우기 전에 정함 · 부르는 쪽도 같은 값) · 서버에서 openssl rand -hex 32를 실행해 나온 64자를 그대로 · 예 9f2c…(64자 16진수) [비밀]
     fulltext_sign_key:                        # [필수 · dev·prd(mcp — 원문 도구를 쓸 때)] 원문 도구 sfid 서명 키 — 원문 도구가 내주는 문서 번호(sfid)에 붙이는 서명용 비밀(바꾸면 이미 준 sfid 무효 · mcp_token과 다른 값) · 8자 이상 · 서버에서 openssl rand -hex 32를 실행해 나온 64자를 그대로 · 예 4be1…(64자 16진수) [비밀]
   # ---- 서버 배포(이미지·호스트 폴더) ----
   deploy:
@@ -75,6 +75,12 @@ common:
       object_storage_verify_tls: '1'          # TLS 검증 · 1 검증·0 끔·사내 CA 파일 경로(예 /etc/pki/ca-trust/source/anchors/corp-ca.pem)
     edw:
       edw_extra_connect_args: null            # EDW pymssql 추가 인자 JSON · 예 {"login_timeout": 10} (null = 추가 인자 없음) [비밀]
+    redis:
+      redis_host: 127.0.0.1                   # parse_document Redis 주소 · 루프백 전용 권장
+      redis_port: 6379                        # Redis 포트 · 서버당 한 벌(번호 벌은 파싱 MCP 없음) · 정수
+      redis_password: null                    # Redis 비밀번호 (null = 인증 없음, 루프백에만 bind) [비밀]
+      redis_db: 0                             # Redis 데이터베이스 번호 · 정수 0 이상
+      redis_key_prefix: mcp_parse             # Redis 키 접두 · 설정값 그대로(서버당 한 벌)
   # ---- 모델 호출 — 임베딩·LLM·VLM ----
   models:
     embed:
@@ -177,6 +183,9 @@ ops:
   # ---- 호스트 — 컨테이너 도구·여러 벌·이미지 정리 ----
   host:
     compose_project: compose                  # compose 묶음 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>) · 예 compose(벌 1이면 compose-1로 붙음)
+    redis_image: redis:7.4.2-alpine           # Redis AOF 이미지 · 폐쇄망 반입 필요
+    redis_mem_limit: 512m                     # Redis 컨테이너 메모리 상한
+    redis_data_dir: null                      # Redis AOF 호스트 폴더 (null = <서버 루트>/redis)
     container_cli: null                       # 컨테이너 명령 · docker·podman (null = podman, 없으면 docker)
     host_edw_chain_file: null                 # 호스트 EDW 사슬 사본 파일(루트 기준 상대 또는 절대 경로) · 예 /srv/rag/edw_chain.yaml (null = <루트>/edw_chain.yaml)
     extra_compose: null                       # 더 붙일 compose 파일(루트 기준 상대 또는 절대 경로 — 없는 파일이면 host_ctl.sh 종료 2) · 쉼표 구분 · 예 compose.extra.yml 또는 compose.extra.yml, /srv/rag/compose.gpu.yml (null = 없음)
@@ -187,8 +196,8 @@ ops:
   containers:
     data_parsing:
       data_parsing_container_name: mcp-data-parsing  # parse MCP 서비스 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>) · 예 mcp-data-parsing(벌 1이면 mcp-data-parsing-1)
-      data_parsing_cpus: 3.0                  # parse MCP 서비스 컨테이너 CPU · 숫자
-      data_parsing_mem_limit: 8g              # parse MCP 서비스 메모리 · 예 8g
+      data_parsing_cpus: 4.0                  # parse MCP 컨테이너 CPU 상한 · worker 2 × 엔진 2 · 숫자
+      data_parsing_mem_limit: 12g             # parse MCP 서비스 메모리 · worker 2개 기준 12g
       data_parsing_cpu_shares: 4096           # parse MCP 서비스 CPU 나눔 비율(일괄 작업 1024) · 정수
     mcp:
       mcp_container_name: mcp-server          # 검색 MCP 컨테이너 이름(밑 이름 — 여러 벌이면 끝에 -<벌 번호>) · 예 mcp-server(벌 1이면 mcp-server-1)
@@ -202,7 +211,8 @@ ops:
   services:
     data_parsing:
       mcp_parse_max_file_mb: 100.0            # parse_document 파일 상한(MB) · 숫자 0 초과
-      data_parsing_port: 8766                 # parse MCP 서비스 포트(운영 서버 — 개발자 벌은 띄우지 않음) · 정수
+      data_parsing_port: 8766                 # 더 쓰지 않음(#113 Redis 큐로 대체) — 다음 판에서 지움 · 정수
+      mcp_parse_workers: 2                    # Redis 소비자 프로세스 수 · 1~2(현재 최대 2), 늘리려면 CPU·메모리·엔진 수도 조정 · 정수 1 이상 2 이하
       mcp_parse_allowed_roots: null           # parse 서비스가 읽어도 되는 폴더 목록 · 쉼표 구분 · 예 /data/inbox, /data/shared (null = <서비스 폴더>/inbox)
   # ---- 새벽 배치 ----
   nightly:
@@ -381,9 +391,11 @@ tuning:
     # ---- 상주 서비스 ----
     services:
       data_parsing:
+        mcp_parse_max_attempts: 3             # 죽은 worker 작업의 최대 전달 횟수 · 정수 1 이상
+        mcp_parse_result_ttl_sec: 86400       # 완료 HASH·LIST 보존 시간(초) · 정수 1 이상
         mcp_parse_job_timeout_sec: 600.0      # parse 작업 1건 제한(초) · 숫자
-        mcp_parse_engine_processes: null      # parse 서비스 엔진 프로세스 (null = min(3, CPU − 1)) · 정수
-        mcp_parse_max_queued_jobs: 8          # parse 대기 작업 상한 · 정수
+        mcp_parse_engine_processes: null      # parse 서비스 엔진 프로세스 (null = min(2, CPU − 1) — worker마다) · 정수
+        mcp_parse_max_queued_jobs: 8          # parse 대기 작업 상한 · 정수 1 이상
         mcp_parse_text_engine_page_timeout_sec: 1.0  # parse 글자 엔진 쪽당 제한(초) · 숫자
         mcp_parse_first_try_min_timeout_sec: 20.0  # parse 첫 시도 제한 하한(초) · 숫자
 

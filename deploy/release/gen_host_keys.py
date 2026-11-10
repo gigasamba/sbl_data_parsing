@@ -14,7 +14,7 @@ from common.core.paths import DEPLOY_ROOT
 HOST_SECTIONS = (
     "common.run_env",
     "common.host",
-    "common.runtime.data_parsing_port",
+    "common.connections.redis.redis_port",
     "pipeline.host",
     "mcp.host",
     "mcp.server.host",

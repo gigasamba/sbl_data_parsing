@@ -39,6 +39,9 @@ NAME_LIST = {
 }
 # YAML에 넣지 않는 이름 — env로 남김(라이브러리가 읽음) · 인자(빌드·반입·시험 스크립트). 코드가 읽지 않는 이름은 대조하지 않는다.
 NOT_SETTINGS = {
+    "REDIS_CONF_DIR": ("인자", "호스트 전용 보호 설정 폴더 — 셸 덮기만 허용, settings.yaml 칸 없음(#177 F7)"),
+    "REDIS_CONF_CHANGED": ("env로 남김", "내부 신호 — prepare_redis의 파일 내용 변경을 호스트 재시작에 전달(#177 F7)"),
+    "REDISCLI_AUTH": ("env로 남김", "Redis CLI 라이브러리 인증 — 보호 파일에서만 전달, 설정 칸은 redis_password"),
     "APPLOG_CONTEXT": ("env로 남김", "내부 신호 — 부모 → 자식 request/run/span ID(JSON), 설정 아님"),
     "SETTINGS_FILE": ("env로 남김", "설정 파일 위치(새 — D-015)"),
     "SETTINGS_LENIENT": (

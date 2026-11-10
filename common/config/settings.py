@@ -1316,6 +1316,27 @@ class CommonConnectionsPg(Section):
     user: str | None = F(None, "PG_USER", "PostgreSQL 접속 계정 이름(필수 — op-09)")
 
 
+class CommonConnectionsRedis(Section):
+    redis_host: str = F("127.0.0.1", "REDIS_HOST", "parse_document Redis 호스트(루프백 권장)")
+    redis_port: Port = F(6379, "REDIS_PORT", "parse_document Redis 포트 — 서버당 한 벌(번호 벌은 파싱 MCP 없음)")
+    redis_password: SecretStr | None = F(None, "REDIS_PASSWORD", "Redis 비밀번호 — 로그·셸 env에 내보내지 않음")
+    redis_db: int = F(0, "REDIS_DB", "Redis 데이터베이스 번호", ge=0)
+    redis_key_prefix: str = F("mcp_parse", "REDIS_KEY_PREFIX", "Redis 큐 키 접두 — 설정값 그대로(서버당 한 벌)", min_length=1)
+
+
+class CommonParseQueue(Section):
+    queue_max: int = F(8, "DATA_PARSING_QUEUE_MAX", "parse MCP 서비스 대기 작업 상한(건)", ge=1)
+    mcp_parse_workers: int = F(
+        2,
+        "MCP_PARSE_WORKERS",
+        "Redis 작업 소비자 프로세스 수 — 지금은 최대 2(사용자 결정 2026-11-09). 늘리려면 상한과 CPU·메모리·엔진 프로세스 수를 같이 조정",
+        ge=1,
+        le=2,
+    )
+    mcp_parse_max_attempts: int = F(3, "MCP_PARSE_MAX_ATTEMPTS", "죽은 worker 작업의 최대 전달 횟수", ge=1)
+    mcp_parse_result_ttl_sec: int = F(86400, "MCP_PARSE_RESULT_TTL_SEC", "완료 HASH·LIST 보존 시간(초)", ge=1)
+
+
 class CommonDevDocker(Section):
     mcp_publish_port: Port | None = F(18765, "MCP_PUBLISH_PORT", "시험 compose에서 MCP를 호스트에 게시할 포트")
     pg_image: str | None = F("pgvector/pgvector:pg16", "PG_IMAGE", "시험 PostgreSQL(pgvector) 이미지")
@@ -1472,6 +1493,9 @@ class CommonHost(Section):
     )
     data_parsing_container: str = _cname("mcp-data-parsing", "DATA_PARSING_CONTAINER", "parse_document 작업 서비스 전용")
     devbox: CommonHostDevbox = Field(default_factory=CommonHostDevbox)
+    redis_image: str = F("redis:7.4.2-alpine", "REDIS_IMAGE", "Redis AOF 컨테이너 이미지 — 폐쇄망 반입 필요")
+    redis_mem_limit: str = F("512m", "REDIS_MEM_LIMIT", "Redis 컨테이너 메모리 상한")
+    redis_data_dir: str | None = F(None, "REDIS_DATA_DIR", "Redis AOF 호스트 폴더 — 비우면 <서버 루트>/redis")
     doc_src: str | None = F(None, "DOC_SRC", "호스트 원본 문서 폴더 — compose가 컨테이너 /data/docs에 읽기 전용으로 붙임")
     docker: str | None = F(None, "DOCKER", "호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등 — op-10)")
     edw_chain_src: str | None = F(
@@ -1549,7 +1573,7 @@ class CommonRuntime(Section):
     data_parsing_port: Port = F(
         8766,
         "DATA_PARSING_PORT",
-        "parse_document 작업 서비스 포트(127.0.0.1) — 작업 서비스가 듣고 검색 MCP가 부름. 여러 벌이면 벌마다 다르게(기본값이면 시작 거부)",
+        "더 쓰지 않음(#113 Redis 큐로 대체) — 다음 판에서 지움",
     )
     pipe_max_procs: float | None = F(8, "PIPE_MAX_PROCS", "파싱 엔진 프로세스 수 자동 결정의 상한(개)", unset=("auto",))
     pipe_proc_gb: float | None = F(3.0, "PIPE_PROC_GB", "엔진 프로세스 1개당 메모리 가정(GB) — 자동 프로세스 수 계산용", unset=("auto",))
@@ -1586,6 +1610,7 @@ class CommonConnections(Section):
     object_storage: CommonConnectionsObjectStorage = Field(default_factory=CommonConnectionsObjectStorage)
     pg: CommonConnectionsPg = Field(default_factory=CommonConnectionsPg)
     rdb: CommonConnectionsRdb = Field(default_factory=CommonConnectionsRdb)
+    redis: CommonConnectionsRedis = Field(default_factory=CommonConnectionsRedis)
 
 
 class CommonModels(Section):
@@ -1619,7 +1644,7 @@ class CommonTokens(Section):
     mcp: SecretStr | None = F(
         None,
         "MCP_TOKEN",
-        "MCP 토큰 하나 — 검색 MCP Bearer(비루프백 바인드면 필수)·parse_document 프록시 → 작업 서비스 호출·작업 서비스 확인에 같이 씀",
+        "MCP Bearer 토큰(비루프백 바인드면 필수) — parse_document 내부 전달은 Redis 접속 권한을 씀",
     )
 
 
@@ -1634,6 +1659,7 @@ class CommonSettings(Section):
     log: CommonLog = Field(default_factory=CommonLog)
     paths: CommonPaths = Field(default_factory=CommonPaths)
     runtime: CommonRuntime = Field(default_factory=CommonRuntime)
+    parse_queue: CommonParseQueue = Field(default_factory=CommonParseQueue)
     text: CommonText = Field(default_factory=CommonText)
     tokens: CommonTokens = Field(default_factory=CommonTokens)
 
