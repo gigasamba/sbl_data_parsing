@@ -269,12 +269,20 @@ def _receive(r, consumer, min_idle_ms=None):
     return None
 
 
+def _publish_policy(r):
+    try:
+        redisq.publish_policy(r, allowed_exts(), ROOTS, common_cfg().runtime.parse_max_mb)
+    except (Exception, SystemExit) as exc:
+        _log(redisq.redact(f"정책 갱신 실패: {type(exc).__name__}: {exc}"))
+
+
 def _heartbeat(stop, consumer):
     r = redisq.client()
     try:
         while not stop.is_set():
             try:
                 r.set(redisq.key("worker", consumer), "1", ex=30)
+                _publish_policy(r)
             except Exception as exc:
                 _log(redisq.connection_error(exc))
             stop.wait(10)
@@ -388,6 +396,7 @@ def main():
     r = redisq.client()
     try:
         redisq.ensure_group(r)
+        _publish_policy(r)
     finally:
         r.close()
     workers = common_cfg().parse_queue.mcp_parse_workers

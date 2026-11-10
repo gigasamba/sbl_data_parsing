@@ -456,3 +456,19 @@ def test_worker_nonredis_error_log():
     ensure.assert_called_once()
     assert "worker 오류: ValueError: bad hash" in log.call_args.args[0]
     assert "Traceback" in log.call_args.args[0] and "연결 실패" not in log.call_args.args[0]
+
+
+def test_policy_refresh_reads_engine_configuration():
+    from common.store import redisq
+    from pipeline import run_mcp_parsing as S
+    from tests.server.common.test_redisq import FakeRedis
+
+    r = FakeRedis()
+    with mock.patch.object(S, "allowed_exts", side_effect=[{".txt"}, {".pdf"}, ValueError("bad stack")]):
+        S._publish_policy(r)
+        assert redisq.read_policy(r)["exts"] == [".txt"]
+        S._publish_policy(r)
+        assert redisq.read_policy(r)["exts"] == [".pdf"]
+        with mock.patch.object(S, "_log") as log:
+            S._publish_policy(r)
+        assert "정책 갱신 실패" in log.call_args.args[0]

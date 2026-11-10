@@ -99,6 +99,20 @@ def submit(r, job_id, meta, queue_max):
                     raise
 
 
+def publish_policy(r, exts, roots, max_mb):
+    """worker 정책 스냅샷 — 짧은 TTL로 중단된 worker의 정책을 지움."""
+    with r.pipeline(transaction=True) as tx:
+        tx.multi()
+        tx.hset(key("policy"), mapping={"exts": json.dumps(sorted(exts)), "roots": json.dumps([str(p) for p in roots]), "max_mb": max_mb})
+        tx.expire(key("policy"), 120)
+        tx.execute()
+
+
+def read_policy(r):
+    policy = r.hgetall(key("policy"))
+    return {**policy, "exts": json.loads(policy["exts"]), "roots": json.loads(policy["roots"])} if policy else None
+
+
 def claim(r, job_id, consumer, attempts, picked_at, queue_wait_s):
     """종료 확인과 실행 소유권 변경을 같은 WATCH 트랜잭션으로 묶음."""
     while True:

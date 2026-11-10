@@ -2,6 +2,7 @@
 
 import base64
 import json
+import os
 import re
 import shutil
 import time
@@ -17,8 +18,8 @@ from mcp_server.services.tool_runner import PARSE_MAX_SEC
 class RedisFailure(RuntimeError):
     """클라이언트 명령에서 발생한 Redis/소켓 오류(파일 I/O와 구분)."""
 
-    def __init__(self, error):
-        self.error = error
+    def __init__(self, error, job_id=None):
+        self.error, self.job_id = error, job_id
         super().__init__(str(error))
 
 
@@ -75,6 +76,15 @@ def _submit(source, r):
     else:
         fname = Path(path).name
         meta = {"filename": fname, "mode": "path", "path": str(path), "bytes": 0}
+    policy = _redis_call(redisq.read_policy, r)
+    if policy:
+        ext = Path(fname).suffix.lower()
+        if ext not in policy["exts"]:
+            raise ValueError(f"지원하지 않는 확장자({Path(fname).suffix or '없음'}) — {sorted(policy['exts'])}")
+        if meta["mode"] == "path":
+            normalized = Path(os.path.normpath(str(path)))
+            if not normalized.is_absolute() or not any(normalized.is_relative_to(Path(root)) for root in policy["roots"]):
+                raise ValueError(f"허용 경로 아님({', '.join(policy['roots'])} 하위만)")
     job_id = time.strftime("%Y%m%d") + "-" + uuid.uuid4().hex[:12]
     ws = redisq.JOBS_DIR / job_id
     try:
@@ -87,7 +97,18 @@ def _submit(source, r):
         except Exception as exc:
             raise JobFileError(exc, job_id) from exc
         ahead = _redis_call(redisq.submit, r, job_id, meta, cfg().parse_queue.queue_max)
-    except Exception:
+    except RedisFailure as exc:
+        try:
+            committed = _redis_call(r.exists, redisq.key("job", job_id))
+            if committed:
+                job = _redis_call(r.hgetall, redisq.key("job", job_id))
+                ahead = int(job["queue_position"])
+            else:
+                shutil.rmtree(ws, ignore_errors=True)
+                raise RedisFailure(exc.error, job_id) from exc
+        except RedisFailure as check:
+            raise RedisFailure(check.error, job_id) from check
+    except (redisq.QueueFull, ValueError, JobFileError):
         shutil.rmtree(ws, ignore_errors=True)
         raise
     return job_id, ahead
@@ -122,7 +143,7 @@ def do_parse_document(path=None, content_b64=None, filename=None, time_out_thres
                     return _file_error(exc, job_id)
             return _parse_shaped(job, max_chars)
     except RedisFailure as exc:
-        return {"error": redisq.connection_error(exc.error)}
+        return {"error": redisq.connection_error(exc.error), **({"job_id": exc.job_id or job_id} if exc.job_id or job_id else {})}
     except JobFileError as exc:
         return _file_error(exc.error, exc.job_id)
     except (ValueError, redisq.QueueFull) as exc:

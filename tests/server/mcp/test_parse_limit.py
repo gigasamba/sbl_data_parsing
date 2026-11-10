@@ -246,3 +246,90 @@ def test_redis_errors_without_redis_import():
         ):
             result = parse_proxy.do_parse_document(content_b64="dGV4dA==", filename="a.txt")
             assert "연결 실패(Redis" in result["error"] and name in result["error"]
+
+
+def test_policy_rejects_before_files_and_submit():
+    from unittest.mock import Mock
+
+    import pytest
+
+    for available in (True, False):
+        for source in (
+            {"content_b64": "eA==", "filename": "a.exe"},
+            {"path": "/outside/a.txt"},
+            {"path": "relative/a.txt"},
+            {"path": "/allowed/../outside/a.txt"},
+        ):
+            r = FakeRedis()
+            if available:
+                redisq.publish_policy(r, [".txt"], ["/allowed"], 100)
+            with tempfile.TemporaryDirectory() as d, patch.object(redisq, "JOBS_DIR", Path(d)):
+                submit = Mock(wraps=redisq.submit)
+                with patch.object(redisq, "submit", submit):
+                    if available:
+                        with pytest.raises(ValueError, match="지원하지 않는 확장자|허용 경로 아님"):
+                            parse_proxy._submit(source, r)
+                        assert not list(Path(d).iterdir())
+                        submit.assert_not_called()
+                    else:
+                        jid, _ = parse_proxy._submit(source, r)
+                        assert (Path(d) / jid).is_dir()
+                        submit.assert_called_once()
+    r = FakeRedis()
+    redisq.publish_policy(r, [".txt"], ["/allowed"], 100)
+    assert r.ttls[redisq.key("policy")] == 120
+    with tempfile.TemporaryDirectory() as d, patch.object(redisq, "JOBS_DIR", Path(d)):
+        assert parse_proxy._submit({"path": "/allowed/missing.txt"}, r)[0]  # 존재 확인은 worker 몫
+        assert parse_proxy._submit({"path": "/ignored/a.exe", "content_b64": "eA==", "filename": "a.txt"}, r)[0]
+
+
+def test_submit_response_lost():
+    import pytest
+
+    for committed, verify_fails in ((True, False), (False, False), (False, True)):
+        r = FakeRedis()
+        original = redisq.submit
+
+        def lose_response(r, jid, meta, maximum, committed=committed, original=original):
+            if committed:
+                original(r, jid, meta, maximum)
+            raise ConnectionError("EXEC response lost")
+
+        with (
+            tempfile.TemporaryDirectory() as d,
+            patch.object(redisq, "JOBS_DIR", Path(d)),
+            patch.object(redisq, "client", return_value=r),
+            patch.object(redisq, "submit", side_effect=lose_response),
+            patch.object(r, "exists", side_effect=ConnectionError("still down") if verify_fails else r.exists),
+        ):
+            if committed:
+
+                def done(r=r, d=d):
+                    jid = next(iter(r.sets[redisq.key("active")]))
+                    (Path(d) / jid / "result-1.json").write_text('{"text": "ok"}', encoding="utf-8")
+                    redisq.finish(r, "1-0", jid, "done", result_file="result-1.json")
+
+                r.on_wait = done
+                out = parse_proxy.do_parse_document(content_b64="eA==", filename="a.txt")
+                assert out == {"text": "ok", "status": "done"}
+                assert len(list(Path(d).iterdir())) == 1
+            else:
+                out = parse_proxy.do_parse_document(content_b64="eA==", filename="a.txt")
+                assert "연결 실패" in out["error"] and out["job_id"]
+                assert (Path(d) / out["job_id"]).exists() == verify_fails
+            with pytest.raises(ValueError):
+                parse_proxy._submit({}, r)
+
+
+def test_result_filename_validation():
+    for name in ("", "result.json", "../result-1.json", "sub/result-1.json", "sub\\result-1.json", "result-1..json"):
+        r = FakeRedis()
+        with tempfile.TemporaryDirectory() as d, patch.object(redisq, "JOBS_DIR", Path(d)), patch.object(redisq, "client", return_value=r):
+
+            def done(r=r, name=name):
+                jid = next(iter(r.sets[redisq.key("active")]))
+                redisq.finish(r, "1-0", jid, "done", result_file=name)
+
+            r.on_wait = done
+            out = parse_proxy.do_parse_document(content_b64="eA==", filename="a.txt")
+            assert out["error"].startswith("parse 작업 파일 오류:")
