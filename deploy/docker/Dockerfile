@@ -78,7 +78,7 @@ RUN set -e; n=$(ls /tmp/wheels | grep -c '\.whl$' || true); \
 RUN if [ "$APT" = "1" ]; then \
       apt-get update && apt-get install -y --no-install-recommends \
         openssh-server openssh-client telnet git curl wget iputils-ping dnsutils netcat-openbsd net-tools procps lsof \
-        vim nano zip unzip tree file ripgrep sqlite3 tini tmux \
+        vim nano zip unzip tree file ripgrep sqlite3 tini tmux sudo \
       && rm -rf /var/lib/apt/lists/*; fi \
     && mkdir -p /run/sshd && chmod 755 /run/sshd
 ARG UV_VERSION=0.11.26

@@ -339,3 +339,28 @@ DB 스키마(마이그레이션 — `doc` 칸·`doc` 색인·`except_doc_info`·
 
 - 비고: 규칙 1~5·8·9·11·12·14~22 반영 — 처리 기록 `doc` 칸(판 `0006_search` — `search_tables.DOC_RECORD`, 게시 `publish/silver.jsonl` → 적재 `--silver`), `doc` 찾기 색인 `ix_<스키마>_doc_sha256`·`_doc_silver`·`_doc_path`(판 `0007_search` — `search_tables.DOC_INDEX`), 끝난 문서·내용 중복 `pipeline/shared/gold_docs.py`, `applog.except_doc_info`(판 `0003_applog` — `pipeline/shared/except_docs.py` · 판 `0004_applog` `file_ext`·`file_size`), 원문 도구는 `doc` 칸에서 읽음, EDW 쓰기 없음. 규칙 6·7(DEV 원천 스키마) 반영 — `search_tables.source_of`(`DEV-<n>` → `dev_<n>` → `<기준>_dev_<n>`), `dbtool up --target search`·적재 deploy가 함께 쓰는 `dbtool.upgrade_search`가 설정의 DEV 원천 스키마를 만들고 DB에 있는 `_dev_*`도 올림(판 기록 표는 그 스키마 안 · 판 파일은 `migrations/search_parts.sources()`로 그 스키마만 — 시험이 판 파일마다 확인 · 적재 전 판 확인 `require_current`도 `_dev_*`를 봄 · prd는 DEV를 찾지 않음 · `--sql`은 설정의 DEV 스키마를 빈 스키마부터, DB에 있는 다른 `_dev_*`는 `-- 수동:` 줄), 적재는 스키마가 없으면 멈춤(DDL 없음)·EDW 메타 없음, 끝난 문서·원문 도구·run_pipeline 건수·PC 폴더 원천(`DEV-<n>/`, 원천 목록으로 거름)이 `_dev_*`를 봄, 원천 목록이 비면 운영 5개 원천만(규칙 8 — `candidate_pick.picked`)(시험 `tests/server/pipeline/test_dev_source.py`). 마스터 표 `glossary`(판 `0002_master` — 옛 마스터 표 일곱 개를 지움, 원본 `resources/vocab/glossary/glossary.csv`, 옛 행 모양으로 되돌리기 `common/store/master.py` `to_tables`, 해시는 읽을 때 계산, 시험 `test_master.py`). 옛 CSV → `glossary.csv` 옮기기 `python -m common.store.master convert`(시험 `test_convert_old_csv`), 명부 도구 `gen_roster --kind client`는 glossary 고객 줄을 씀(있는 파일은 고객 줄만 바꿈). 서버 `migrate up --target master`·실명 자료 옮기기 실행은 사람(refactor.md C-108). 규칙 7의 검색 MCP 원천 목록·10 반영 — 검색 MCP가 시작 때 5벌 + 있는 `_dev_*`를 싣고(`server_state.connect_sources` — `ST.all_sources`, prd는 5벌만), `DEV-<n>` 꼴 값이 오면 DB를 한 번 다시 찾아 그사이 생긴 스키마는 그 원천만 더하고 사라진 것은 뺌(`server_state.dev_served` — 재시작 없음, 표 없는 등 깨진 DEV 스키마는 경고 한 줄 뒤 그 원천만 뺌), `search`·`list_doc_fulltext`가 dev·local에서 있는 `DEV-<n>`을 받음(prd는 모르는 값과 같은 오류, 출력·메아리 `DEV-<n>`), 도구 설명에 "(개발 서버: DEV-<숫자>)", `edw_meta` `search_attrs`에 DEV 원천(빈 칸)(시험 `tests/server/mcp/test_dev_search.py`). 검증 페이지 원천 고르기는 고정 목록이라 그대로. 남은 것: 13(서버의 ParsingMeta 기록 옮기기 — 사람, refactor.md C-107). 쓰기 계정·`parsing_meta_table` 칸은 없앴다(남은 settings.yaml은 시작 거부 — C-107). 대상 목록 표는 `required.edw.edw_file_table`(기본 `AI.FileStorageMap`, `<스키마>.<표>`만 — 사용자 11-06, 시험 `test_target_list.py` `TABLES`).
 - Status: todo
+
+<a id="op-18"></a>
+## op-18 · 개발 서버 시험 묶음 — root SSH 컨테이너 여러 개(compose 한 파일)
+
+### 무엇·왜
+개발 서버에서 벌마다 컨테이너를 띄우고, 서버 바깥에서 root 비밀번호로 바로 SSH 접속해 코드를 고치고 시험한다. `host_ctl.sh`의 작업 공간(op-16 — rag, 열쇠 로그인)과 따로 쓰는 길이다.
+
+### 규칙
+1. `deploy/host/compose/docker-compose.yml` 한 파일: `data-pipeline-0`·`data-pipeline-1`(실행 이미지 `data-pipeline-runtime`, SSH 서버 포트 8020·8021 → 22)과 `mcp-server-0`(`mcp-server-runtime`, SSH 8050 → 22 · HTTP 8051 → 8080). 포트는 `0.0.0.0`, 네트워크는 docker bridge(PG는 `host.docker.internal`).
+2. 벌 폴더 `<SBL_ROOT>/sbl_data_parsing-main-<n>` 전체를 `/app/deploy`에 쓰기 가능으로, 그 `settings.yaml`은 같은 자리에 읽기 전용으로 다시, `output/` → `/app/output`, `home/` → `/root`. `mcp-server-0`은 벌 0을 쓰고(결과는 읽기 전용) 홈만 `home/mcp/`(홈은 git·굽기 묶음에서 빠짐).
+3. 컨테이너마다 `cpus`·`mem_limit`·`memswap_limit`(메모리+스왑 합)·`ports`를 그 칸에 직접 적는다. 바꿀 env: `SBL_ROOT`(기본 `/home/sbl`)·`IMAGE_TAG`·`DOC_SRC`.
+4. 컨테이너는 root(`user: "0"`)로 `devbox`를 띄운다. `dev_entry.sh`가 root면 실행 환경(앱과 같은 풀이 — 붙인 settings.yaml `required.env.run_env`, compose는 env `RUN_ENV`를 주지 않음)이 정확히 `dev`일 때만 `/run/secrets/root_pw`(서버 `<SBL_ROOT>/root_pw`를 읽기 전용으로) 첫 줄로 root 비밀번호를 걸고 sshd에 root·비밀번호 로그인을 연다. dev가 아니거나 파일이 없거나 비면 종료 2(docker가 없는 자리에 빈 폴더를 만들 수 있음 — 그 폴더를 지우고 파일로). 비밀번호는 env·이미지·저장소·settings.yaml에 두지 않는다.
+5. `devbox <명령>`이면 그 앱 명령도 뒤에서 함께 돈다(`mcp-server-0` = `devbox mcp` — 따로 지켜보지 않음, 멈추면 손으로 다시 시작).
+6. 이미지에 `sudo`(개발 도구 줄). rag에는 sudo 권한을 주지 않는다 — rag로 뜨는 길(op-16·운영)은 그대로.
+
+### 비고
+- root로 쓴 파일은 서버에서도 root 소유다.
+- `sudo`는 모든 이미지(운영 포함)에 들어간다 — rag에 권한이 없어 쓸 수 없지만 setuid 프로그램이 하나 는다(사람 검토).
+
+### QA
+- `tests/general/deploy/test_devbox.py`(`devbox <명령>` 인자 넘김 · `docker-compose.yml` 포트·마운트·비밀번호 파일 읽기 전용) · PC 시험(0.3.0 실행 이미지 + sudo·새 `dev_entry.sh`): 세 컨테이너를 띄워 PC 사설 IP로 8020·8021·8050 root 비밀번호 로그인, 틀린 비밀번호 거부, 다시 시작 뒤 로그인, `/app/deploy` 쓰기, `sudo`·`su`, run_env가 dev가 아니면·파일이 비면 종료 2.
+- Status: dev
+
+### 사람 검토
+보안 경계(root 비밀번호 SSH, 모든 주소에 연 포트, 운영 이미지에도 sudo).

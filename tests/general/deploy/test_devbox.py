@@ -116,3 +116,30 @@ def test_git_cred():
             (Path(home) / ".git-credentials").symlink_to(target)
             gc.setup(home, "https://gitea.test", "u", "t")
             assert target.read_text(encoding="utf-8") == "keep\n" and not (Path(home) / ".git-credentials").is_symlink()
+
+
+SETS = {  # 시험 묶음 docker-compose.yml(op-18) 서비스 → (명령, 포트, 벌 폴더, 홈)
+    "data-pipeline-0": (["devbox"], ["0.0.0.0:8020:22"], "main-0", "home"),
+    "data-pipeline-1": (["devbox"], ["0.0.0.0:8021:22"], "main-1", "home"),
+    "mcp-server-0": (["devbox", "mcp"], ["0.0.0.0:8050:22", "0.0.0.0:8051:8080"], "main-0", "home/mcp"),
+}
+
+
+def test_compose_sets():
+    svcs = yaml.safe_load((COMPOSE / "docker-compose.yml").read_text(encoding="utf-8"))["services"]
+    assert set(svcs) == set(SETS)
+    for name, (cmd, ports, folder, home) in SETS.items():
+        s = svcs[name]
+        assert s["command"] == cmd and s["ports"] == ports and s["user"] == "0", name
+        assert "RUN_ENV" not in s["environment"], name
+        b = "${SBL_ROOT:-/home/sbl}/sbl_data_parsing-" + folder
+        v = s["volumes"]
+        assert v[0] == f"{b}:/app/deploy:z" and v[1] == f"{b}/settings.yaml:/app/deploy/settings.yaml:ro,z", (name, v)
+        pw = {
+            "type": "bind",
+            "source": "${SBL_ROOT:-/home/sbl}/root_pw",
+            "target": "/run/secrets/root_pw",
+            "read_only": True,
+            "bind": {"create_host_path": False, "selinux": "z"},
+        }
+        assert f"{b}/{home}:/root:z" in v and pw in v, (name, v)
