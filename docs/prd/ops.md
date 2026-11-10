@@ -394,3 +394,29 @@ DB 스키마(마이그레이션 — `doc` 칸·`doc` 색인·`except_doc_info`·
 
 ### 사람 검토
 보안 경계(Redis 포트를 모든 주소에), 새 외부 이미지(`redis:7.4.8-alpine` — 반입 승인).
+
+<a id="op-20"></a>
+## op-20 · 실행 묶음 — `host_ctl.sh` + 환경별 compose 파일(`compose-local.yml`·`compose-dev.yml`·`compose-prd.yml`)
+
+### 무엇·왜
+서버 컨테이너를 환경마다 compose 파일 하나로 띄운다. 겹쳐 쓰던 옛 compose 파일 10개(`compose.*.yml`·`extra.example.yml`)와 settings.yaml의 컨테이너 칸을 없애, 무엇이 어떻게 뜨는지 파일 하나에서 보이게 한다.
+
+### 규칙
+1. 파일: `compose-local.yml`(PC — 0번 한 벌, 재시작 정책 없음) · `compose-dev.yml`(개발 서버 — 벌 0·1, `unless-stopped`) · `compose-prd.yml`(운영 — 0번, `always`, 구운 이미지). 각 파일에 `data-pipeline-<n>`, `mcp-server-0`, 파싱 worker `mcp-data-parsing-0`.
+2. 네트워크는 docker 자체 네트워크 + 포트 연결. 바깥은 `0.0.0.0`, 컨테이너 안 SSH는 22(서버 쪽 8020·8021·8050), 검색 MCP는 안 8080 → 서버 8051. 서버에 있는 것(PG 5433, Redis 8010, 모델)은 `host.docker.internal`로 붙는다.
+3. 컨테이너 이름·이미지·CPU·메모리·포트는 compose 파일에 직접 적는다. settings.yaml의 컨테이너 칸(`ops.containers.*`, `option.devbox.ssh_port`, `ops.host.compose_project`·`extra_compose` 등)은 없다.
+4. 모든 앱 컨테이너는 root(파싱 worker 포함). SSH 컨테이너의 root 비밀번호는 이미지에 넣은 값(예외 승인 — 이미지 빌드 때 BuildKit 비밀값).
+5. `host_ctl.sh`는 얇다: `up`·`down` 등은 settings.yaml `run_env`(부른 폴더)에 맞는 `compose-<환경>.yml` 하나로 `docker compose`를 부른다. `init`·`timers`·`check`는 그대로. 층 쌓기·벌 번호(INSTANCE)·코드 폴더 짝 코드는 없다.
+6. PG(`compose-pgvector.yml`)·Redis(`compose-redis.yml`)는 사람이 따로 한 번 띄우고 늘 `always`. 비밀번호는 settings.yaml 하나(`required.pg.pg_password`·`common.connections.redis.redis_password`) — 띄우기 전에 `host_ctl.sh secrets`가 권한 600 파일(PG 비밀번호 파일·Redis 설정)을 만든다. 손으로 만드는 비밀번호 파일은 없다.
+7. Redis는 공식 `redis:7.4.8-alpine` 하나, 포트 8010, 모든 주소에서 받고 비밀번호 필수. 클러스터는 없다(나중에).
+8. 밤 배치·MCP 살리기는 0번만 본다(`data-pipeline-0`, `mcp-server-0`, `mcp-data-parsing-0`, Redis).
+
+### 비고
+- 지금: 옛 층 파일 10개와 settings.yaml 컨테이너 칸이 남아 있고, `host_ctl.sh`·`mcp_keepalive.sh`·`run_pipeline.py`·시험(`test_dc.py`·`test_compose.py`·`test_redis_host.py`)이 그것을 쓴다. compose-dev·prd에 파싱 worker가 없고, 우리 Redis 이미지(`sbl-redis`)와 `pg_pw`·`redis_pw` 파일을 쓴다. 0.4.0에서 바꾼다(사용자 결정).
+
+### QA
+- 시험: compose 파일마다 서비스·포트·재시작 정책 · `host_ctl.sh`가 환경에 맞는 파일 하나만 부름 · `secrets`가 600 파일을 만들고 값을 출력하지 않음 · 지운 설정 칸이 keyscan에 없음. PC: compose-local로 0번 띄워 SSH·MCP·`parse_document` 큐 동작, PG·Redis 접속.
+- Status: todo
+
+### 사람 검토
+보안 경계(모든 앱 컨테이너 root, 모든 주소에 연 PG·Redis·SSH 포트), 설정 칸 삭제(서버 settings.yaml 정리 필요).
