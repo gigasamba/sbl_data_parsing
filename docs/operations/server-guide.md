@@ -246,8 +246,9 @@ B=/home/sbl/sbl_data_parsing-main; cd $B
   $DOCKER run -d --name mcp-redis --restart unless-stopped --network host \
     --memory "${REDIS_MEM_LIMIT:-512m}" \
     -v "${REDIS_DATA_DIR:-$RAG_ROOT/redis}:/data:z" \
+    -v "${REDIS_CONF_DIR:-$RAG_ROOT/redis-conf}:/conf:ro,z" \
     --health-cmd='sh /conf/health.sh' --health-interval=15s --health-timeout=5s --health-retries=3 \
-    "${REDIS_IMAGE:-redis:7.4.2-alpine}" redis-server /data/redis.conf )
+    "${REDIS_IMAGE:-redis:7.4.2-alpine}" sh /conf/start.sh )
 # 예: <원본 문서 폴더> = /data/docs · <VERSION> = 0.3.1(끝 줄 data-pipeline:0.3.1 idle · mcp-server:0.3.1 mcp) · 자원 값은 dev ②의 확인 명령으로 정함
 docker run -d --name data-pipeline --restart unless-stopped --network host --init \
   --memory 24g --memory-swap 24g --cpus 5 --cpu-shares 1024 --pids-limit 4096 \
@@ -402,7 +403,7 @@ $DOCKER exec mcp-redis redis-cli -p <설정 포트> HGETALL mcp_parse:job:<job_i
 
 위 직접 redis-cli 키 조회 예시는 local 무인증 시험용이다. 서버(dev·prd)는 비밀번호가 필수이므로 컨테이너 셸에서 보호 파일(`/conf/health.sh`의 REDISCLI_AUTH 선언)을 이용하며 비밀번호를 명령 인자·로그에 적지 않는다. Redis·mcp-data-parsing·mcp는 서버당 한 벌이며 번호 벌은 파싱 MCP가 없다. 접두는 설정값 그대로 사용한다(자동 접미사 없음). `KEYS *`·FLUSHALL 대신 해당 접두의 SCAN을 쓴다.
 
-AOF 데이터는 `ops.host.redis_data_dir`(비우면 `<루트>/redis`)에 남는다. 호스트 스크립트가 settings.yaml의 redis_password를 권한 600인 redis.conf·health.sh로 만들어 인증을 설정한다. 설정은 운영 계정 소유 `${REDIS_CONF_DIR:-$RAG_ROOT/redis-conf}`(폴더 700, 파일 600)에 두고 `/conf:ro,z`로 붙인다. 데이터 폴더는 Redis 전용이며 운영 계정이 쓰지 않는다. start.sh는 root로 설정을 /data/redis.conf에 복사·chmod 600한 뒤 공식 entrypoint를 redis-server 인자로 실행해 Redis 계정으로 내린다. 호스트 prepare_redis는 같은 내용이면 파일을 다시 쓰지 않고, 바뀌면 host_ctl·keepalive가 실행 중인 Redis와 두 앱을 순서대로 재시작한다. AOF everysec는 장애 시 최근 약 1초 쓰기를 잃을 수 있다. 완료 STREAM 항목은 XACK+XDEL로 제거하고, AOF는 Redis 기본 auto-rewrite(100% 증가·최소 64MB)를 사용하므로 디스크 여유를 살핀다. 완료 HASH·LIST는 기본 하루 TTL, 폴더는 수정 시간순 최근 30개를 남기되 active와 최근 10분 폴더는 등록 전 업로드까지 보호한다. 미완료 작업은 pending에서 회수되며 최대 전달 횟수를 넘으면 failed 알림을 준다.
+AOF 데이터는 `ops.host.redis_data_dir`(비우면 `<루트>/redis`)에 남는다. 호스트 스크립트가 settings.yaml의 redis_password를 권한 600인 redis.conf·health.sh로 만들어 인증을 설정한다. 설정은 운영 계정 소유 `${REDIS_CONF_DIR:-$RAG_ROOT/redis-conf}`(폴더 700, 파일 600)에 두고 `/conf:ro,z`로 붙인다. 데이터 폴더는 Redis 전용이며 운영 계정이 쓰지 않는다. start.sh는 root로 설정을 /data/redis.conf에 복사·chmod 600한 뒤 공식 entrypoint를 redis-server 인자로 실행해 Redis 계정으로 내린다. 호스트 prepare_redis는 같은 내용이면 파일을 다시 쓰지 않고, 바뀌면 host_ctl·keepalive가 실행 중인 Redis와 두 앱을 순서대로 재시작한다. Redis가 꺼져 있어도 실행 중인 두 앱은 새 비밀번호를 읽도록 재시작한다. 설정 폴더·파일 읽기/쓰기 권한 오류는 값이나 traceback 대신 해당 경로와 소유자·권한 확인 안내(server-guide §4-6)를 출력한다. AOF everysec는 장애 시 최근 약 1초 쓰기를 잃을 수 있다. 완료 STREAM 항목은 XACK+XDEL로 제거하고, AOF는 Redis 기본 auto-rewrite(100% 증가·최소 64MB)를 사용하므로 디스크 여유를 살핀다. 완료 HASH·LIST는 기본 하루 TTL, 폴더는 수정 시간순 최근 30개를 남기되 active와 최근 10분 폴더는 등록 전 업로드까지 보호한다. 미완료 작업은 pending에서 회수되며 최대 전달 횟수를 넘으면 failed 알림을 준다.
 
 검색 MCP의 keepalive는 jobs/Redis 준비·기동이 실패해도 검색 MCP 확인과 재기동을 계속한다. parse health는 컨테이너 로컬 임시 폴더의 supervisor 식별자를 읽고 그 소비자의 heartbeat만 확인하므로 호스트 네트워크에서도 다른 컨테이너를 정상으로 오인하지 않는다.
 

@@ -141,6 +141,15 @@ def lines(doc, sections, fmt="sh"):
 
 
 def redis_files(doc, directory):
+    """보호 파일 권한 오류를 값이나 traceback 없이 호스트 준비 안내로 돌려줌."""
+    try:
+        return _redis_files(doc, directory)
+    except OSError as exc:
+        path = exc.filename or directory
+        raise ValueError(f"Redis 설정 폴더/파일을 읽거나 쓰지 못함: {path} — 소유자·권한 확인(server-guide §4-6)") from None
+
+
+def _redis_files(doc, directory):
     """Redis 이미지에는 Python이 없음 — 호스트가 설정에서 비밀을 읽어 보호 파일로만 전달.
     requirepass는 argv·compose env에 싣지 않는다. 설정은 운영 계정 소유의 별도 /conf, 데이터는 /data.
     """

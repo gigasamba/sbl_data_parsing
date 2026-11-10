@@ -62,7 +62,7 @@
 
 Redis 인증(#177): 서버(dev·prd)의 `settings.yaml`에는 `common.connections.redis.redis_password`를 반드시 채운다. 비움·공백은 호스트 prepare_redis와 앱 client가 거부하며 worker 시작은 종료 코드 2다. local에서만 무인증을 허용한다. Redis는 루프백 bind와 `protected-mode yes`를 함께 사용한다. 비밀값 처리 변경은 검토 등급 A로 다른 사람의 승인이 필요하다(C-117).
 
-Redis 보호 설정은 운영 계정 소유 `${REDIS_CONF_DIR:-$RAG_ROOT/redis-conf}`(폴더 700, 파일 600)에 두고 `/conf:ro,z`로 붙인다. `REDIS_CONF_DIR`는 호스트 셸에서만 덮을 수 있으며 settings.yaml 항목은 추가하지 않는다(keyscan에서도 호스트 인자로 분류). `/data`는 Redis가 소유하는 AOF 데이터 폴더다. prepare_redis는 파일 내용이 같으면 다시 쓰지 않고, 바뀌면 `REDIS_CONF_CHANGED=1`로 알려 host_ctl·keepalive가 실행 중인 Redis → 파싱 MCP → 검색 MCP를 재시작한다.
+Redis 보호 설정은 운영 계정 소유 `${REDIS_CONF_DIR:-$RAG_ROOT/redis-conf}`(폴더 700, 파일 600)에 두고 `/conf:ro,z`로 붙인다. `REDIS_CONF_DIR`는 호스트 셸에서만 덮을 수 있으며 settings.yaml 항목은 추가하지 않는다(keyscan에서도 호스트 인자로 분류). `/data`는 Redis가 소유하는 AOF 데이터 폴더다. prepare_redis는 파일 내용이 같으면 다시 쓰지 않고, 바뀌면 `REDIS_CONF_CHANGED=1`로 알려 host_ctl·keepalive가 실행 중인 Redis → 파싱 MCP → 검색 MCP를 재시작한다. Redis가 꺼져 있어도 실행 중인 두 앱은 재시작한다. 보호 파일의 읽기·쓰기·chmod 실패는 값이나 traceback 없이 경로와 소유자·권한 확인 안내(server-guide §4-6)로 보고한다.
 
 기동·건강 확인·키 조회는 [server-guide §1-3-1](server-guide.md#1-3-1-parse_document-redis-큐113). 외부 MCP Bearer 토큰은 계속 필요하며 내부 parse HTTP 토큰 검사는 없어졌다.
 

@@ -247,3 +247,70 @@ restart_redis_changed
         again = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
         assert first.returncode == again.returncode == 0
         assert first.stdout == "changed\n" and not again.stdout
+
+
+def test_changed_config_restarts_apps_when_redis_stopped():
+    import shlex
+
+    script = DEPLOY_ROOT / "deploy" / "host" / "scripts" / "load_settings.sh"
+    with tempfile.TemporaryDirectory() as d:
+        calls = Path(d) / "calls"
+        shell = f"""set -eu
+. {shlex.quote(str(script))}
+REDIS_CONF_CHANGED=1
+DATA_PARSING_CNAME=parsing
+MCP_CNAME=mcp
+DOCKER=docker_stub
+docker_stub() {{
+  case "$1" in
+    inspect) case "$*" in *mcp-redis) echo false ;; *) echo true ;; esac ;;
+    restart) echo "$2" >> {shlex.quote(str(calls))} ;;
+  esac
+}}
+restart_redis_changed
+"""
+        result = subprocess.run(["bash", "-c", shell], capture_output=True, text=True, encoding="utf-8")
+        assert result.returncode == 0, (result.stdout, result.stderr)
+        assert calls.read_text(encoding="utf-8").splitlines() == ["parsing", "mcp"]
+
+
+def test_redis_config_permission_errors_are_actionable():
+    import contextlib
+    import io
+    from unittest import TestCase, mock
+
+    path = DEPLOY_ROOT / "deploy" / "host" / "scripts" / "settings_to_env.py"
+    spec = importlib.util.spec_from_file_location("redis_permission_settings", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    secret = "dummy-private-marker"
+    doc = {"common": {"connections": {"redis": {"redis_password": secret}}}}
+    with tempfile.TemporaryDirectory() as d:
+        module.redis_files(doc, d)
+        for target, attribute in ((Path, "read_text"), (Path, "chmod"), (module.tempfile, "mkstemp")):
+            with mock.patch.object(target, attribute, side_effect=PermissionError(secret)):
+                with TestCase().assertRaisesRegex(ValueError, "소유자·권한 확인") as caught:
+                    # port를 바꿔 mkstemp도 반드시 실행한다.
+                    changed = {"common": {"connections": {"redis": {"redis_port": 56380, "redis_password": secret}}}}
+                    module.redis_files(changed, d)
+            error = str(caught.exception)
+            assert d in error and "server-guide §4-6" in error and secret not in error
+        output, errors = io.StringIO(), io.StringIO()
+        with (
+            mock.patch.object(module, "load_or_error", return_value=(doc, None)),
+            mock.patch.object(Path, "read_text", side_effect=PermissionError(secret)),
+            contextlib.redirect_stdout(output),
+            contextlib.redirect_stderr(errors),
+        ):
+            assert module.main(["--file", str(Path(d) / "settings.yaml"), "--redis-dir", d]) == 2
+        assert not output.getvalue()
+        assert "Redis 설정 폴더/파일을 읽거나 쓰지 못함" in errors.getvalue()
+        assert "Traceback" not in errors.getvalue() and secret not in errors.getvalue()
+
+
+def test_direct_redis_start_matches_compose():
+    guide = (DEPLOY_ROOT / "docs" / "operations" / "server-guide.md").read_text(encoding="utf-8")
+    start = guide.split("$DOCKER run -d --name mcp-redis", 1)[1].split(" )", 1)[0]
+    assert '-v "${REDIS_CONF_DIR:-$RAG_ROOT/redis-conf}:/conf:ro,z"' in start
+    assert '"${REDIS_IMAGE:-redis:7.4.2-alpine}" sh /conf/start.sh' in start
+    assert "redis-server /data/redis.conf" not in start

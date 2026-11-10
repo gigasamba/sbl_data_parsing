@@ -117,9 +117,10 @@ prepare_redis() {
 # 파일 교체만으로 실행 중 Redis는 바뀌지 않는다. 두 앱도 새 비밀번호를 다시 읽는다.
 restart_redis_changed() {
   [ "${REDIS_CONF_CHANGED:-0}" = 1 ] || return 0
-  [ "$($DOCKER inspect -f '{{.State.Running}}' mcp-redis 2>/dev/null)" = true ] || return 0
-  echo "[설정] Redis 보호 설정 변경 — Redis와 실행 중인 파싱·검색 MCP 재시작"
-  $DOCKER restart mcp-redis >/dev/null || return $?
+  echo "[설정] Redis 보호 설정 변경 — 실행 중인 Redis·파싱·검색 MCP 재시작"
+  if [ "$($DOCKER inspect -f '{{.State.Running}}' mcp-redis 2>/dev/null)" = true ]; then
+    $DOCKER restart mcp-redis >/dev/null || return $?
+  fi
   local name
   for name in "$DATA_PARSING_CNAME" "$MCP_CNAME"; do
     if [ "$($DOCKER inspect -f '{{.State.Running}}' "$name" 2>/dev/null)" = true ]; then
