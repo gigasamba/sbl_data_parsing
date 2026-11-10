@@ -245,12 +245,13 @@ def _process(r, message_id, job_id, consumer, attempts=1):
 
 
 _CLAIM_CURSORS: dict[str, str] = {}
+_MISSING_HEARTBEATS: dict[str, float] = {}  # spawn worker 프로세스마다 독립적인 부재 관찰 기록
 
 
 def _receive(r, consumer, min_idle_ms=None):
     """유실 작업부터 회수, 없으면 새 STREAM 메시지 하나를 기다림."""
     idle = int((JOB_TIMEOUT + 60) * 1000) if min_idle_ms is None else min_idle_ms
-    dead = redisq.reclaim_dead(r, consumer)
+    dead = redisq.reclaim_dead(r, consumer, _MISSING_HEARTBEATS)
     rows = [dead] if dead else []
     if not rows:
         claimed = r.xautoclaim(

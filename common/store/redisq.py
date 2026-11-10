@@ -2,6 +2,7 @@
 
 import json
 import re
+import time
 from typing import Any
 
 from common.config.settings import SERVER_ENVS, cfg, resolve_run_env, reveal
@@ -142,15 +143,28 @@ def claim(r, job_id, consumer, attempts, picked_at, queue_wait_s):
                     raise
 
 
-def reclaim_dead(r, consumer):
-    """heartbeat가 끊긴 소비자의 pending을 한 건씩 회수."""
-    for item in r.xinfo_consumers(key("queue"), group()):
+def reclaim_dead(r, consumer, missing_since, *, now=None):
+    """heartbeat 부재를 연속 30초 관찰한 소비자의 pending을 한 건씩 회수."""
+    now = time.monotonic() if now is None else now
+    consumers = r.xinfo_consumers(key("queue"), group())
+    names = {item["name"] for item in consumers if item["name"] != consumer}
+    for name in list(missing_since):
+        if name not in names:
+            del missing_since[name]
+    for item in consumers:
         name = item["name"]
-        # heartbeat TTL 30초·갱신 10초보다 긴 60초 idle을 기다려 일시 지연과 구분.
-        if name == consumer or item["idle"] <= 60000 or r.exists(key("worker", name)):
+        if name == consumer:
+            continue
+        if r.exists(key("worker", name)):
+            missing_since.pop(name, None)
+            continue
+        first_missing = missing_since.setdefault(name, now)
+        # TTL 30초·갱신 10초: Redis 재기동 뒤 heartbeat가 복구될 유예 + idle 60초를 함께 확인.
+        if now - first_missing < 30 or item["idle"] <= 60000:
             continue
         if not item["pending"]:
             r.xgroup_delconsumer(key("queue"), group(), name)
+            missing_since.pop(name, None)
             continue
         pending = r.xpending_range(key("queue"), group(), "-", "+", 1, consumername=name)
         if pending:

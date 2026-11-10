@@ -322,7 +322,7 @@ def test_submit_response_lost():
 
 
 def test_result_filename_validation():
-    for name in ("", "result.json", "../result-1.json", "sub/result-1.json", "sub\\result-1.json", "result-1..json"):
+    for name in ("", "../result-1.json", "sub/result-1.json", "sub\\result-1.json", "result-1..json"):
         r = FakeRedis()
         with tempfile.TemporaryDirectory() as d, patch.object(redisq, "JOBS_DIR", Path(d)), patch.object(redisq, "client", return_value=r):
 
@@ -373,3 +373,38 @@ def test_proxy_accepts_symlink_policy_roots():
             for path in (configured / "a.pdf", configured.resolve() / "a.pdf"):
                 jid, _ = parse_proxy._submit({"path": str(path)}, r)
                 assert (root / "jobs" / jid).is_dir()
+
+
+def test_legacy_result_path_stays_in_own_job():
+    for legacy in ("result.json", "/old/output/jobs/other/result.json", "../x/result.json", "C:\\old\\other\\result.json"):
+        r = FakeRedis()
+        with tempfile.TemporaryDirectory() as d, patch.object(redisq, "JOBS_DIR", Path(d)), patch.object(redisq, "client", return_value=r):
+            other = Path(d) / "other"
+            other.mkdir()
+            (other / "result.json").write_text('{"text": "wrong job"}', encoding="utf-8")
+
+            def done(r=r, d=d, legacy=legacy):
+                jid = next(iter(r.sets[redisq.key("active")]))
+                (Path(d) / jid / "result.json").write_text('{"text": "own job"}', encoding="utf-8")
+                redisq.finish(r, "1-0", jid, "done", result_file=legacy)
+
+            r.on_wait = done
+            out = parse_proxy.do_parse_document(content_b64="eA==", filename="a.txt")
+            assert out == {"text": "own job", "status": "done"}
+
+
+def test_legacy_other_job_cannot_supply_missing_result():
+    r = FakeRedis()
+    with tempfile.TemporaryDirectory() as d, patch.object(redisq, "JOBS_DIR", Path(d)), patch.object(redisq, "client", return_value=r):
+        other = Path(d) / "other"
+        other.mkdir()
+        result = other / "result.json"
+        result.write_text('{"text": "wrong job"}', encoding="utf-8")
+
+        def done():
+            jid = next(iter(r.sets[redisq.key("active")]))
+            redisq.finish(r, "1-0", jid, "done", result_file=str(result))
+
+        r.on_wait = done
+        out = parse_proxy.do_parse_document(content_b64="eA==", filename="a.txt")
+        assert out["error"].startswith("parse 작업 파일 오류:") and out["job_id"] != "other"

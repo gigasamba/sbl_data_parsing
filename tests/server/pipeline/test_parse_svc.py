@@ -414,13 +414,55 @@ def test_dead_consumer_heartbeat_and_cleanup():
     redisq.submit(r, "j", {"filename": "a.txt"}, 1)
     item = S._receive(r, "dead")
     r.consumers.update(dead=60001, empty=60001)
-    r.set(redisq.key("worker", "dead"), "1", ex=30)
-    assert redisq.reclaim_dead(r, "rescuer") is None
-    assert "empty" not in r.consumers and r.pending[item[0]]["consumer"] == "dead"
-    r.delete(redisq.key("worker", "dead"))
-    got = S._receive(r, "rescuer")
+    missing = {}
+    assert redisq.reclaim_dead(r, "rescuer", missing, now=100) is None
+    assert missing == {"dead": 100, "empty": 100}
+    assert "empty" in r.consumers and r.pending[item[0]]["consumer"] == "dead"
+    assert redisq.reclaim_dead(r, "rescuer", missing, now=129.99) is None
+    claimed = redisq.reclaim_dead(r, "rescuer", missing, now=130)
+    assert claimed[0] == item[0] and r.pending[item[0]]["consumer"] == "rescuer"
+    assert r.pending[item[0]]["times_delivered"] == 2
+    redisq.reclaim_dead(r, "rescuer", missing, now=130)
+    assert "empty" not in r.consumers and "empty" not in missing
+
+
+def test_heartbeat_recovery_resets_reclaim_grace():
+    from common.store import redisq
+    from tests.server.common.test_redisq import FakeRedis
+
+    r = FakeRedis()
+    r.consumers["live"] = 60001
+    missing = {"gone": 50, "rescuer": 50}
+    redisq.reclaim_dead(r, "rescuer", missing, now=100)
+    assert missing == {"live": 100}  # 사라진 소비자와 자기 기록은 정리
+    r.set(redisq.key("worker", "live"), "1", ex=30)
+    redisq.reclaim_dead(r, "rescuer", missing, now=130)
+    assert "live" in r.consumers and missing == {}
+    r.delete(redisq.key("worker", "live"))
+    redisq.reclaim_dead(r, "rescuer", missing, now=131)
+    assert "live" in r.consumers and missing == {"live": 131}
+    redisq.reclaim_dead(r, "rescuer", missing, now=160)
+    assert "live" in r.consumers
+    redisq.reclaim_dead(r, "rescuer", missing, now=161)
+    assert "live" not in r.consumers and missing == {}
+
+
+def test_heartbeat_reclaim_still_requires_idle_and_receive_state():
+    from common.store import redisq
+    from pipeline import run_mcp_parsing as S
+    from tests.server.common.test_redisq import FakeRedis
+
+    r = FakeRedis()
+    redisq.submit(r, "j", {"filename": "a.txt"}, 1)
+    item = S._receive(r, "dead")
+    missing = {}
+    redisq.reclaim_dead(r, "rescuer", missing, now=100)
+    r.consumers["dead"] = 60000
+    assert redisq.reclaim_dead(r, "rescuer", missing, now=130) is None
+    r.consumers["dead"] = 60001
+    with mock.patch.object(S, "_MISSING_HEARTBEATS", {"dead": time.monotonic() - 31}):
+        got = S._receive(r, "rescuer")
     assert got == (item[0], "j", "rescuer", 2)
-    assert r.pending[item[0]]["consumer"] == "rescuer"
 
 
 def test_corrupt_hash_finishes_failed():

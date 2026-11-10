@@ -138,7 +138,10 @@ def do_parse_document(path=None, content_b64=None, filename=None, time_out_thres
                 try:
                     name = job.get("result_file", "")
                     if not re.fullmatch(r"result-[0-9]+\.json", name):
-                        raise FileNotFoundError("완료 결과 파일 이름 없음 또는 잘못됨")
+                        # 옛 판 호환 — 다음 판에서 지움. 받은 경로는 열지 않고 자기 job의 고정 파일만 읽음.
+                        if name.replace("\\", "/").rsplit("/", 1)[-1] != "result.json":
+                            raise FileNotFoundError("완료 결과 파일 이름 없음 또는 잘못됨")
+                        name = "result.json"
                     job["result"] = json.loads((redisq.JOBS_DIR / job_id / name).read_text(encoding="utf-8"))
                 except Exception as exc:
                     return _file_error(exc, job_id)
