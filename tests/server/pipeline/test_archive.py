@@ -96,7 +96,10 @@ CASES = [  # (이름, 파일 이름, 내용, 거르기 이유, 안 파일 이름
 
 
 def test_archive_cases():
-    with tempfile.TemporaryDirectory() as td, pc.PIPE.env(ARCHIVE_MAX_FILES="3"):
+    with (
+        tempfile.TemporaryDirectory() as td,
+        pc.PIPE.env(ARCHIVE_MAX_FILES="3", ATTACH_MAX_DEPTH="2"),
+    ):  # 표는 기본 깊이 2 기준 — 서버 settings.yaml 값과 상관없이
         for label, fname, data, reason, names in CASES:
             p = Path(td) / label.replace(" ", "_") / fname
             p.parent.mkdir()
