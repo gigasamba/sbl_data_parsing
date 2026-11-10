@@ -118,7 +118,7 @@ def test_git_cred():
             assert target.read_text(encoding="utf-8") == "keep\n" and not (Path(home) / ".git-credentials").is_symlink()
 
 
-SETS = {  # 시험 묶음 docker-compose.yml(op-18) 서비스 → (명령, 포트, 벌 폴더, 홈)
+SETS = {  # 시험 묶음 compose-dev.yml(op-18) 서비스 → (명령, 포트, 벌 폴더, 홈)
     "data-pipeline-0": (["devbox"], ["0.0.0.0:8020:22"], "main-0", "home"),
     "data-pipeline-1": (["devbox"], ["0.0.0.0:8021:22"], "main-1", "home"),
     "mcp-server-0": (["devbox", "mcp"], ["0.0.0.0:8050:22", "0.0.0.0:8051:8080"], "main-0", "home/mcp"),
@@ -126,7 +126,7 @@ SETS = {  # 시험 묶음 docker-compose.yml(op-18) 서비스 → (명령, 포�
 
 
 def test_compose_sets():
-    svcs = yaml.safe_load((COMPOSE / "docker-compose.yml").read_text(encoding="utf-8"))["services"]
+    svcs = yaml.safe_load((COMPOSE / "compose-dev.yml").read_text(encoding="utf-8"))["services"]
     assert set(svcs) == {*SETS, "pgvector"}
     for name, (cmd, ports, folder, home) in SETS.items():
         s = svcs[name]
@@ -146,3 +146,28 @@ def test_compose_sets():
     pg = svcs["pgvector"]  # 검색 DB — 바깥 5433, 데이터 폴더, 비밀번호는 파일(env에 값 없음)
     assert pg["ports"] == ["0.0.0.0:5433:5432"] and pg["environment"]["POSTGRES_PASSWORD_FILE"] == "/run/secrets/pg_pw", pg
     assert "POSTGRES_PASSWORD" not in pg["environment"] and pg["volumes"][0] == "${PG_DATA:-/data/pg/pipeline}:/var/lib/postgresql/data:z"
+
+
+PRD = {  # 운영 묶음 compose-prd.yml(op-18) 서비스 → (이미지, 명령, 포트 — compose-dev.yml과 같음, 홈)
+    "data-pipeline-0": ("data-pipeline:", ["devbox"], ["0.0.0.0:8020:22"], "home"),
+    "mcp-server-0": ("mcp-server:", ["devbox", "mcp"], ["0.0.0.0:8050:22", "0.0.0.0:8051:8080"], "home/mcp"),
+}
+
+
+def test_compose_prd():
+    def load(name):
+        return yaml.safe_load((COMPOSE / name).read_text(encoding="utf-8"))["services"]
+
+    svcs, dev = load("compose-prd.yml"), load("compose-dev.yml")
+    assert set(svcs) == {*PRD, "pgvector"} and all(s["restart"] == "always" for s in svcs.values()), svcs
+    d = "${PRD_DIR:-/home/sbl/sbl_data_parsing-main}"
+    for name, (image, cmd, ports, home) in PRD.items():
+        s = svcs[name]
+        assert s["image"].startswith(image) and s["command"] == cmd and s["ports"] == ports == dev[name]["ports"], name
+        assert s["user"] == "0" and s["entrypoint"][-1] == "/etc/devbox/dev_entry.sh", name  # 구운 이미지 ENTRYPOINT를 작업 공간으로
+        assert s["environment"]["APP_ENTRY"] == "/app/docker/entrypoint.sh" and "RUN_ENV" not in s["environment"], name
+        v = s["volumes"]
+        assert f"{d}/settings.yaml:/etc/rag/settings.yaml:ro,z" in v and f"{d}/{home}:/root:z" in v, (name, v)
+        assert not any(isinstance(x, str) and ":/app/deploy" in x for x in v), (name, v)  # 코드는 이미지 안
+    pg = svcs["pgvector"]
+    assert {k: pg[k] for k in ("ports", "environment", "volumes")} == {k: dev["pgvector"][k] for k in ("ports", "environment", "volumes")}

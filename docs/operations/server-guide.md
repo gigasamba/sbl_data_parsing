@@ -2064,8 +2064,8 @@ git tag -l 'v*'                                       #    기대: … v0.3.1 v0
 - 태그는 한 번 올리면 옮기지 않는다. 잘못 붙였으면 다음 판 번호로 새로 낸다(남이 이미 받았을 수 있다).
 - `release/*` 브랜치는 병합 뒤에도 지우지 않는다(그 판을 고칠 때 다시 씀).
 
-### 6-6. 개발 서버 시험 묶음 — root SSH 컨테이너 여러 개(compose 한 파일)
-`deploy/host/compose/docker-compose.yml` 한 파일로 벌 0·1의 `data-pipeline`, 벌 0의 `mcp-server`, 검색 DB `pgvector`를 함께 띄운다([op-18](../prd/ops.md#op-18)). 컨테이너는 root로 뜨고, 서버 바깥에서 root 비밀번호로 SSH 접속한다. **개발 서버만** — 벌 settings.yaml `required.env.run_env`가 `dev`가 아니면 컨테이너가 시작을 거부한다. `host_ctl.sh`와 따로 쓴다 — 같은 벌을 두 길로 띄우지 않는다(컨테이너 이름 `data-pipeline-0`·`mcp-server-0`이 `host_ctl.sh` 벌 0과 같아 함께 띄우면 이름이 겹친다 · 먼저 `host_ctl.sh down`).
+### 6-6. 서버 묶음 — root SSH 컨테이너(compose 파일: 개발 `compose-dev.yml` · 운영 `compose-prd.yml`)
+`deploy/host/compose/compose-dev.yml` 한 파일로 벌 0·1의 `data-pipeline`, 벌 0의 `mcp-server`, 검색 DB `pgvector`를 함께 띄운다([op-18](../prd/ops.md#op-18)). 컨테이너는 root로 뜨고, 서버 바깥에서 root 비밀번호로 SSH 접속한다. 벌 settings.yaml `required.env.run_env`가 `dev`·`prd`가 아니면 컨테이너가 시작을 거부한다. 운영 서버는 아래 [운영 서버 — compose-prd.yml](#운영-서버--compose-prdyml). `host_ctl.sh`와 따로 쓴다 — 같은 벌을 두 길로 띄우지 않는다(컨테이너 이름 `data-pipeline-0`·`mcp-server-0`이 `host_ctl.sh` 벌 0과 같아 함께 띄우면 이름이 겹친다 · 먼저 `host_ctl.sh down`).
 
 | 컨테이너 | 벌 폴더(`/app/deploy`) | 서버 포트 → 컨테이너 포트 | CPU · 메모리(파일에 적힌 값) |
 |---|---|---|---|
@@ -2094,7 +2094,7 @@ for n in 0 1; do mkdir -p sbl_data_parsing-main-$n/{output,home}; done; mkdir -p
 **② 띄우기·확인**
 ```bash
 cd /home/sbl/sbl_data_parsing-main-0
-docker compose -f deploy/host/compose/docker-compose.yml up -d     # 이미지 판이 다르면 앞에 IMAGE_TAG=0.4.0 · 원본 폴더는 DOC_SRC=/data/docs
+docker compose -f deploy/host/compose/compose-dev.yml up -d     # 이미지 판이 다르면 앞에 IMAGE_TAG=0.4.0 · 원본 폴더는 DOC_SRC=/data/docs
 docker ps --format '{{.Names}} {{.Status}} {{.Ports}}'           # 그대로 입력 — 기대: 세 컨테이너 Up, 0.0.0.0:8020->22/tcp …
 docker logs mcp-server-0 | tail -5                               # 기대: Server listening … port 22 + 검색 MCP 시작 줄
 ```
@@ -2109,7 +2109,29 @@ curl http://<서버 IP>:8051/health   # 검색 MCP — 기대: 200
 psql -h <서버 IP> -p 5433 -U rag -d rag -c 'select 1'   # 검색 DB(psql이 있는 PC에서) — 비밀번호 = pg_pw
 ```
 - 들어가면 `/app/deploy`(벌 폴더 — 쓰기 가능)에서 고치고 git을 쓴다(§6-4). `sudo`·`su`도 있다.
-- 비밀번호를 바꾸려면 `root_pw`를 고치고 `docker compose -f deploy/host/compose/docker-compose.yml restart`(시작할 때마다 그 파일 값으로 다시 건다).
+- 비밀번호를 바꾸려면 `root_pw`를 고치고 `docker compose -f deploy/host/compose/compose-dev.yml restart`(시작할 때마다 그 파일 값으로 다시 건다).
 - root로 쓴 파일은 서버에서도 root 소유다 — 서버 계정으로 고치거나 지울 때는 `sudo`.
 - 검색 MCP는 sshd 옆에서 뒤로 돈다 — MCP만 멈춰도 컨테이너는 Up이다. 8051이 응답하지 않으면 `docker logs mcp-server-0`로 원인을 보고 `docker restart mcp-server-0`.
-- 내리기: `docker compose -f deploy/host/compose/docker-compose.yml down`(벌 폴더·결과는 그대로).
+- 내리기: `docker compose -f deploy/host/compose/compose-dev.yml down`(벌 폴더·결과는 그대로).
+
+#### 운영 서버 — compose-prd.yml
+`deploy/host/compose/compose-prd.yml` 한 파일로 0번 `data-pipeline-0`·`mcp-server-0`과 검색 DB `pgvector`를 띄운다. 포트·비밀번호 파일·pgvector는 `compose-dev.yml`과 같고, 다른 점은 아래뿐이다.
+
+| | 개발(`compose-dev.yml`) | 운영(`compose-prd.yml`) |
+|---|---|---|
+| 컨테이너 | `data-pipeline-0`·`-1` · `mcp-server-0` · `pgvector` | `data-pipeline-0` · `mcp-server-0` · `pgvector` |
+| 이미지 | 실행 이미지 `*-runtime:<판>` + 벌 폴더를 `/app/deploy`에(쓰기 가능) | 구운 이미지 `data-pipeline:<판>`·`mcp-server:<판>`([§0-3](#0-3-prd--운영-서버-코드를-구운-이미지)) — 코드는 이미지 안(고칠 수 없음) |
+| 설정·결과 | 벌 폴더의 `settings.yaml`·`output/`·`home/` | 운영 폴더 `PRD_DIR`(기본 `/home/sbl/sbl_data_parsing-main`)의 `settings.yaml`·`edw_chain.yaml`·`output/`·`home/`(`home/mcp` = mcp-server-0 홈) |
+| 재시작 | `unless-stopped`(손으로 멈추면 그대로) | `always`(손으로 멈춘 것도 docker가 다시 켜질 때 띄움) |
+| 실행 환경 | `run_env: dev` | `run_env: prd` |
+
+```bash
+cd /home/sbl && mkdir -p sbl_data_parsing-main/{output,home/mcp}    # 운영 폴더 — settings.yaml·edw_chain.yaml은 §0-3과 같은 자리
+#   root_pw·pg_pw·/data/pg/pipeline 준비는 위 ①과 같다(같은 /home/sbl에)
+IMAGE_TAG=0.4.0 docker compose -f <코드 묶음을 푼 폴더>/deploy/host/compose/compose-prd.yml up -d   # IMAGE_TAG = 구운 판(코드 VERSION)
+docker inspect -f '{{.Name}} {{.HostConfig.RestartPolicy.Name}}' data-pipeline-0 mcp-server-0 pgvector   # 그대로 입력 — 기대: 셋 다 always
+```
+- 접속은 위 ③과 같다 — `ssh -p 8020 root@<서버 IP>`(data-pipeline-0) · `ssh -p 8050 root@<서버 IP>`(mcp-server-0) · `curl http://<서버 IP>:8051/health` · `psql -h <서버 IP> -p 5433 -U rag -d rag`.
+- 구운 이미지의 시작 스크립트(`entrypoint.sh`)를 이 파일이 SSH 작업 공간(`dev_entry.sh`)으로 바꿔 띄우고, 앱 명령은 `entrypoint.sh`로 넘긴다. 그래서 굽기 바탕이 0.4.0 이상(sudo·root SSH가 든 실행 이미지)이어야 한다.
+- §0-3의 `docker run`이나 `host_ctl.sh`로 띄운 운영 컨테이너가 있으면 먼저 내린다(포트·이름이 겹침).
+

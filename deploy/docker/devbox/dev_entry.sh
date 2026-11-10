@@ -22,13 +22,13 @@ O=$HOME/.config/opencode/opencode.json
 # never goes through env. A failure only warns; the workspace still starts.
 python /etc/devbox/git_cred.py || echo "[devbox] git account setup failed — check option.devbox.gitea_*" >&2
 [ -f "$K/ssh_host_ed25519_key" ] || ssh-keygen -q -t ed25519 -N '' -f "$K/ssh_host_ed25519_key"
-# root (dev set compose docker-compose.yml, user "0"): root password from the mounted file, root password login.
-# Dev server only. The password never goes through env, the image or the repo.
+# root (set compose compose-dev.yml / compose-prd.yml, user "0"): root password from the mounted file, root password login.
+# Servers only (dev, prd). The password never goes through env, the image or the repo.
 SSHD_OPTS=()
 if [ "$(id -u)" = 0 ]; then
-  # run_env as the apps resolve it (env RUN_ENV, else the mounted settings.yaml) — only exactly dev opens root login
+  # run_env as the apps resolve it (env RUN_ENV, else the mounted settings.yaml) — only dev or prd opens root login
   E=$(python -c 'import os; from common.config.settings import resolve_run_env as r; print(r(os.environ) or "")' 2>/dev/null || true)
-  [ "$E" = dev ] || { echo "[devbox] root SSH is for the dev server only — run_env is '${E:-?}' (settings.yaml required.env.run_env)" >&2; exit 2; }
+  case "$E" in dev | prd) ;; *) echo "[devbox] root SSH is for the servers only (dev, prd) — run_env is '${E:-?}' (settings.yaml required.env.run_env)" >&2; exit 2 ;; esac
   P=/run/secrets/root_pw
   W=$( [ -f "$P" ] && head -n1 "$P" | tr -d '\r' || true)
   [ -n "$W" ] || { echo "[devbox] $P missing or empty — create <SBL_ROOT>/root_pw before up (server-guide §6-6)" >&2; exit 2; }

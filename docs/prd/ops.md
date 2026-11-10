@@ -341,26 +341,27 @@ DB 스키마(마이그레이션 — `doc` 칸·`doc` 색인·`except_doc_info`·
 - Status: todo
 
 <a id="op-18"></a>
-## op-18 · 개발 서버 시험 묶음 — root SSH 컨테이너 여러 개(compose 한 파일)
+## op-18 · 서버 묶음 — root SSH 컨테이너(compose 파일: 개발 `compose-dev.yml` · 운영 `compose-prd.yml`)
 
 ### 무엇·왜
-개발 서버에서 벌마다 컨테이너를 띄우고, 서버 바깥에서 root 비밀번호로 바로 SSH 접속해 코드를 고치고 시험한다. `host_ctl.sh`의 작업 공간(op-16 — rag, 열쇠 로그인)과 따로 쓰는 길이다.
+개발·운영 서버에서 컨테이너를 띄우고, 서버 바깥에서 root 비밀번호로 바로 SSH 접속해 코드를 고치고 시험하거나(개발) 상태를 본다(운영). `host_ctl.sh`의 작업 공간(op-16 — rag, 열쇠 로그인)과 따로 쓰는 길이다.
 
 ### 규칙
-1. `deploy/host/compose/docker-compose.yml` 한 파일: `data-pipeline-0`·`data-pipeline-1`(실행 이미지 `data-pipeline-runtime`, SSH 서버 포트 8020·8021 → 22), `mcp-server-0`(`mcp-server-runtime`, SSH 8050 → 22 · HTTP 8051 → 8080), `pgvector`(`pgvector/pgvector:pg16`, 5433 → 5432, 데이터 `PG_DATA` 기본 `/data/pg/pipeline`, 비밀번호 `<SBL_ROOT>/pg_pw` — `POSTGRES_PASSWORD_FILE`, 처음 만들 때만). 포트는 `0.0.0.0`, 네트워크는 docker bridge(컨테이너끼리 PG는 `pgvector:5432`).
+1. `deploy/host/compose/compose-dev.yml` 한 파일: `data-pipeline-0`·`data-pipeline-1`(실행 이미지 `data-pipeline-runtime`, SSH 서버 포트 8020·8021 → 22), `mcp-server-0`(`mcp-server-runtime`, SSH 8050 → 22 · HTTP 8051 → 8080), `pgvector`(`pgvector/pgvector:pg16`, 5433 → 5432, 데이터 `PG_DATA` 기본 `/data/pg/pipeline`, 비밀번호 `<SBL_ROOT>/pg_pw` — `POSTGRES_PASSWORD_FILE`, 처음 만들 때만). 포트는 `0.0.0.0`, 네트워크는 docker bridge(컨테이너끼리 PG는 `pgvector:5432`).
 2. 벌 폴더 `<SBL_ROOT>/sbl_data_parsing-main-<n>` 전체를 `/app/deploy`에 쓰기 가능으로, 그 `settings.yaml`은 같은 자리에 읽기 전용으로 다시, `output/` → `/app/output`, `home/` → `/root`. `mcp-server-0`은 벌 0을 쓰고(결과는 읽기 전용) 홈만 `home/mcp/`(홈은 git·굽기 묶음에서 빠짐).
 3. 컨테이너마다 `cpus`·`mem_limit`·`memswap_limit`(메모리+스왑 합)·`ports`를 그 칸에 직접 적는다. 바꿀 env: `SBL_ROOT`(기본 `/home/sbl`)·`IMAGE_TAG`·`DOC_SRC`.
-4. 컨테이너는 root(`user: "0"`)로 `devbox`를 띄운다. `dev_entry.sh`가 root면 실행 환경(앱과 같은 풀이 — 붙인 settings.yaml `required.env.run_env`, compose는 env `RUN_ENV`를 주지 않음)이 정확히 `dev`일 때만 `/run/secrets/root_pw`(서버 `<SBL_ROOT>/root_pw`를 읽기 전용으로) 첫 줄로 root 비밀번호를 걸고 sshd에 root·비밀번호 로그인을 연다. dev가 아니거나 파일이 없거나 비면 종료 2(docker가 없는 자리에 빈 폴더를 만들 수 있음 — 그 폴더를 지우고 파일로). 비밀번호는 env·이미지·저장소·settings.yaml에 두지 않는다.
+4. 컨테이너는 root(`user: "0"`)로 `devbox`를 띄운다. `dev_entry.sh`가 root면 실행 환경(앱과 같은 풀이 — 붙인 settings.yaml `required.env.run_env`, compose는 env `RUN_ENV`를 주지 않음)이 `dev`·`prd`일 때만 `/run/secrets/root_pw`(서버 `<SBL_ROOT>/root_pw`를 읽기 전용으로) 첫 줄로 root 비밀번호를 걸고 sshd에 root·비밀번호 로그인을 연다. dev·prd가 아니거나 파일이 없거나 비면 종료 2(docker가 없는 자리에 빈 폴더를 만들 수 있음 — 그 폴더를 지우고 파일로). 비밀번호는 env·이미지·저장소·settings.yaml에 두지 않는다.
 5. `devbox <명령>`이면 그 앱 명령도 뒤에서 함께 돈다(`mcp-server-0` = `devbox mcp` — 따로 지켜보지 않음, 멈추면 손으로 다시 시작).
-6. 이미지에 `sudo`(개발 도구 줄). rag에는 sudo 권한을 주지 않는다 — rag로 뜨는 길(op-16·운영)은 그대로.
+6. `compose-prd.yml`(운영): `data-pipeline-0`·`mcp-server-0`·`pgvector`만, 포트·비밀번호 파일·pgvector는 `compose-dev.yml`과 같다. 이미지는 구운 이미지(`data-pipeline:<판>`·`mcp-server:<판>` — 코드 폴더 마운트 없음), ENTRYPOINT를 `dev_entry.sh`로 바꾸고 `APP_ENTRY` = `entrypoint.sh`. 설정·결과·홈은 `PRD_DIR`(기본 `<SBL_ROOT>/sbl_data_parsing-main`). 재시작 `always`(사용자 결정).
+7. 이미지에 `sudo`(개발 도구 줄). rag에는 sudo 권한을 주지 않는다 — rag로 뜨는 길(op-16·운영)은 그대로.
 
 ### 비고
 - root로 쓴 파일은 서버에서도 root 소유다.
 - `sudo`는 모든 이미지(운영 포함)에 들어간다 — rag에 권한이 없어 쓸 수 없지만 setuid 프로그램이 하나 는다(사람 검토).
 
 ### QA
-- `tests/general/deploy/test_devbox.py`(`devbox <명령>` 인자 넘김 · `docker-compose.yml` 포트·마운트·비밀번호 파일 읽기 전용) · PC 시험(0.3.0 실행 이미지 + sudo·새 `dev_entry.sh`): 세 컨테이너를 띄워 PC 사설 IP로 8020·8021·8050 root 비밀번호 로그인, 틀린 비밀번호 거부, 다시 시작 뒤 로그인, `/app/deploy` 쓰기, `sudo`·`su`, run_env가 dev가 아니면·파일이 비면 종료 2.
+- `tests/general/deploy/test_devbox.py`(`devbox <명령>` 인자 넘김 · `compose-dev.yml` 포트·마운트·비밀번호 파일 읽기 전용) · PC 시험(0.3.0 실행 이미지 + sudo·새 `dev_entry.sh`): 세 컨테이너를 띄워 PC 사설 IP로 8020·8021·8050 root 비밀번호 로그인, 틀린 비밀번호 거부, 다시 시작 뒤 로그인, `/app/deploy` 쓰기, `sudo`·`su`, run_env가 dev·prd가 아니면·파일이 비면 종료 2. 운영 묶음(구운 이미지 대역 — 실행 이미지 + 코드 COPY + ENTRYPOINT entrypoint.sh): 8020·8050 root 로그인, PC 사설 IP로 5433 PG 로그인, restart always, run_env local 거부.
 - Status: dev
 
 ### 사람 검토
-보안 경계(root 비밀번호 SSH, 모든 주소에 연 포트, 운영 이미지에도 sudo).
+보안 경계(root 비밀번호 SSH — 운영 서버 포함, 모든 주소에 연 포트 — 운영 PG 5433 포함, 운영 이미지에도 sudo).

@@ -1,0 +1,91 @@
+# 운영 서버 묶음(op-18): 0번 data-pipeline + mcp-server + 검색 DB pgvector를 한 파일로 띄운다. 포트는 compose-dev.yml과 같다.
+#   이미지 = 개발 서버에서 구운 코드가 든 이미지(data-pipeline:<판> · mcp-server:<판> — server-guide §0-3) — 코드 폴더를 붙이지 않는다.
+#   컨테이너는 root로 뜨고 root 비밀번호 SSH를 연다(비밀번호 = <SBL_ROOT>/root_pw 첫 줄 — 시작할 때마다 다시 건다).
+#   실행 환경은 settings.yaml required.env.run_env(prd) — dev·prd가 아니면 컨테이너가 시작을 거부한다. 재시작 정책 always.
+#   host_ctl.sh·§0-3의 docker run과 따로 쓴다 — 같은 서버에서 두 길로 띄우지 않는다. 준비·접속 순서: docs/operations/server-guide.md §6-6
+#   띄우기: docker compose -f compose-prd.yml up -d     내리기: … down
+#   바꿀 자리: SBL_ROOT(기본 /home/sbl) · PRD_DIR(운영 폴더 — 기본 <SBL_ROOT>/sbl_data_parsing-main: settings.yaml·edw_chain.yaml·output/·home/)
+#     · IMAGE_TAG(굽기 판 = 코드 VERSION) · DOC_SRC(원본 문서 폴더) · PG_DATA·PG_DB·PG_USER — 셸 env나 이 파일 옆 .env
+#     컨테이너마다 ports·cpus·mem_limit·memswap_limit(메모리+스왑 합 — 같으면 스왑 안 씀)는 아래 각 칸에 직접 적는다.
+#   네트워크: docker 자체 네트워크(bridge) — 포트를 서버의 모든 주소(0.0.0.0)에 연다. 모델 주소는 서버 주소로,
+#     PG는 이 묶음의 pgvector — 컨테이너끼리는 pgvector:5432, 서버 바깥에서는 <서버 IP>:5433(settings.yaml required.pg).
+name: sbl-prd                                 # compose 묶음 이름
+x-prd: &prd
+  restart: always
+  init: true
+  user: "0"                                   # root — 운영 폴더에 쓰는 파일도 root 소유가 됨
+  # 구운 이미지의 ENTRYPOINT는 entrypoint.sh — SSH 작업 공간(dev_entry.sh)으로 바꾸고, 앱 명령은 entrypoint.sh로 넘긴다
+  entrypoint: ["/usr/bin/tini", "-s", "--", "/etc/devbox/dev_entry.sh"]
+  extra_hosts: ["host.docker.internal:host-gateway"]   # 컨테이너에서 서버 자신
+  pids_limit: 4096
+  logging:
+    options: {max-size: "50m", max-file: "3"}
+
+services:
+  data-pipeline-0:
+    <<: *prd
+    image: data-pipeline:${IMAGE_TAG:-0.4.0}
+    container_name: data-pipeline-0
+    command: ["devbox"]
+    ports: ["0.0.0.0:8020:22"]                # SSH: 서버 8020 → 컨테이너 22
+    environment: {SSH_PORT: "22", SETTINGS_FILE: /etc/rag/settings.yaml, APP_ENTRY: /app/docker/entrypoint.sh}
+    volumes:
+      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/settings.yaml:/etc/rag/settings.yaml:ro,z
+      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/edw_chain.yaml:/etc/rag/edw_chain.yaml:ro,z
+      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/output:/app/output:z
+      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/home:/root:z                # root 홈 — SSH 호스트 열쇠·작업 기록
+      - {type: bind, source: "${SBL_ROOT:-/home/sbl}/root_pw", target: /run/secrets/root_pw, read_only: true,
+         bind: {create_host_path: false, selinux: z}}   # 비밀번호 파일 — 없거나 비면 컨테이너가 시작 거부(종료 2)
+      - ${DOC_SRC:-/data/docs}:/data/docs:ro,z
+    cpus: 4
+    mem_limit: 12g
+    memswap_limit: 16g
+
+  # 검색 MCP — `devbox mcp` = sshd + MCP 서버. settings.yaml search.server: host auto · port 8080 · token(필수) · allowed_hosts <서버 IP>:8051
+  mcp-server-0:
+    <<: *prd
+    image: mcp-server:${IMAGE_TAG:-0.4.0}
+    container_name: mcp-server-0
+    command: ["devbox", "mcp"]
+    ports: ["0.0.0.0:8050:22", "0.0.0.0:8051:8080"]   # SSH 8050 → 22 · HTTP 8051 → 8080
+    environment: {SSH_PORT: "22", SETTINGS_FILE: /etc/rag/settings.yaml, APP_ENTRY: /app/docker/entrypoint.sh}
+    volumes:
+      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/settings.yaml:/etc/rag/settings.yaml:ro,z
+      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/edw_chain.yaml:/etc/rag/edw_chain.yaml:ro,z
+      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/output:/app/output:ro,z
+      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/home/mcp:/root:z
+      - {type: bind, source: "${SBL_ROOT:-/home/sbl}/root_pw", target: /run/secrets/root_pw, read_only: true,
+         bind: {create_host_path: false, selinux: z}}   # 비밀번호 파일 — 없거나 비면 컨테이너가 시작 거부(종료 2)
+    cpus: 3
+    mem_limit: 12g
+    memswap_limit: 12g
+
+  # 검색 DB(PostgreSQL 16 + pgvector) — compose-dev.yml의 pgvector와 같음(데이터 PG_DATA, 비밀번호 <SBL_ROOT>/pg_pw — 처음 한 번만).
+  pgvector:
+    image: pgvector/pgvector:pg16
+    container_name: pgvector                   # 서버에 따로 띄운 옛 pgvector 컨테이너는 먼저 내린다(이름·포트 5433이 겹침)
+    restart: always
+    ports: ["0.0.0.0:5433:5432"]               # 서버 바깥에서 접속 확인 — <서버 IP>:5433
+    environment:
+      POSTGRES_DB: ${PG_DB:-rag}
+      POSTGRES_USER: ${PG_USER:-rag}
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_pw
+    volumes:
+      - ${PG_DATA:-/data/pg/pipeline}:/var/lib/postgresql/data:z
+      - {type: bind, source: "${SBL_ROOT:-/home/sbl}/pg_pw", target: /run/secrets/pg_pw, read_only: true,
+         bind: {create_host_path: false, selinux: z}}
+    command: >
+      postgres -c shared_buffers=4GB -c effective_cache_size=12GB -c work_mem=64MB
+               -c maintenance_work_mem=2GB -c max_parallel_maintenance_workers=2
+               -c max_parallel_workers_per_gather=2 -c max_connections=100
+    shm_size: 3g
+    cpus: 4
+    mem_limit: 12g
+    memswap_limit: 12g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      options: {max-size: "50m", max-file: "3"}
