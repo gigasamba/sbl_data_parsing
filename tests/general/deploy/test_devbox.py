@@ -1,5 +1,5 @@
 """개발 작업 공간(op-17·op-18): 이미지 ENTRYPOINT dev_entry.sh는 `devbox`만 sshd로, 그 밖의 명령은 인자 그대로 APP_ENTRY(이미지의 시작
-스크립트)로 넘긴다. compose 파일의 SSH 컨테이너·포트는 test_compose.py 표. git_cred.py는 gitea 계정 줄만 고친다.
+스크립트)로 넘긴다. compose 파일의 SSH 컨테이너·포트는 test_compose.py 표. git_cred.py는 git 이름·메일만 쓴다.
 sshd가 실제로 뜨는지는 이미지 시험(server-guide §2-13) — 여기는 bash만(PC 전용)."""
 
 import os
@@ -38,21 +38,11 @@ def test_dev_entry_dispatch():
 
 
 GIT_CRED = ENTRY.parent / "git_cred.py"
-OTHER = "https://me:x@github.test"  # 우리가 관리하지 않는 줄 — 늘 남음
-# 한 홈에서 차례로: (주소, 계정, 토큰, 이름, 메일) → 기대 ~/.git-credentials 줄, 기대 ~/.gitconfig 칸(누적)
-CRED_STEPS = [
-    (
-        ("http://gitea.test:3000", "dev1", "t/k:n@1", "홍길동", "dev1@corp.test"),
-        [OTHER, "http://dev1:t%2Fk%3An%401@gitea.test:3000"],  # 옛 같은 호스트 줄은 바뀜
-        {"credential.helper": "store", "user.name": "홍길동", "user.email": "dev1@corp.test"},
-    ),
-    (
-        ("https://gitea2.test/git", "dev1", "tok", None, None),
-        [OTHER, "https://dev1:tok@gitea2.test"],
-        None,
-    ),  # 주소 바뀜 — 옛 호스트 줄 지움
-    (("https://gitea2.test", "dev1", "", None, None), [OTHER], None),  # 토큰 비움 — 우리 줄만 지움
-    ((None, None, None, None, None), [OTHER], None),  # 다시 비움 — 그대로
+# 한 홈에서 차례로: (이름, 메일) → 기대 ~/.gitconfig 칸(누적 — 비운 칸은 그대로)
+NAME_STEPS = [
+    (("홍길동", "dev1@corp.test"), {"user.name": "홍길동", "user.email": "dev1@corp.test"}),
+    ((None, "dev2@corp.test"), {"user.name": "홍길동", "user.email": "dev2@corp.test"}),
+    ((None, None), {"user.name": "홍길동", "user.email": "dev2@corp.test"}),
 ]
 
 
@@ -75,21 +65,7 @@ def test_git_cred():
     gc = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(gc)
     with tempfile.TemporaryDirectory() as home:
-        cred = Path(home) / ".git-credentials"
-        cred.write_text(f"{OTHER}\nhttp://old:y@gitea.test:3000\n", encoding="utf-8")
-        cfg = {}
-        for args, want_lines, want_cfg in CRED_STEPS:
+        for args, want in NAME_STEPS:
             gc.setup(home, *args)
-            assert cred.read_text(encoding="utf-8").splitlines() == want_lines, (args, want_lines)
-            if os.name == "posix":
-                assert cred.stat().st_mode & 0o777 == 0o600, oct(cred.stat().st_mode)
-            cfg = want_cfg or cfg
-            assert _gitconfig(home) == cfg, args
-        assert not (Path(home) / ".devbox" / "gitea_host").exists()  # 다 지우면 기록도 없음
-    if os.name == "posix":  # 자리가 링크면 따라가지 않고 링크를 바꿈(링크가 가리키던 파일은 그대로)
-        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as out:
-            target = Path(out) / "victim"
-            target.write_text("keep\n", encoding="utf-8")
-            (Path(home) / ".git-credentials").symlink_to(target)
-            gc.setup(home, "https://gitea.test", "u", "t")
-            assert target.read_text(encoding="utf-8") == "keep\n" and not (Path(home) / ".git-credentials").is_symlink()
+            assert _gitconfig(home) == want, args
+        assert not (Path(home) / ".git-credentials").exists()  # 자격 파일은 쓰지 않음

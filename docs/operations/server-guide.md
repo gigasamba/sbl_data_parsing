@@ -839,7 +839,7 @@ systemctl list-timers 'data-pipeline-nightly*' 'mcp-server-keepalive*'
 - 이미지에는 개발 도구(sshd·git·uv·ruff·mypy·pytest·ripgrep·sqlite3·tmux·vim 등)와 opencode(이미지를 만들 때 `assets/opencode/opencode`가 있으면)가 들어 있다. 앱은 이 도구를 쓰지 않는다.
 - 저장소 루트 `opencode.jsonc`는 opencode 프로젝트 설정 자리다 — 외부망에는 빈 틀(`{}`)만 있고, 내부망 gitea에서 모델 주소·이름을 채워 커밋한다(키는 적지 않음 — 아래 `INTERNAL_LLM_API_KEY`). 외부망 새 판을 들여올 때 덮지 않는다([§6-1](#6-1-저장소-처음-만들기--관리자가-한-번) ⑥ `--exclude opencode.jsonc`).
 - opencode는 내부망 모델만 쓴다(외부 모델 목록 받기·자동 업데이트 끔). 첫 시작에 홈의 `~/.config/opencode/opencode.json`에 틀이 복사되니 모델 주소(`baseURL` — OpenAI 호환 `/v1`)·이름(`<model id>` 두 곳)을 채운다. 키가 필요한 모델이면 SSH 셸에서 `export INTERNAL_LLM_API_KEY=<키>`(틀이 이 env를 읽음 — 컨테이너 env·settings.yaml에는 넣지 않는다).
-- git 계정(선택): `option.devbox`에 `gitea_url`·`gitea_user`·`gitea_token`(비밀)을 모두 적으면 작업 공간이 시작할 때 `~/.git-credentials`의 그 호스트 줄을 쓴다 — 적는 법·토큰 만들기는 [§6-3](#6-3-개발자-한-벌-만들기).
+- git 이름·메일(선택): `option.devbox`에 `git_user_name`·`git_user_email`을 적으면 작업 공간이 시작할 때 `git config --global user.name`·`user.email`을 쓴다. gitea 로그인은 컨테이너 안에서 처음 `git pull`·`push`할 때 직접 한다 — [§6-3](#6-3-개발자-한-벌-만들기).
 - 컨테이너 안에서 root로 쓴 파일은 서버에서도 root 소유다 — 서버 계정으로 고치거나 지울 때는 `sudo`.
 
 ### 2-14. 컨테이너 이름·볼륨 바꾸기
@@ -874,7 +874,7 @@ cp ../sbl_data_parsing-main-0/settings.yaml settings.yaml.new      # 벌 0 설�
 | 칸 | 벌 0 | 새 벌 |
 |---|---|---|
 | `required.source.source_systems` | `DEV-1` | `DEV-2` |
-| `option.devbox.gitea_*`·`git_user_*` | 벌 0 개발자 계정 | 비우거나 새 벌 개발자 값 — 남의 gitea 토큰을 그대로 두지 않는다 |
+| `option.devbox.git_user_*` | 벌 0 개발자 이름·메일 | 비우거나 새 벌 개발자 값 |
 | `search.server.*` | 검색 MCP 값 | 지워도 된다(검색 MCP는 벌 0만) |
 
 ```bash
@@ -1534,7 +1534,7 @@ cp -p <옛 루트>/settings.yaml "$B/" && cp -a <옛 루트>/output "$B/"
 cd "$B"
 cp -p settings.yaml settings.yaml.bak-$(date +%Y%m%d-%H%M)
 
-grep -noE '^[[:space:]]*(skipped_docs_log|secure_doc|source_column_content_version|embed_query_cache_file|embed_query_cache_max_rows|pg_standin|instance_name|edw_write_user|edw_write_password|parsing_meta_table|pipeline_image|mcp_image|compose_project|redis_image|redis_mem_limit|redis_data_dir|host_edw_chain_file|extra_compose|host_output_dir|containers|[a-z_]+_container_name|[a-z_]+_cpus|[a-z_]+_mem_limit|data_parsing_cpu_shares|ssh_port|opencode_config|home_dir)[[:space:]]*:' settings.yaml   # pg_container_name 줄은 남긴다
+grep -noE '^[[:space:]]*(skipped_docs_log|secure_doc|source_column_content_version|embed_query_cache_file|embed_query_cache_max_rows|pg_standin|instance_name|edw_write_user|edw_write_password|parsing_meta_table|pipeline_image|mcp_image|compose_project|redis_image|redis_mem_limit|redis_data_dir|host_edw_chain_file|extra_compose|host_output_dir|containers|[a-z_]+_container_name|[a-z_]+_cpus|[a-z_]+_mem_limit|data_parsing_cpu_shares|ssh_port|opencode_config|home_dir|gitea_url|gitea_user|gitea_token)[[:space:]]*:' settings.yaml   # pg_container_name 줄은 남긴다
 
 vi settings.yaml        # :<줄 번호> 로 가서 dd · 저장 :wq
 
@@ -1565,6 +1565,7 @@ chown 10001:<운영 그룹> settings.yaml && chmod 640 settings.yaml
   | `ops.containers.data_parsing.data_parsing_container_name` · `data_parsing_cpus` · `data_parsing_mem_limit` · `data_parsing_cpu_shares` | 0.4.0 | 같음 |
   | `ops.containers.mcp.mcp_container_name` · `mcp_cpus` · `mcp_mem_limit` | 0.4.0 | 같음 |
   | `option.devbox.ssh_port` · `option.devbox.opencode_config` · `option.devbox.home_dir` | 0.4.0 | SSH 포트·홈은 compose 파일(홈 `<벌 폴더>/home` → `/root`) · opencode 설정은 저장소 루트 `opencode.jsonc` |
+  | `option.devbox.gitea_url` · `gitea_user` · `gitea_token` | 0.4.0 | 쓰지 않음 — gitea 로그인은 컨테이너 안에서 직접(§6-3) |
   | `extract.skipped_docs_log` | 0.3.1 | 건너뛴 문서 기록은 늘 `<준비 폴더>/_records/skipped.jsonl`(게시 단계가 읽는 자리) |
   | `extract.secure_doc`(절 통째 — 안에 `secure_doc_passwords_file`) | 0.3.1 | 읽는 곳이 없음(암호 문서는 건너뜀) |
   | `tuning.extract.source_columns.source_column_content_version` | 0.3.1 | 판 ID 열은 읽지 않음(증분 판정 열은 `source_column_increment`) |
@@ -1574,7 +1575,7 @@ chown 10001:<운영 그룹> settings.yaml && chmod 640 settings.yaml
   | `edw_write_user` · `edw_write_password` · `parsing_meta_table` | 0.3.0 | 파이프라인이 EDW에 쓰지 않음(§4-7) |
 
 - **엔진 구성 파일** `resources/config/pipeline_stack.json`은 코드 폴더 안이라 §4-5에서 새 판으로 바뀐다. 서버에서 고친 옛 파일을 다시 덮어 쓰면 그 파일의 `retrieve`·`k` 칸을 지운다(모르는 칸이면 읽기 거부). 확인: `$DOCKER run --rm --entrypoint python -v "$PWD:/app/deploy:ro,z" "$IMG" -m pipeline.cli show-stack` — 엔진 표가 나오면 통과.
-- **선택 절 `option.devbox`**(파일 맨 아래) — SSH 작업 공간의 gitea 로그인(`gitea_url`·`gitea_user`·`gitea_token`·`git_user_name`·`git_user_email`). 비우면 git 계정을 설정하지 않음. 쓰는 법은 [§2-13](#2-13-개발-작업-공간--sshopencode선택).
+- **선택 절 `option.devbox`**(파일 맨 아래) — SSH 작업 공간의 git 이름·메일(`git_user_name`·`git_user_email`). 비우면 설정하지 않음. 옛 판의 `gitea_url`·`gitea_user`·`gitea_token` 줄이 남아 있으면 모르는 칸으로 시작이 거부되니 지운다. 쓰는 법은 [§2-13](#2-13-개발-작업-공간--sshopencode선택).
 - **경로 칸은 컨테이너 안 절대 경로로** 적고, 쓰는 자리는 `/app/output/…` 아래여야 한다 — [env-guide §5](env-guide.md#5-서버-경로-칸--컨테이너-안-절대-경로).
 - `설정-읽힘` 확인을 건너뛰어도 §4-7에서 컨테이너가 뜰 때 같은 칸 이름을 알리고 멈춘다 — 고치고 다시 띄운다.
 
@@ -1930,7 +1931,7 @@ exit
 
 예: 벌 번호 `1`, 벌 폴더 `/home/sbl/sbl_data_parsing-main-1`, 원천 `DEV-2`, SSH 포트 `8021`(`compose-dev.yml`의 `data-pipeline-1` 칸 — 새 번호면 §2-15처럼 칸을 더한다).
 
-**① 토큰**(선택 — 비밀번호로도 된다): gitea 웹 → 프로필 사진 → **설정**(Settings) → **응용**(Applications) → **새 토큰 만들기**(Generate New Token) — 이름 `devserver-main-1`, 권한 `repository` **읽기 및 쓰기**(Read and Write, 옛 판은 `repo` 체크) → 만들기. 토큰은 만들 때 한 번만 보이므로 바로 ③의 settings.yaml에 넣는다. 잃어버리면 그 토큰을 지우고 새로 만든다. 토큰을 권하는 까닭: 컨테이너 홈의 `~/.git-credentials`에 글자 그대로 저장되는데, 토큰은 저장소 권한뿐이고 따로 지울 수 있다. 관리자가 비밀번호 로그인을 막았거나 2단계 인증을 켰으면 토큰만 된다.
+**① 토큰**(선택 — 비밀번호로도 된다): gitea 웹 → 프로필 사진 → **설정**(Settings) → **응용**(Applications) → **새 토큰 만들기**(Generate New Token) — 이름 `devserver-main-1`, 권한 `repository` **읽기 및 쓰기**(Read and Write, 옛 판은 `repo` 체크) → 만들기. 토큰은 만들 때 한 번만 보이므로 바로 ⑤에서 쓴다. 잃어버리면 그 토큰을 지우고 새로 만든다. 토큰을 권하는 까닭: 컨테이너 홈의 `~/.git-credentials`에 글자 그대로 저장되는데, 토큰은 저장소 권한뿐이고 따로 지울 수 있다. 관리자가 비밀번호 로그인을 막았거나 2단계 인증을 켰으면 토큰만 된다.
 
 **② clone** — 빈 벌 폴더를 만들어 git 셸 (나)에서 받는다.
 서버 셸(root):
@@ -1949,13 +1950,10 @@ exit
 ```bash
 cd $B && bash deploy/host/scripts/host_ctl.sh init --group sbl   # settings.yaml·output/ 만듦(없을 때만)
 ```
-공용 벌 settings.yaml을 틀로 벌마다 다른 칸을 고친다([§2-15](#2-15-두-번째-벌-만들기) 표 — 예 `required.source.source_systems: DEV-2`). 맨 아래에 gitea 칸:
+공용 벌 settings.yaml을 틀로 벌마다 다른 칸을 고친다([§2-15](#2-15-두-번째-벌-만들기) 표 — 예 `required.source.source_systems: DEV-2`). 맨 아래에 git 이름·메일:
 ```yaml
 option:
   devbox:
-    gitea_url: http://gitea.example.local:3000   # 주소·포트까지(저장소 경로 없이) — https면 https://
-    gitea_user: jehun                         # gitea 가입 때 사용자 이름
-    gitea_token: <내 토큰>                     # ①에서 만든 값 — 비밀, 이 파일에만
     git_user_name: jehun                      # 커밋에 남길 이름
     git_user_email: jehun@sbl.local           # gitea 계정 메일과 같게
 ```
@@ -1964,7 +1962,7 @@ chmod 640 $B/settings.yaml
 mkdir -p $B/home/.ssh && cp /home/sbl/jehun_id_ed25519.pub $B/home/.ssh/authorized_keys   # 열쇠로 들어갈 때만 — 내 PC 공개 열쇠(~/.ssh/id_ed25519.pub)를 서버로 옮겨 둔 자리
 chmod 700 $B/home/.ssh && chmod 600 $B/home/.ssh/authorized_keys
 ```
-**④ 띄우기** — SSH 작업 공간(코드 쓰기 가능 + gitea 로그인 자동)으로:
+**④ 띄우기** — SSH 작업 공간(코드 쓰기 가능)으로:
 ```bash
 bash deploy/host/scripts/host_ctl.sh up -d data-pipeline-1   # compose-dev.yml의 칸 — 벌 폴더를 /app/deploy에 쓰기 가능으로(settings.yaml만 읽기 전용)
 ```
@@ -1972,13 +1970,13 @@ bash deploy/host/scripts/host_ctl.sh up -d data-pipeline-1   # compose-dev.yml�
 **⑤ 첫 확인** — git 셸 (가):
 ```bash
 ssh -p 8021 root@<서버>                               # 또는 서버 셸에서 docker exec -it data-pipeline-1 bash
-cd /app/deploy && git ls-remote origin | head -2      # 기대: 아이디를 묻지 않고 커밋 번호 줄(작업 공간이 로그인 정보를 씀)
+cd /app/deploy && git config --global credential.helper store   # 로그인 정보를 홈에 기억(한 번만)
+git ls-remote origin | head -2                        # Username: jehun · Password: ①의 토큰 → 기대: 커밋 번호 줄(다음부터는 묻지 않음)
 ```
 그다음은 [§2-15](#2-15-두-번째-벌-만들기)와 같다 — (새 `DEV-<숫자>`면) 컨테이너 안에서 `bash /app/docker/runtime_entry.sh migrate up --target search` → 벌 0 폴더에서 `host_ctl.sh check`(기대 마지막 줄 `[host_ctl check] 통과 — 6개`). DB 표가 아직 없는 서버의 첫 벌이면 [§2-6](#2-6-db-판--검토용-sql-뽑기--migrate-up) (가).
 
 - `cat ~/.git-credentials`는 하지 않는다(토큰이 찍힘).
-- 비밀번호·토큰을 바꿨으면 git 셸 (가)에서 `printf 'protocol=http\nhost=gitea.example.local:3000\n' | git credential reject` 뒤 `git pull`에서 새 값을 넣는다(작업 공간이면 settings.yaml `gitea_token`을 고치고 `host_ctl.sh restart data-pipeline-1`).
-- 작업 공간의 gitea 로그인 자동 설정: 시작할 때 홈에 `~/.git-credentials`(권한 600)의 그 gitea 호스트 줄만 바꾸고(다른 줄은 그대로) `credential.helper store`·이름·메일을 설정한다(토큰은 컨테이너 env로 넘기지 않고 붙인 settings.yaml에서 직접 읽음 — 화면·로그에 나오지 않음). 셋(`gitea_url`·`gitea_user`·`gitea_token`) 중 하나라도 비우면 전에 쓴 그 호스트 줄을 지운다. 주소 꼴은 `http(s)://호스트[:포트][/경로]` — 틀리면 경고만 남기고 아무것도 쓰지 않는다.
+- 비밀번호·토큰을 바꿨으면 git 셸 (가)에서 `printf 'protocol=http\nhost=gitea.example.local:3000\n' | git credential reject` 뒤 `git pull`에서 새 값을 넣는다.
 - `https`인데 `SSL certificate problem`이면 서버 관리자에게 사내 인증서를 받아 등록한다(검사 끄기 `sslVerify=false`는 쓰지 않는다).
 
 ### 6-4. 매일 쓰는 법 — 브랜치 따기·push·PR

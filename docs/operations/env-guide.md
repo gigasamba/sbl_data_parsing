@@ -185,7 +185,6 @@ Redis 인증(#177): 서버(dev·prd)의 `settings.yaml`에는 `common.connection
 
 | 이름 | 기본 | 뜻 |
 |---|---|---|
-| `DEVBOX_GITEA_URL`·`DEVBOX_GITEA_USER`·`DEVBOX_GITEA_TOKEN`(`option.devbox.gitea_url`·`gitea_user`·`gitea_token` — 토큰은 비밀) | 비움(설정 안 함) | 셋 다 적으면 작업 공간 시작 때 `~/.git-credentials`(권한 600)에서 그 호스트 줄 `<scheme>://<계정>:<토큰>@<호스트[:포트]>`만 바꾸고(다른 줄 그대로) `git config --global credential.helper store` — 하나라도 비우면 전에 쓴 줄(`~/.devbox/gitea_host`)을 지움. 주소는 `http(s)://호스트[:포트][/경로]`(`https://` 권장 — http면 토큰이 암호화 없이 감). 컨테이너 안에서 붙인 settings.yaml을 직접 읽는다(토큰은 env로 안 넘김) |
 | `DEVBOX_GIT_USER_NAME`·`DEVBOX_GIT_USER_EMAIL`(`option.devbox.git_user_name`·`git_user_email`) | 비움 | 적으면 작업 공간 시작 때 `git config --global user.name`·`user.email` |
 
 ## 2. 자원·병렬 (보통 안 건드림)

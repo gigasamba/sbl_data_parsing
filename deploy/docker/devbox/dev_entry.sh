@@ -18,9 +18,9 @@ env | grep -vE '^(HOME|PWD|SHLVL|_|HOSTNAME)=' | while IFS= read -r l; do printf
 # First start: opencode config template (internal model only) — the developer fills in the model address.
 O=$HOME/.config/opencode/opencode.json
 [ -f "$O" ] || { mkdir -p "$(dirname "$O")"; cp /etc/devbox/opencode.json "$O"; }
-# git account (option.devbox.gitea_* / git_user_*): read from the mounted settings file inside the container — the token
-# never goes through env. A failure only warns; the workspace still starts.
-python /etc/devbox/git_cred.py || echo "[devbox] git account setup failed — check option.devbox.gitea_*" >&2
+# git name/email (option.devbox.git_user_*): read from the mounted settings file inside the container.
+# A failure only warns; the workspace still starts.
+python /etc/devbox/git_cred.py || echo "[devbox] git name/email setup failed — check option.devbox.git_user_*" >&2
 [ -f "$K/ssh_host_ed25519_key" ] || ssh-keygen -q -t ed25519 -N '' -f "$K/ssh_host_ed25519_key"
 # root (server compose compose-dev.yml / compose-prd.yml, user "0"): the root password built into the image (Dockerfile secret root_pw),
 # or a file mounted at /run/secrets/root_pw if one is given (non-empty); root password login. Servers only (dev, prd). Never via env or the repo.

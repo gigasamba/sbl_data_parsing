@@ -299,14 +299,14 @@
 1. 개발 도구는 Dockerfile `base` 단계에 있어 네 이미지(`data-pipeline-runtime`·`mcp-server-runtime`·`data-pipeline`·`mcp-server`)가 모두 담는다 — apt(openssh-server·git·curl·ripgrep·sqlite3·tini·tmux·vim 등) + pip `uv` + `requirements-dev.txt`(PC 개발 도구와 같은 판). 의존성 지문(`DEPS_HASH`)은 requirements-core·image만 본다(그대로).
 2. opencode 실행 파일은 `assets/opencode/opencode`(git 밖 — `assets.py pack`이 `<ASSET_SRC>/dl/opencode`에서 채움). 없으면 opencode 없이 빌드(`ALLOW_NO_ASSETS=1`). 이미지 env로 외부 모델 목록 받기·자동 업데이트를 끄고, 설정 틀(`deploy/docker/devbox/opencode.json`)은 내부망 모델만(자리 표시만 — 주소·키 없음).
 3. 이미지 ENTRYPOINT는 `tini -s -- dev_entry.sh`: `devbox`면 sshd(컨테이너 사용자 UID 10001, 열쇠 로그인만, 호스트 열쇠는 홈), 그 밖의 명령은 인자 그대로 이미지의 시작 스크립트(`APP_ENTRY` — 실행 이미지 `runtime_entry.sh`, 코드가 든 이미지 `entrypoint.sh`)로.
-4. 설정은 settings.yaml 맨 아래 선택 절 `option.devbox` — gitea 계정 `gitea_url`·`gitea_user`·`gitea_token`(비밀)·`git_user_name`·`git_user_email`(선택). 주소·계정·토큰을 모두 적으면 `dev_entry.sh`가 `git_cred.py`로 붙인 settings.yaml에서 읽어 `~/.git-credentials`(600)의 그 호스트 줄만 바꾸고 `credential.helper store`, 비우면 그 줄을 지운다(토큰은 env로 안 넘김). SSH 컨테이너·포트는 compose 파일([op-18](#op-18)·[op-20](#op-20)).
+4. 설정은 settings.yaml 맨 아래 선택 절 `option.devbox` — `git_user_name`·`git_user_email`(선택). 적으면 `dev_entry.sh`가 `git_cred.py`로 붙인 settings.yaml에서 읽어 `git config --global user.name`·`user.email`을 쓴다. gitea 로그인은 개발자가 컨테이너 안에서 직접 한다(설정에 토큰을 두지 않음). SSH 컨테이너·포트는 compose 파일([op-18](#op-18)·[op-20](#op-20)).
 5. 컨테이너 env에는 비밀이 없다(설정은 붙인 settings.yaml에서만) — SSH 접속 셸이 그 env를 홈에 저장해 다시 읽기 때문.
 
 ### 비고
 - 운영용 굽기(`Dockerfile.bake`)는 ENTRYPOINT를 `entrypoint.sh` 그대로 둔다 — 운영은 작업 공간을 쓰지 않고, 굽는 바탕이 개발 도구가 없는 옛 실행 이미지일 수도 있어서.
 
 ### QA
-- `tests/general/deploy/test_devbox.py`(`dev_entry.sh` 인자 넘김 표 · `git_cred.py` 그 호스트 줄만 바꿈·다른 줄 유지·권한·비우면 지움·링크 안 따라감) · 이미지 시험(`pipeline-runtime` 빌드 → 도구 확인·`selftest` `[판정] 통과`·`devbox` sshd) · 통과.
+- `tests/general/deploy/test_devbox.py`(`dev_entry.sh` 인자 넘김 표 · `git_cred.py` 이름·메일만 씀·비운 칸은 그대로·자격 파일 안 씀) · 이미지 시험(`pipeline-runtime` 빌드 → 도구 확인·`selftest` `[판정] 통과`·`devbox` sshd) · 통과.
 - Status: done
 
 <a id="op-17"></a>

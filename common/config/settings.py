@@ -1448,15 +1448,6 @@ class CommonDev(Section):
 
 
 class CommonHostDevbox(Section):
-    gitea_url: str | None = F(
-        None,
-        "DEVBOX_GITEA_URL",
-        "개발 작업 공간의 내부망 gitea 주소(선택 — http(s)://호스트[:포트][/경로]) · 예 https://gitea.corp.local:3000 — http는 토큰이 암호화 없이 감."
-        " 주소·계정·토큰을 모두 적으면 시작할 때 ~/.git-credentials(권한 600)에 그 호스트 줄을 씀",
-        pattern=r"^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/\S*)?$",
-    )
-    gitea_user: str | None = F(None, "DEVBOX_GITEA_USER", "개발 작업 공간의 gitea 계정 이름(선택)")
-    gitea_token: SecretStr | None = F(None, "DEVBOX_GITEA_TOKEN", "개발 작업 공간의 gitea 접근 토큰(선택 — gitea 설정 > 응용 > 토큰)")
     git_user_name: str | None = F(None, "DEVBOX_GIT_USER_NAME", "개발 작업 공간의 git 커밋 이름(git config user.name, 선택)")
     git_user_email: str | None = F(None, "DEVBOX_GIT_USER_EMAIL", "개발 작업 공간의 git 커밋 메일(git config user.email, 선택)")
 
