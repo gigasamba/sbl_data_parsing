@@ -472,3 +472,17 @@ def test_policy_refresh_reads_engine_configuration():
         with mock.patch.object(S, "_log") as log:
             S._publish_policy(r)
         assert "정책 갱신 실패" in log.call_args.args[0]
+
+
+def test_main_missing_password_exit_two():
+    from common.store import redisq
+    from pipeline import run_mcp_parsing as S
+
+    with (
+        mock.patch.object(settings, "require_run_env"),
+        mock.patch.object(sys, "argv", ["run_mcp_parsing"]),
+        mock.patch.object(redisq, "require_password", side_effect=redisq.RedisConfigError("Redis 비밀번호 없음")),
+        mock.patch.object(S.parse_steps, "stack") as stack,
+    ):
+        assert S.main() == 2
+    stack.assert_not_called()

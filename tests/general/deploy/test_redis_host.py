@@ -163,3 +163,24 @@ def test_numbered_keepalive_has_no_services():
         )
         result = subprocess.run(["bash", str(scripts / "mcp_keepalive.sh")], capture_output=True, text=True, encoding="utf-8")
         assert result.returncode == 0 and result.stdout == result.stderr == "", (result.stdout, result.stderr)
+
+
+def test_redis_host_password_required():
+    import pytest
+
+    path = DEPLOY_ROOT / "deploy" / "host" / "scripts" / "settings_to_env.py"
+    spec = importlib.util.spec_from_file_location("redis_password_settings", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    for run in ("local", "dev", "prd"):
+        for password in (None, "   ", "test-secret"):
+            doc = {"common": {"run_env": run, "connections": {"redis": {"redis_password": password}}}}
+            with tempfile.TemporaryDirectory() as d:
+                target = Path(d) / "conf"
+                if run != "local" and not (password or "").strip():
+                    with pytest.raises(ValueError, match="common.connections.redis.redis_password"):
+                        module.redis_files(doc, target)
+                    assert not target.exists()
+                else:
+                    module.redis_files(doc, target)
+                    assert "protected-mode yes" in (target / "redis.conf").read_text(encoding="utf-8")

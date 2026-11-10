@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any
 
-from common.config.settings import cfg, reveal
+from common.config.settings import SERVER_ENVS, cfg, resolve_run_env, reveal
 from common.core.paths import APP_ROOT
 
 SERVICE_DIR = APP_ROOT / "output" / "_mcp_parse"
@@ -16,8 +16,18 @@ class QueueFull(RuntimeError):
     """active 작업 수가 상한에 닿음."""
 
 
+class RedisConfigError(RuntimeError):
+    """서버 Redis 인증 설정 누락."""
+
+
+def require_password():
+    if resolve_run_env() in SERVER_ENVS and not (reveal(cfg().connections.redis.redis_password) or "").strip():
+        raise RedisConfigError("Redis 비밀번호 없음 — 서버(dev·prd)는 settings.yaml common.connections.redis.redis_password 필수")
+
+
 def client(*, wait_timeout=5):
     """BLPOP 대기보다 긴 socket timeout. 테스트는 반환 클라이언트만 바꿔 외부 접속 없이 실행."""
+    require_password()
     import redis
 
     s = cfg().connections.redis
@@ -63,7 +73,7 @@ def filename(value):
 
 def is_redis_error(exc):
     """redis-py 없는 시험에서도 Redis 예외와 소켓 오류를 식별."""
-    return isinstance(exc, OSError) or any(cls.__module__ == "redis.exceptions" for cls in type(exc).__mro__)
+    return isinstance(exc, (OSError, RedisConfigError)) or any(cls.__module__ == "redis.exceptions" for cls in type(exc).__mro__)
 
 
 def redact(value):

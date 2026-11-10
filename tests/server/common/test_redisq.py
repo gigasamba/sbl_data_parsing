@@ -222,3 +222,16 @@ def test_worker_count_limit_and_default():
             assert exc.errors()[0]["loc"] == ("mcp_parse_workers",)
         else:
             raise AssertionError(f"worker {count}개는 허용 범위 밖")
+
+
+def test_server_requires_redis_password():
+    import pytest
+
+    for run in ("local", "dev", "prd"):
+        for password in (None, "   ", "test-secret"):
+            with settings.isolated(REDIS_PASSWORD=password), mock.patch.object(redisq, "resolve_run_env", return_value=run):
+                if run != "local" and not (password or "").strip():
+                    with pytest.raises(RuntimeError, match="common.connections.redis.redis_password"):
+                        redisq.client()
+                else:
+                    redisq.require_password()

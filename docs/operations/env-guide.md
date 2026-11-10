@@ -50,7 +50,7 @@
 | YAML 자리 | 기본 | 뜻 |
 |---|---|---|
 | `common.connections.redis.redis_host` · `redis_port` | 127.0.0.1 · 6379 | 두 앱의 Redis 접속. compose Redis는 루프백 bind, 서버당 한 벌 — 번호 벌은 파싱 MCP 없음 |
-| 같은 절 `redis_password` · `redis_db` | 비움 · 0 | 비밀값은 settings.yaml에만 작성. 호스트가 Redis용 보호 파일(600)로 전달, 비밀값은 셸 export·argv에 안 실음 |
+| 같은 절 `redis_password` · `redis_db` | 비움 · 0 | 서버(dev·prd)는 비밀번호 필수(공백도 거부), local만 무인증 허용. 비밀값은 settings.yaml에만 작성. 호스트가 Redis용 보호 파일(600)로 전달, 비밀값은 셸 export·argv에 안 실음 |
 | 같은 절 `redis_key_prefix` | mcp_parse | 설정값 그대로 사용(자동 접미사 없음) |
 | `ops.services.data_parsing.mcp_parse_workers` | 2 | spawn 소비자 프로세스 수, 현재 1~2만 허용(사용자 결정 2026-11-09). 늘리려면 상한·CPU·메모리·엔진 수를 함께 조정 |
 | `tuning.ops.services.data_parsing.mcp_parse_engine_processes` | 비움 | worker마다 max(1, min(2, CPU − 1)), 보통 2 workers × 2 engines = 총 4개 |
@@ -240,3 +240,5 @@ PC는 `.venv/bin/python -m pipeline.config`(루트 `settings.yaml`)가 같은 �
 - 그래서 서버 settings.yaml의 경로 칸(`ops.paths.*`·`ops.log.log_fallback_dir`·`search.edw_meta.edw_meta_catalog_dir` 등)은 **컨테이너 안 절대 경로**로 적고, 무엇이든 쓰는 자리는 `/app/output/…` 아래로 둔다(예 `/app/output/edw_meta`). 비워 두면 기본값이 이미 `/app/output` 아래다.
 - 호스트 쪽 칸(`ops.host.host_output_dir`·`required.deploy.host_docs_dir`·`ops.run_pipeline.run_pipeline_work_dir`·`option.devbox.opencode_config`)은 **호스트 절대 경로**다.
 - PC에서 Docker로 시험할 때 `valid_env`의 자료를 쓰려면 `/app/valid_env/…`에 붙이고, 시험 설정의 경로도 그 자리(절대 경로)로 적는다.
+
+Redis 인증(#177): 서버(dev·prd)의 `settings.yaml`에는 `common.connections.redis.redis_password`를 반드시 채운다. 비움·공백은 호스트 prepare_redis와 앱 client가 거부하며 worker 시작은 종료 코드 2다. local에서만 무인증을 허용한다. Redis는 루프백 bind와 `protected-mode yes`를 함께 사용한다. 비밀값 처리 변경은 검토 등급 A로 다른 사람의 승인이 필요하다(C-117).

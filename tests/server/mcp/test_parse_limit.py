@@ -333,3 +333,9 @@ def test_result_filename_validation():
             r.on_wait = done
             out = parse_proxy.do_parse_document(content_b64="eA==", filename="a.txt")
             assert out["error"].startswith("parse 작업 파일 오류:")
+
+
+def test_proxy_missing_server_password_is_connection_error():
+    with patch.object(redisq, "client", side_effect=redisq.RedisConfigError("Redis 비밀번호 없음")):
+        out = parse_proxy.do_parse_document(path="/input/a.txt")
+        assert "연결 실패" in out["error"] and "Redis 비밀번호 없음" in out["error"]

@@ -388,6 +388,11 @@ def main():
     if "--health" in sys.argv:
         return 0 if health() else 1
     require_run_env("run_mcp_parsing", sections=("pipeline",))
+    try:
+        redisq.require_password()
+    except redisq.RedisConfigError as exc:
+        _log(str(exc))
+        return 2
     parse_steps.stack()
     SERVICE_DIR.mkdir(parents=True, exist_ok=True)
     JOBS_DIR.mkdir(parents=True, exist_ok=True)

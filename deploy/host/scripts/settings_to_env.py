@@ -144,6 +144,9 @@ def redis_files(doc, directory):
     """Redis 이미지에는 Python이 없음 — 호스트가 설정에서 비밀을 읽어 보호 파일로만 전달.
     requirepass는 argv·compose env에 싣지 않는다. redis entrypoint가 /data 주인을 맞춘다.
     """
+    password = get(doc, "common.connections.redis.redis_password")
+    if get(doc, "common.run_env") in ("dev", "prd") and not str(password or "").strip():
+        raise ValueError("Redis 비밀번호 없음 — 서버(dev·prd)는 settings.yaml common.connections.redis.redis_password 필수")
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     port = get(doc, "common.connections.redis.redis_port") or 6379
@@ -154,7 +157,7 @@ def redis_files(doc, directory):
     if not 1 <= port <= 65535:
         raise ValueError("Redis 포트는 1~65535")
     password = get(doc, "common.connections.redis.redis_password")
-    config = f"bind 127.0.0.1\nport {port}\nappendonly yes\nappendfsync everysec\ndir /data\n"
+    config = f"protected-mode yes\nbind 127.0.0.1\nport {port}\nappendonly yes\nappendfsync everysec\ndir /data\n"
     health = "#!/bin/sh\n"
     if password:
         config += "requirepass " + json.dumps(str(password), ensure_ascii=False) + "\n"
