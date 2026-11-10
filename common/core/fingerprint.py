@@ -64,6 +64,7 @@ EXCLUDED_FILES = (
     "store/mssql.py",  # 회사 DB(SQL Server) SQLAlchemy 연결 — 연결 방법만
     "store/objectstore.py",  # Object Storage(S3) 연결 설정
     "core/paths.py",  # cli 평가 도구 경로 기본값 + 원자적 파일 쓰기 헬퍼(쓰는 방식만·내용은 안 바꿈)
+    "store/redisq.py",  # Redis 작업 전달·공유 작업 폴더 — 운영 상태만, 인계 내용과 무관
     "store/pg.py",  # PostgreSQL 연결 설정
     "store/edw_chain.py",  # EDW 조인 사슬 파일 읽기·검사(적재 edw_meta·검색 거르기 이름) — 인계 형식과 무관
     "store/master.py",  # 마스터 표(용어집·고객 명부) 읽기·채우기 — DB 연결·표 내용, 인계 형식과 무관(terms.py가 읽은 값으로 판별)

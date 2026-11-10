@@ -6,8 +6,74 @@ import json
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest import mock
 
 from pipeline.tools import perf_report as perf
+
+
+def _mcp_rows():
+    now = datetime.now(UTC)
+    runs = [
+        {"run_id": str(i), "command": "mcp_parse", "started_at": now.isoformat(), "status": status}
+        for i, status in enumerate(("ok", "fail", "fail", "running"))
+    ]
+    runs += [{"run_id": "other", "command": "parse", "started_at": now.isoformat(), "status": "ok"}]
+    events = [
+        _ev("mcp_parse.job", (i + 1) * 1000, run_id=str(i), status=status, metrics={"job_id": f"job{i}", "queue_wait_ms": (i + 1) * 100})
+        for i, status in enumerate(("ok", "fail", "timeout"))
+    ]
+    for i in range(3):
+        events.append(_ev("proc.run", 600 + 1000 * i, run_id=str(i), metrics={"module": perf.MCP_PHASES["엔진"]}))
+        events.append(_ev("extract.parse", 99999, run_id=str(i)))  # 병렬 자식은 단계 벽시계에 더하지 않음
+    events += [
+        _ev("proc.run", 30, run_id="0", metrics=json.dumps({"module": perf.MCP_PHASES["채점"]})),
+        _ev("proc.run", 50, run_id="1", metrics={"module": perf.MCP_PHASES["채점"]}),
+        _ev("proc.run", 100, run_id="0", metrics={"module": perf.MCP_PHASES["대표 결과"]}),
+        _ev("proc.run", 99999, run_id="3", metrics={"module": perf.MCP_PHASES["엔진"]}),  # 진행 중 작업은 시간 표에서 제외
+        _ev("mcp_parse.job", 99999, run_id="other", metrics={"job_id": "ignore"}),
+    ]
+    return runs, events
+
+
+def test_mcp_summary():
+    runs, events = _mcp_rows()
+    summary = perf.summarize_mcp(runs, events, top=2)
+    assert (summary["n_runs"], summary["n_jobs"], summary["running"]) == (4, 3, 1)
+    assert summary["status"] == {"ok": 1, "fail": 1, "timeout": 1}
+    t = summary["timings"]
+    assert t["파싱(준비 포함)"] == {"n": 3, "p50_ms": 2000, "p95_ms": 2900, "max_ms": 3000}
+    assert t["큐 대기"]["p50_ms"] == 200 and t["전체(대기+파싱)"]["max_ms"] == 3300
+    assert t["엔진"]["p50_ms"] == 1600 and t["엔진"]["max_ms"] == 2600
+    assert t["채점"]["n"] == 2 and t["채점"]["p50_ms"] == 40 and t["대표 결과"]["n"] == 1
+    assert [j["job_id"] for j in summary["slow_jobs"]] == ["job2", "job1"]
+    assert summary["slow_jobs"][0]["queue_wait_ms"] == 300 and summary["slow_jobs"][0]["parsing_ms"] == 3000
+    assert perf.summarize_mcp([], [], top=0)["timings"]["엔진"]["p50_ms"] is None
+
+
+def test_mcp_file_and_db_readers():
+    runs, events = _mcp_rows()
+    old = {"run_id": "old", "command": "mcp_parse", "started_at": (datetime.now(UTC) - timedelta(hours=48)).isoformat()}
+    items = [{"table": "pipe_run", "row": {**r, "status": "running"}} for r in [*runs, old]]
+    items += [{"table": "pipe_run", "row": {"run_id": r["run_id"], "status": r["status"]}} for r in runs]
+    items += [{"table": "pipe_event", "row": r} for r in [*events, _ev("mcp_parse.job", 99, run_id="old")]]
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "applog.jsonl"
+        path.write_text("\n".join(json.dumps(item) for item in items) + "\nnot json\n", encoding="utf-8")
+        loaded_runs, loaded_events = perf.load_mcp_file(24, [path])
+        expected = perf.summarize_mcp(runs, events, top=2)
+        assert perf.summarize_mcp(loaded_runs, loaded_events, top=2) == expected
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            assert perf.main(["--mcp", "--file", str(path), "--top", "2", "--json"]) == 0
+        assert json.loads(out.getvalue()) == expected
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            assert perf.main(["--mcp", "--since", "24", "--file", str(path)]) == 0
+        assert "MCP 작업" in out.getvalue() and "채점" in out.getvalue() and "job2" in out.getvalue()
+    with mock.patch.object(perf, "_db_rows", side_effect=[loaded_runs, loaded_events]) as read:
+        assert perf.load_mcp_db(12) == (loaded_runs, loaded_events)
+    assert all(call.args[0].startswith("SELECT ") and "mcp_parse" in call.args[0] for call in read.call_args_list)
+    assert all(call.args[1] == {"s": 43200} for call in read.call_args_list)
 
 
 def _ev(stage, ms, engine=None, doc="a.pdf", status="ok", **kw):

@@ -12,7 +12,21 @@
 set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트
 . deploy/host/scripts/load_settings.sh && load_settings || exit $?   # 컨테이너 이름과 /health 주소 — 값은 출력하지 않음
+# 번호 벌은 data-pipeline만 실행 — 준비·컨테이너 조회 전에 끝낸다.
+if [ -n "${INSTANCE:-}" ]; then exit 0; fi
+prepare_jobs || echo "[mcp_keepalive] jobs 준비 실패 — parse_document 파일 오류 가능, 검색 MCP 확인은 계속" >&2
+if prepare_redis; then
+  restart_redis_changed || echo "[mcp_keepalive] Redis 설정 반영 재시작 실패 — 검색 MCP 확인은 계속" >&2
+else
+  echo "[mcp_keepalive] Redis 설정 준비 실패 — parse_document 연결 오류 가능, 검색 MCP 확인은 계속" >&2
+fi
 UP="bash deploy/host/scripts/host_ctl.sh base up -d"
+redis_state=$($DOCKER inspect -f '{{.State.Running}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' mcp-redis 2>/dev/null || true)
+case "$redis_state" in
+  "true healthy"|"true starting") ;;
+  "true unhealthy") $DOCKER restart mcp-redis >/dev/null || echo "[mcp_keepalive] Redis 재시작 실패 — 검색 MCP 확인은 계속" >&2 ;;
+  *) $UP mcp-redis || echo "[mcp_keepalive] Redis 기동 실패 — 검색 MCP 확인은 계속" >&2 ;;
+esac
 # parse_document 작업 서비스 전용 컨테이너(mcp-data-parsing)도 여기서 살핀다(타이머 2분마다). 꺼졌으면 up -d만(응답 확인은 검색 MCP의 몫).
 if [ "$($DOCKER inspect -f '{{.State.Running}}' "$DATA_PARSING_CNAME" 2>/dev/null)" != true ]; then
   echo "[mcp_keepalive] $(date '+%F %T') $DATA_PARSING_CNAME 꺼짐 — 띄움"

@@ -421,3 +421,5 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 ## 7. 문서
 
 문서 지도는 [docs/INDEX.md](docs/INDEX.md). 알려진 문제·미개발 항목은 [docs/PRD.md](docs/PRD.md) 표의 `todo` 행.
+
+`parse_document`는 서버당 한 벌의 Redis 큐를 쓴다. 번호 벌은 develop 규칙대로 `data-pipeline`만 실행하며 파싱 MCP·Redis를 띄우지 않는다. 설치·자원·AOF 운영은 [서버 가이드](docs/operations/server-guide.md#1-3-1-parse_document-redis-큐113), 배포 확인은 [C-116](docs/refactoring/refactor.md)을 따른다.

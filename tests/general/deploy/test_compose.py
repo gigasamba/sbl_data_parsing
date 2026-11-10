@@ -94,3 +94,22 @@ def test_mcp_healthcheck_host():
         with mock.patch.object(socket, "gethostbyname", return_value="10.9.8.7"), mock.patch.object(urllib.request, "urlopen") as op:
             exec(render(code, {"MCP_HOST": host}))  # 저장소 compose 파일의 python 한 줄을 그대로 실행
         assert op.call_args.args[0] == url, (host, op.call_args)
+
+
+def test_parse_resource_defaults():
+    from pipeline.config import PipelineHost
+
+    service = _services("compose.data-parsing.yml")["mcp-data-parsing"]
+    host = PipelineHost(data_parsing_cpus=None, data_parsing_mem_limit=None)
+    assert host.data_parsing_cpus == _default(service["cpus"]) == 4
+    assert host.data_parsing_mem_limit == "12g"
+    assert service["mem_limit"] == service["memswap_limit"] == "${DATA_PARSING_MEM_LIMIT:-12g}"
+    assert host.data_parsing_cpu_shares == _default(service["cpu_shares"]) == 4096
+
+
+def test_redis_separate_configuration_mount():
+    service = _services("compose.redis.yml")["mcp-redis"]
+    assert service["command"] == ["sh", "/conf/start.sh"]
+    assert "${REDIS_CONF_DIR:-${RAG_ROOT}/redis-conf}:/conf:ro,z" in service["volumes"]
+    assert "${REDIS_DATA_DIR:-${RAG_ROOT}/redis}:/data:z" in service["volumes"]
+    assert service["healthcheck"]["test"] == ["CMD", "sh", "/conf/health.sh"]

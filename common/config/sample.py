@@ -85,6 +85,17 @@ NOTE_COL = 46  # 칸 주석이 시작하는 열(값 자리와 주석을 떼어 �
 
 # 칸마다 주석 한 줄 — 짧은 설명 · 값 또는 예. 기본값이 null인 선택 칸은 "(null = 비우면 되는 것)". 모든 칸이 있어야 한다(build가 확인).
 NOTES = {
+    "common.connections.redis.redis_host": "parse_document Redis 주소 · 루프백 전용 권장",
+    "common.connections.redis.redis_port": "Redis 포트 · 서버당 한 벌(번호 벌은 파싱 MCP 없음)",
+    "common.connections.redis.redis_password": "Redis 비밀번호 (null = 인증 없음, 루프백에만 bind)",
+    "common.connections.redis.redis_db": "Redis 데이터베이스 번호",
+    "common.connections.redis.redis_key_prefix": "Redis 키 접두 · 설정값 그대로(서버당 한 벌)",
+    "common.host.redis_image": "Redis AOF 이미지 · 폐쇄망 반입 필요",
+    "common.host.redis_mem_limit": "Redis 컨테이너 메모리 상한",
+    "common.host.redis_data_dir": "Redis AOF 호스트 폴더 (null = <서버 루트>/redis)",
+    "common.parse_queue.mcp_parse_workers": "Redis 소비자 프로세스 수 · 1~2(현재 최대 2), 늘리려면 CPU·메모리·엔진 수도 조정",
+    "common.parse_queue.mcp_parse_max_attempts": "죽은 worker 작업의 최대 전달 횟수",
+    "common.parse_queue.mcp_parse_result_ttl_sec": "완료 HASH·LIST 보존 시간(초)",
     # required
     "common.run_env": "실행 환경 · local(PC)·dev(개발 서버)·prd(운영 서버)",
     "pipeline.extract.source.systems": "파싱할 원천 목록(FileStorageMap.source_system, 대소문자 무관) · SFDC·CRMS·LAS·FAQ·Other·DEV-<1~99> · 쉼표 구분 · 예 DEV-1 또는 DEV-1, DEV-2 또는 SFDC, CRMS (null = 운영 5개 원천 SFDC·CRMS·LAS·FAQ·Other — DEV-<n> 행은 뺌)",
@@ -117,7 +128,7 @@ NOTES = {
     "common.models.vlm.base_url": "VLM 주소(OpenAI 호환) · 예 http://10.0.0.7:8000/v1 — 그림·쪽 VLM·스캔 PDF가 씀",
     "common.models.vlm.model": "VLM 모델 이름 · 예 qwen2.5-vl-7b",
     "common.models.vlm.api_key": "VLM API 키 · 예 모델 담당이 준 키(sk-로 시작하는 글자 등) (null = 키 안 보냄)",
-    "common.tokens.mcp": "MCP 토큰(Authorization: Bearer — 검색·parse MCP 공용 · MCP를 띄우기 전에 정함 · 부르는 쪽도 같은 값) · 서버에서 openssl rand -hex 32를 실행해 나온 64자를 그대로 · 예 9f2c…(64자 16진수)",
+    "common.tokens.mcp": "MCP 토큰(Authorization: Bearer — 검색 MCP 인증 · MCP를 띄우기 전에 정함 · 부르는 쪽도 같은 값) · 서버에서 openssl rand -hex 32를 실행해 나온 64자를 그대로 · 예 9f2c…(64자 16진수)",
     "mcp.server.fulltext_secret": "원문 도구 sfid 서명 키 — 원문 도구가 내주는 문서 번호(sfid)에 붙이는 서명용 비밀(바꾸면 이미 준 sfid 무효 · mcp_token과 다른 값) · 8자 이상 · 서버에서 openssl rand -hex 32를 실행해 나온 64자를 그대로 · 예 4be1…(64자 16진수)",
     "pipeline.host.image": "data-pipeline 이미지:태그 · 예 data-pipeline-runtime:0.2.0(dev)",
     "mcp.host.image": "mcp-server 이미지:태그 · 예 mcp-server-runtime:0.2.0(dev)",
@@ -209,12 +220,12 @@ NOTES = {
     "common.host.devbox.git_user_email": "git 커밋 메일(user.email) · 예 hong@corp.local (null = 설정 안 함)",
     "pipeline.host.parse_cpus": "data-pipeline 컨테이너 CPU(호스트 CPU 수 이하)",
     "pipeline.host.parse_mem_limit": "data-pipeline 메모리 · 예 16g",
-    "pipeline.host.data_parsing_cpus": "parse MCP 서비스 컨테이너 CPU",
-    "pipeline.host.data_parsing_mem_limit": "parse MCP 서비스 메모리 · 예 8g",
+    "pipeline.host.data_parsing_cpus": "parse MCP 컨테이너 CPU 상한 · worker 2 × 엔진 2",
+    "pipeline.host.data_parsing_mem_limit": "parse MCP 서비스 메모리 · worker 2개 기준 12g",
     "pipeline.host.data_parsing_cpu_shares": "parse MCP 서비스 CPU 나눔 비율(일괄 작업 1024)",
     "mcp.host.cpus": "mcp-server 컨테이너 CPU",
     "mcp.host.mem_limit": "mcp-server 메모리 · 예 4g",
-    "common.runtime.data_parsing_port": "parse MCP 서비스 포트(운영 서버 — 개발자 벌은 띄우지 않음)",
+    "common.runtime.data_parsing_port": "더 쓰지 않음(#113 Redis 큐로 대체) — 다음 판에서 지움",
     "common.runtime.parse_max_mb": "parse_document 파일 상한(MB)",
     "pipeline.service.data_parsing.roots": "parse 서비스가 읽어도 되는 폴더 목록 · 쉼표 구분 · 예 /data/inbox, /data/shared (null = <서비스 폴더>/inbox)",
     "pipeline.host.nightly.time": "새벽 배치 시작 · HH:MM · 예 01:30 (null = 새벽 배치 없음 — 세 칸 다 적어야 켜짐)",
@@ -340,8 +351,8 @@ NOTES = {
     "common.runtime.pipe_reserve_gb": "자동 계산 때 남길 메모리(GB)",
     "common.runtime.pipe_threads": "프로세스당 OMP·MKL 스레드 (null = CPU ÷ 프로세스 수)",
     "pipeline.service.data_parsing.job_timeout_sec": "parse 작업 1건 제한(초)",
-    "pipeline.service.data_parsing.procs": "parse 서비스 엔진 프로세스 (null = min(3, CPU − 1))",
-    "pipeline.service.data_parsing.queue_max": "parse 대기 작업 상한",
+    "pipeline.service.data_parsing.procs": "parse 서비스 엔진 프로세스 (null = min(2, CPU − 1) — worker마다)",
+    "common.parse_queue.queue_max": "parse 대기 작업 상한",
     "pipeline.service.data_parsing.text_page_sec": "parse 글자 엔진 쪽당 제한(초)",
     "pipeline.service.data_parsing.warmup_sec": "parse 첫 시도 제한 하한(초)",
     # dev
@@ -379,6 +390,17 @@ def build(classes=None):
     for cls in classes.values():
         for p, f, _ in S.walk(cls):
             rows.setdefault(p, f)
+    # #113: queue_max를 common으로 옮겨도 기존 sample의 표시 순서(job timeout → procs → queue)를 유지.
+    queue = "common.parse_queue.queue_max"
+    procs = "pipeline.service.data_parsing.procs"
+    if queue in rows and procs in rows:
+        field = rows.pop(queue)
+        ordered = {}
+        for path, value in rows.items():
+            ordered[path] = value
+            if path == procs:
+                ordered[queue] = field
+        rows = ordered
     tree = {}
     for p, f in rows.items():
         L.set_path(tree, L.to_yaml(p), (p, f))
