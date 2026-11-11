@@ -178,10 +178,10 @@ EDW 표(`AI.FileStorageMap`, 원천 표 SFDC·CRMS·LAS 등)는 서버에서 운
 
 gold·EDW와 별개인 로그 표다. 서버 적용 절차는 refactor.md C-79.
 
-판: `common/store/db/migrations/versions/0001_applog_base.py`(브랜치 `applog`)·`0002_applog_skip.py`·`0003_applog_except.py`(`except_doc_info` — 옛 `skip_doc_info` 행을 `skip`으로 옮김)·`0004_applog_docs.py`(`pipe_event.source_system`·`except_doc_info`의 확장자·크기 칸) · 파티션 관리: `common/store/db/migrations/applog_parts.py` · 모델: `common/store/db/models/log_tables.py` · 쓰기: `common/store/logsink.py`(큐 → 배치 INSERT, 실패하면 `output/logs/*.jsonl`, 앱이 DDL을 실행하지 않음). 켜는 설정: 파일 자리 `ops.log.log_db_enabled`(모델 `ops.log.log_db_enabled`, 서버 이미지 기본 켬·PC 기본 꺼짐 — op-13). `tests/server/common/test_db_schema.py`는 이 절을 대조하지 않는다 — DB 판 확인은 `dbtool check --target applog`.
+판: `common/store/db/migrations/versions/0001_applog_base.py`(브랜치 `applog`)·`0002_applog_skip.py`·`0003_applog_except.py`(`except_doc_info` — 옛 `skip_doc_info` 행을 `skip`으로 옮김)·`0004_applog_docs.py`(`pipe_event.source_system`·`except_doc_info`의 확장자·크기 칸)·`0005_applog_dlq.py`(`dlq_doc` — 재시도 상태) · 파티션 관리: `common/store/db/migrations/applog_parts.py` · 모델: `common/store/db/models/log_tables.py` · 쓰기: `common/store/logsink.py`(큐 → 배치 INSERT, 실패하면 `output/logs/*.jsonl`, 앱이 DDL을 실행하지 않음). 켜는 설정: 파일 자리 `ops.log.log_db_enabled`(모델 `ops.log.log_db_enabled`, 서버 이미지 기본 켬·PC 기본 꺼짐 — op-13). `tests/server/common/test_db_schema.py`는 이 절을 대조하지 않는다 — DB 판 확인은 `dbtool check --target applog`.
 
 - **파티션:** `mcp_log`(`requested_at`)·`pipe_event`(`ts_start`)는 월 단위(UTC). 이름은 `<표>_YYYYMM`. `dbtool up`과 `dbtool maintain`이 현재 달부터 3개월 치를 만든다.
-- **보존:** `dbtool maintain --target applog`를 매일 실행한다. `ops.log.log_retention_days`(기본 90)가 지난 달의 파티션을 DROP하고 `pipe_run`은 DELETE한다. 달이 통째로 지나야 DROP되므로 파티션 표의 행은 약 90~120일 남는다.
+- **보존:** `dbtool maintain --target applog`를 매일 실행한다. `ops.log.log_retention_days`(기본 90)가 지난 달의 파티션을 DROP하고 `pipe_run`과 보존 기간이 지난 `dlq_doc` resolved 행은 DELETE한다(pending·dead는 보존). 달이 통째로 지나야 DROP되므로 파티션 표의 행은 약 90~120일 남는다.
 - **되돌리기:** `downgrade`는 막혀 있다. 지우려면 DB 담당자가 직접 한다.
 - **연결:** `pipe_event.run_id` → `pipe_run.run_id`는 외래 키가 없다(지우는 시점이 달라 짝 없는 행이 생길 수 있음). 파티션 표의 `id`는 기본 키가 시각과 묶여 있어 그것만으로는 고유하지 않다.
 - **기록하지 않는 값:** MCP `clientInfo`(`args`에서도 뺌). 접속 IP는 `mcp_log.client_ip`에 남긴다.
@@ -293,7 +293,7 @@ MCP 요청 1건당 1행. 인증 실패와 `initialize`도 행으로 남는다. �
 
 ### applog.except_doc_info
 
-gold에 적재되지 않은 원본 1개·종류 1개당 1행(op-17). 기본 키 (`source_key`, `except_type`). 일반 표(파티션·보존 DELETE 없음 — `skip` 행을 지우면 그 문서를 다시 고름). 판: `common/store/db/migrations/versions/0003_applog_except.py`·`0004_applog_docs.py`(`file_ext`·`file_size`). 쓰는 곳: `pipeline/shared/except_docs.py` — `record()`(`skip`: 받기 전 `candidate_pick._record_source_skipped`·받은 뒤 `candidate_ready._record_filtered`·내용 중복 `candidate_ready._dedup`)·`record_error()`(`error`: 게시의 파싱 실패·적재의 분류 실패·run_pipeline의 파싱·게시·적재 실패 — `except_docs error` 명령). 같은 키·종류면 `last_seen`·`count`만 갱신. 읽는 곳: `candidate_pick.list_targets`(`--skip-done`이면 `skip` 키를 뺌 — `error` 행은 빼지 않아 다음 실행이 다시 고름).
+gold에 적재되지 않은 원본 1개·종류 1개당 1행(op-17). 기본 키 (`source_key`, `except_type`). 일반 표(파티션·보존 DELETE 없음 — `skip` 행을 지우면 그 문서를 다시 고름). 판: `common/store/db/migrations/versions/0003_applog_except.py`·`0004_applog_docs.py`(`file_ext`·`file_size`). 쓰는 곳: `pipeline/shared/except_docs.py` — `record()`(`skip`: 받기 전 `candidate_pick._record_source_skipped`·받은 뒤 `candidate_ready._record_filtered`·내용 중복 `candidate_ready._dedup`)·`record_error()`(`error`: 게시의 파싱 실패·적재의 분류 실패·run_pipeline의 파싱·게시·적재 실패 — `except_docs error` 명령). 같은 키·종류면 `last_seen`·`count`만 갱신. 읽는 곳: `candidate_pick.list_targets`(`--skip-done`이면 `skip` 키를 뺌 — `error` 행 자체는 빼지 않으며, 별도 DLQ 상태(pl-69)의 dead만 제외, pending은 다음 실행 본 흐름에서 다시 시도).
 
 | 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|---|
@@ -308,6 +308,27 @@ gold에 적재되지 않은 원본 1개·종류 1개당 1행(op-17). 기본 키 
 | count | INTEGER NOT NULL | `2` | 기록한 횟수(기본 1) | 〃 | 없음 | 새로 |
 | file_ext | TEXT | `pdf` | 확장자(소문자, 점 없음 — `file_name`에서, 판 0004) | 〃 | 없음 | 새로 |
 | file_size | BIGINT | `448556` | 파일 크기(바이트 — 문서 위치 표·manifest의 `file_size`, 모르면 NULL — 판 0004) | 〃 | 없음 | 새로 |
+
+### applog.dlq_doc
+
+실패 문서 재시도 상태([pl-69](../prd/load.md#pl-69)), 원본 키당 한 행. 판 `0005_applog`, 고정 DDL `0005_applog_dlq.py`. 일반 표이며 색인 `ix_dlq_doc_status_failed(status, last_failed_at)`를 둔다. 실패 이력 `except_doc_info error`·`pipe_event`와 별개다. 실패 3회면 dead, 사람이 requeue한다. 자동 재시도 정책은 12월(#174 합의)이다.
+
+쓰는 곳: `pipeline/shared/dlq.py` — 호스트의 `except_docs error` CLI만 실패 upsert(컨테이너 record_error는 이력만), gold 적재 성공과 skip-done 본 목록의 gold/영구 뺌 대조가 resolve, 운영자가 requeue. 읽는 곳: `candidate_pick.list_targets`(`--skip-done`일 때 dead 제외·pending은 다음 실행 본 흐름에서 재시도, FAQ도 동일), 호스트 실행기 요약과 `python -m pipeline.shared.dlq list`. `dbtool maintain --target applog`는 보존 기한 지난 resolved만 지운다.
+
+| 칸 | 형식 | 뜻 |
+|---|---|---|
+| source_key | TEXT PK | 원본 키(`FileStorageMap.s3_key`·gold `doc.file_path`) |
+| source_system | TEXT | 원천 시스템 |
+| file_name | TEXT | 원본 파일 이름 |
+| stage | TEXT | 마지막 실패 단계(parse·publish·load·classify 등, 실패 이유에서) |
+| last_reason | TEXT NOT NULL | 마지막 실패 이유(해소 때도 보존) |
+| attempts | INTEGER NOT NULL DEFAULT 1 | 실패 시도 횟수(호스트가 문서당 한 번 기록, requeue 때 0) |
+| status | TEXT NOT NULL DEFAULT 'pending' | CHECK pending·dead·resolved |
+| first_failed_at | TIMESTAMPTZ NOT NULL DEFAULT now() | 현재 실패 주기의 첫 실패 시각(resolved 뒤 재실패면 새로) |
+| last_failed_at | TIMESTAMPTZ NOT NULL DEFAULT now() | 마지막 실패 기록 시각 |
+| dead_at | TIMESTAMPTZ | dead가 된 시각(requeue·새 실패 주기 때 비움) |
+| resolved_at | TIMESTAMPTZ | gold 완료 또는 영구 뺌 확인 시각(보존 DELETE 기준) |
+| pipeline_version | TEXT | 마지막 실패의 `common.pipeline_version()` |
 
 ### applog.superseded_doc_log
 

@@ -400,8 +400,15 @@ def faq_first(rows, order, faq_rows, never, seen_f, sync):
     return want + [s for s in order if s not in keep]
 
 
+def _dlq_unavailable(ex):
+    print(
+        f"[DLQ] 상태 못 읽음({type(ex).__name__}) — DLQ 제외 없이 진행(applog 판 0005·접속 확인)",
+        flush=True,
+    )
+
+
 def list_targets(keywords, start, limit=0, seqs=(), skip_done=False, max_docs=0, faq_seen=None, sync=None):
-    """이번 실행의 대상 → (rows, order, start, total). skip_done이면 gold에 끝난 키와 영구 뺌 키(except_doc_info skip — op-17)를 뺀다.
+    """이번 실행의 대상 → (rows, order, start, total). skip_done이면 gold 완료·영구 뺌(except_doc_info skip — op-17)·DLQ dead 키를 뺀다(pending은 재시도).
     rows = 목록 행(FAQ 덧붙임 포함), order = 처리할 rows 자리 순서,
     total = 키워드 목록 행 수. faq_seen(교체를 마친 FAQ 키 파일)을 주면 FAQ 먼저 — sync(reset) = faq_sync 자리."""
     from common.store import mssql
@@ -419,11 +426,21 @@ def list_targets(keywords, start, limit=0, seqs=(), skip_done=False, max_docs=0,
         print(f"start-offset {start} ≥ 대상 {len(rows)}건", flush=True)
         start = len(rows)
     order = sorted(seqs) if seqs else list(range(start, len(rows) if not limit else min(len(rows), start + limit)))
-    from pipeline.shared import except_docs
+    from pipeline.shared import dlq, except_docs
 
     never = except_docs.skipped_keys() if skip_done or use_faq else set()
+    excluded = None
+    if skip_done:
+        try:
+            excluded = dlq.excluded_keys()
+        except (Exception, SystemExit) as ex:
+            _dlq_unavailable(ex)
+
     if skip_done:
         done = done_keys()
+        if excluded is not None:
+            dlq.resolve(set(excluded) & (done | never))
+            excluded = {k: r for k, r in excluded.items() if k not in done | never and r["status"] == "dead"}
         before = len(order)
         order = [s for s in order if rows[s]["s3_key"] not in done]
         n_done = before - len(order)
@@ -437,6 +454,10 @@ def list_targets(keywords, start, limit=0, seqs=(), skip_done=False, max_docs=0,
         order = faq_first(rows, order, faq_rows, never, Path(faq_seen), sync)
     elif faq_seen is not None:
         print("FAQ 교체 확인(pl-41) 건너뜀 — --seqs·--limit 실행 또는 원천 목록에 FAQ 없음", flush=True)
+    if excluded is not None:
+        before = len(order)
+        order = [i for i in order if rows[i]["s3_key"] not in excluded]
+        print(f"DLQ dead {before - len(order)}건 뺌 — pending은 본 흐름에서 처리", flush=True)
     if max_docs and len(order) > max_docs:
         print(f"max-docs: {len(order)}건 중 앞 {max_docs}건만(나머지는 다음 실행)", flush=True)
         order = order[:max_docs]

@@ -13,6 +13,7 @@ import numpy as np
 from pipeline.load import doc_classify as CL
 from pipeline.load import pgvector_load as M
 from pipeline.load import publish_parse_result as P
+from pipeline.shared import dlq
 from pipeline.shared import except_docs as SD
 from tests.server.common import pgcase
 from tests.server.pipeline.goldseed import gold as gold_schema
@@ -57,6 +58,7 @@ def test_silver_row_table():
         tmp = Path(tempfile.mkdtemp())
         try:
             with gold_schema(DIM) as S:
+                dlq.record_failure([{"source_key": KEY, "file_name": "a.pdf", "reason": "load_failed"}])
                 P.apply([_entry()], P.LocalFolderStore(tmp / "os"), tmp / "md")
                 assert _silver_rows() == [(KEY, SD.SILVER_REASON, "warn")], (name, _silver_rows())
                 if gold:
@@ -71,6 +73,8 @@ def test_silver_row_table():
                     assert in_gold == ([] if stays else [KEY]), (name, in_gold)
                     db.cn.close()
                 assert bool(_silver_rows()) == stays, (name, _silver_rows())
+                assert dlq.list_rows()[0]["status"] == ("pending" if stays else "resolved"), name
+                assert dlq.list_rows()[0]["attempts"] == 1, "게시·적재의 컨테이너 이력은 DLQ 횟수를 늘리지 않음"
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
     print("[selftest] pl-68 — 게시가 silver 행을 쓰고 골드 성공이 지움 · 골드 실패·실버까지만은 남음 통과")

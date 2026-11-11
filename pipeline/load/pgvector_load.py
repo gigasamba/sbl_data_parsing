@@ -252,7 +252,7 @@ def load(db, bundle, replace=False, rep_dir=None, silver=None):
     elsewhere = _elsewhere(dbs, docs, by_src)  # 같은 원본 경로가 다른 원천 스키마에 있는지(원천이 바뀐 문서)
     if not replace:  # 어디든 이미 있으면 건너뜀(두 스키마에 같은 문서가 생기지 않게)
         by_src = {src: [i for i in idx if docs[i]["file_path"] not in elsewhere] for src, idx in by_src.items()}
-    counts = {"docs": 0, "chunks": 0, "terms": 0, "by_source": {}, "meta_missing": meta_missing}
+    counts = {"docs": 0, "chunks": 0, "terms": 0, "by_source": {}, "meta_missing": meta_missing, "classify_failed": len(failed)}
     meta = {**meta, "gold_version": gold_version(meta), "loaded_at": datetime.now(_KST).isoformat(timespec="seconds")}  # 이번 적재의 doc 칸
     with db.cn.transaction(), db.cn.cursor() as cur:  # 한 트랜잭션 — 실패하면 5벌 모두 되돌림
         for src, ids in _drop_plan(elsewhere, replace).items():
@@ -262,6 +262,9 @@ def load(db, bundle, replace=False, rep_dir=None, silver=None):
     except_docs.clear_silver(
         d["file_path"] for d in docs if d["file_path"] not in failed
     )  # pl-68 — 이제 gold에 있음(분류 실패는 silver 행 남김)
+    from pipeline.shared import dlq
+
+    dlq.resolve(d["file_path"] for d in docs if d["file_path"] not in failed)
     counts["sec"] = round(time.time() - t0, 1)
     return counts
 
@@ -484,6 +487,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["check", "deploy", "load", "faq-sync"])
     ap.add_argument("--bundle", default="output/edw/bundle")
+    ap.add_argument("--fail-on-classify", action="store_true", help="load 분류 실패 시 종료 코드 3(기본은 counts에만 기록)")
     ap.add_argument("--replace", action="store_true")
     ap.add_argument("--reset", action="store_true", help="faq-sync — gold faq 문서·청크를 모두 지움(pl-41 — 새 FAQ가 올라온 실행)")
     ap.add_argument("--out", default=None, help="faq-sync 결과 JSON 파일(지운 수·남은 gold faq file_path)")
@@ -530,6 +534,8 @@ def main(argv=None):
             sp.add(**{k: v for k, v in counts.items() if k in ("docs", "chunks", "terms", "sec")})
             runtrace.docs(total=counts["docs"])  # pipe_run 문서 수(이번에 새로 넣은 문서)
         print(json.dumps(counts, ensure_ascii=False))
+        if a.fail_on_classify and counts["classify_failed"]:
+            raise SystemExit(3)
 
 
 if __name__ == "__main__":

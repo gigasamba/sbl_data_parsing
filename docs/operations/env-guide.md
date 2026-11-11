@@ -33,7 +33,7 @@
 | `tuning.ops.log.log_shutdown_sec` | 5 | 종료 때 남은 기록을 쓰는 상한(초) |
 | `tuning.search.audit.audit_max_input_bytes` · `audit_max_output_bytes` | 16384 · 65536 | MCP 감사 원문 저장 상한(바이트) |
 
-- `applog.except_doc_info`(적재 안 된 문서 — `skip` 영구 뺌·`error` 실패 기록)는 `ops.log.log_db_enabled`와 관계없이 쓰고 읽는다(대상 목록이 `skip` 키를 뺌, `error` 행은 다음 실행이 다시 고름). 서버는 `migrate up --target applog`(판 `0004_applog`)가 먼저다 — 없으면 대상 목록·받기가 멈춘다. PG 접속 칸을 채운 PC도 파싱 전에 `dbtool up --target applog`. 보존 정리 대상이 아니다.
+- `applog.except_doc_info`(`skip` 영구 뺌·`error` 실패 이력)는 `ops.log.log_db_enabled`와 관계없이 쓰고 읽는다. `error` 이력 자체로 대상을 제외하지 않으며, 호스트 run_pipeline이 `except_docs error` CLI로 `applog.dlq_doc` 실패 횟수·상태를 관리한다. pending은 다음 실행 본 흐름에서 다시 시도하고 3회 실패한 dead는 제외한다(사람이 requeue). 컨테이너의 publish·load는 이력만 남기며, 호스트의 `--dlq-only`는 이미 쓴 이력을 중복 집계하지 않는다. 서버는 **`dbtool up --target applog`(판 `0005_applog`) 먼저 → 코드 폴더 교체**가 필수다. PG 접속 칸을 채운 PC도 파싱 전에 판을 올린다. except_doc_info는 보존 정리 대상이 아니며 DLQ는 오래된 resolved만 정리한다.
 - **영구 뺌 풀기(기한 없음 — 사람이 지움).** 한 번 들어간 `skip` 키는 `candidate_pick list --skip-done`이 계속 뺀다. 다시 고르게 할 때 — 새 엔진이 확장자를 받게 됐을 때(그 이유 전체), DRM 오탐·고친 파일이 같은 `s3_key`로 다시 올라왔을 때(그 키만) — DB 담당자 승인을 받고 `skip` 행을 지운다. 지운 키는 다음 실행이 다시 고른다(다시 못 읽으면 다시 들어감):
   ```sql
   SELECT reason, count(*) FROM applog.except_doc_info WHERE except_type = 'skip' GROUP BY reason;   -- 먼저 대상 확인

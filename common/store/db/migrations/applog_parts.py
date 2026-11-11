@@ -81,4 +81,6 @@ def maintain(op, schema="applog", days=90, now=None):
         op.execute(f"DROP TABLE {schema}.{name}")
         dropped.append(name)
     op.execute(text(f"DELETE FROM {schema}.pipe_run WHERE coalesce(ended_at, started_at) < :cutoff").bindparams(cutoff=cutoff))
+    # dbtool.maintain_applog는 최신 판 확인 뒤에만 호출한다(판 0005 전이면 실행 거부).
+    op.execute(text(f"DELETE FROM {schema}.dlq_doc WHERE status = 'resolved' AND resolved_at < :cutoff").bindparams(cutoff=cutoff))
     return {"ensured": created, "dropped": dropped}
