@@ -22,7 +22,10 @@ ls /var/tmp/bake/code-<VERSION>-*.tar.gz                    # 코드 묶음
 ```
 
 ## 2. 옮기기
-`/var/tmp/bake/sbl_images`와 코드 묶음을 운영 서버 `$S`로 옮긴다.
+`/var/tmp/bake/sbl_images`·코드 묶음과, 처음이면 개발 서버의 redis 조각(`sbl_images/<이미지 판>/redis/`)·`pgvector_pg16.tar`도 운영 서버 `$S`로 옮긴다. 처음이면 PG·Redis 이미지를 먼저 불러온다:
+```bash
+cp -r <redis 폴더> $S/sbl_images/<VERSION>/ && docker load -i $S/pgvector_pg16.tar   # redis는 6의 load.sh가 함께 불러옴
+```
 
 ## 3. 운영 폴더(처음)
 ```bash
@@ -32,7 +35,7 @@ cd $B && bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>
 SSH를 쓰면 개발 홈 묶음을 `$P/home`과 `$P/home/mcp`에 푼다([dev.md A-3](dev.md#a-3-개발-홈-묶음-풀기컨테이너-띄우기-전)).
 
 ## 4. 설정 채우기
-`$B/settings.yaml`의 빈 칸을 채운다(`required.env.run_env: prd` — 컨테이너 이름 칸 `ops.host.*_container`는 비워 둠). 확인:
+`$B/settings.yaml`의 빈 칸을 채운다(`required.env.run_env: prd` · SSH root 비밀번호 `option.devbox.root_password` — 컨테이너 이름 칸 `ops.host.*_container`는 비워 둠). 확인:
 ```bash
 bash deploy/host/scripts/host_ctl.sh config --quiet && echo 설정 OK
 ```
@@ -61,7 +64,16 @@ docker exec pgvector psql -U <계정> -d <DB> -c 'CREATE EXTENSION IF NOT EXISTS
 ```bash
 cd $B && bash deploy/release/promote.sh <VERSION> $S/sbl_images --dim <임베딩 차원>   # --dim은 처음만
 ```
-기대 마지막 줄: `[promote] 통과 — <VERSION>`. 처음이면 이어서:
+기대 마지막 줄: `[promote] 통과 — <VERSION>`. 같은 다섯 단계를 손으로 한 줄씩(CI/CD에 옮길 때 그대로):
+```bash
+cd $B && V=<VERSION>
+env DOCKER=$DOCKER bash $S/sbl_images/load.sh $V
+mkdir -p $B/output/_mcp_parse/jobs $P/home/mcp
+$DOCKER run --rm --user 0 --network host -v $B/settings.yaml:/etc/rag/settings.yaml:ro,z -v $B/output:/app/output:z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=prd data-pipeline:$V migrate up --target all --dim <임베딩 차원>   # --dim은 처음만
+IMAGE_TAG=$V bash deploy/host/scripts/host_ctl.sh up -d --force-recreate
+bash deploy/host/scripts/host_ctl.sh check                  # 기대 마지막 줄: [host_ctl check] 통과 — …
+```
+처음이면 이어서:
 ```bash
 bash deploy/host/scripts/pipe_exec.sh migrate master load
 curl -s http://<서버 IP>:8051/health                        # 기대: {"ok":true,"ready":true,…}
@@ -70,11 +82,13 @@ bash deploy/host/scripts/pipe_exec.sh publish --dry-run     # 게시 미리 보�
 DB 담당이 먼저 SQL을 보려면 ③ 전에: `docker run --rm --network host -v $B/settings.yaml:/etc/rag/settings.yaml:ro,z -v $B/output:/app/output:z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=prd data-pipeline:<VERSION> migrate up --target all --dim <차원> --sql /app/output/up.sql`.
 
 ## 7. 한 번에 돌리기 — run_pipeline.py
+운영에서는 **호스트**의 `app/`에서 부른다 — 명령은 `docker exec`로 `ops.host.pipeline_container` 안에서, ③ 검색 확인은 `ops.host.mcp_container` 안에서 돈다. ③은 settings.yaml `dev.search_ui.search_ui_mcp_url`(검색 MCP 주소)이 있어야 한다(비우면 매번 종료 코드 3).
 ```bash
-nohup python3 deploy/host/scripts/run_pipeline.py --limit 2 > run_first.out 2>&1 &
-tail -f deploy/host/scripts/test_space/batch_progress/progress.log   # 기대 끝 줄: === 문서별 flow 끝: … 종료 코드 0 ===
+cd /home/sbl/data_pipeline/app
+nohup python3 deploy/host/scripts/run_pipeline.py > run_first.out 2>&1 &
+tail -f deploy/host/scripts/test_space/batch_progress/progress.log   # 기대 끝 줄: [판정] 통과 — …
 ```
-인자·종료 코드·실패 문서(DLQ) 다루기는 [dev.md A-10](dev.md#a-10-한-번에-돌리기--run_pipelinepyedw-목록--받기--파싱--게시--구조화적재)과 같다(컨테이너 이름만 `data-pipeline`). 단계 하나씩은 `pipe_exec.sh`([dev.md A-11](dev.md#a-11-단계-하나씩--pipe_execsh)).
+전체 적재는 `run_pipeline.py --limit 0 --skip-done`, 문서 하나는 `--seqs <순번>` — 쓰임새 표·종료 코드·실패 문서(DLQ) 다루기는 [dev.md A-10](dev.md#a-10-한-번에-돌리기--run_pipelinepyedw-목록--받기--파싱--게시--구조화적재)과 같다(운영은 `docker exec` 없이 호스트에서 바로, 컨테이너 이름은 `data-pipeline`). 단계 하나씩은 `pipe_exec.sh`([dev.md A-11](dev.md#a-11-단계-하나씩--pipe_execsh)).
 
 ## 8. 자동 실행 타이머
 ```bash

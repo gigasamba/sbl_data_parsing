@@ -41,7 +41,7 @@ def test_applog_migration():
             with eng.connect() as conn:
                 assert dbtool.check("applog", schema, conn=conn)[0] == "끝"
                 names = set(conn.exec_driver_sql(f"SELECT tablename FROM pg_tables WHERE schemaname='{schema}'").scalars())
-                assert {"mcp_log", "pipe_run", "pipe_event", "alembic_version"} <= names
+                assert {"mcp_log", "pipe_run", "pipe_event", "dlq_doc", "alembic_version"} <= names
                 assert len([n for n in names if n.startswith(("mcp_log_", "pipe_event_"))]) == 6
                 constraints = set(
                     conn.exec_driver_sql(

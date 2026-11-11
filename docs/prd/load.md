@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md) 카테고리. [transform.md](transform.md) 다음: EDW 메타(pl-29) → pgvector 적재(pl-07·pl-13·pl-16·pl-51·pl-19) → 게시(silver — pl-09·pl-26) → FAQ 다시 올리기(pl-41) → 정형 DB·문서 대장 없음(pl-08·pl-12) → 마스터 표(pl-38). 저장 구조·DB 스키마는 [load-schema.md](load-schema.md).
 
-순서: pl-29 · pl-07 · pl-13 · pl-16 · pl-51 · pl-19 · pl-09 · pl-26 · pl-41 · pl-08 · pl-12 · pl-38 · pl-56 · pl-61 · pl-68.
+순서: pl-29 · pl-07 · pl-13 · pl-16 · pl-51 · pl-19 · pl-09 · pl-26 · pl-41 · pl-08 · pl-12 · pl-38 · pl-56 · pl-61 · pl-68 · pl-69.
 
 <a id="pl-29"></a>
 ## pl-29 · EDW 고객·원천 메타를 적재 때 붙인다
@@ -131,7 +131,7 @@ FAQ는 판을 잇지 않는다. 새 FAQ가 오면 gold faq를 비우고 FAQ 전�
 1. 새 FAQ = FileStorageMap에서 `source_system`이 `FAQ`(대소문자 무관)인 행의 키 중 결과 폴더의 `_faq_seen.txt`(교체를 마친 키 목록)에 없는 것. 파일이 없으면(처음) FAQ 전체를 한 번 교체한다.
 2. 컨테이너 안 `candidate_pick list --faq-seen <파일>`의 `faq_first`(처리 순서를 정한 뒤 — `--skip-done` 뒤, `--max-docs` 앞): FAQ 목록은 `--filter`와 상관없이 FileStorageMap에서 따로 읽는다(대상에 없는 FAQ는 목록 뒤에 덧붙임). `--start-offset`이 대상 수보다 커도 확인한다.
 3. 새 FAQ가 있으면 → 자식 프로세스 `pgvector_load faq-sync --reset`으로 gold faq의 문서·청크·키워드 색인을 한 트랜잭션에서 지우고, FAQ 전체를 이번 처리 맨 앞에 넣는다(이미 끝난 FAQ도). `_faq_seen.txt`는 `faq-sync` 결과(`--out` JSON — 목록 파일 옆 `faq_sync.json` — 지운 수·남은 `file_path`)를 읽은 **뒤에만** 적는다.
-4. 새 FAQ가 없으면 → 지우지 않고 gold에 없는 FAQ만 넣는다(영구 뺌 `except_doc_info` `skip`은 뺌) — 중간에 멈춘 교체와 파싱 실패를 다음 실행이 채운다.
+4. 새 FAQ가 없으면 → 지우지 않고 gold에 없는 FAQ만 넣는다(영구 뺌 `except_doc_info` `skip`은 뺌) — 중간에 멈춘 교체와 파싱 실패를 다음 실행이 채운다. FAQ도 본 흐름 `faq_first`에서 pending을 다시 시도하고 dead만 제외한다([pl-69](#pl-69)).
 5. 만약 `faq-sync` 결과를 못 읽으면(실패·시간 초과 1,800초) → 경고와 함께 FAQ 전체를 넣고 `_faq_seen.txt`는 그대로 둔다.
 6. `--seqs`·`--limit` 실행과 원천 목록(`required.source.source_systems`)에 `FAQ`가 없는 실행에서는 FAQ 교체를 하지 않는다(로그 한 줄).
 7. 한계: 같은 실행 안에서 지우고 다시 넣는 사이에는 검색에 FAQ가 일부만 보인다. FileStorageMap에서 사라진 FAQ는 다음 교체 때 함께 빠진다.
@@ -211,3 +211,33 @@ FAQ는 판을 잇지 않는다. 새 FAQ가 오면 gold faq를 비우고 FAQ 전�
   4. 역방향 호출 예외는 둘뿐이다 — 이 실버 먼저 게시와 받기의 FAQ 교체 확인(`candidate_pick.faq_sync`)이 적재 명령 `pgvector_load faq-sync`를 자식 프로세스로 부르는 것(import가 아니라 명령 이름 문자열 — 모듈 경계 점검 ⑫이 세지 않음).
 - QA: `tests/server/pipeline/test_silver_row.py` 사례 표(골드 성공 → silver 행 없음 · 골드 실패 → 남음 · 실버까지만 → 남음) · `test_publish_parse.py`(게시가 올린 문서의 silver 행).
 - Status: done
+
+
+<a id="pl-69"></a>
+## pl-69 · DLQ — 실패 문서 적재·관리(applog.dlq_doc)
+
+- Status: dev
+
+### 무엇·왜
+실패 이력(`except_doc_info error`·`pipe_event`)은 그대로 남기고, 실패 횟수와 pending·dead·resolved 상태를 PostgreSQL `applog.dlq_doc`에 원본 키당 한 행으로 관리한다. 이슈 #174 합의에 따라 DLQ 적재·조회·수동 재기동을 먼저 구축한다. 자동 재시도 시점·건수 정책은 안정화 단계에서 정한다.
+
+### 규칙
+1. 실패 DLQ는 호스트 run_pipeline이 부르는 `python -m pipeline.shared.except_docs error` CLI만 쓴다. 컨테이너의 `record_error`·`note_error`(publish·load 등)는 except_doc_info 이력만 남기며 단독 publish·load 명령은 DLQ 횟수를 늘리지 않는다. `part`·`silver`도 DLQ 대상이 아니다. 호스트는 컨테이너가 이미 이력을 쓴 분류 실패·게시의 파싱 실패를 `--dlq-only`로 기록해 이력 횟수를 중복 집계하지 않는다. 실패·해소 기록 오류는 경고 뒤 계속한다. 마지막 이유·단계·파이프라인 판과 처음·마지막 실패 시각을 남기며, NULL 원천·파일 이름은 이미 아는 값을 지우지 않는다.
+2. 최대 실패 횟수는 `pipeline.shared.dlq.MAX_ATTEMPTS = 3` 상수다. 한 실행에서 한 문서는 시도 1회다. 호스트 note_error가 문서 번호별로 실패 CLI를 한 번만 호출하며, DLQ는 호출당 1회 증가한다. 컨테이너와 공유하던 시도 환경 신호·SQL 중복 표지 분기는 쓰지 않는다.
+3. 한 실행은 본 흐름 1회다. `candidate_pick list --skip-done`은 gold 완료·영구 뺌(skip)·DLQ dead를 제외하고 pending은 평소처럼 다시 시도한다. FAQ도 같은 규칙이다. 실패하면 attempts가 오르며 3회면 dead다. 기존 자리 번호·필터·`--limit`·`--max-docs`를 그대로 적용한다. 매 목록 생성 때 `_seen_sha`를 비운다.
+4. dead 전이 때 `[DLQ] 확인 필요`와 조회 명령을 출력한다. 호스트는 실패 기록 CLI의 모든 `[DLQ]` 확인·경고 줄을 progress.log에 옮기고, CLI 자체가 실패해도 경고를 남긴다. dead의 횟수·dead 시각은 추가 실패에도 유지한다. 사람이 원인을 고친 뒤 `requeue --key K`(여러 번 가능) 또는 `--all-dead`로 pending·attempts=0으로 돌리면 다음 실행 본 흐름이 다시 고른다.
+5. gold 적재 성공 때 resolve한다. skip-done 본 목록 생성 때 이미 gold에 들어갔거나 영구 뺌인 pending·dead도 resolve한다(마지막 이유 보존). resolved가 다시 실패하면 새로운 실패 주기로 1회부터 센다. 원본 부재 해소는 이번 범위에 없다.
+6. `dbtool maintain --target applog`가 `log_retention_days`보다 오래된 resolved만 DELETE한다. pending·dead는 보존한다. **DB 담당 승인 뒤 `dbtool up --target applog`(판 `0005_applog`) 먼저 → 그다음 코드 폴더 교체가 필수**다. 새 표 추가는 옛 코드에 무해하지만 새 코드의 maintain은 applog head 전에는 거부한다.
+7. 실행 시작·끝에 pending/dead와 이번 실행 새 dead 건수를 안내한다. 대상이 0건이면 시작 요약만 남기고 `처리할 문서 없음 — 종료` 후 종료 0으로 끝난다. 조회는 `python -m pipeline.shared.dlq list --status dead` 또는 `--status pending --json`이다(서버 명령: [dev.md](../operations/dev.md) A-10). DLQ 조회 실패는 경고 뒤 제외·요약 없이 계속하며 종료 코드는 단계 결과로 정한다.
+8. run_pipeline 종료 코드는 [pl-18](ops.md#pl-18) 한 곳에 둔다. 이미 받은 본 흐름을 모두 끝냈으면 마감 시각을 지났어도 0이다. 성공·영구 뺌 뒤 관찰·정리 오류는 경고만 남기며 실패로 기록하지 않는다. 적재는 분류 실패 counts를 남기고 기본 종료 0을 유지한다. 호스트는 `--fail-on-classify`로 종료 3을 요청해 gold 실패로 세며, 분류 실패는 호스트가 classify_failed로 DLQ에 기록하고 적재가 남긴 이력은 중복 집계하지 않는다. publish가 엔진 없는 rep을 failed로 제외하면 기존 publish.log JSON의 by_status.failed를 읽어 parse_failed로 실패 집계·DLQ 기록·종료 1 처리한다(원본 보존·gold로 보내지 않음). publish 출력·종료 코드 계약은 그대로다.
+
+### 남은 일
+- 자동 재시도 패스와 시점·건수 정책은 안정화 단계에서 정한다(#174 합의).
+- 서버 판 0005와 새 표 권한은 DB 담당 승인 뒤 적용([C-120](../refactoring/refactor.md)).
+- silver에서 gold만 재생성은 [pl-32](load-schema.md#pl-32) 뒤 후속. 현재 다음 실행은 받기부터 전체 흐름이다.
+
+### QA
+- `tests/server/pipeline/test_dlq.py`: 실 PG 임시 스키마에서 1·2·3회, 호스트 CLI 기록·이력 분리·동시 쓰기, resolve·재실패·dead 유지·requeue·CLI·보존·NULL 메타데이터 보존·명시 키 우선.
+- `test_target_list.py`: pending 포함·dead 제외·gold/skip 해소·자리 번호·max-docs·FAQ·매 목록 RUN_SEEN 초기화·조회 실패 시 기존 선택.
+- `tests/general/deploy/test_run_pipeline.py`·`test_docs_flow.py`: 호스트 문서별 1회 기록·분류 실패 DLQ/경고·엔진 없는 rep 게시 제외·선행 하이픈 파일 이름 인자·본 흐름 1회·마감 종료 코드·성공/영구 뺌 뒤 기록 오류·조회 실패 시 단계 결과 유지.
+- `test_silver_row.py`: gold 성공 해소·분류 실패 상태 보존. `test_pgvector_load.py`: 분류 실패 종료 코드 옵션·실행 기록·counts 보존.

@@ -1,6 +1,7 @@
 """서버 compose 파일(op-18·op-19·op-20): 환경마다 하나(compose-<run_env>.yml) + 따로 띄우는 PG·Redis.
 dev = 개발자 벌 1~4만(벌 N = data_pipeline-N/{app,home} → /app·/root). prd·local = 번호 없는 컨테이너 3개.
-옛 덧붙임 파일(compose.*.yml)·EDW 사슬 사본 마운트·root_pw 마운트는 없다(사슬은 코드 폴더·이미지 안 edw_chain.yaml)."""
+SSH 컨테이너의 root 비밀번호는 compose 비밀값(settings.yaml option.devbox.root_password → /run/secrets/root_pw)뿐 — 볼륨으로 붙이지 않는다.
+옛 덧붙임 파일(compose.*.yml)·EDW 사슬 사본 마운트는 없다(사슬은 코드 폴더·이미지 안 edw_chain.yaml)."""
 
 import yaml
 
@@ -60,6 +61,8 @@ def test_compose_files():
             if f in ("compose-dev.yml", "compose-prd.yml"):
                 assert s["network_mode"] == "host" and "ports" not in s, (f, name)
                 assert env.get("SSH_PORT") == ports, (f, name)
+                assert s.get("secrets") == (["root_pw"] if ports else None), (f, name)  # SSH 컨테이너만
+                assert doc["secrets"]["root_pw"] == {"environment": "ROOT_PW"}, f
             else:
                 assert s.get("ports") == ports, (f, name)
             assert not any("edw_chain" in v or "root_pw" in v or "redis_pw" in v for v in vols), (f, name, vols)

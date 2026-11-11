@@ -154,7 +154,10 @@ def test_list_excludes_skipped():
         out = Path(d) / "targets.json"
         (Path(d) / CP.RUN_SEEN).mkdir()  # 앞 실행이 받은 sha256 표지 — 목록을 새로 만들면 비움(pl-59)
         for args, want in ((["--skip-done", "--max-docs", "1"], ["SFDC/b/rfp_new.pdf"]), (["--max-docs", "1"], ["SFDC/a/rfp_drm.pdf"])):
-            with COMMON.env(RDB_SQLITE=str(edw)):
+            with (
+                COMMON.env(RUN_ENV="local", RDB_SQLITE=str(edw)),
+                pc.PIPE.env(SOURCE_SYSTEMS=None),
+            ):  # 가짜 EDW는 local 전용 · 원천 목록 비움
                 assert CP._list_cmd([*args, "--filter", "rfp", "--out", str(out)]) == 0
             assert [r["s3_key"] for r in json.loads(out.read_text(encoding="utf-8"))["docs"]] == want, args
             assert not (Path(d) / CP.RUN_SEEN).exists()

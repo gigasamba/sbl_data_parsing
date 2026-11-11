@@ -51,7 +51,7 @@ COPY --from=src /src/opencode/ /usr/local/bin/
 COPY deploy/docker/devbox/ /etc/devbox/
 RUN sed -i 's/\r$//' /etc/devbox/* && chmod 755 /etc/devbox/dev_entry.sh && ln -s /etc/devbox/profile.sh /etc/profile.d/zz-devbox.sh
 # Image root password (user exception): BuildKit secret `--secret id=root_pw,src=<file outside git>` — first line.
-#   Not in the repo or `docker history`; the hash stays in /etc/shadow. A non-empty <SBL_ROOT>/root_pw still overrides it at start.
+#   Not in the repo or `docker history`; the hash stays in /etc/shadow. Optional — servers give it at start instead: settings.yaml option.devbox.root_password → compose secret /run/secrets/root_pw (dev_entry.sh), which wins.
 RUN --mount=type=secret,id=root_pw,required=false \
     if [ -s /run/secrets/root_pw ]; then head -n1 /run/secrets/root_pw | tr -d '\r' | sed 's/^/root:/' | chpasswd; fi
 ENV OPENCODE_DISABLE_MODELS_FETCH=1 OPENCODE_DISABLE_AUTOUPDATE=1
@@ -99,7 +99,7 @@ COPY --from=src /src/mcp_server /app/mcp_server
 COPY --from=src /src/pipeline/__init__.py /src/pipeline/cli.py /src/pipeline/config.py /app/pipeline/
 COPY --from=src /src/resources /app/resources
 COPY --from=src /src/VERSION /app/VERSION
-COPY --from=src /src/edw_chain.yaml /app/edw_chain.yaml
+COPY --from=src /src/edw_chain.yaml /src/opencode.jsonc /app/
 COPY --from=src /src/appdocker /opt/sbl/docker
 COPY --from=src /src/tests/__init__.py /src/tests/runner.py /app/tests/
 COPY --from=src /src/tests/server/__init__.py /app/tests/server/
@@ -160,7 +160,7 @@ COPY --from=src /src/pipeline /app/pipeline
 COPY --from=src /src/mcp_server/__init__.py /src/mcp_server/config.py /app/mcp_server/
 COPY --from=src /src/resources /app/resources
 COPY --from=src /src/VERSION /app/VERSION
-COPY --from=src /src/edw_chain.yaml /app/edw_chain.yaml
+COPY --from=src /src/edw_chain.yaml /src/opencode.jsonc /app/
 COPY --from=src /src/appdocker /opt/sbl/docker
 COPY --from=src /src/tests/__init__.py /src/tests/runner.py /app/tests/
 COPY --from=src /src/tests/server/__init__.py /app/tests/server/

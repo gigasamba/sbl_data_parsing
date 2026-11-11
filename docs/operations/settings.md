@@ -8,7 +8,11 @@
 | 개발 서버 벌 | `/home/sbl/data_pipeline-<n>/app/settings.yaml`(컨테이너 안 `/app/settings.yaml` — 고칠 수 있음) | 640 |
 | 운영 서버(개발 서버의 출시 전 시험도) | `/home/sbl/data_pipeline/app/settings.yaml`(컨테이너에는 읽기 전용 `/etc/rag/settings.yaml`) | 640 |
 
-서버는 `host_ctl.sh init`이 sample을 복사해 둔다(없을 때만). PC 파일을 서버로 복사하지 않는다.
+서버는 `host_ctl.sh init`이 sample을 복사해 둔다(없을 때만). 다른 파일을 읽히려면 env `SETTINGS_FILE`. **PC 파일을 서버로 복사하지 않는다** — PC의 `run_env: local`·`*_allow_external: true`가 서버에서 외부 모델 호출을 연다.
+
+- **구조:** 맨 위 `required`(필수 접속·입력) → 역할 절 `common`·`extract`·`transform`·`load`·`search`·`ops`·`dev` → 맨 아래 `tuning`. 같은 절·칸을 두 번 쓰면 시작 거부.
+- **쓰는 법:** 기본값과 다르게 쓸 칸만 적는다. sample의 빈 칸(`pg_host:` 뒤가 빔)은 꼭 적을 값(주석의 `[필수 · 모드]`), `null`은 비워 두면 코드 기본값을 쓰는 칸이다.
+- **옛 칸:** 옛 배치(최상위 `common`·`pipeline`·`mcp`)·옛 자리·지운 칸·모르는 칸이 있으면 시작하지 않고 칸 이름만 알린다 — sample과 대조해 고친다. 옛 env 이름을 env로 넘기면 무시하고 이름만 경고한다.
 
 ## 꼭 채울 칸
 
@@ -35,10 +39,37 @@
 | `ops.host.container_cli` | 컨테이너 도구 | — | `docker` | `docker` |
 | `ops.host.pipeline_container` | 호스트 스크립트(`run_pipeline.py`·`pipe_exec.sh`·`host_ctl.sh`)가 들어갈 파이프라인 컨테이너 — 비우면 `data-pipeline` | — | `data-pipeline-<n>` | 비움 |
 | `ops.host.mcp_container`·`parse_container` | 검색 MCP·parse_document 작업 컨테이너 — 비우면 `mcp-server`·`mcp-data-parsing` | — | — | 비움 |
+| `option.devbox.root_password` | SSH 컨테이너 root 비밀번호(8자 이상 — compose 비밀값으로 넘김) | — | ✓ | ✓ |
 
-PC만: `dev.models.<embed|llm|vlm>.*_allow_external`(외부 모델 허용 — 평소 `false`) · `dev.models.guard.daily_budget_usd`(하루 지출 상한). 서버 파일에는 `dev` 절의 외부 허용을 켜 두지 않는다.
+PC만 쓰는 칸은 아래 [PC 전용 칸](#pc-전용-칸).
 
 `.env`(PG·Redis를 띄우는 `app` 폴더 맨 위 — 개발 서버는 `data_pipeline/app`, 600): `PG_USER`·`PG_DB`·`PG_PASSWORD`·`REDIS_PASSWORD` — settings.yaml과 같은 값. `host_ctl.sh check` 첫 단계가 대조한다.
+
+## 파싱할 원천 — `required.source.source_systems`
+
+- 값: `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`·`DEV-<1~99>`(쉼표 구분, 대소문자 무관 — 예 `DEV-1, DEV-2`). 원천은 EDW `AI.FileStorageMap.source_system` 칸 값이다.
+- 비우면 운영 5개 원천(`DEV-<숫자>` 행은 뺌).
+- `DEV-…`는 dev·local에서만 — prd에 적혀 있으면 시작하지 않는다. `DEV-<숫자>` 문서는 검색 스키마 `<기준>_dev_<숫자>`에 적재되므로 목록에 새로 넣으면 먼저 `migrate up --target search`(없으면 적재가 멈춤).
+- PC 폴더 원천은 맨 위 `DEV-<숫자>/` 폴더도 원천 폴더이고 같은 목록으로 거른다.
+
+## PC 전용 칸
+
+PC(local)에 꼭 필요한 칸은 `run_env: local`, 모델 접속(`required.models`), PG 접속이다(예: [local.md 2](local.md#2-settingsyaml)). PC 전용 칸은 `dev` 절에 모여 있다(sample 맨 아래).
+
+- **서버 전용 칸은 무시:** `run_env: local`은 `required.edw.edw_host`·EDW 계정, `required.object_storage.*`, 원천 버킷, `required.publish.publish_bucket`을 비우고 `[settings] local(PC) — 서버 전용 칸을 무시함(비움): …` 한 줄에 칸 이름만 찍은 뒤 시작한다. 그래서 PC는 실제 EDW·Object Storage에 닿지 않는다. 서버(dev·prd)는 이 칸들을 쓰고 `dev.local`은 읽지 않는다.
+- **가짜 대상 `dev.local`**(기본값이 있어 적지 않아도 됨 — 저장소 루트 기준 상대 경로 또는 절대 경로):
+
+  | 칸 | 기본 |
+  |---|---|
+  | `local_edw_sqlite_file` | 가짜 EDW(원본 목록 FileStorageMap) — 비우면 `valid_env/edw/edw_copy.sqlite`(없으면 `edw.sqlite`를 복사해 만듦) |
+  | `local_publish_dir` | `valid_env/object_storage/Parsing_Result`(가짜 Object Storage — 처음 게시할 때 만듦). `<prefix>/<출처>/<원본 경로>/<파일명>_<날짜>.md`로 쓰고, 원본 목록에서는 빠진다 |
+  | `local_source_dir` | `valid_env/object_storage`(파싱 원본 — `--source`·`source_input_location`이 없을 때) |
+  | `local_max_new_docs_per_run` | `5`(새로 파싱할 문서 수 — `--max-new`·`max_new_docs_per_run`이 없을 때) |
+
+  원본 폴더(`ops.paths.source_docs_dir`)·파싱 원본(`extract.source.source_input_location` — 폴더 또는 `rdb:csv:<경로>`)도 상대 경로를 받는다.
+- **외부 모델:** `dev.models.<embed|llm|vlm>.*_allow_external`이 `true`이고 `run_env: local`일 때만 부른다(서버는 늘 거부 — 서버 파일에는 셋 다 `false`). 평소 `false`, 쓰는 실행 동안만 `true`. LLM·VLM을 켜면 분류(SFDC·LAS)와 그림·스캔 VLM이 외부 모델을 부른다 — 비우면 분류가 실패해 SFDC·LAS 문서는 적재되지 않는다. OpenRouter 하나로 임베딩·LLM·VLM을 모두 쓸 수 있다(같은 주소·키, 모델만 다름 — 단가표 `common/ai/llm.py` `PRICES`에 있는 모델이어야 예산 상한이 걸림).
+- **하루 지출 상한:** `dev.models.guard.daily_budget_usd`(비우면 0.1달러, 장부 `output/_llm_spend/<날짜>.txt`).
+- **VLM 설정은 한 벌:** VLM 엔진(`qwen_vlm`)·쪽 VLM·그림 VLM이 같은 호출과 같은 칸(`common.models.vlm.*` — 동시 수·제한 시간·재시도·`vlm_extra_request_body`, 해상도 `extract.page_render_dpi`, 쪽 상한 `transform.vlm.vlm_max_pages_per_doc`)을 쓴다. 생각(추론) 모델이면 `vlm_extra_request_body`에 생각 끄기를 넣는다(OpenRouter는 `{"reasoning": {"enabled": false}}`) — 규칙 PRD [pl-43](../prd/transform.md#pl-43).
 
 ## 새벽 배치(셋 다 있어야 돈다)
 

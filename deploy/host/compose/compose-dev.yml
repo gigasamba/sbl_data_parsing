@@ -7,6 +7,7 @@ x-dev: &dev
   network_mode: host
   init: true
   user: "0"
+  secrets: [root_pw]
   extra_hosts: ["host.docker.internal:host-gateway"]
   pids_limit: 4096
   cpus: 2
@@ -59,3 +60,7 @@ services:
       - ${SBL_ROOT:-/home/sbl}/data_pipeline-4/app:/app:z
       - ${SBL_ROOT:-/home/sbl}/data_pipeline-4/home:/root:z
       - ${DOC_SRC:-/data/docs}:/data/docs:ro,z
+
+secrets:
+  root_pw:   # SSH root 비밀번호 — host_ctl.sh가 settings.yaml option.devbox.root_password를 넘김 → 컨테이너 /run/secrets/root_pw
+    environment: ROOT_PW

@@ -28,13 +28,14 @@ def _ok_pub(seq):
 
 
 def _ok_gold(seq, enq_t=None):
-    return True
+    return 0
 
 
 def _run_main(work, rows, parse_one, gold_one=_ok_gold, publish_one=_ok_pub, drops=None, setup=None, args=()):
     """가짜 함수로 main()을 돌리고 모듈을 돌려준다(종료 코드는 M.rc). 외부 명령 가드는 main() 스레드가 끝날 때까지 유지한다(멈추면 가드 안에서 실패).
     drops(목록)를 주면 정리 호출을 ("orig"|"temp", seq)로 적는다(pl-24 순서 시험) — 정리 함수가 예외를 내게 하려면 setup에서 바꿈."""
     M = _load()
+    M.host_note_error, M.host_publish_one = M.note_error, M.publish_one
     rec = drops if drops is not None else []
 
     class _FastTime:  # run_pipeline의 5초 대기 고리(_mcp_pause_monitor·흐름 끝 기다림)를 짧게 — 다른 time 기능은 그대로
@@ -47,7 +48,8 @@ def _run_main(work, rows, parse_one, gold_one=_ok_gold, publish_one=_ok_pub, dro
 
     M.time = _FastTime()
 
-    def configure(_settings):  # 설정 파일 대신 — 작업 폴더만 임시 폴더로
+    def configure(_settings, _overrides=()):  # 설정 파일 대신 — 작업 폴더만 임시 폴더로
+        M.POLICY.update(steps_precheck=False, steps_verify=False, run_limit=0)  # ② 문서 처리만 — ①③·건수는 test_run_pipeline
         M.TEST, M.PROG = work, work / "batch_progress"
         M.DOCSPACE = work / "out"
         M.DOCFLOW, M.STAGING = M.DOCSPACE / "_docflow", M.DOCSPACE / "_staging"
@@ -67,6 +69,8 @@ def _run_main(work, rows, parse_one, gold_one=_ok_gold, publish_one=_ok_pub, dro
     M.drop_temp = lambda seq: rec.append(("temp", seq))
     M.take_lock = lambda path: object()  # flock(fcntl — Linux 호스트)은 test_lock_blocks_second_run이 따로
     M.pg_count = lambda: (0, 0)
+    M.dlq_state = lambda: {}  # 앱 DLQ 조회도 가짜로(외부 명령 가드는 그대로)
+    M.note_error = lambda seq, reason, row=None, dlq_only=False: None  # 실패 이력·DLQ 기록도 가짜로
     M.rc = None
     argv = sys.argv
     sys.argv = ["run_pipeline.py", "--start-offset", "0", "--settings", str(work / "unused.yaml"), *args]
@@ -99,7 +103,7 @@ def test_main_runs_lanes_to_end():
 
         def gold_one(seq, enq_t=None):
             calls["struct"].append(seq)
-            return True
+            return 0
 
         M = _run_main(work, rows, parse_one, gold_one)
         assert sorted(calls["parse"]) == [0, 1], calls  # 레인 스레드가 _one → parse_one을 부름
@@ -136,8 +140,8 @@ def test_main_survives_errors_in_failure_path():
         assert M.rc == 1
 
 
-def test_thread_error_fails_the_run():
-    """gold 뒤 기록(mark — 디스크 가득 등)이 예외를 내도 집계는 먼저 되고, 스레드 예외는 실패로 세어 종료 코드 1."""
+def test_done_mark_error_preserves_success():
+    """gold 뒤 기록(mark — 디스크 가득 등)의 예외는 경고만 남기고 성공을 유지한다."""
     rows = [{"id": 0, "s3_key": "k0", "original_filename": "doc0.txt", "file_size": 10}]
     with tempfile.TemporaryDirectory(prefix="orca_thr_") as tmp:
         work = Path(tmp)
@@ -154,8 +158,8 @@ def test_thread_error_fails_the_run():
 
         M = _run_main(work, rows, lambda seq, row: True, setup=setup)
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
-        assert "완료 1 · 건너뜀 0 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 1" in log, log
-        assert M.rc == 1
+        assert "완료 1 · 건너뜀 0 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 0" in log, log
+        assert M.rc == 0
 
 
 def test_stage_error_does_not_hang():
@@ -207,7 +211,7 @@ def test_struct_backlog_holds_new_parses():
 
         def gold_one(seq, enq_t=None):
             time.sleep(0.3)
-            return True
+            return 0
 
         M = _run_main(work, rows, lambda seq, row: True, gold_one, setup=setup)
         lines = [json.loads(x) for x in (M.PROG / "queue_depth.jsonl").read_text(encoding="utf-8").splitlines()]
@@ -332,7 +336,7 @@ def test_doc_order_and_exit_code():
                 work,
                 rows,
                 lambda seq, row, ok=p_ok, ev=ev: (ev.append("parse"), ok)[1],
-                lambda seq, enq_t=None, ok=g_ok, ev=ev: (ev.append("gold"), ok)[1],
+                lambda seq, enq_t=None, ok=g_ok, ev=ev: (ev.append("gold"), 0 if ok else 1)[1],
                 lambda seq, ok=pub_ok, ev=ev: (ev.append("publish"), ok)[1],
                 drops=_Rec(ev),
             )
@@ -397,3 +401,378 @@ def test_lock_blocks_second_run():
         assert subprocess.run([sys.executable, "-c", code], check=False).returncode == 0
         held.close()
         assert subprocess.run([sys.executable, "-c", code], check=False).returncode == 1  # 풀린 뒤에는 잡힘
+
+
+def test_deadline_only_when_work_remains():
+    rows = [{"id": 0, "s3_key": "pending", "original_filename": "doc0.txt", "file_size": 10}]
+    for during_parse in (False, True):
+        picks = []
+
+        def setup(M, during_parse=during_parse, picks=picks):
+            def pick(a):
+                picks.append("list")
+                if not during_parse:
+                    M.DEADLINE_AT = time.time() - 1  # 시작 판단 뒤, 받기 전에 마감
+                return {0: rows[0]}, [0], 1, 0
+
+            def parse(seq, row):
+                M.DEADLINE_AT = time.time() - 1  # 마지막 문서 처리 중 마감(이미 받은 문서는 끝까지 처리)
+                return True
+
+            M.pick_targets, M.parse_one = pick, parse
+
+        with tempfile.TemporaryDirectory(prefix="orca_dlq_deadline_") as tmp:
+            M = _run_main(Path(tmp), rows, lambda seq, row: True, setup=setup, args=("--skip-done",))
+            log = (M.PROG / "progress.log").read_text(encoding="utf-8")
+        assert picks == ["list"] and M.rc == (0 if during_parse else 75), log
+
+
+def test_classify_failure_preserves_load_reason():
+    rows = [{"id": 0, "s3_key": "k0", "original_filename": "doc0.txt", "file_size": 10}]
+    noted = []
+
+    def setup(M):
+        M.note_error = lambda *args: noted.append(args)
+
+    with tempfile.TemporaryDirectory(prefix="orca_classify_") as tmp:
+        M = _run_main(Path(tmp), rows, lambda seq, row: True, gold_one=lambda seq, enq_t=None: 3, setup=setup)
+        log = (M.PROG / "progress.log").read_text(encoding="utf-8")
+    assert M.rc == 1 and "gold실패 1" in log and noted == [(0, "classify_failed", rows[0], True)]
+
+
+def test_stage_error_records_row_and_removes_temp():
+    rows = [{"id": 0, "s3_key": "k0", "original_filename": "doc0.txt", "file_size": 10}]
+    noted, drops = [], []
+
+    def setup(M):
+        M.stage_one = mock.Mock(side_effect=OSError("cannot write batch.csv"))
+        M.note_error = lambda *args: noted.append(args)
+
+    with tempfile.TemporaryDirectory(prefix="orca_stage_row_") as tmp:
+        M = _run_main(Path(tmp), rows, lambda seq, row: True, setup=setup, drops=drops)
+    assert M.rc == 1 and noted == [(0, "stage_failed", rows[0])]
+    assert drops == [("temp", 0)]
+
+
+def test_success_cleanup_errors_only_warn():
+    rows = [{"id": 0, "s3_key": "k0", "original_filename": "doc0.txt", "file_size": 10}]
+    for event in ("done", "struct_put", "pub_put"):
+        noted = []
+
+        def setup(M, event=event, noted=noted):
+            original = M.mark if event == "done" else M.depth
+
+            def boom(*args, **kwargs):
+                if (args[1] if event == "done" else args[0]) == event:
+                    raise OSError("queue failure")
+                return original(*args, **kwargs)
+
+            if event == "done":
+                M.mark = boom
+            else:
+                M.depth = boom
+            M.note_error = lambda *args: noted.append(args)
+
+        with tempfile.TemporaryDirectory(prefix="orca_queue_error_") as tmp:
+            M = _run_main(Path(tmp), rows, lambda seq, row: True, setup=setup)
+        assert M.rc == 0 and not noted, (event, noted)
+
+
+def test_stuck_thread_overrides_deadline():
+    """실제 작업은 끝낸 뒤 is_alive만 흉내 내어 종료 대기 제한·마감보다 실패 우선임을 확인."""
+    for name in ("lane-light-own", "downloader", "mcp-watch", "publish", "structure-0"):
+        joins, picks = [], []
+        real_join = threading.Thread.join
+        real_alive = threading.Thread.is_alive
+
+        def setup(M, name=name, picks=picks):
+            real_run = M.run_flow
+
+            def flow(*args):
+                result = real_run(*args)
+                result["deadline"] = True
+                return result
+
+            M.run_flow = flow
+            M.pick_targets = lambda a: picks.append("list") or ({0: {"s3_key": "pending", "original_filename": "p.pdf"}}, [0], 1, 0)
+
+        def join(thread, timeout=None, joins=joins, real_join=real_join):
+            joins.append((thread.name, timeout))
+            return real_join(thread, timeout)
+
+        def alive(thread, name=name, real_alive=real_alive):
+            return thread.name == name or real_alive(thread)
+
+        with (
+            tempfile.TemporaryDirectory(prefix="orca_stuck_") as tmp,
+            mock.patch.object(threading.Thread, "join", join),
+            mock.patch.object(threading.Thread, "is_alive", alive),
+        ):
+            M = _run_main(Path(tmp), [], lambda seq, row: True, setup=setup, args=("--skip-done",))
+            log = (M.PROG / "progress.log").read_text(encoding="utf-8")
+        assert M.rc == 1 and picks == ["list"], (name, M.rc, picks)
+        assert "종료 대기 시간 초과" in log and name in log
+        assert all(
+            timeout is not None and 0 < timeout <= 30
+            for thread, timeout in joins
+            if thread.startswith("lane-") or thread in ("downloader", "mcp-watch", "publish", "structure-0")
+        )
+
+
+def test_dispatched_mark_error_keeps_lane_document():
+    rows = [{"id": 0, "s3_key": "k0", "original_filename": "doc0.txt", "file_size": 10}]
+    noted, drops, parsed, errors = [], [], [], []
+
+    def setup(M):
+        real_mark = M.mark
+
+        def mark(seq, event, **kwargs):
+            if event == "dispatched":
+                raise OSError("cannot write dispatch mark")
+            return real_mark(seq, event, **kwargs)
+
+        M.mark = mark
+        M.note_error = lambda *args: noted.append(args)
+        M._thread_error = lambda *args: errors.append(args)
+
+    with tempfile.TemporaryDirectory(prefix="orca_dispatch_") as tmp:
+        M = _run_main(Path(tmp), rows, lambda seq, row: parsed.append(seq) or True, setup=setup, drops=drops)
+    assert M.rc == 0 and parsed == [0] and not noted and not M._STAGE_FAILED and M._STAGE_ERR == [0]
+    assert drops == [("orig", 0), ("temp", 0)]  # 레인 완료 뒤 정리만 한 번
+    assert len(errors) == 1 and errors[0][:2] == ("받기", 0)
+
+
+def test_permanent_skip_mark_error_only_warns():
+    rows = [{"s3_key": "skip", "original_filename": "skip.pdf"}]
+    noted, errors = [], []
+
+    def setup(M):
+        real_mark = M.mark
+
+        def mark(seq, event, **kwargs):
+            if event == "done":
+                raise OSError("cannot mark permanent skip")
+            return real_mark(seq, event, **kwargs)
+
+        M.mark = mark
+        M.parse_one = lambda seq, row: M.SKIP
+        M.note_error = lambda *args: noted.append(args)
+        M._thread_error = lambda *args: errors.append(args)
+
+    with tempfile.TemporaryDirectory(prefix="orca_skip_mark_") as tmp:
+        M = _run_main(Path(tmp), rows, lambda seq, row: True, setup=setup)
+    assert M.rc == 0 and not noted and len(errors) == 1
+
+
+def test_single_flow_attempt_and_unknown_dlq():
+    rows = [{"s3_key": "pending", "original_filename": "p.pdf"}]
+    for known in (True, False):
+        for parsed in (True, False):
+            picks, parsed_docs = [], []
+
+            def setup(M, known=known, parsed=parsed, picks=picks, parsed_docs=parsed_docs):
+                M.dlq_state = lambda: {} if known else None
+                M.pick_targets = lambda a: picks.append("list") or ({0: rows[0]}, [0], 1, 0)
+                M.parse_one = lambda seq, row: parsed_docs.append(seq) or parsed
+
+            with tempfile.TemporaryDirectory(prefix="orca_single_flow_") as tmp:
+                M = _run_main(Path(tmp), rows, lambda seq, row: True, setup=setup, args=("--skip-done",))
+                log = (M.PROG / "progress.log").read_text(encoding="utf-8")
+            assert picks == ["list"] and parsed_docs == [0]
+            assert M.rc == (0 if parsed else 1)
+            assert ("DLQ 상태 모름" in log) is not known
+
+
+def test_post_gold_report_error_preserves_completed():
+    rows = [{"s3_key": f"k{i}", "original_filename": "doc.pdf"} for i in range(5)]
+    noted, errors = [], []
+
+    def setup(M):
+        def count():
+            if threading.current_thread().name.startswith("structure-"):
+                raise OSError("cannot report PG count")
+            return 5, 5
+
+        M.pg_count = count
+        M.note_error = lambda *args: noted.append(args)
+        M._thread_error = lambda *args: errors.append(args)
+
+    with tempfile.TemporaryDirectory(prefix="orca_report_error_") as tmp:
+        M = _run_main(Path(tmp), rows, lambda seq, row: True, setup=setup)
+    assert M.rc == 0 and not noted and len(errors) == 1
+
+
+def test_empty_targets_return_without_flow():
+    for state in ({}, None):
+
+        def setup(M, state=state):
+            M.run_flow = mock.Mock(side_effect=AssertionError("empty list must not start flow threads"))
+            M.pg_count = mock.Mock(side_effect=AssertionError("empty list must not count PG rows"))
+            M._mcp_pause_monitor_once = mock.Mock(side_effect=AssertionError("empty list must not inspect MCP work"))
+            M._mcp_pause_monitor = mock.Mock(side_effect=AssertionError("empty list must not monitor MCP work"))
+            M.dlq_state = mock.Mock(return_value=state)
+
+        with tempfile.TemporaryDirectory(prefix="orca_empty_targets_") as tmp:
+            M = _run_main(Path(tmp), [], mock.Mock(side_effect=AssertionError("empty list must not parse")), setup=setup)
+            log = (M.PROG / "progress.log").read_text(encoding="utf-8")
+        assert M.rc == 0 and "처리할 문서 없음 — 종료" in log
+        M.run_flow.assert_not_called()
+        M.pg_count.assert_not_called()
+        M._mcp_pause_monitor_once.assert_not_called()
+        M._mcp_pause_monitor.assert_not_called()
+        M.dlq_state.assert_called_once_with()
+
+
+def _use_host_error_cli(M, fail=False):
+    """docker exec만 대체하고 실제 호스트 note_error → 앱 CLI → 시험 PG 경로는 유지."""
+    import io
+    import shlex
+    from contextlib import redirect_stderr, redirect_stdout
+
+    from pipeline.shared import dlq, except_docs
+
+    M.host_error_calls = []
+
+    def shell(cmd, timeout=0):
+        args = shlex.split(shlex.split(cmd)[-1].split(" && ")[-1])
+        assert args[:4] == ["python", "-m", "pipeline.shared.except_docs", "error"]
+        M.host_error_calls.append(args)
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            if fail:
+                with mock.patch.object(dlq, "record_failure", side_effect=RuntimeError("secret")):
+                    rc = except_docs._error_cmd(args[4:])
+            else:
+                rc = except_docs._error_cmd(args[4:])
+        return rc, out.getvalue(), err.getvalue()
+
+    M.sh, M.note_error = shell, M.host_note_error
+
+
+def test_classify_failure_host_dlq_and_progress():
+    from pipeline.shared import dlq, except_docs
+    from tests.server.common import pgcase
+    from tests.server.pipeline.test_dlq import log_schema
+
+    rows = [{"s3_key": "SFDC/a.pdf", "original_filename": "a.pdf", "source_system": "SFDC"}]
+    failure = {"source_key": "SFDC/a.pdf", "file_name": "a.pdf", "source_system": "SFDC", "reason": "classify_failed"}
+    for previous, host_write_fails in ((0, False), (2, False), (0, True)):
+        with tempfile.TemporaryDirectory(prefix="orca_classify_dlq_") as tmp, log_schema() as schema:
+            for _ in range(previous):
+                dlq.record_failure([failure])
+
+            def setup(M, host_write_fails=host_write_fails):
+                _use_host_error_cli(M, fail=host_write_fails)
+
+                def gold(seq, enq_t=None):
+                    # 컨테이너의 DLQ가 고장 나 있어도 호출하지 않음. 이력만 쓰고 rc 3을 반환.
+                    with mock.patch.object(dlq, "record_failure", side_effect=RuntimeError("container DLQ unavailable")) as blocked:
+                        except_docs.note_error([failure])
+                        blocked.assert_not_called()
+                    return 3
+
+                M.gold_one = gold
+
+            M = _run_main(Path(tmp), rows, lambda seq, row: True, setup=setup)
+            log = (M.PROG / "progress.log").read_text(encoding="utf-8")
+            assert M.rc == 1 and len(M.host_error_calls) == 1 and "--dlq-only" in M.host_error_calls[0]
+            if host_write_fails:
+                assert not dlq.list_rows()
+                assert "[DLQ] 실패 기록 못 씀(RuntimeError)" in log and "secret" not in log
+            else:
+                r = dlq.list_rows()[0]
+                assert (r["attempts"], r["last_reason"]) == (previous + 1, "classify_failed")
+                if previous == 2:
+                    assert r["status"] == "dead" and "[DLQ] 확인 필요" in log
+            db = pgcase.connect(schema)
+            try:
+                assert db.q(f"SELECT count FROM {schema}.except_doc_info WHERE except_type='error'")[0]["count"] == 1
+            finally:
+                db.cn.close()
+
+
+def test_failed_rep_publish_host_records_once():
+    import io
+    import json
+    import shutil
+    from contextlib import redirect_stdout
+
+    from pipeline.load import publish_parse_result as publish
+    from pipeline.shared import dlq
+    from tests.server.common import pgcase
+    from tests.server.pipeline import test_publish_parse as fixture
+    from tests.server.pipeline.test_dlq import log_schema
+
+    fixture_dir, source, args = fixture.make_fixture()
+    try:
+        manifest = source / "parse" / "_source" / "manifest.jsonl"
+        failed = next(
+            json.loads(line) for line in manifest.read_text(encoding="utf-8").splitlines() if json.loads(line)["file_name"] == "b.pdf"
+        )
+        failed["source_system"] = "SFDC"
+        manifest.write_text(json.dumps(failed) + "\n", encoding="utf-8")
+        args.apply, args.source_system = True, "SFDC"
+        rows = [{"s3_key": "docs/b.pdf", "original_filename": "b.pdf", "source_system": "SFDC"}]
+        with tempfile.TemporaryDirectory(prefix="orca_failed_rep_") as tmp, log_schema() as schema:
+
+            def setup(M):
+                dest = M.DOCFLOW / "0"
+                shutil.copytree(source, dest)
+                args.out = str(dest)
+                _use_host_error_cli(M)
+                M.publish_one = M.host_publish_one
+                M.gold_one = mock.Mock(side_effect=AssertionError("failed rep must not reach gold"))
+                real_flow = M.run_flow
+
+                def flow(*a):
+                    M.flow_result = real_flow(*a)
+                    return M.flow_result
+
+                M.run_flow = flow
+
+                def doc_shell(seq, cmd, timeout, doc_log):
+                    out = io.StringIO()
+                    with (
+                        mock.patch.object(publish, "make_storage", return_value=publish.LocalFolderStore(Path(tmp) / "storage")),
+                        redirect_stdout(out),
+                    ):
+                        result = publish.run(args)
+                    assert result["by_status"] == {"failed": 1} and not dlq.list_rows()
+                    (dest / "publish.log").write_text(out.getvalue(), encoding="utf-8")
+                    return 0  # 기존 publish 종료 코드 계약 그대로
+
+                M.doc_sh = doc_shell
+
+            M = _run_main(Path(tmp), rows, lambda seq, row: True, setup=setup)
+            assert M.rc == 1 and M.flow_result["failed_keys"] == {"docs/b.pdf"} and not M.flow_result["completed"]
+            assert M.flow_result["parse_fail"] == 1
+            M.gold_one.assert_not_called()
+            M.note_error(0, "publish_failed", rows[0])  # 뒤 예외 경로가 다시 불러도 문서당 1회
+            assert len(M.host_error_calls) == 1
+            r = dlq.list_rows()[0]
+            assert (r["attempts"], r["last_reason"], r["status"]) == (1, "parse_failed", "pending")
+            db = pgcase.connect(schema)
+            try:
+                assert db.q(f"SELECT count FROM {schema}.except_doc_info WHERE except_type='error'")[0]["count"] == 1
+            finally:
+                db.cn.close()
+    finally:
+        shutil.rmtree(fixture_dir, ignore_errors=True)
+
+
+def test_publish_summary_statuses():
+    import json
+
+    for rc, statuses, want in ((0, {"ok": 1}, True), (0, {"failed": 1}, "parse_failed"), (1, {}, False)):
+        with tempfile.TemporaryDirectory(prefix="orca_publish_status_") as tmp:
+            M = _load()
+            M.PROG, M.DOCFLOW = Path(tmp), Path(tmp) / "flow"
+            doc = M.DOCFLOW / "0"
+            doc.mkdir(parents=True)
+            (doc / "publish.log").write_text(
+                json.dumps({"by_status": {"failed": 1}}) + "\nnoise\n" + json.dumps({"by_status": statuses}) + "\n", encoding="utf-8"
+            )
+            M.doc_sh = lambda *args, rc=rc: rc
+            M.publish_cmd = lambda seq: "unused"
+            M._fail_note = lambda *args: "failure"
+            assert M.publish_one(0) == want

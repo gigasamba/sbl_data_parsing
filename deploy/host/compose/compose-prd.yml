@@ -13,6 +13,7 @@ x-prd: &prd
     options: {max-size: "50m", max-file: "3"}
 x-ssh: &ssh
   <<: *prd
+  secrets: [root_pw]
   entrypoint: ["/usr/bin/tini", "-s", "--", "/etc/devbox/dev_entry.sh"]   # 구운 이미지 ENTRYPOINT(entrypoint.sh) 대신 SSH 작업 공간으로
 
 services:
@@ -67,3 +68,7 @@ services:
       timeout: 15s
       retries: 3
       start_period: 15s
+
+secrets:
+  root_pw:   # SSH root 비밀번호 — host_ctl.sh가 settings.yaml option.devbox.root_password를 넘김 → 컨테이너 /run/secrets/root_pw
+    environment: ROOT_PW

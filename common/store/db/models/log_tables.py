@@ -1,6 +1,7 @@
 """applog 정본(op-01). MCP/pipe_event PK는 PG 제약에 따라 월 키를 포함한다.
 pipe_run은 실행당 한 행으로 작아 일반 테이블(run_id PK)로 두고 보존 DELETE한다.
 except_doc_info(적재되지 않은 문서 — 원본 키 + 종류 PK)는 일반 테이블 — 보존 DELETE 없음(skip 행을 지우면 그 문서를 다시 고름).
+dlq_doc(pl-69)은 실패 재시도 상태 — resolved만 보존 기한 뒤 DELETE한다.
 실행 중 DDL 금지: 생성/보존 관리는 Alembic과 dbtool maintain만 사용한다.
 """
 
@@ -149,7 +150,7 @@ def log_metadata(schema="applog"):
         else:
             Index("ix_pipe_run_started", table.c.started_at)
     # 적재되지 않은 문서(op-17 — 판 0003, 옛 skip_doc_info): 원본 키 + 종류당 한 행, pipeline/shared/except_docs가 upsert.
-    # except_type skip = 영구 뺌(미지원·DRM·암호·내용 중복 — 대상 목록이 뺌) · error = 파싱·적재 실패(기록만 — 다음 실행이 다시 고름). 작은 일반 표.
+    # except_type skip = 영구 뺌(미지원·DRM·암호·내용 중복 — 대상 목록이 뺌) · error = 파싱·적재 실패 이력(재시도 상태는 별도 dlq_doc). 작은 일반 표.
     now = text("now()")
     Table(
         "except_doc_info",
@@ -166,6 +167,24 @@ def log_metadata(schema="applog"):
         Column("file_ext", Text),  # 판 0004 — 소문자, 점 없음(file_name에서)
         Column("file_size", BigInteger),  # 판 0004 — 원천 표 file_size(모르면 NULL)
     )
+    dlq = Table(
+        "dlq_doc",
+        md,
+        Column("source_key", Text, primary_key=True),
+        Column("source_system", Text),
+        Column("file_name", Text),
+        Column("stage", Text),
+        Column("last_reason", Text, nullable=False),
+        Column("attempts", Integer, nullable=False, server_default=text("1")),
+        Column("status", Text, nullable=False, server_default=text("'pending'")),
+        Column("first_failed_at", DateTime(timezone=True), nullable=False, server_default=now),
+        Column("last_failed_at", DateTime(timezone=True), nullable=False, server_default=now),
+        Column("dead_at", DateTime(timezone=True)),
+        Column("resolved_at", DateTime(timezone=True)),
+        Column("pipeline_version", Text),
+        CheckConstraint("status IN ('pending','dead','resolved')", name="dlq_doc_status"),
+    )
+    Index("ix_dlq_doc_status_failed", dlq.c.status, dlq.c.last_failed_at)
     return md
 
 

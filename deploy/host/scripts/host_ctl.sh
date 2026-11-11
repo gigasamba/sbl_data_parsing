@@ -150,5 +150,14 @@ case "${1:-}" in
 esac
 F=deploy/host/compose/compose-${RUN_ENV:-}.yml   # 환경 = settings.yaml required.env.run_env(load_settings가 RUN_ENV로 냄)
 [ -f "$F" ] || { echo "[host_ctl] $F 없음 — settings.yaml required.env.run_env는 local·dev·prd 중 하나" >&2; exit 2; }
+if grep -q '^  root_pw:' "$F"; then   # SSH 컨테이너 root 비밀번호 = settings.yaml option.devbox.root_password → compose 비밀값(이 compose 프로세스에만)
+  case "${1:-}" in
+    up | create | run | restart)
+      pw=$("${PY:-python3}" deploy/host/scripts/settings_to_env.py --file "$SETTINGS_FILE" --secret common.host.devbox.root_password) ||
+        { echo "[host_ctl] SSH root 비밀번호를 못 읽음(위 줄) — settings.yaml option.devbox.root_password(8자 이상)" >&2; exit 2; } ;;
+    *) pw="" ;;   # ps·logs·down 등은 비밀값을 쓰지 않음
+  esac
+  export ROOT_PW="$pw"
+fi
 # shellcheck disable=SC2086 — DOCKER(sudo docker처럼 두 낱말)는 낱말 나눔
 exec $DOCKER compose -f "$F" "$@"   # compose 변수 DOC_SRC(ops.host.host_docs_dir)는 load_settings가 셸 env로 냄

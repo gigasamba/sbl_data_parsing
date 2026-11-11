@@ -74,7 +74,7 @@
 <a id="op-11"></a>
 ## op-11 · 사람 정답 폴더(`GOLD_DIR`) 칸 없음
 - 이유: 상주 `data-pipeline`에 사람 정답 폴더가 붙지 않아 점검기의 이름 짝 점검이 늘 건너뛰어졌다.
-- 결정(사용자 11-04): 칸 `GOLD_DIR`(`pipeline.paths.gold_dir`·`pipeline.host.gold_dir`)과 이미지 약속 경로 `gold_mount`를 지웠다. 점검기(`common/check/checker.py`)에 정답 폴더 점검이 없다. 옛 파일에 남은 칸은 시작 거부.
+- 결정: 칸 `GOLD_DIR`(`pipeline.paths.gold_dir`·`pipeline.host.gold_dir`)과 이미지 약속 경로 `gold_mount`를 지웠다. 점검기(`common/check/checker.py`)에 정답 폴더 점검이 없다. 옛 파일에 남은 칸은 시작 거부.
 - 파일: `common/config/settings.py`, `pipeline/config.py`, `common/check/checker.py`.
 - Status: done
 
@@ -95,8 +95,8 @@
 - QA: `tests/general/deploy/test_dc_init.py`(init 배치·루트 = 코드 폴더·app 안에 `home/`을 만들지 않음·`timers` 틀 채우기) · `test_compose.py`(벌 `app`·`home` 마운트) · `test_host_env.py` · `tests/server/common/test_layout.py`(지운 칸은 시작 거부) · `tests/server/common/test_settings.py`(서버 이미지 DB 로그 기본 켬). 서버 확인: [refactor.md C-90](../refactoring/refactor.md).
 - Status: done
 
-<a id="op-19"></a>
-## op-19 · 서버 문서는 환경마다 실행 안내 하나
+<a id="op-23"></a>
+## op-23 · 서버 문서는 환경마다 실행 안내 하나
 - 이유: 서버에 들어가서 문서의 명령을 위에서부터 차례로 치면 끝나야 한다. 같은 절차가 여러 곳에 있으면 한쪽만 고쳐져 어긋난다.
 - 규칙:
   1. 환경마다 실행 안내 하나 — PC [local.md](../operations/local.md), 개발 서버 [dev.md](../operations/dev.md)(호스트 셸 + 벌 컨테이너 안 `python -m` 명령, 폴더·원천·파일 경로는 `--set`), 운영 서버 [prd.md](../operations/prd.md)(설치·판 올리기·되돌리기). 사람이 채울 설정 칸은 [settings.md](../operations/settings.md). 다른 문서는 링크만 둔다.

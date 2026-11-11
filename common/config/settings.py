@@ -58,6 +58,7 @@ IMAGE_PATHS = {
     # 이 표로 만든 deploy/host/scripts/host_settings.tsv를 읽는다(호스트 python엔 pydantic이 없음 — load_settings.sh가 APP_* env로도 냄).
     "code_root": "/app",  # 코드 자리(PYTHONPATH — 실행 이미지는 서버 코드 폴더를 여기에 붙임)
     "output_root": "/app/output",  # 결과 자리 = 코드 폴더/output(paths.APP_ROOT/output과 같음 — compose가 여기에 붙임)
+    "docker_root": "/opt/sbl/docker",  # 이미지 부품(entrypoint·배포 판정 selftest_gate.sh — Dockerfile COPY 자리)
     "image_env": "/opt/sbl/docker/image_env.txt",  # 빌드 때 이미지 ENV를 적어 둔 파일(common.config.boot — 라이브러리 env가 이미지 값만 덮게)
     "assets_root": "/opt/sbl/assets",  # 반입 자산(assets.py install이 읽음 — Dockerfile COPY 자리)
     "docs_mount": "/data/docs",  # 원본 폴더를 읽기 전용으로 붙이는 자리(compose DOC_SRC → 이 자리 · pipeline DOC_DIR 기본값)
@@ -1451,6 +1452,11 @@ class CommonDev(Section):
 class CommonHostDevbox(Section):
     git_user_name: str | None = F(None, "DEVBOX_GIT_USER_NAME", "개발 작업 공간의 git 커밋 이름(git config user.name, 선택)")
     git_user_email: str | None = F(None, "DEVBOX_GIT_USER_EMAIL", "개발 작업 공간의 git 커밋 메일(git config user.email, 선택)")
+    root_password: SecretStr | None = F(
+        None,
+        "ROOT_PW",
+        "서버 SSH 컨테이너 root 비밀번호(dev·prd 필수) — host_ctl.sh가 compose 비밀값 root_pw로 넘김(셸 env·로그에 내보내지 않음)",
+    )
 
 
 class CommonHost(Section):

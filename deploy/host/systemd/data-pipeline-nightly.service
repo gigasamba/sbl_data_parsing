@@ -11,5 +11,5 @@ User=root
 WorkingDirectory=@CODE_DIR@
 ExecStart=/bin/bash deploy/host/scripts/nightly_batch.sh scheduled
 TimeoutStartSec=6h
-# 75 = 마감·다른 run_pipeline이 도는 중(pl-18) — 실패로 치지 않음
+# 75 = 마감·다른 run_pipeline이 도는 중(pl-18) — 실패로 치지 않음. 1 실패 문서 · 2 설정 · 3 사전 점검·적재 확인은 실패
 SuccessExitStatus=75

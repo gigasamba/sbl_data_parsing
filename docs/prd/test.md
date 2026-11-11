@@ -13,6 +13,8 @@
   3. PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕(`run_env: local`과 부모의 PG 접속만, 다른 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `_PC_SETTINGS_CASES`(지금 빔).
 - 기준선(11-08, slim/load — 0.3.0 + 압축 원본 풀기·문서 안 문서 꺼내기 pl-63·pl-65 · 옛 오피스 검사기 하나로 pl-66 · 실버만 게시 상태 기록 pl-68 · 대표 결과 교차 병합·엑셀 날짜 표기 통일 pl-67 · 검색 MCP 동시 요청 mc-09 · 배포 판정 DB 시험 실 pgvector e2-22): `selftest` 113개 모두 통과(시험 함수 SKIP 0 — e2-22 뒤) · `pytest tests/` 177 통과 · 0 건너뜀 · 알려진 실패 0(두 목록 모두 빔) · FINGERPRINT `50588adec5d6d525` · code_fp p0 `e46c37a6e03f` · p1 `7aaabd66a297` · r `16e085b9ff38` · s `ddaf805dc00a`(기록용 — 0.3.0과 달라 서버는 다시 처리, refactor.md C-114 · e2-22에서 공용 `settings.py`·`layout.py` 설명이 바뀜) · 엔진 지문(`engine_code_fp`, 기록용): anydoc `01d0d7813c77` · archive `563e19556b61`(새 엔진) · docx2python `9ba622227470` · html_stdlib·mhtml·msg_extract `6b86d3b876c3` · hwpx `1ce4058a3a0a` · kreuzberg `e7797391d046` · markitdown `c6263c0c0984` · office `3a5c3859de9c` · plaintext `e61fe9d86b40` · pymupdf `8611e97ce9ec` · qwen_vlm `a0fd63c5062a`(엔진 폴더는 그대로 — 함께 셈하는 `pipeline/shared/vlmcall.py`의 설정 이름이 바뀜) · rapidocr_ko `1e08f27b5ddd`.
 - #113 재배치 뒤 기준선(11-10, develop `73ac9401` 위 Redis 큐): `selftest` 114/114 통과(시험 함수 SKIP 0) · `pytest tests/` 180 통과 · 0 건너뜀 · 알려진 실패 0. 바로 위 develop 기록(113/113 · 177 통과)에서 서버 Redis 큐 시험 1개와 PC Redis 통합·호스트 시험 2개가 늘었다. 실제 시험 PG `127.0.0.1:55433`·Redis `127.0.0.1:56379`로 확인했다. FINGERPRINT `50588adec5d6d525` 그대로 · code_fp p0 `7045fca5b2b7` · p1 `9af0ab324470` · r `28b358e02aa3` · s `e2346d4a3187`(설정 공용 의존 변경으로 서버 전체 재처리 — [C-116](../refactoring/refactor.md), 새 이미지 버전 필요). 엔진·핸드오프·프롬프트 파일 바이트는 develop 그대로다.
+- #174 DLQ 적재·관리 범위 정리 뒤 기준선(11-11, october-03/feature-dlq 미커밋): `selftest` 115/115 통과(실패 0·시험 함수 SKIP 0) · `pytest tests/` 184 통과 · 실패 0 · 0 건너뜀 · 알려진 실패 0(두 목록 모두 빔). 자동 재시도 패스 시험을 제거하고 본 흐름 1회·pending 포함/dead 제외·3회 dead·수동 requeue·선행 하이픈 인자·성공/영구 뺌 뒤 기록 오류·명시 키 우선·NULL 메타데이터 보존·호스트만 DLQ 1회 기록·분류 실패 경고 전달·엔진 없는 rep 게시 제외의 종료 1을 확인했다. 이전 미커밋 재시도 패스 기준선 188개에서 pytest 직접 수집 사례 5개 제거·회귀 사례 1개 추가로 184개이며 서버 시험 모듈은 115개로 같다. HEAD를 `git archive HEAD`로 임시 폴더에 풀어 비교한 FINGERPRINT `50588adec5d6d525` · code_fp p0 `7045fca5b2b7` · p1 `9af0ab324470` · r `28b358e02aa3` · s `e2346d4a3187`는 현재와 모두 같다(develop 병합 뒤 11-11: develop과 같은 p0 `26b7f03c6318` · p1 `56eca3c80b01` · r `96902fdf1d9e` · s `5f5bdc050f48`). DLQ로 인한 추가 전체 재처리는 없다. 코드 폴더만 교체하며 applog 판 0005 선적용이 필수다([C-120](../refactoring/refactor.md)). 엔진·핸드오프·프롬프트 파일 바이트는 HEAD 그대로다.
+- rn-05 run_pipeline e2e 뒤 기준선(11-11, feature/dev-mounts에 합친 뒤): `selftest` 115/115 통과(시험 함수 SKIP 3 — Windows PC에서 Linux 전용 사례) · `pytest tests/` 188 통과 · 실패 0 · 알려진 실패 0. develop 기록(184)에서 실행 자리·`--set` 우선·단계 멈춤·끝 판정 사례 표 3개가 늘었다. FINGERPRINT `50588adec5d6d525` 그대로 · code_fp p0 `ef167736b237` · p1 `e7cb2d7381c1` · r `48bf22cbbaa5` · s `a25c3f388d66`(`pipeline/config.py`·`common/config/layout.py` 새 설정 칸 — 서버 전체 다시 처리, [C-121](../refactoring/refactor.md)). 엔진·핸드오프·프롬프트 파일 바이트는 develop 그대로다.
 - 지문 확인 명령: [CLAUDE.md](../../CLAUDE.md) §4. 공용·레이어 파일을 고친 커밋은 전후 값을 커밋 메시지에 적는다.
 - QA: `python -m pipeline.cli selftest` · `[판정]` 통과, 기준선보다 나빠지지 않음.
 - Status: done
@@ -35,22 +37,22 @@
 ## e2-15 · 에이전트 지시서 폴더는 있는 갈래만 찾는다
 - 이유: 없는 폴더를 찾는 갈래는 읽는 사람만 헷갈리게 한다.
 - 요건: `common/core/paths.py` `resolve_agent_dir`는 `resources/prompts/common` → `resources/prompts/pipeline` → `valid_env/answer_test` 셋만 본다(`tests/server/common/test_paths.py`).
-- 반영: 0.3.0(11-05).
+- 반영: 0.3.0.
 - Status: todo
 
 <a id="e2-21"></a>
 ## e2-21 · 옛 오버레이 패치 흔적 정리
 - 이유: 오버레이 패치 길은 없어졌는데 그 길만 읽던 것이 남았다.
 - 요건: ① 버전 표기 `common/core/fingerprint.py` `pipeline_version()`은 저장소 루트 `VERSION` 하나만 읽는다(`common/PATCH_VERSION` 후보 없음 — `tests/server/common/test_fingerprint.py` 사례 표). ② `deploy/docker/IMAGE_BASE`(읽는 곳 없음)와 그 `.gitattributes` 줄은 없다.
-- 반영: 0.3.0(11-05) — 레이어 지문은 그대로(`fingerprint.py`는 레이어 지문에 들지 않음).
+- 반영: 0.3.0 — 레이어 지문은 그대로(`fingerprint.py`는 레이어 지문에 들지 않음).
 - 비고: `pipeline/load/publish_parse_result.py`의 설명·`--version` 도움말에 `PATCH_VERSION` 글자가 남아 있다(동작 무관).
 - Status: done
 
 <a id="e2-01"></a>
 ## e2-01 · PC 스모크 — 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색
 - 이유: 릴리스 전에 문서 2~3건으로 사슬 전체를 증명한다.
-- 규칙: README §4-4 단계(`pipeline.cli parse` · `gold_bundle` · `dbtool up` · `pgvector_load` · `mcp_server.cli.search_ask`). 실행마다 다른 값은 `--set`. 임베딩 캐시 `output/edw/embed_cache.sqlite`. 시험 문서 `valid_env/object_storage/`.
-- QA: README §4-4 ①~⑥ · `ask`가 근거를 냄.
+- 규칙: [local.md 5](../operations/local.md#5-문서-몇-건-돌리기파싱--구조화--db-표--적재--검색) 단계(`pipeline.cli parse` · `gold_bundle` · `dbtool up` · `pgvector_load` · `mcp_server.cli.search_ask`). 실행마다 다른 값은 `--set`. 임베딩 캐시 `output/edw/embed_cache.sqlite`. 시험 문서 `valid_env/object_storage/`.
+- QA: local.md 5-1~5-7 · `ask`가 근거를 냄.
 - Status: done
 
 <a id="e2-13"></a>

@@ -147,6 +147,9 @@ ENV_PAIRS = (  # .env(compose-redis.yml·compose-pgvector.yml) 이름 → settin
 )
 
 
+SECRET_PAIRS = (("ROOT_PW", "common.host.devbox.root_password"),)  # compose 비밀값 이름 → 모델 경로(host_ctl.sh — 셸 env로 내보내지 않음)
+
+
 def env_mismatch(doc, env_file):
     """.env와 settings.yaml이 다른(또는 빈) 이름 목록 — 값은 돌려주지 않는다."""
     env = {}
@@ -163,12 +166,22 @@ def main(argv=None):
     ap.add_argument("--file", help="설정 파일(없으면 SETTINGS_FILE)")
     ap.add_argument("--format", choices=("env", "sh"), default="env")
     ap.add_argument("--check-env", help=".env가 settings.yaml과 같은지만 확인(다른 이름만 찍음 — host_ctl.sh check)")
+    ap.add_argument(
+        "--secret", choices=[p for _, p in SECRET_PAIRS], help="비밀 칸 값 하나만(host_ctl.sh가 compose 비밀값으로 — 비면 종료 1)"
+    )
     a = ap.parse_args(argv)
     path = a.file or os.environ.get("SETTINGS_FILE")  # env 남김 — 설정 파일 자리 신호(load_settings가 정함)
     if not path:
         print("[settings_to_env] 설정 파일 없음 — --file 또는 SETTINGS_FILE", file=sys.stderr)
         return 2
     doc, err = load_or_error(path)
+    if not err and a.secret:
+        v = str(get(doc, a.secret) or "")
+        if len(v) < 8 or "\n" in v:  # 서버 앱 시작 관문과 같은 길이(settings.MIN_SECRET_LENGTH)
+            print(f"[settings_to_env] {a.secret} 비었거나 8자 미만(또는 여러 줄)", file=sys.stderr)
+            return 1
+        sys.stdout.write(v)
+        return 0
     if not err and a.check_env:
         try:
             bad = env_mismatch(doc, a.check_env)

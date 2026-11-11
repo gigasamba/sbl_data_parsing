@@ -18,7 +18,7 @@
 5. 지원 형식 = 구성의 `parse` 키 47개: `.pptx` `.doc` `.docx` `.hwpx` `.png` `.jpg` `.jpeg` `.tif` `.tiff` `.bmp` `.eml` `.mht` `.mhtml` `.txt` `.html` `.htm` `.pdf_image` `.pdf_text` `.xls` `.xlsm` `.xlsx` `.ppt` `.msg` `.docm` `.pptm` `.rtf` `.csv` `.tsv` `.md` `.odt` `.ods` `.odp` `.xlsb` `.dotx` `.xltx` `.potx` `.ppsx` `.dot` `.xlt` `.pot` `.json` `.xml` `.log` `.zip` `.tar` `.tgz` `.gz`. `.hwp`는 아직 아니다([pl-45](#pl-45)). 압축 원본(`.zip`·`.tar`·`.tgz`·`.tar.gz`)은 압축 엔진 `archive` + 첨부 단계([extract.md#pl-57](extract.md#pl-57)).
 6. 구성의 엔진이 등록부(`pipeline/transform/parse/engines`)에 없거나 설치되지 않았으면 → 시작하지 않는다(종료 2).
 7. 파싱(`parse_engines`)은 입력 폴더의 파일을 그대로 문서로 본다 — 같은 내용 사본을 한 번만 돌려 복사하는 일과 확장자 거르기를 하지 않는다(중복 제외·미지원 거르기는 [pl-02](extract.md#pl-02)). 처리 엔진 없는 확장자 파일이 들어오면 엔진 후보가 없어 그 문서는 작업 0건이다. `--shard i/k`는 내용 sha256으로 문서를 나눈다.
-8. `.pptx`(anydoc)·`.txt`(plaintext)·`.csv`(markitdown)는 엔진 하나만 돈다 — 0.3.0 엔진 비교(`valid_env` 86건, 11-06)에서 보조 엔진(kreuzberg·markitdown)이 대표 결과에 더한 것이 없었다(사용자 11-06).
+8. `.pptx`(anydoc)·`.txt`(plaintext)·`.csv`(markitdown)는 엔진 하나만 돈다 — 0.3.0 엔진 비교(`valid_env` 86건)에서 보조 엔진(kreuzberg·markitdown)이 대표 결과에 더한 것이 없었다.
 
 ### QA
 - `tests/server/pipeline/test_engine_check.py` · `tests/server/pipeline/test_engine_run.py`.
@@ -53,7 +53,7 @@
 ## pl-43 · VLM 처리 한 길 — 호출·동시 수·제한 시간·해상도
 
 ### 무엇·왜
-공유 VLM 서버의 동시 요청을 설정 몇 개로 묶어 조절한다(엔진마다 손잡이를 두지 않음). 11-04(사용자): 스캔 쪽이 엔진 `qwen_vlm`·쪽 VLM 후보정·그림 VLM 세 길로 각자 요청을 만들어 해상도(200·150·200)·생각 끄기·제한 시간·재시도·동시 수가 길마다 달랐다 — 한 함수·한 설정으로 합친다.
+공유 VLM 서버의 동시 요청을 설정 몇 개로 묶어 조절한다(엔진마다 손잡이를 두지 않음). 스캔 쪽이 엔진 `qwen_vlm`·쪽 VLM 후보정·그림 VLM 세 길로 각자 요청을 만들어 해상도(200·150·200)·생각 끄기·제한 시간·재시도·동시 수가 길마다 달랐다 — 한 함수·한 설정으로 합친다.
 
 ### 규칙
 1. 모든 VLM 호출(엔진 `qwen_vlm`·쪽 VLM·pptx 슬라이드·그림 VLM·중첩 그림)은 `pipeline/shared/vlmcall.py`의 `ask()` 하나로 `common.ai.llm.complete('vlm')`를 부른다 — 내부망 가드·예산 장부·모델 다운 감지가 같고, 요청 본문에 `common.models.vlm.vlm_extra_request_body`(생각 끄기 등)를 합친다. 코드에 고정한 생각 끄기는 없다.
@@ -64,7 +64,7 @@
 6. 동시 수: 한 프로세스 안 모든 VLM 호출의 합 상한 = `common.models.vlm.vlm_max_total_requests`(8, 호출 한 건이 자리 하나). 문서 하나 안 = `common.models.vlm.vlm_requests_per_doc`(4 — 쪽·그림 공통). 쪽 옮기기는 가장 느린 호출이 60초를 넘으면 다음 묶음 병렬 수를 절반(최소 2)으로 줄였다가 빨라지면 되돌린다(코드 상수).
 7. 일괄 파싱(`pipeline.cli parse`)은 엔진 자식에 `VLM_CONCURRENCY` = max(1, min(`vlm_requests_per_doc`, `vlm_max_total_requests` ÷ 동시 문서 수))를 넘긴다. 동시 문서 수 = min(이번 문서 수, 조각 `--procs` × `--workers`).
 
-### 현재 상태(11-04)
+### 현재 상태
 - 지운 칸(남아 있으면 시작 거부): `extract.vlm_page_sec`·`tuning.ops.services.data_parsing.vlm_page_sec` → `common.models.vlm.vlm_timeout_sec` · `tuning.transform.vlm.deadline` → `vlm_timeout_sec` · `transform.vlm.global_concurrency` → `vlm_max_total_requests` · `tuning.transform.vlm.page_concurrency`·`tuning.transform.figures.vlm_parallel`·`tuning.ops.nightly_run.vlm_concurrency`(명령 인자 `--vlm-concurrency`) → `vlm_requests_per_doc` · `transform.vlm.page_slow`·`tuning.transform.vlm.page_min_concurrency` → 코드 상수.
 - 고친 결함: run_pipeline이 `--set VLM_CONCURRENCY=8`(vlm 레인 6)을 줘도 `--workers` 기본 4로 나눠 문서 1건 실행의 엔진 자식이 늘 2였다(`8 ÷ 4`). 이제 동시 문서 수(문서 1건이면 1)로 나눈다.
 - 결과가 바뀜: 엔진 `qwen_vlm` 지문이 바뀌어 스캔·이미지 문서는 다시 파싱된다(지시문이 쪽 VLM과 같은 `page_transcribe`로, 해상도 200 → 150). 그림 해상도 200 → 150이라 그림 캐시도 새로 만든다. 서버 확인은 [refactor.md C-93](../refactoring/refactor.md).
@@ -92,7 +92,7 @@
 
 ### 규칙
 1. 엔진 `parser.py`의 `FORMATS`는 두고, 등록부 `pipeline/transform/parse/engines/registry.py`의 `EXTRA_FORMATS`(엔진별 추가 확장자)에 더한다 — `formats(엔진)` = `FORMATS` + `EXTRA_FORMATS`, `engines_for()`·`parse_engines --one --list`가 이것을 읽는다.
-2. 구성(우선순위 순): `.docm`·`.pptm`(kreuzberg, anydoc) · `.rtf`·`.odt`·`.ods`(anydoc, kreuzberg) · `.odp`(anydoc) · `.csv`(markitdown — 보조 엔진 기여 0이라 뺌, 사용자 11-06) · `.tsv`(plaintext, kreuzberg) · `.md`(plaintext, markitdown) · `.xlsb`·`.dotx`·`.xltx`·`.potx`·`.ppsx`·`.dot`·`.xlt`·`.pot`(kreuzberg) · `.json`·`.xml`·`.log`(plaintext 하나 — 글 그대로).
+2. 구성(우선순위 순): `.docm`·`.pptm`(kreuzberg, anydoc) · `.rtf`·`.odt`·`.ods`(anydoc, kreuzberg) · `.odp`(anydoc) · `.csv`(markitdown — 보조 엔진 기여 0이라 뺌) · `.tsv`(plaintext, kreuzberg) · `.md`(plaintext, markitdown) · `.xlsb`·`.dotx`·`.xltx`·`.potx`·`.ppsx`·`.dot`·`.xlt`·`.pot`(kreuzberg) · `.json`·`.xml`·`.log`(plaintext 하나 — 글 그대로).
 3. `.docm`·`.pptm`은 `office` 엔진에 주지 않는다(`office_stdlib`는 `.docx`가 아니면 xlsx로 다룸).
 4. 파싱 서비스가 받는 확장자(`pipeline.transform.parse.engine_check.allowed_exts()`) = 구성의 `parse` 키(`.pdf_*` → `.pdf`) − 이미지 확장자.
 
@@ -129,7 +129,7 @@
 메일의 핵심 내용이 첨부에 있는 경우가 많다.
 
 ### 규칙
-1. `.eml`·`.msg`의 첨부와 메일 안 메일(이름 없이 통째로 붙은 전달 메일 포함)은 받기 단계가 준비 폴더 `_parts/`에 꺼내 두고([extract.md#pl-63](extract.md#pl-63)), 첨부 단계가 형식별 엔진으로 파싱한다 — 깊이 `tuning.extract.attach.attachment_max_depth`(2 — 압축·오피스 개체와 같이 셈, 사용자 11-06), 첨부 하나 `attachment_max_mb`(20 MB) 넘으면 건너뜀, 메일 하나에서 `attachment_max_count`(10)개까지.
+1. `.eml`·`.msg`의 첨부와 메일 안 메일(이름 없이 통째로 붙은 전달 메일 포함)은 받기 단계가 준비 폴더 `_parts/`에 꺼내 두고([extract.md#pl-63](extract.md#pl-63)), 첨부 단계가 형식별 엔진으로 파싱한다 — 깊이 `tuning.extract.attach.attachment_max_depth`(2 — 압축·오피스 개체와 같이 셈), 첨부 하나 `attachment_max_mb`(20 MB) 넘으면 건너뜀, 메일 하나에서 `attachment_max_count`(10)개까지.
 2. 결과는 대표 본문에 `[첨부 <파일명>]` 절로 덧붙이고, 인용 스레드는 접는다.
 3. 인라인 그림(cid)은 그림 기능([pl-05](#pl-05))이 맡는다.
 
@@ -245,7 +245,7 @@
 ## pl-62 · 엔진 비교에서 찾은 대표 결과 빈틈
 
 ### 무엇·왜
-0.3.0 엔진 비교(`valid_env` 86건, VLM 켬 — 11-06)에서 대표 결과가 검색 조각을 흐리거나 엔진이 더 읽은 글을 버리는 곳을 찾았다. 큰 두 건(쪽 VLM 되풀이 고장·한글 xlsx 표 칸 중복)은 0.3.0에서 고쳤다([pl-22](#pl-22) 규칙 5 · [pl-04](#pl-04) 규칙 4). 남은 것을 여기 둔다.
+0.3.0 엔진 비교(`valid_env` 86건, VLM 켬)에서 대표 결과가 검색 조각을 흐리거나 엔진이 더 읽은 글을 버리는 곳을 찾았다. 큰 두 건(쪽 VLM 되풀이 고장·한글 xlsx 표 칸 중복)은 0.3.0에서 고쳤다([pl-22](#pl-22) 규칙 5 · [pl-04](#pl-04) 규칙 4). 남은 것을 여기 둔다.
 
 ### 규칙
 1. 표 자리 찾기(`table_inline.find_span`)는 칸 글자를 다른 칸 글자 안(예: 칸 "1"을 "100"의 앞 글자)에서 찾지 않는다 — 표 뒤에 "00 100 1 정상" 같은 조각이 남지 않는다.
@@ -266,7 +266,7 @@
 <a id="pl-67"></a>
 ## pl-67 · 대표 결과 교차 병합
 - 요건: 엔진 하나면 그대로, 여럿이면 다른 쪽만 조각 단위로 병합(소제목·표·쪽·bbox). 시간 제한 대신 비교를 가볍게. 읽는 곳 없는 조각 투표·교차 확인은 이 구조로 바꾸며 지운다.
-- 규칙(사용자 11-08 결정):
+- 규칙:
   1. 그 문서에 성공한 엔진이 하나면 그 결과를 그대로 쓴다(병합 없음).
   2. 여럿이면 대표 엔진 본문은 **한 글자도 바꾸지 않는다**. 다른 엔진 본문을 조각(빈 줄·쪽 나눔 `\f`으로 나눈 소제목·표·문단)으로 나눠, 조각 낱말의 98% 이상이 대표에 있으면 같은 내용으로 보고 건너뛴다. 아니면 그 조각을 바로 앞에 맞은 대표 조각 바로 뒤에 끼운다(앞에 맞은 조각이 없으면 그 쪽 첫머리).
   3. 쪽 수(`\f`)가 같으면 쪽끼리, 다르면 문서 전체끼리 견준다. 공백을 뺀 글이 같은 쪽은 조각 비교 없이 먼저 거른다(가벼운 비교 먼저 — 시간 제한 없음).

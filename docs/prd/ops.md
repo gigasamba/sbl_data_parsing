@@ -65,7 +65,7 @@
 ## pl-18 · `run_pipeline` 종료 코드와 겹침 잠금
 - 이유: 스케줄러가 실패를 봐야 한다.
 - 규칙:
-  1. 종료 코드: 0 = 대상 0건·모두 끝 · 1 = 실패 문서(파싱·게시·gold) 하나라도(받기가 뺀 건너뜀 문서는 실패 아님 — pl-24) · 75 = 마감 도달(실패 없음) 또는 다른 run_pipeline이 도는 중 · 2 = 설정 문제. 실패와 마감이 함께면 1.
+  1. 종료 코드: 0 = 대상 0건·모두 끝 · 1 = 실패 문서(파싱·게시·gold) 하나라도(받기가 뺀 건너뜀 문서는 실패 아님 — pl-24) · 75 = 마감 도달(실패 없음) 또는 다른 run_pipeline이 도는 중 · 2 = 설정 문제 · 3 = ① 사전 점검 또는 ③ 적재·검색 확인 실패(마감에 걸려 적재 0건이면 ③ 없이 75). 실패와 마감이 함께면 1.
   2. 겹침 잠금: `flock batch_progress/run_pipeline.lock`(프로세스가 죽으면 커널이 풂). 사람이 직접 돌려도 같은 잠금.
   3. `--deadline HH:MM`: 그 시각(지금보다 이르거나 같으면 다음 날)이 지나면 새 문서를 받지 않는다.
 - 파일: `deploy/host/scripts/run_pipeline.py`, `deploy/host/scripts/nightly_batch.sh`.
@@ -119,22 +119,25 @@
 
 <a id="rn-05"></a>
 ## rn-05 · run_pipeline은 지휘만 — 판단은 파이프라인 함수, PC도 run_pipeline으로
-- 이유(사용자 11-04): 같은 판단이 서버 러너와 파이프라인 두 곳에 있으면 어긋난다. PC E2E가 서버와 다른 길을 타면 PC 결과가 서버를 증명하지 못한다.
+- 이유: 같은 판단이 서버 러너와 파이프라인 두 곳에 있으면 어긋난다. PC E2E가 서버와 다른 길을 타면 PC 결과가 서버를 증명하지 못한다.
 - 요건(되어야 할 모습):
   1. 서버 러너 `run_pipeline.py`는 지휘만 한다 — 레인·워커·임시 폴더 관리와 컨테이너 안 파이프라인 명령 호출(`docker exec`). 원천 목록 읽기, 끝난 문서 빼기, 중복, 레인 판정, FAQ 교체 판단, 게시 판단은 파이프라인(extract·transform·load) 함수가 한다.
   2. 대상 목록은 컨테이너 명령 하나 `python -m pipeline.extract.candidate_pick list`가 만든다 — EDW `FileStorageMap`에서 이름 키워드(`--filter`)·파일 크기 오름차순(크기 없는 행 뺌), `--start-offset`·`--limit`·`--seqs`, `--skip-done`이면 끝난 문서(gold `doc` 행 — `done_keys()` 한 곳)와 영구 뺌(`except_doc_info` `skip`)을 빼고, FAQ를 앞에(교체를 마친 키 `<결과 폴더>/_faq_seen.txt`), 앞 `--max-docs`개. 결과는 목록 파일 `--out`(JSON `total`·`start`·`docs`[`seq`·`id`·`s3_key`·`original_filename`·`file_size`·`source_system`])이고 러너는 그 파일만 읽는다. 러너의 이 호출 시간 제한(2400초)은 안쪽 FAQ 맞추기 시간 제한(`candidate_pick` — 1800초)보다 길다(안쪽이 먼저 끊겨 원인이 로그에 남음). EDW 접속은 `mssql`을 다시 쓴다.
   3. 원본 받기는 한 길이다 — `python -m pipeline.extract.candidate_ready stage`가 문서를 `_staging/`(`extract.source.source_staging_dir`)에 한 번 받고, 같은 실행에서 바로 중복 제외(받은 파일 SHA-256 — 같은 묶음·gold에 끝난 다른 원본, pl-02)와 형식·DRM·암호·미지원 거르기(`filter_and_rotate`)를 이 순서로 한다. 살아남은 문서만 파싱하고, 파싱(`parse --staged`)은 받아 둔 파일만 읽는다 — 받지 못한 문서는 파싱 실패, 받기가 뺀 문서(중복·DRM·암호)는 건너뜀이고 받기가 `except_doc_info` `skip`에 쓴다(pl-24). DRM 문서는 표시만 하고 건너뛴다(처리 단계 없음). 회전은 기본 꺼짐 그대로다. 원본은 게시가 성공한 뒤 `drop_original()`만 지운다(pl-24).
   4. PC(`RUN_ENV=local`)도 같은 `run_pipeline`로 E2E를 돈다 — 가짜 대상만(EDW sqlite·`file://` 게시 폴더·상대 경로, op-14). PC만의 분기는 접속 대상을 고르는 한 곳이다.
   5. 커밋 전 점검 스크립트는 점검 도구 자리 `common/check/`에 있다(`.githooks/pre-commit`·CLAUDE.md §5-2·README가 그 경로를 부른다).
-- 비고(현재와 다른 점, 11-05 확인):
-  - `configure()`가 `run_env`가 dev·prd가 아니면 거부하고, CLAUDE.md §4가 "run_pipeline은 PC에서 실행하지 않는다"고 적는다 — PC는 `python -m pipeline.cli parse`를 바로 부른다. 바꾸는 것은 등급 A(운영 접속 가드).
+  6. run_pipeline 한 번이 e2e다 — ① 사전 점검(설정 `checker env` → 모델 연결 `checker ping` → DB 판 `dbtool check --target all` → 배포 시험 `selftest_gate.sh … selftest`) → ② 문서 처리 → ③ 적재·검색 확인(적재까지 마친 문서 하나로 실행 기록 applog `pipe_run`·그 문서 `pipe_event` 1행+ → DB 검색 `search_ask` 근거 1건+ → 검색 MCP `mcp_smoke` — prd는 검색 컨테이너(`ops.host.mcp_container`) 안에서 · 적재 0건이면 하지 않음). 단계 순서대로, 첫 실패에서 멈추고, 끝에 `[판정] 통과|실패 — 이유 · 종료 코드` 한 줄을 남긴다. 종료 코드는 [pl-18](#pl-18)(마감·잠금은 `[판정] 멈춤`). 새벽 배치도 같은 run_pipeline을 부른다.
+  7. 실행 자리: 개발 서버(dev)는 벌 컨테이너 안(`cd /app`)에서 명령을 바로 부르고, 운영 서버(prd)는 호스트에서 `ops.host.*_container` 컨테이너에 `docker exec`로 부른다. 그 밖의 자리(dev인데 컨테이너 밖)는 시작을 거부한다.
+  8. 단계 켜기·건수는 settings.yaml `ops.run_pipeline.steps.steps_precheck`·`steps_verify`(기본 켜짐)·`ops.run_pipeline.run_limit`(사람 실행 기본 2건)이고, 명령 인자 `--limit N`·`--set RUN_PIPELINE_<칸>=값`이 설정보다 앞선다. 새벽 배치는 `--limit 0`(건수는 `--max-docs`).
+- 비고(현재와 다른 점):
+  - `configure()`가 `run_env`가 dev·prd가 아니면 거부하고, CLAUDE.md §4가 "run_pipeline은 PC에서 실행하지 않는다"고 적는다 — PC는 `python -m pipeline.cli parse`를 바로 부른다. 바꾸는 것은 등급 A(운영 접속 가드). PC(요건 4)는 Object Storage 대역이 있어야 해서(`objectstore.client()`가 local을 거부 — 대역을 넣으면 레이어 코드 지문이 바뀜) 다음 판으로 미룬다.
   - 점검 스크립트가 `deploy/release/lint_changed.sh`에 있다.
-- QA: 바꾸기 전후 같은 문서 묶음의 결과(대표 결과·gold `doc` 처리 기록·게시 파일)가 같음 · 대상 목록 고르기 사례 표 `tests/server/pipeline/test_target_list.py`(키워드·크기순·시작 자리·골라 돌리기·끝난 문서·FAQ 교체·max-docs) · 받기·중복·거르기 `tests/server/pipeline/test_stage_batch.py`·`test_candidate.py::test_stage_batch` · PC에서 run_pipeline 한 번으로 gold 대역 `doc` 행과 `file://` 폴더 결과가 생김.
+- QA: 바꾸기 전후 같은 문서 묶음의 결과(대표 결과·gold `doc` 처리 기록·게시 파일)가 같음 · 대상 목록 고르기 사례 표 `tests/server/pipeline/test_target_list.py`(키워드·크기순·시작 자리·골라 돌리기·끝난 문서·FAQ 교체·max-docs) · 받기·중복·거르기 `tests/server/pipeline/test_stage_batch.py`·`test_candidate.py::test_stage_batch` · PC에서 run_pipeline 한 번으로 gold 대역 `doc` 행과 `file://` 폴더 결과가 생김 · 실행 자리·`--set` 우선·첫 실패에서 멈춤 사례 표 `tests/general/deploy/test_run_pipeline.py`(`test_run_place_by_env`·`test_set_overrides_settings`·`test_steps_stop_at_first_failure`) · 개발 서버 컨테이너 안 run_pipeline 2건에서 `[판정] 통과`.
 - Status: todo
 
 <a id="rn-06"></a>
 ## rn-06 · 같은 일은 한 곳, 파일 이름은 하는 일로
-- 이유(사용자 11-04): 같은 일을 하는 코드가 여러 곳에 있으면 한쪽만 고쳐져 어긋난다. 이름만 보고 하는 일을 알 수 있어야 한다.
+- 이유: 같은 일을 하는 코드가 여러 곳에 있으면 한쪽만 고쳐져 어긋난다. 이름만 보고 하는 일을 알 수 있어야 한다.
 - 요건(되어야 할 모습):
   1. 범위는 저장소 전체(`pipeline`·`common`·`mcp_server`·`deploy/host`·`deploy/release`·`validation`). 보호 파일(엔진 폴더, `common/core/{contract,repfmt,terms,text}.py`)은 이 규칙으로 고치지 않는다.
   2. 같은 일을 하는 코드는 한 벌이다 — 파싱 단계 사슬(준비 → 엔진 → 채점 → 대표 결과)과 프로세스 묶음 실행은 `pipeline/parse_steps.py` 하나를 `pipeline.cli parse`와 MCP 작업 서비스 `pipeline.run_mcp_parsing`가 함께 쓴다. 검색 MCP의 날짜 조건 해석(`_when`)도 한 벌.
@@ -148,7 +151,7 @@
 
 <a id="rn-07"></a>
 ## rn-07 · 서로 덮지 않는 여러 벌, 적은 설정 칸, 목적만 적은 주석
-- 이유(사용자 11-05 점검): 개발 서버에 여러 벌이 EDW·게시·포트·스키마를 함께 쓰면 서로 덮는다. 같은 값 칸·늘 같은 스위치·옛 칸 표는 설정을 읽기 어렵게 한다.
+- 이유: 개발 서버에 여러 벌이 EDW·게시·포트·스키마를 함께 쓰면 서로 덮는다. 같은 값 칸·늘 같은 스위치·옛 칸 표는 설정을 읽기 어렵게 한다.
 - 요건(되어야 할 모습):
   1. 여러 벌은 코드 폴더 이름 끝 벌 번호로 컨테이너 이름이 갈린다([op-15](ops-settings.md#op-15)) · 포트는 기본값 그대로면 시작 거부 · `prd`에서 번호가 붙은 폴더면 시작 거부. PG 스키마·EDW 기록 표·게시 경로·버전에는 벌 표시를 붙이지 않는다.
   2. 파싱 MCP는 컨테이너·서비스·compose 파일 `mcp-data-parsing`, 설정 칸 `data_parsing`(env `DATA_PARSING_*`). 파싱 포트와 프록시 주소는 한 칸, 토큰은 `tokens.mcp` 하나.
@@ -161,14 +164,14 @@
 
 <a id="rn-08"></a>
 ## rn-08 · 파이프라인 폴더는 ETL 뜻대로, 파일 이름은 하는 일로
-- 이유(사용자 11-05): 폴더만 보고 그 단계가 무엇을 하는지 알 수 있어야 한다. 엔진으로 글자를 뽑는 일은 정제(transform)이고, 그 결과가 silver다.
+- 이유: 폴더만 보고 그 단계가 무엇을 하는지 알 수 있어야 한다. 엔진으로 글자를 뽑는 일은 정제(transform)이고, 그 결과가 silver다.
 - 요건(되어야 할 모습):
   0. 층 이름: **staging** = Object Storage 원본을 임시 폴더로 받아 둔 것(원본은 이미 Object Storage에 있어 따로 보관하지 않음 — extract의 결과) · **silver** = 엔진별 파싱 결과 `parse/<엔진>/<문서>.json`과 대표 결과(transform의 첫 결과 — 실제 엔진 추출은 모두 transform) · **gold** = 검색용 묶음과 pgvector 적재.
   1. `pipeline/extract` = 원본을 고르고 받아 파싱 입력으로 준비하는 일만 — 대상 고르기(목록 − 끝난 문서, 받기 전) `candidate_pick.py`, 미리 받기·받기 `candidate_ready.py`, 같은 파일 정리 `deduplication.py`, 형식 거르기·회전 `filter_and_rotate.py`, 레인 나누기 `doc_lane_group.py`(엔진을 돌리지 않음 — 형식·크기·앞 3쪽 글자 수), 원천 열 찾기 `discover_columns.py`.
   2. `pipeline/transform/parse/` = 엔진 파싱 — 엔진 `engines/`(보호 파일), 엔진 준비 확인 `engine_check.py`, 엔진 실행은 한 파일(엔진마다 자식 프로세스로 분리), 엔진 버전·캐시 키(`engine_version`·`p0_key`·`engine_code_fp`)와 캐시 지우기. 그 뒤 `represent`(대표 결과) → `figures`(그림) → `structure`(gold 묶음 `gold_bundle.py`).
   3. `pipeline/shared`의 파일은 한 가지 일만 하고 이름이 그 일이다(원본 캐시·실패 단서·`pdf_kind` 각각). 한 단계만 쓰는 것은 그 단계 폴더에 둔다(차트 글자 → figures), 여러 단계가 읽는 설정 해석은 `pipeline/config.py`(후처리 스위치 `active_features` — represent·figures).
   4. 요건 행에 닿지 않는 코드(부르는 곳이 없거나 시험만 부르는 함수, 쓰지 않는 설정 칸·반환 칸)와 같은 일을 하는 두 번째 코드는 두지 않는다. `rep.meta`와 `parse_document` 출력(MCP 계약)은 그대로.
-- 비고(남은 것, 11-05):
+- 비고(남은 것):
   - 보호 파일 `common/core/contract.py`의 설명 글에 옛 이름 `build_bundle`이 남음(핸드오프 지문 때문에 그대로).
   - 엔진 폴더를 옮겨 엔진 핑거프린트(상대 경로 포함)와 code_fp가 바뀜 — 기록용([test.md#e2-02](test.md#e2-02), 재처리는 gold `doc` 행으로만). 사람 검토 필요.
   - 이번에 하지 않음: 그림 부가 기능(pl-05), 글자 파싱 뒤 레인 나누기.
@@ -194,7 +197,7 @@
 - 규칙:
   1. 벡터는 pgvector에만, EDW에는 넣지 않는다.
   2. 접속 블록 하나 — settings.yaml `required.edw`(`edw_host`·`edw_port`·`edw_database`·`edw_read_user`·`edw_read_password`, 모델 `common.connections.rdb`). 서버는 접속 칸을 채우고, PC는 아무것도 채우지 않는다(가짜 EDW — 5). 드라이버는 pymssql만(`common.store.mssql.login(role)`).
-  3. 읽기 계정: RDB 원천 목록·discover·고객 목록·FileStorageMap·`run_pipeline.py` 읽기·MCP 전부. 쓰기 계정 칸은 없다 — `mssql.login()`은 읽기 계정만 낸다(질의 도구 `query_edw` 계정에 쓰기 권한을 두지 않음 — 사용자 11-05).
+  3. 읽기 계정: RDB 원천 목록·discover·고객 목록·FileStorageMap·`run_pipeline.py` 읽기·MCP 전부. 쓰기 계정 칸은 없다 — `mssql.login()`은 읽기 계정만 낸다(질의 도구 `query_edw` 계정에 쓰기 권한을 두지 않음).
   4. PC 대역: `dev.local.local_edw_sqlite_file`의 sqlite 파일 하나(비우면 `valid_env/edw/edw_copy.sqlite` — 없으면 `valid_env/edw/edw.sqlite`를 복사, 원본 생성: `python -m validation.e2e.edw_standin`, `local`에서만 열림)를 `AI`·`CRMS`·`LAS`·`SFDC` 별칭으로 ATTACH(`mssql.standin`, 기본 읽기 전용). `query_edw`는 읽기 전용으로 연다.
 - 파일: `common/store/mssql.py`, `common/config/settings.py`.
 - QA: `tests/server/common/test_edw_login.py`·`tests/general/common/test_edw_standin.py` · 통과.
@@ -224,14 +227,21 @@
   4. dev·prd 시작 관문: 비어 있지 않은 비밀 설정이 8자(`MIN_SECRET_LENGTH`) 미만이면 칸 경로만 알리고 종료 2.
   5. MCP SDK 줄(`mcp.*`)은 stderr JSON으로만. 요청마다의 INFO는 `ops.log.log_level=DEBUG`일 때만. stdio 모드의 stdout은 JSON-RPC 전용.
 - 규칙 — DB(`applog` 스키마, Alembic 갈래 `applog` — `common/store/db/migrations/versions/0001_applog_base.py`):
-  1. 표: `mcp_log`(월 파티션, 키 `requested_at`) · `pipe_event`(월 파티션, 키 `ts_start`) · `pipe_run`(`run_id` PK, 시작 running → 종료 UPSERT). applog는 여러 벌이 함께 쓰므로 문서 사건(`doc_id` 있음) 행은 원천 `source_system`(판 `0004_applog`)을 채우고 빈 `ext`·`file_bytes`를 메운다(원천·크기는 이번 실행 manifest, 확장자는 이름 — 그 밖의 사건은 `source_system` NULL · 시험 `test_span_soft.py` `DOC_COLS`).
+  1. 표(칸·색인·판은 [db_schema.md §6](../architecture/db_schema.md#6-applog--로그-저장소-pgvector-pg-스키마-applog) 한 곳):
+     - `pipe_run` — 파이프라인 실행 1건(아래 "파이프라인 추적").
+     - `pipe_event` — 문서×단계 1건(월 파티션, 아래 "파이프라인 추적").
+     - `mcp_log` — MCP 요청 1건(월 파티션, 아래 "MCP 감사" · [mc-13](mcp.md#mc-13)).
+     - `except_doc_info` — 적재되지 않은 원본×종류 1건(`skip` [pl-58](extract.md#pl-58) · `error` [pl-24](#pl-24) · `part` [pl-65](extract.md#pl-65) · `silver` [pl-68](load.md#pl-68)).
+     - `dlq_doc` — 실패 문서 재시도 상태(원본 키당 1건 — [pl-69](load.md#pl-69)).
+
+     applog는 여러 벌이 함께 쓰므로 문서 사건(`doc_id` 있음) 행은 원천 `source_system`(판 `0004_applog`)을 채우고 빈 `ext`·`file_bytes`를 메운다(원천·크기는 이번 실행 manifest, 확장자는 이름 — 그 밖의 사건은 `source_system` NULL · 시험 `test_span_soft.py` `DOC_COLS`).
   2. `common/store/logsink.py` `emit(table,row)` → 제한 큐(`tuning.ops.log.log_queue_size` 10000, 차면 즉시 버리고 `dropped`) → 배치 INSERT(`log_batch_size` 200 · `log_flush_sec` 1 · `log_db_timeout_sec` 2). DB 실패면 `ops.log.log_fallback_dir`(기본 `output/logs`) jsonl, 프로세스당 경고 한 번. 파일 로그는 이 예비 한 곳뿐이다 — 실행 출력은 컨테이너 로그(서버 stdout), 실행 기록 파일(`RUNLOG.md`·`runlog.jsonl`·`logs/<시각>_<도구>.log`)·질의 기록 파일은 없다(op-13). 종료 flush는 `log_shutdown_sec` 5초 안.
   3. 켜기 `ops.log.log_db_enabled` — 서버(두 이미지) 기본 true, PC 기본 false(op-13). 서버는 새 코드를 띄우기 전에 `migrate up --target all`(applog 포함). 보존 `log_retention_days` 90. `dbtool up --target applog`(현재 달 + 2개월 준비), 매일 `dbtool maintain --target applog`(다음 달 준비·만료 파티션 DROP·`pipe_run` DELETE — 서버는 새벽 배치가 run_pipeline 앞에 부름, [pl-23](#pl-23)). sink는 DDL을 하지 않는다.
 - 규칙 — MCP 감사(`mcp_server/services/call_log.py`):
   1. 도구 호출마다 `applog.mcp_log` 한 행 — 성공·도구 오류·busy·timeout·HTTP 인증 거부(rpc_method NULL), initialize(rpc_method=initialize, clientInfo 뺌). 칸은 [db_schema.md §6](../architecture/db_schema.md). sink 실패가 도구 응답을 바꾸지 않는다.
   2. 본문: 마스킹 뒤 앞부분만 — 입력 `tuning.search.audit.audit_max_input_bytes` 16384 · 출력 `audit_max_output_bytes` 65536. 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)는 출력 본문 대신 `result_keys` 요약만 저장한다(원문은 싣지 않음). `*_bytes`·`result_sha256`은 자르기 전 전체 응답 기준. 행 전체의 가림은 sink(`logsink.emit`)가 한 번 한다(본문은 자르기 전에 가림). `parse_document`의 `content_b64`는 디코딩한 파일 sha256·바이트 수로 바꿈.
   3. `result_keys`: search = chunk_keys(순위 순)·evidence_status·filter·scope_docs · list_doc_fulltext = 건수·next_cursor·doc_keys · get_doc_fulltext = 건수와 파일별 name/kind/size/sha256/skip_reason · query_edw = row_count·columns · parse_document = job_id·engine·rep_path·text_chars · edw_meta = 단계·표·칸 수.
-  4. 컨텍스트: `X-MCP-User`(없으면 `params._meta.user`) → knox_id, `X-MCP-Client`는 호출자 표시·콘솔 로그에만 쓰고 DB에는 남기지 않음(agent_id는 인증 체계가 생긴 뒤), Mcp-Session-Id(stateless라 도구 행은 대개 null). 유효한 UUID `X-Request-Id`는 그대로, 아니면 새 UUID를 응답 헤더로. 접속 소켓 주소는 client_ip에 남기고(사용자 11-04, 프록시 뒤면 프록시 IP) clientInfo는 남기지 않는다.
+  4. 컨텍스트: `X-MCP-User`(없으면 `params._meta.user`) → knox_id, `X-MCP-Client`는 호출자 표시·콘솔 로그에만 쓰고 DB에는 남기지 않음(agent_id는 인증 체계가 생긴 뒤), Mcp-Session-Id(stateless라 도구 행은 대개 null). 유효한 UUID `X-Request-Id`는 그대로, 아니면 새 UUID를 응답 헤더로. 접속 소켓 주소는 client_ip에 남기고(프록시 뒤면 프록시 IP) clientInfo는 남기지 않는다.
   5. 감사는 전용 데몬 스레드 하나가 처리한다(도구는 기다리지 않음). 본문 대기 큐 64건 + 바이트 합계 `tuning.search.audit.audit_max_queue_bytes`(기본 268435456) — 넘으면 본문 없는 메타 행(`result_keys.audit_body_omitted=queue_full`, `error_code=audit_queue_full`).
 - 규칙 — 파이프라인 추적:
   1. 실행 1건 = `pipe_run`(`pipeline/shared/runtrace.py` — code_fp·stack·settings_hash·문서 수·workers·cpu_max_load·mem_start_pct). 부모가 준 run_id가 있는 자식은 새로 시작하지 않는다. run_pipeline에서는 문서·단계마다 실행이 따로 생긴다.
@@ -294,7 +304,7 @@
 ## op-16 · 개발 작업 공간 — 이미지의 개발 도구·opencode(선택)
 
 ### 무엇·왜
-개발 서버 컨테이너 안에서 바로 코드를 고치고 시험한다(사용자 11-05). opencode는 파이프라인이 부르는 프로그램이 아니라 개발자가 쓰는 선택 도구다.
+개발 서버 컨테이너 안에서 바로 코드를 고치고 시험한다. opencode는 파이프라인이 부르는 프로그램이 아니라 개발자가 쓰는 선택 도구다.
 
 ### 규칙
 1. 개발 도구는 Dockerfile `base` 단계에 있어 네 이미지(`data-pipeline-runtime`·`mcp-server-runtime`·`data-pipeline`·`mcp-server`)가 모두 담는다 — apt(openssh-server·git·curl·ripgrep·sqlite3·tini·tmux·vim 등) + pip `uv` + `requirements-dev.txt`(PC 개발 도구와 같은 판). 의존성 지문(`DEPS_HASH`)은 requirements-core·image만 본다(그대로).
@@ -314,9 +324,9 @@
 ## op-17 · 개발 서버 개인 시험 벌 — 벌 폴더 app·home, DEV 원천, 처리 기록은 pgvector
 
 ### 무엇·왜
-개발 서버에서 개발자마다 자기 문서만 파싱·적재·검색해 시험한다(사용자 11-06). 벌끼리는 원천 이름(`DEV-1`·`DEV-2`)으로 나뉘고, 처리 기록은 EDW가 아니라 pgvector에서만 관리한다. 0.3.0에 넣는다.
+개발 서버에서 개발자마다 자기 문서만 파싱·적재·검색해 시험한다. 벌끼리는 원천 이름(`DEV-1`·`DEV-2`)으로 나뉘고, 처리 기록은 EDW가 아니라 pgvector에서만 관리한다. 0.3.0에 넣는다.
 
-### 정한 것(사용자 11-06)
+### 정한 것
 1. 벌 폴더 = `/home/sbl/data_pipeline-<n>/{app,home}` — `app/` = 코드 폴더(`settings.yaml`·`output/`이 그 안), `home/` = root 홈([doc.md#op-13](doc.md#op-13)). `backup/`은 만들지 않는다. 공용 폴더(`/home/sbl/`)에는 이미지 폴더.
 2. `init`의 권한 정리(`a+rX`)는 settings.yaml·`.env`·output/을 건드리지 않는다(비밀값 파일 640 유지).
 3. 판 올리기는 사람이 한다 — 새 zip을 풀어 벌의 `app/`에 덮어쓴다(옛 것은 각자 백업, gitea에도 올림).
@@ -344,7 +354,7 @@
 ### 사람 검토
 DB 스키마(마이그레이션 — `doc` 칸·`doc` 색인·`except_doc_info`·DEV 스키마), MCP 계약(dev 값), 비밀값 파일 권한(init), EDW 쓰기 중단.
 
-- 비고: 규칙 1~5·8·9·11·12·14~22 반영 — 처리 기록 `doc` 칸(판 `0006_search` — `search_tables.DOC_RECORD`, 게시 `publish/silver.jsonl` → 적재 `--silver`), `doc` 찾기 색인 `ix_<스키마>_doc_sha256`·`_doc_silver`·`_doc_path`(판 `0007_search` — `search_tables.DOC_INDEX`), 끝난 문서·내용 중복 `pipeline/shared/gold_docs.py`, `applog.except_doc_info`(판 `0003_applog` — `pipeline/shared/except_docs.py` · 판 `0004_applog` `file_ext`·`file_size`), 원문 도구는 `doc` 칸에서 읽음, EDW 쓰기 없음. 규칙 6·7(DEV 원천 스키마) 반영 — `search_tables.source_of`(`DEV-<n>` → `dev_<n>` → `<기준>_dev_<n>`), `dbtool up --target search`·적재 deploy가 함께 쓰는 `dbtool.upgrade_search`가 설정의 DEV 원천 스키마를 만들고 DB에 있는 `_dev_*`도 올림(판 기록 표는 그 스키마 안 · 판 파일은 `migrations/search_parts.sources()`로 그 스키마만 — 시험이 판 파일마다 확인 · 적재 전 판 확인 `require_current`도 `_dev_*`를 봄 · prd는 DEV를 찾지 않음 · `--sql`은 설정의 DEV 스키마를 빈 스키마부터, DB에 있는 다른 `_dev_*`는 `-- 수동:` 줄), 적재는 스키마가 없으면 멈춤(DDL 없음)·EDW 메타 없음, 끝난 문서·원문 도구·run_pipeline 건수·PC 폴더 원천(`DEV-<n>/`, 원천 목록으로 거름)이 `_dev_*`를 봄, 원천 목록이 비면 운영 5개 원천만(규칙 8 — `candidate_pick.picked`)(시험 `tests/server/pipeline/test_dev_source.py`). 마스터 표 `glossary`(판 `0002_master` — 옛 마스터 표 일곱 개를 지움, 원본 `resources/vocab/glossary/glossary.csv`, 옛 행 모양으로 되돌리기 `common/store/master.py` `to_tables`, 해시는 읽을 때 계산, 시험 `test_master.py`). 옛 CSV → `glossary.csv` 옮기기 `python -m common.store.master convert`(시험 `test_convert_old_csv`), 명부 도구 `gen_roster --kind client`는 glossary 고객 줄을 씀(있는 파일은 고객 줄만 바꿈). 서버 `migrate up --target master`·실명 자료 옮기기 실행은 사람(refactor.md C-108). 규칙 7의 검색 MCP 원천 목록·10 반영 — 검색 MCP가 시작 때 5벌 + 있는 `_dev_*`를 싣고(`server_state.connect_sources` — `ST.all_sources`, prd는 5벌만), `DEV-<n>` 꼴 값이 오면 DB를 한 번 다시 찾아 그사이 생긴 스키마는 그 원천만 더하고 사라진 것은 뺌(`server_state.dev_served` — 재시작 없음, 표 없는 등 깨진 DEV 스키마는 경고 한 줄 뒤 그 원천만 뺌), `search`·`list_doc_fulltext`가 dev·local에서 있는 `DEV-<n>`을 받음(prd는 모르는 값과 같은 오류, 출력·메아리 `DEV-<n>`), 도구 설명에 "(개발 서버: DEV-<숫자>)", `edw_meta` `search_attrs`에 DEV 원천(빈 칸)(시험 `tests/server/mcp/test_dev_search.py`). 검증 페이지 원천 고르기는 고정 목록이라 그대로. 남은 것: 13(서버의 ParsingMeta 기록 옮기기 — 사람, refactor.md C-107). 쓰기 계정·`parsing_meta_table` 칸은 없앴다(남은 settings.yaml은 시작 거부 — C-107). 대상 목록 표는 `required.edw.edw_file_table`(기본 `AI.FileStorageMap`, `<스키마>.<표>`만 — 사용자 11-06, 시험 `test_target_list.py` `TABLES`).
+- 비고: 규칙 1~5·8·9·11·12·14~22 반영 — 처리 기록 `doc` 칸(판 `0006_search` — `search_tables.DOC_RECORD`, 게시 `publish/silver.jsonl` → 적재 `--silver`), `doc` 찾기 색인 `ix_<스키마>_doc_sha256`·`_doc_silver`·`_doc_path`(판 `0007_search` — `search_tables.DOC_INDEX`), 끝난 문서·내용 중복 `pipeline/shared/gold_docs.py`, `applog.except_doc_info`(판 `0003_applog` — `pipeline/shared/except_docs.py` · 판 `0004_applog` `file_ext`·`file_size`), 원문 도구는 `doc` 칸에서 읽음, EDW 쓰기 없음. 규칙 6·7(DEV 원천 스키마) 반영 — `search_tables.source_of`(`DEV-<n>` → `dev_<n>` → `<기준>_dev_<n>`), `dbtool up --target search`·적재 deploy가 함께 쓰는 `dbtool.upgrade_search`가 설정의 DEV 원천 스키마를 만들고 DB에 있는 `_dev_*`도 올림(판 기록 표는 그 스키마 안 · 판 파일은 `migrations/search_parts.sources()`로 그 스키마만 — 시험이 판 파일마다 확인 · 적재 전 판 확인 `require_current`도 `_dev_*`를 봄 · prd는 DEV를 찾지 않음 · `--sql`은 설정의 DEV 스키마를 빈 스키마부터, DB에 있는 다른 `_dev_*`는 `-- 수동:` 줄), 적재는 스키마가 없으면 멈춤(DDL 없음)·EDW 메타 없음, 끝난 문서·원문 도구·run_pipeline 건수·PC 폴더 원천(`DEV-<n>/`, 원천 목록으로 거름)이 `_dev_*`를 봄, 원천 목록이 비면 운영 5개 원천만(규칙 8 — `candidate_pick.picked`)(시험 `tests/server/pipeline/test_dev_source.py`). 마스터 표 `glossary`(판 `0002_master` — 옛 마스터 표 일곱 개를 지움, 원본 `resources/vocab/glossary/glossary.csv`, 옛 행 모양으로 되돌리기 `common/store/master.py` `to_tables`, 해시는 읽을 때 계산, 시험 `test_master.py`). 옛 CSV → `glossary.csv` 옮기기 `python -m common.store.master convert`(시험 `test_convert_old_csv`), 명부 도구 `gen_roster --kind client`는 glossary 고객 줄을 씀(있는 파일은 고객 줄만 바꿈). 서버 `migrate up --target master`·실명 자료 옮기기 실행은 사람(refactor.md C-108). 규칙 7의 검색 MCP 원천 목록·10 반영 — 검색 MCP가 시작 때 5벌 + 있는 `_dev_*`를 싣고(`server_state.connect_sources` — `ST.all_sources`, prd는 5벌만), `DEV-<n>` 꼴 값이 오면 DB를 한 번 다시 찾아 그사이 생긴 스키마는 그 원천만 더하고 사라진 것은 뺌(`server_state.dev_served` — 재시작 없음, 표 없는 등 깨진 DEV 스키마는 경고 한 줄 뒤 그 원천만 뺌), `search`·`list_doc_fulltext`가 dev·local에서 있는 `DEV-<n>`을 받음(prd는 모르는 값과 같은 오류, 출력·메아리 `DEV-<n>`), 도구 설명에 "(개발 서버: DEV-<숫자>)", `edw_meta` `search_attrs`에 DEV 원천(빈 칸)(시험 `tests/server/mcp/test_dev_search.py`). 검증 페이지 원천 고르기는 고정 목록이라 그대로. 남은 것: 13(서버의 ParsingMeta 기록 옮기기 — 사람, refactor.md C-107). 쓰기 계정·`parsing_meta_table` 칸은 없앴다(남은 settings.yaml은 시작 거부 — C-107). 대상 목록 표는 `required.edw.edw_file_table`(기본 `AI.FileStorageMap`, `<스키마>.<표>`만 — 시험 `test_target_list.py` `TABLES`).
 - Status: todo
 
 <a id="op-18"></a>
@@ -403,7 +413,7 @@ parse_document 작업 큐(Redis Streams)를 서버마다 Redis 하나로 띄운�
 1. 파일: `compose-local.yml`(PC — 재시작 정책 없음, 실행 이미지 + 저장소를 `/app` 읽기 전용) · `compose-dev.yml`(개발 서버 벌 1~4 `data-pipeline-<n>`, `unless-stopped`) · `compose-prd.yml`(운영 묶음, `always`, 구운 이미지). local·prd에는 번호 없는 `data-pipeline`·`mcp-server`·파싱 worker `mcp-data-parsing`.
 2. 앱 컨테이너(dev·prd)는 서버 네트워크를 그대로 쓴다(`network_mode: host` — 포트 연결 없음). SSH는 컨테이너마다 `SSH_PORT`(개발 벌 8021~8024, 운영 묶음 8020·8050), 검색 MCP는 `<서버 IP>:8051`. PG·Redis는 자기 compose에서 `0.0.0.0`에 연다. PC `compose-local.yml`만 docker 자체 네트워크 + 포트 연결. 서버에 있는 것(PG 5433, Redis 8010, 모델)은 `host.docker.internal`로 붙는다.
 3. 컨테이너 이름·이미지·CPU·메모리·포트는 compose 파일에 직접 적는다. 호스트 스크립트(`host_ctl.sh`·`pipe_exec.sh`·`mcp_keepalive.sh`·`run_pipeline.py`)가 들어갈 컨테이너 이름은 settings.yaml `ops.host.pipeline_container`·`mcp_container`·`parse_container` 세 칸(기본 `data-pipeline`·`mcp-server`·`mcp-data-parsing` — 개발 벌 N은 `pipeline_container: data-pipeline-N`).
-4. 모든 앱 컨테이너는 root(파싱 worker 포함). SSH 컨테이너의 root 비밀번호는 이미지에 넣은 값(예외 승인 — 이미지 빌드 때 BuildKit 비밀값).
+4. 모든 앱 컨테이너는 root(파싱 worker 포함). SSH 컨테이너의 root 비밀번호는 settings.yaml `option.devbox.root_password` 하나 — `host_ctl.sh`가 compose 비밀값 `root_pw`로 넘겨 컨테이너 `/run/secrets/root_pw`에 둔다(이미지·git·컨테이너 env에는 없음). 비면 `host_ctl.sh up`이 거부한다.
 5. `host_ctl.sh`는 얇다: `up`·`down` 등은 settings.yaml `run_env`(부른 폴더)에 맞는 `compose-<환경>.yml` 하나로 `docker compose`를 부른다. `init`·`secrets`·`timers`·`check`는 하위 명령. 덧붙임 파일·벌 번호 계산은 없다.
 6. PG(`compose-pgvector.yml`)·Redis(`compose-redis.yml`)는 사람이 따로 한 번 띄우고 늘 `always`. 비밀번호는 settings.yaml 하나(`required.pg.pg_password`·`common.connections.redis.redis_password`) — PG·Redis 컨테이너에는 같은 값을 코드 폴더 맨 위 `.env`(`REDIS_PASSWORD`·`PG_USER`·`PG_DB`·`PG_PASSWORD`, 600, git 제외)에 사람이 적어 `docker compose --env-file .env`로 넘긴다. 다른 비밀번호 파일은 없다.
 7. Redis는 공식 `redis:7.4.8-alpine` 하나, 포트 8010, 모든 주소에서 받고 비밀번호 필수. 클러스터는 없다(나중에).

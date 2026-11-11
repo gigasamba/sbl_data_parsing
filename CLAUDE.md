@@ -129,11 +129,11 @@ uv pip install --python .venv/bin/python -r deploy/docker/requirements-core.txt 
 export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자식 프로세스가 다른 폴더에서 실행될 때도 찾도록 절대 경로)
 .venv/bin/python -m pipeline.config   # 어느 settings.yaml을 읽는지와 요약(비밀값은 가림)
 ```
-- 루트 `settings.yaml`에는 `required.env.run_env: local`, 전용 PG 접속 정보(`required.pg`), 임베딩·LLM·VLM 주소·모델·키(`required.models`), (부하가 높은 PC라면) `tuning.ops.runtime.max_cpu_load`를 둔다. 예시는 README §4-2에 있다.
+- 루트 `settings.yaml`에는 `required.env.run_env: local`, 전용 PG 접속 정보(`required.pg`), 임베딩·LLM·VLM 주소·모델·키(`required.models`), (부하가 높은 PC라면) `tuning.ops.runtime.max_cpu_load`를 둔다. 예시는 [local.md](docs/operations/local.md) 2절에 있다.
 - 작업 폴더(worktree)에는 `settings.yaml`이 없다 — 거기서 점검·시험은 `export RUN_ENV=local`을 먼저(없으면 `output/`이 저장소 한 단계 위에 생긴다 — `paths.PROJ_ROOT`). 하위 에이전트 지시에도 넣는다.
-- 전용 pgvector 컨테이너(PG 16 + pgvector, 예: `127.0.0.1:55433`)를 쓴다 — 없거나 멈췄으면 DB 시험이 스스로 띄우고(settings.yaml `required.deploy.pg_container_name`) 손으로는 README §4-1 "PC 시험 DB 준비" 순서로 띄운다(DB 시험은 이 PG가 없으면 FAIL). PG 접속 항목(`required.pg`)은 모두 채운다 — 빈 칸이 있으면 시작을 거부한다(자동 탐색 없음, sqlite 대역 없음). 다른 작업의 DB와 포트를 쓰지 않는다.
+- 전용 pgvector 컨테이너(PG 16 + pgvector, 예: `127.0.0.1:55433`)를 쓴다 — 없거나 멈췄으면 DB 시험이 스스로 띄우고(settings.yaml `required.deploy.pg_container_name`) 손으로는 [local.md](docs/operations/local.md) 3절 "PC 시험 DB 준비" 순서로 띄운다(DB 시험은 이 PG가 없으면 FAIL). PG 접속 항목(`required.pg`)은 모두 채운다 — 빈 칸이 있으면 시작을 거부한다(자동 탐색 없음, sqlite 대역 없음). 다른 작업의 DB와 포트를 쓰지 않는다.
 - 백그라운드 프로세스는 PID를 파일에 남기고 **PID로만** 종료한다(`pkill -f` 패턴 금지).
-- 검색 스키마 테이블은 마이그레이션이 만든다(`dbtool up --target all --schema <이름> --bundle <묶음>` — README §4-4).
+- 검색 스키마 테이블은 마이그레이션이 만든다(`dbtool up --target all --schema <이름> --bundle <묶음>` — [local.md](docs/operations/local.md) 5절).
 
 ### 6-2. 점검 명령
 ```bash
@@ -158,10 +158,10 @@ export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자�
 - 고정 데이터: 외부 시스템을 흉내 내는 데이터(문서·정답·EDW 대역)는 `valid_env/`에 둔다([e2-09](docs/prd/test.md#e2-09)). 서버 배포 테스트는 `valid_env`가 없는 이미지에서도 돌게 데이터를 임시 폴더에 만들어 쓴다.
 
 ### 6-5. 스모크 테스트 — 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색
-README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. 실행마다 다른 값은 `--set`으로 준다(파이프라인 진입점·`mcp_server.main`·`ask` 모두). 테스트 문서는 `valid_env/object_storage/{SFDC,CRMS}/`에 있고(문서 목록은 README §4-4), 임베딩 캐시는 `output/edw/embed_cache.sqlite`다(같은 청크는 다시 호출하지 않는다 — 실제 호출을 확인하려면 `EMBED_CACHE=<빈 sqlite>`).
+[local.md](docs/operations/local.md) 5절·6절의 순서대로 문서 2~3건으로 확인한다. 실행마다 다른 값은 `--set`으로 준다(파이프라인 진입점·`mcp_server.main`·`ask` 모두). 테스트 문서는 `valid_env/object_storage/{SFDC,CRMS}/`에 있고(문서 목록은 [local.md](docs/operations/local.md) 5절), 임베딩 캐시는 `output/edw/embed_cache.sqlite`다(같은 청크는 다시 호출하지 않는다 — 실제 호출을 확인하려면 `EMBED_CACHE=<빈 sqlite>`).
 
 ### 6-6. 검증 페이지와 이미지 빌드
-- 검증 페이지: `validation/search_ui/start_mcp.sh`와 `start_ui.sh`로 띄운다(설정은 루트 `settings.yaml` 하나 — `search.server`, `dev.search_ui`, PG 접속 `required.pg`, 외부 임베딩 `dev.models.embed.embed_allow_external` — README §4-2 예시). 주소는 http://127.0.0.1:8791 이다. 자세한 내용은 README §4-6.
+- 검증 페이지: `validation/search_ui/start_mcp.sh`와 `start_ui.sh`로 띄운다(설정은 루트 `settings.yaml` 하나 — `search.server`, `dev.search_ui`, PG 접속 `required.pg`, 외부 임베딩 `dev.models.embed.embed_allow_external` — [local.md](docs/operations/local.md) 2절 예시). 주소는 http://127.0.0.1:8791 이다. 자세한 내용은 [local.md](docs/operations/local.md) 7절.
 - 서버에 올릴 이미지를 빌드하기 전에 `assets/`를 채운다(`PYTHONPATH=. python deploy/release/assets.py pack` — [server-guide §5-3-1](docs/history/server-guide-0.4.md#5-3-1-반입-자산assets-준비--이미지-빌드-전)).
 - 이미지: `ALLOW_NO_ASSETS=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh`(빌드 → `selftest_gate.sh` 판정 — 판정은 종료 코드가 아니라 `[판정]` 줄로 한다). 판정 시험의 DB 사례는 PG에 붙는다 — `build_ship.sh`가 설정 파일·`--network host`·`RUN_ENV`를 넣고 PC 빌드는 `--set PG_HOST=host.docker.internal`을 붙인다(손으로 돌릴 때도 같게). PC 시험 빌드는 태그를 작업마다 새로 붙인다(TAG를 빼면 `data-pipeline:<VERSION>` — 배포용 버전 태그이고, 이미 있으면 `build_ship.sh`가 멈춘다). push와 서버 배포는 사람이 한다.
 - **배포 단계마다 이미지와 코드의 구성이 다르다**([dev.md](docs/operations/dev.md)·[prd.md](docs/operations/prd.md)). ① PC(local) → 개발 서버(dev): 코드가 없는 실행 이미지(`IMAGE_TARGET=pipeline-runtime|mcp-runtime`) + 벌 폴더 `data_pipeline-<n>/app`(코드·settings.yaml·output)을 `/app`에, `home`을 `/root`에 붙인다. ② 개발 서버 → 운영 서버(prd): 개발 서버에서 `deploy/release/bake_prod_image.sh`로 같은 실행 이미지 + 시험한 코드 폴더를 묶어 코드가 든 이미지를 만들고, `data_pipeline/app`에서 `deploy/release/promote.sh`로 올린다(코드 폴더 없이 실행). Dockerfile의 코드 포함 타깃(`pipeline`·`mcp`)은 PC 시험과 비상용이다.

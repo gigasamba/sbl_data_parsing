@@ -101,3 +101,15 @@ def test_env_mismatch():
         for body, want in ENV_CASES:
             f.write_text(body, encoding="utf-8")
             assert s2e.env_mismatch(ENV_DOC, f) == want, (body, want)
+
+
+def test_secret_for_compose():
+    """--secret: SSH root 비밀번호 칸 하나만 그대로 냄(compose 비밀값) — 비었거나 8자 미만이면 종료 1·아무것도 안 냄."""
+    s2e = _host_env()
+    for value, rc in (("pw-for-test-1", 0), (None, 1), ("short", 1)):
+        f = Path(tempfile.mkdtemp()) / "settings.yaml"
+        f.write_text(yaml.safe_dump({"option": {"devbox": {"root_password": value}}}), encoding="utf-8")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            got = s2e.main(["--file", str(f), "--secret", "common.host.devbox.root_password"])
+        assert (got, out.getvalue()) == (rc, value if rc == 0 else ""), (value, got)

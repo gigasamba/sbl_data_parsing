@@ -4,19 +4,19 @@
 
 | 문서 | 무엇 | 언제 읽나 |
 |---|---|---|
-| [README.md](../README.md) | 프로젝트 소개 — 처리 흐름·이미지와 버전·폴더 구조·설정·PC 실행 단계(①~⑥)·서버 설치와 실행 | 처음 볼 때, 실행 방법을 찾을 때 |
+| [README.md](../README.md) | 프로젝트 소개 — 처리 흐름·모듈·이미지와 실행 모드 요약·담당 역할, 환경별 실행 안내로 가는 링크 | 처음 볼 때 |
 | [PRD.md](PRD.md) · [prd/extract.md](prd/extract.md) · [prd/transform.md](prd/transform.md) · [prd/transform-cleanup.md](prd/transform-cleanup.md) · [prd/load.md](prd/load.md) · [prd/load-schema.md](prd/load-schema.md) · [prd/mcp.md](prd/mcp.md) · [prd/ops.md](prd/ops.md) · [prd/ops-settings.md](prd/ops-settings.md) · [prd/test.md](prd/test.md) · [prd/doc.md](prd/doc.md) | 기능 요건 — 카테고리 7개: 수집, 변환(정리·지문 배치는 transform-cleanup), 적재(DB 스키마는 load-schema), 검색 MCP, 운영(설정은 ops-settings), 테스트, 문서·릴리스. PRD.md는 묶음 표와 지금 진행 중. 카테고리 파일 끝에 요건과 다른 코드·요건 없는 코드 | 기능을 고치거나 더하기 전에, 할 일을 고를 때 |
 | [CLAUDE.md](../CLAUDE.md) | 작업 규칙 — 지문·계약·운영 가드, 경계·이름, 배포 환경 규칙, 로컬 하네스·점검 명령 | 작업을 시작하기 전에 늘 |
 | [refactoring/refactor.md](refactoring/refactor.md) | 서버·사람이 확인할 열린 사항(C-xx) — 무엇을 돌리고 무엇이 통과인지 | 서버 배포 전후, 담당자와 협의할 때 |
-| [operations/local.md](operations/local.md) | PC 실행 순서 — 가상환경·settings.yaml·시험 DB·점검·문서 몇 건(파싱 → 구조화 → DB 표 → 적재 → 검색)·검색 MCP·검증 페이지·compose-local | PC에서 처음 돌리거나 시험할 때 |
+| [operations/local.md](operations/local.md) | PC 실행 순서 — 가상환경·settings.yaml(예시)·시험 DB·점검·문서 몇 건(파싱 → 구조화 → DB 표 → 적재 → 검색)·검색 MCP·검증 페이지·compose-local·코드가 든 시험 이미지 | PC에서 처음 돌리거나 시험할 때 |
 | [operations/dev.md](operations/dev.md) | 개발 서버 실행 순서 — A 호스트(벌 폴더 `data_pipeline-<n>/{app,home}`·이미지·PG·Redis·홈 묶음·방화벽·띄우기·점검·`run_pipeline.py` 한 번에·`pipe_exec.sh` 단계 하나씩·백업·코드 바꾸기·이미지 정리) · B 벌 컨테이너 안(`python -m`으로 설정 확인·selftest·DB 표·파싱·게시·적재·검색) · C 벌끼리 간섭 없이 일하기(git·opencode) · D 출시 전 시험(운영 묶음) | 개발 서버를 설치하거나 벌에서 시험할 때 |
 | [operations/prd.md](operations/prd.md) | 운영 서버 실행 순서 — 굽기·옮기기·운영 폴더 `data_pipeline/{app,home}`·운영 반영(`promote.sh`)·`run_pipeline.py`·타이머(새벽 배치·MCP 살리기)·이미지 정리, 판 올리기, 되돌리기 | 운영 서버를 설치하거나 새 판으로 올릴 때 |
-| [operations/settings.md](operations/settings.md) | 환경마다 사람이 채울 설정 칸, 새벽 배치 칸, `--set 이름=값` 쓰는 법 | 설정 값을 채우거나 한 번만 바꿔 돌릴 때 |
+| [operations/settings.md](operations/settings.md) | 설정 파일 구조·쓰는 법, 환경마다 사람이 채울 칸, 파싱할 원천, PC 전용 칸(가짜 대상·외부 모델·VLM), 새벽 배치 칸, `--set 이름=값` 쓰는 법 | 설정 값을 채우거나 한 번만 바꿔 돌릴 때 |
 | [operations/mcp-guide.md](operations/mcp-guide.md) | 검색 MCP 도구 6개의 입력·출력·한도·오류·예(표는 `tests/general/mcp/test_mcp_guide.py`가 코드와 대조) | MCP 클라이언트를 붙이거나 도구 입출력을 바꿀 때 |
-| [architecture/db_schema.md](architecture/db_schema.md) | DB 스키마 명세 — gold(원천별 5벌 — 처리 기록 칸 포함)·EDW(`AI.FileStorageMap` — 읽기만)·마스터(`<스키마>_master`)·`applog`. 시험 `tests/server/common/test_db_schema.py`가 판·SQL과 대조 | DB 표·칸을 바꾸거나 DB 담당자와 협의할 때 |
+| [architecture/db_schema.md](architecture/db_schema.md) | DB 스키마 명세 — gold(원천별 5벌 — 처리 기록 칸 포함)·EDW(`AI.FileStorageMap` — 읽기만)·마스터(`<스키마>_master`)·`applog`, 판 올리기 `dbtool`(§7), 아직 없는 표(§8). 시험 `tests/server/common/test_db_schema.py`가 판·SQL과 대조 | DB 표·칸을 바꾸거나 DB 담당자와 협의할 때 |
 | [architecture/resources.md](architecture/resources.md) | 코드가 읽는 자료 — §1 엔진 구성 파일(`resources/config/pipeline_stack.json` — 모양 검사·바꾸기·되돌리기·엔진 거부) · §2 AI 지시서 패키지(`resources/prompts/` + 답변 점검 `rag_qa` — 찾는 순서·구성·캐시 열쇠·입출력·호출부) | 엔진 구성을 바꾸거나 지시서·LLM·VLM 호출부를 볼 때 |
 | [architecture/parse_flow.md](architecture/parse_flow.md) | 파싱 실행 흐름 — 입구(`run_pipeline.py`·`pipeline.cli`) → extract → transform → load → 검색 MCP를 단계별 그림(mermaid)과 파일 역할 표로, 단계별 산출물·캐시 열쇠, 설정·로그·출력 폴더 | 코드가 실제로 어떤 순서로 도는지, 결과가 어디에 쌓이는지 볼 때 |
-| [history/](history) | 지난 기록(보관만 — 고치지 않음) — 예 0.2.0 배포 절차 [history/deploy_0_2_0.md](history/deploy_0_2_0.md), 0.4까지의 긴 서버 가이드 [history/server-guide-0.4.md](history/server-guide-0.4.md)·설정 가이드 [history/env-guide-0.4.md](history/env-guide-0.4.md). [refactoring/refactor_plan.md](refactoring/refactor_plan.md)는 옮긴 곳 안내 | 옛 결정(`D-xxx`·`P-xx`)·이력을 찾을 때 |
+| [history/](history) | 지난 기록(보관만 — 고치지 않음) — 예 0.2.0 배포 절차 [history/deploy_0_2_0.md](history/deploy_0_2_0.md), 0.4까지의 긴 서버 가이드 [history/server-guide-0.4.md](history/server-guide-0.4.md)·설정 가이드 [history/env-guide-0.4.md](history/env-guide-0.4.md), C-95 설정 칸 이름 대응표 [history/c95_key_map.md](history/c95_key_map.md). [refactoring/refactor_plan.md](refactoring/refactor_plan.md)는 옮긴 곳 안내 | 옛 결정(`D-xxx`·`P-xx`)·이력을 찾을 때 |
 
 ## 예외
 
@@ -44,6 +44,11 @@
 **프로젝트 용어**
 | 말 | 뜻 |
 |---|---|
+| 원천 | 문서가 온 시스템 — `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`(개발 서버·PC는 `DEV-<숫자>`도). 검색할 때는 원천을 꼭 하나 고른다 |
+| 마스터 표 | 용어집·고객 명부·ID 꼴 표(`<스키마>_master.glossary`) — 원본은 git의 `resources/vocab/glossary/glossary.csv` |
+| 실행 이미지(`*-runtime`) | 코드가 없는 이미지 — 개발 서버는 코드 폴더를 붙여 쓰고, 운영 서버는 코드를 구워 넣은 이미지를 쓴다 |
+| 벌 · 코드 폴더(루트) | 벌 = 한 서버에 따로 띄운 컨테이너 한 묶음 — 폴더 `<벌>/{app,home}`(개발 벌 `/home/sbl/data_pipeline-<n>/`, 운영 묶음 `/home/sbl/data_pipeline/`). 코드 폴더 = 루트 = `app/`(코드 zip을 푼 폴더 — `settings.yaml`·`edw_chain.yaml`·`output/`이 그 안, 컨테이너 `/app`). `home/`은 root 홈(컨테이너 `/root`) |
+| `$DOCKER` | 컨테이너 명령 — 서버는 `docker`(root 셸). 셸에서 `export DOCKER=docker` |
 | 묶음(번들) | 구조화 결과 폴더(`docs.jsonl`·청크·벡터) — 적재의 입력(검색은 PG만 읽는다) |
 | 대역 | PC에서 외부 시스템을 흉내 내는 것(EDW sqlite `valid_env/edw/edw.sqlite` — PG는 대역 없이 PC 시험 pgvector 컨테이너) |
 | 스택 | 파일 형식마다 도는 엔진 목록(`resources/config/pipeline_stack.json`) |

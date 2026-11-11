@@ -11,5 +11,6 @@ pipeline.host.nightly.time	NIGHTLY_TIME	text
 pipeline.host.nightly.max_docs	NIGHTLY_MAX_DOCS	num
 pipeline.host.nightly.deadline	NIGHTLY_DEADLINE	text
 image.code_root	APP_CODE_ROOT	const	/app
+image.docker_root	APP_DOCKER_ROOT	const	/opt/sbl/docker
 image.docs_mount	APP_DOCS_MOUNT	const	/data/docs
 image.output_root	APP_OUTPUT_ROOT	const	/app/output

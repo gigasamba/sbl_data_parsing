@@ -19,6 +19,8 @@ def _posix(p):
     return f"/{p[0].lower()}{p[2:]}" if p[1:2] == ":" else p  # Git Bash(Windows)가 절대 경로로 보는 꼴
 
 
+PW_YAML = "required:\n  env: {{run_env: {}}}\noption:\n  devbox: {{root_password: test-pw-1}}\n"  # host_ctl.sh up이 읽는 SSH 비밀번호 칸
+
 CASES = [  # (run_env, 인자, 종료 코드, 표준 출력(compose 파일 자리는 이름만) 또는 표준 오류에 나올 문구)
     ("local", ["up", "-d"], 0, "compose -f compose-local.yml up -d"),
     ("dev", ["up", "-d", "data-pipeline-1"], 0, "compose -f compose-dev.yml up -d data-pipeline-1"),
@@ -36,12 +38,13 @@ def test_dc_command():
     assert subprocess.run([bash, "-n", str(SCRIPT)], capture_output=True).returncode == 0
     with tempfile.TemporaryDirectory() as d:
         sf = Path(d) / "settings.yaml"
-        sf.write_text("required:\n  env: {run_env: dev}\n", encoding="utf-8")
+        sf.write_text(PW_YAML.format("dev"), encoding="utf-8")
         for run_env, args, rc, want in CASES:
             env = {  # env 남김 — 하위 프로세스(호스트 셸이 load_settings로 받는 이름 — 시험)
                 "PATH": os.environ.get("PATH", ""),
                 "SETTINGS_FILE": _posix(sf),
-                "SETTINGS_LOADED": _posix(sf),  # 이미 읽은 것으로 — settings_to_env.py(PyYAML)를 부르지 않음
+                "SETTINGS_LOADED": _posix(sf),  # 이미 읽은 것으로 — 호스트 칸은 settings_to_env.py를 부르지 않음
+                "PY": Path(sys.executable).as_posix(),  # 비밀번호 칸만 settings_to_env.py --secret으로 읽음
                 "RUN_ENV": run_env,
                 "DOCKER": "echo",
             }
@@ -128,7 +131,7 @@ def test_keepalive():
             (stub / exe).write_text(body, encoding="utf-8", newline="\n")
             (stub / exe).chmod(0o755)
         sf = Path(d) / "settings.yaml"
-        sf.write_text("required:\n  env: {run_env: prd}\n", encoding="utf-8")
+        sf.write_text(PW_YAML.format("prd"), encoding="utf-8")
         script = _posix(SCRIPT.parent / "mcp_keepalive.sh")
         # 대역을 PATH 맨 앞에 — Git Bash(Windows) 입구는 시작 때 /usr/bin을 앞에 붙이므로 셸 안에서 붙이고 bash를 다시 부름
         cmd = f'PATH="{_posix(stub)}:$PATH" exec bash "{script}"'
@@ -139,6 +142,7 @@ def test_keepalive():
                 "PATH": os.environ.get("PATH", ""),
                 "SETTINGS_FILE": _posix(sf),
                 "SETTINGS_LOADED": _posix(sf),
+                "PY": Path(sys.executable).as_posix(),
                 "RUN_ENV": "prd",
                 "DOCKER": "dk",
                 "STATE_redis": redis,

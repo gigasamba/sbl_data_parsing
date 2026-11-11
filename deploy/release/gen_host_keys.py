@@ -23,7 +23,7 @@ HOST_SKIP = (
     "common.host.devbox.git_user_name",
     "common.host.devbox.git_user_email",  # 위 둘: 컨테이너 git_cred.py만 읽음
 )
-IMAGE_CONSTS = ("code_root", "docs_mount", "output_root")  # run_pipeline.py가 쓰는 약속 경로
+IMAGE_CONSTS = ("code_root", "docker_root", "docs_mount", "output_root")  # run_pipeline.py가 쓰는 약속 경로
 HOST_TABLE = DEPLOY_ROOT / "deploy" / "host" / "scripts" / "host_settings.tsv"
 
 

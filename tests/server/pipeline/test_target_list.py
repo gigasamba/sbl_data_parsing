@@ -1,4 +1,4 @@
-"""rn-05 — 대상 목록 `python -m pipeline.extract.candidate_pick list`(run_pipeline이 컨테이너 안에서 한 번 부름): EDW FileStorageMap에서
+"""rn-05 — 대상 목록 `python -m pipeline.extract.candidate_pick list`(run_pipeline이 실행당 한 번 부름): EDW FileStorageMap에서
 이름 키워드로 고르고(--filter — 없으면 모든 문서, 파일 크기 오름차순, 크기 없는 행 뺌) → 시작 자리·시험 개수·골라 돌리기 → 끝난 문서(gold doc)·영구 뺌(except_doc_info skip)
 빼기 → FAQ 먼저(새 FAQ면 교체 + 전체, 아니면 gold에 없는 것만, 결과 없으면 전체) → 앞 max-docs개. 임시 SQLite EDW · gold는 실 pgvector 임시 스키마(goldseed.gold).
 op-17 — 원천 목록(required.source.source_systems)이 있으면 그 원천 행만(대소문자 무관 — FAQ가 없으면 FAQ 교체도 안 함), 비우면 운영 5개 원천
@@ -150,6 +150,7 @@ TABLES = [
 ]
 
 
+@pc.PIPE.env(SOURCE_SYSTEMS=None)  # 원천 목록 비움(운영 5개 원천) — 서버 설정의 source_systems에 기대지 않음
 def test_file_table():
     from common.config.settings import require_run_env
 
@@ -207,3 +208,92 @@ def test_source_systems_gate():
             except SystemExit as e:
                 got, code = None, e.code
             assert code == want and (want is not None or got == run_env), (run_env, systems, code)
+
+
+@pc.PIPE.env(SOURCE_SYSTEMS=None)  # 원천 목록 비움(운영 5개 원천) — 서버 설정의 source_systems에 기대지 않음
+def test_dlq_targets():
+    from pipeline.shared import dlq
+
+    with tempfile.TemporaryDirectory() as tmp, gold():
+        edw, out = _edw(tmp), Path(tmp) / "targets.json"
+        with (
+            COMMON.env(RUN_ENV="local", RDB_SQLITE=str(edw)),
+            mock.patch("pipeline.shared.except_docs.skipped_keys", return_value=set(NEVER)),
+        ):
+            CP._list_cmd([*KW, "--out", str(out)])
+            positions = {r["s3_key"]: r["seq"] for r in json.loads(out.read_text(encoding="utf-8"))["docs"]}
+            for key in (K["prop"], K["nogold"], K["ok"], K["x"], "gone"):
+                dlq.record_failure([{"source_key": key, "reason": "parse_failed"}])
+            for key in (K["big"], K["dup"], K["faq2"]):
+                dlq.record_failure([{"source_key": key, "reason": "parse_failed"}], max_attempts=1)
+            CP._list_cmd([*KW, "--skip-done", "--max-docs", "1", "--out", str(out)])
+            got = json.loads(out.read_text(encoding="utf-8"))["docs"]
+            assert [r["s3_key"] for r in got] == [K["prop"]]
+            CP._list_cmd([*KW, "--skip-done", "--out", str(out)])
+            got = json.loads(out.read_text(encoding="utf-8"))["docs"]
+            assert [r["s3_key"] for r in got] == [K["prop"], K["nogold"]]
+            assert all(r["seq"] == positions[r["s3_key"]] for r in got)
+            states = {r["source_key"]: r["status"] for r in dlq.list_rows()}
+            assert all(states[k] == "resolved" for k in (K["ok"], K["dup"], K["faq2"]))
+            assert states[K["big"]] == "dead" and states["gone"] == "pending"
+
+
+@pc.PIPE.env(SOURCE_SYSTEMS=None)  # 원천 목록 비움(운영 5개 원천) — 서버 설정의 source_systems에 기대지 않음
+def test_dlq_read_failure():
+    """DLQ만 못 읽으면 기존 skip-done 선택. 경고는 종류만 한 줄(비밀값 없음)."""
+    import io
+    from contextlib import redirect_stdout
+
+    from pipeline.shared import dlq
+
+    with tempfile.TemporaryDirectory() as tmp, gold():
+        edw, out = _edw(tmp), Path(tmp) / "targets.json"
+        for error in (RuntimeError("secret-connection"), SystemExit("secret-connection")):
+            stdout = io.StringIO()
+            with (
+                COMMON.env(RUN_ENV="local", RDB_SQLITE=str(edw)),
+                mock.patch("pipeline.shared.except_docs.skipped_keys", return_value=set(NEVER)),
+                mock.patch.object(dlq, "excluded_keys", side_effect=error),
+                mock.patch.object(dlq, "resolve", side_effect=AssertionError("partial read must not resolve")),
+                redirect_stdout(stdout),
+            ):
+                assert CP._list_cmd([*KW, "--skip-done", "--out", str(out)]) == 0
+            got = json.loads(out.read_text(encoding="utf-8"))["docs"]
+            assert [r["s3_key"] for r in got] == [K["prop"], K["nogold"], K["big"]]
+            warning = f"[DLQ] 상태 못 읽음({type(error).__name__}) — DLQ 제외 없이 진행(applog 판 0005·접속 확인)"
+            assert stdout.getvalue().count(warning) == 1 and "secret-connection" not in stdout.getvalue()
+
+
+def test_run_seen_reset_each_list():
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.object(CP, "list_targets", return_value=([], [], 0, 0)):
+        root = Path(tmp)
+        for _ in range(2):
+            seen = root / CP.RUN_SEEN
+            seen.mkdir()
+            (seen / "old-sha").touch()
+            CP._list_cmd(["--out", str(root / "targets.json")])
+            assert not seen.exists()
+
+
+def test_faq_pending_included_dead_excluded():
+    from common.store import mssql
+    from pipeline.shared import dlq, except_docs
+
+    rows = [{"s3_key": k, "source_system": "SFDC"} for k in ("pending", "fresh")]
+    faq_rows = [{"s3_key": k, "source_system": "FAQ"} for k in ("faq-pending", "faq-dead", "faq-new")]
+    excluded = {k: {"status": status} for k, status in (("pending", "pending"), ("faq-pending", "pending"), ("faq-dead", "dead"))}
+    with (
+        tempfile.TemporaryDirectory() as tmp,
+        pc.PIPE.env(SOURCE_SYSTEMS=None),
+        mock.patch.object(mssql, "EdwReader"),
+        mock.patch.object(CP, "edw_rows", side_effect=lambda edw, keywords=(), faq=False, systems=None: list(faq_rows if faq else rows)),
+        mock.patch.object(CP, "done_keys", return_value=set()),
+        mock.patch.object(except_docs, "skipped_keys", return_value=set()),
+        mock.patch.object(dlq, "excluded_keys", return_value=excluded) as query,
+        mock.patch.object(dlq, "resolve"),
+    ):
+        sync = mock.Mock(return_value={"faq_reset": 1, "gold": []})
+        rs, order, _, _ = CP.list_targets([], 0, skip_done=True, faq_seen=Path(tmp) / "seen", sync=sync)
+        assert [rs[i]["s3_key"] for i in order] == ["faq-pending", "faq-new", "pending", "fresh"]
+        query.assert_called_once_with()
+        sync.assert_called_once_with(True)

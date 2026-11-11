@@ -12,6 +12,8 @@
 !VERSION
 # EDW 조인 사슬 정본(코드 폴더 맨 위 — common.store.edw_chain 기본 파일)
 !edw_chain.yaml
+# opencode 권한(코드 폴더 맨 위 — 운영 이미지 /app에서도 적용)
+!opencode.jsonc
 !CODE_COMMIT
 # 개발 도구 pip 판(이미지 base 단계 — PC 개발 도구와 같은 파일)
 !requirements-dev.txt

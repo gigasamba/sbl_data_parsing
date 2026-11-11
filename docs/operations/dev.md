@@ -10,7 +10,7 @@
 벌 하나의 폴더:
 - `app/` → 컨테이너 `/app` — git 코드 + `settings.yaml` + `output/`(결과)
 - `home/` → 컨테이너 `/root` — root 홈(opencode·VS Code 서버·git 설정)
-- 원본 문서 폴더(`ops.host.host_docs_dir`, 기본 `/data/docs`) → `/data/docs`(읽기 전용)
+- 원본 문서 폴더(`required.deploy.host_docs_dir`, 기본 `/data/docs`) → `/data/docs`(읽기 전용)
 
 컨테이너 안에서 같은 폴더가 두 자리에 보이지 않는다. 이미지 부품은 `/opt/sbl/{docker,assets}`에 있다. 설정 칸 뜻은 [settings.md](settings.md).
 
@@ -29,32 +29,34 @@ export DOCKER=docker; S=/home/sbl          # 공용 폴더
 
 ### A-1. 벌 폴더 만들기
 ```bash
-cd $S && unzip -q <코드 zip>                                   # 기대: sbl_data_parsing-<판>/
+cd $S && unzip -q <코드 zip>                                   # 기대: sbl_data_parsing-<판>/ (git archive로 만든 zip — 커밋 표시가 들어감)
 for b in data_pipeline-1 data_pipeline-2 data_pipeline-3 data_pipeline-4 data_pipeline; do
   mkdir -p $S/$b/home && cp -a sbl_data_parsing-<판> $S/$b/app; done
-rm -rf sbl_data_parsing-<판> $S/data_pipeline-*/app/valid_env    # 서버에는 PC 시험 데이터가 필요 없다
+rm -rf sbl_data_parsing-<판> $S/data_pipeline*/app/valid_env    # 서버에는 PC 시험 데이터가 필요 없다
 ```
 
 ### A-2. 실행 이미지 불러오기(판마다 한 번)
 ```bash
-cd $S && unzip -q <이미지 zip>                                  # 기대: sbl_images-main/
-cat sbl_images-main/<이미지 판>/BUILD.txt                       # DEPS_HASH 확인
+cd $S && unzip -q <이미지 zip> && mv sbl_images-<이미지 판> sbl_images   # 이미지 저장소의 <이미지 판> 브랜치 zip
+cat sbl_images/<이미지 판>/BUILD.txt                            # DEPS_HASH 확인
 cat $S/data_pipeline-1/app/deploy/docker/DEPS_HASH             # 위와 같아야 함
-bash sbl_images-main/load.sh <이미지 판>
-docker image ls | grep -E '^(data-pipeline-runtime|mcp-server-runtime|redis) '
+bash sbl_images/load.sh <이미지 판>                             # 실행 이미지 2개 + redis
+docker load -i <pgvector_pg16.tar>                              # PG 이미지 — 인터넷 PC에서 docker pull pgvector/pgvector:pg16 && docker save pgvector/pgvector:pg16 -o pgvector_pg16.tar
+docker image ls | grep -E '^(data-pipeline-runtime|mcp-server-runtime|redis|pgvector/pgvector) '   # 기대: 4줄
 ```
 compose 파일의 기본 판과 다르면 그 벌의 `app/deploy/host/compose/.env`에 `IMAGE_TAG=<이미지 판>` 한 줄.
 
 ### A-3. 개발 홈 묶음 풀기(컨테이너 띄우기 전)
 ```bash
-cd $S/sbl_images-main/<이미지 판> && sha256sum -c --quiet devhome.sha256 && echo OK
+cd $S/sbl_images/<이미지 판> && sha256sum -c --quiet devhome.sha256 && echo OK
 for H in $S/data_pipeline-{1,2,3,4}/home $S/data_pipeline/home $S/data_pipeline/home/mcp; do
   mkdir -p "$H" && cat devhome.tar.gz.part* | tar -xzf - -C "$H"; done
 ls -a $S/data_pipeline-1/home | grep -E 'vscode-server|config|bashrc'
 ```
-접속 PC의 VS Code는 1.117, 자동 업데이트 끔(`update.mode: none`). opencode 설정(`home/.config/opencode/opencode.json`)은 컨테이너 첫 시작 때 한 번만 이미지의 틀에서 복사된다 — 이미 있는 홈은 그대로라, 새 틀(위험한 명령만 묻기)을 쓰려면 그 파일을 지우고 컨테이너를 다시 띄운다.
+접속 PC의 VS Code는 1.117, 자동 업데이트 끔(`update.mode: none`). opencode 권한은 저장소 맨 위 `opencode.jsonc`(git — `/app`에서 시작하면 적용)이고, 홈의 `home/.config/opencode/opencode.json`에는 모델 주소만 둔다.
 
 ### A-4. 벌 폴더 채우기
+호스트 준비(한 번): `dnf install -y python3-pyyaml` · `groupadd <운영 그룹>`(없으면 init의 chown이 실패).
 ```bash
 for b in data_pipeline-1 data_pipeline-2 data_pipeline-3 data_pipeline-4 data_pipeline; do
   (cd $S/$b/app && bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>); done
@@ -68,6 +70,8 @@ for b in data_pipeline-1 data_pipeline-2 data_pipeline-3 data_pipeline-4 data_pi
 |---|---|---|---|
 | `data_pipeline-<n>/app` | `dev` | `data-pipeline-<n>` | `DEV-<n>` |
 | `data_pipeline/app` | `prd` | 비움(= `data-pipeline`) | 시험할 원천 |
+
+SSH root 비밀번호는 `option.devbox.root_password`(벌을 띄우는 `data_pipeline-1/app`과 `data_pipeline/app`에 — compose가 컨테이너에 비밀값으로 넘김).
 
 ```bash
 cd $S/data_pipeline-1/app && bash deploy/host/scripts/host_ctl.sh config --quiet && echo 설정 OK
@@ -83,6 +87,7 @@ docker compose --env-file .env -f deploy/host/compose/compose-redis.yml up -d
 until docker exec pgvector pg_isready -h 127.0.0.1 -U <계정> -d <DB>; do sleep 1; done
 docker exec pgvector psql -U <계정> -d <DB> -c 'CREATE EXTENSION IF NOT EXISTS vector'
 docker ps --filter name=^redis$ --format '{{.Status}}'        # 기대: Up … (healthy)
+for n in 1 2 3 4; do cp -p .env $S/data_pipeline-$n/app/; done   # 벌 점검(A-9 ⓪)이 벌 폴더의 .env를 settings.yaml과 대조
 ```
 
 ### A-7. 방화벽
@@ -94,10 +99,10 @@ firewall-cmd --list-ports
 ### A-8. 벌 띄우기
 ```bash
 cd $S/data_pipeline-1/app
-bash deploy/host/scripts/host_ctl.sh up -d                     # 벌 1~4 모두(폴더 자리는 compose 파일이 SBL_ROOT 기준으로 앎)
+bash deploy/host/scripts/host_ctl.sh up -d                     # 벌 1~4 모두 — 네 벌의 settings.yaml을 다 채운 뒤(한 벌만이면 up -d data-pipeline-<n>)
 bash deploy/host/scripts/host_ctl.sh ps                        # 기대: data-pipeline-1~4 Up
 ```
-처음이면 DB 표를 만든다(B-3 — 아무 벌 안에서 한 번).
+처음이면 A-9 전에 DB 표를 만든다(B-3 — 아무 벌 안에서 한 번, 없으면 A-9 migrate check가 실패).
 
 ### A-9. 점검(벌마다)
 ```bash
@@ -106,25 +111,30 @@ cd $S/data_pipeline-<n>/app && bash deploy/host/scripts/host_ctl.sh check   # �
 벌 점검은 파이프라인만 본다(검색 MCP는 D의 운영 묶음에 있다).
 
 ### A-10. 한 번에 돌리기 — run_pipeline.py(EDW 목록 → 받기 → 파싱 → 게시 → 구조화·적재)
-호스트에서 그 벌의 `app` 폴더에서 부르면 그 벌 컨테이너(`ops.host.pipeline_container`) 안에서 문서마다 돈다.
+벌 컨테이너 **안에서**만 돈다(호스트에서 직접 부르면 거부). 순서: ① 사전 점검(설정·모델·DB 판·배포 시험) → ② 문서 처리 → ③ 적재·검색 확인. 첫 실패에서 멈추고 끝에 `[판정]` 줄을 남긴다.
+③은 같은 서버의 검색 MCP(D의 운영 묶음)를 settings.yaml `dev.search_ui.search_ui_mcp_url`(`http://<서버 IP>:8051/mcp`)로 부른다 — 운영 묶음이 없으면 `--set RUN_PIPELINE_STEPS_VERIFY=false`를 붙인다.
+
+호스트에서 한 줄로(`R` = 아래 표의 인자):
 ```bash
-cd $S/data_pipeline-<n>/app
-nohup python3 deploy/host/scripts/run_pipeline.py --limit 2 > run_first.out 2>&1 &
-tail -f deploy/host/scripts/test_space/batch_progress/progress.log   # 기대 끝 줄: === 문서별 flow 끝: … 종료 코드 0 ===
+docker exec -w /app data-pipeline-<n> python3 deploy/host/scripts/run_pipeline.py R
+tail -f $S/data_pipeline-<n>/app/deploy/host/scripts/test_space/batch_progress/progress.log   # 기대 끝 줄: [판정] 통과 — …
 ```
-자주 쓰는 인자:
+오래 걸리면 컨테이너 안(`ssh -p 802<n> root@<서버 IP>` → `cd /app`)에서 `nohup python3 deploy/host/scripts/run_pipeline.py R > run.out 2>&1 &`.
 
-| 인자 | 뜻 |
+| 하고 싶은 일 | `R` |
 |---|---|
-| `--limit N` | 시험 — N건만 |
-| `--skip-done` | gold에 끝난 문서·영구 뺌 문서·dead 문서를 건너뜀 |
-| `--seqs 3,7,9` | 목록의 이 번호만(dead 문서도 처리) |
-| `--filter RFP,proposal` | 원본 파일 이름 낱말로 좁힘 |
-| `--max-docs N` · `--deadline HH:MM` | 새벽 배치 상한·마감 |
-| `--staging N` · `--struct-workers N` · `--cpu-gate X` | 대기열·구조화 스레드·CPU 게이트(기본은 settings.yaml `ops.run_pipeline.*`) |
-| `--no-cleanup` | 문서별 임시 폴더를 남김 |
+| 시험(기본 2건 — `ops.run_pipeline.run_limit`) | (없음) |
+| 전체 적재(끝난 문서는 건너뜀 — 새벽 배치와 같음) | `--limit 0 --skip-done` |
+| 문서 하나 · 몇 개(번호는 B-5 목록의 순번) | `--seqs 7` · `--seqs 3,7,9` |
+| 이름에 낱말이 든 문서만 | `--filter RFP,proposal --limit 0` |
+| 새 문서 N건만(`--limit`은 목록 앞 N줄 — 끝난 문서도 셈) | `--limit 0 --skip-done --max-docs N` |
+| 정해진 시각까지만 | `--limit 0 --skip-done --deadline 06:00`(`--max-docs N`도) |
+| 문서별 임시 폴더 남기기 | `--no-cleanup` |
+| 이번만 설정 바꾸기 | `--set RUN_PIPELINE_<칸>=값`(`ops.run_pipeline.*`) |
 
-종료 코드: 0 끝 · 1 실패 문서 있음 · 75 마감·다른 run_pipeline이 도는 중 · 2 설정 문제. 진행 기록은 `deploy/host/scripts/test_space/batch_progress/`(문서별 로그 `doc_<번호>.log`). 같은 폴더에서 두 번 동시에 돌리면 뒤의 것이 75로 끝난다.
+EDW가 아닌 **폴더의 파일**을 넣을 때는 run_pipeline이 아니라 B-6(파싱 `--source <폴더>`) → B-8(적재)을 쓴다.
+
+종료 코드([pl-18](../prd/ops.md#pl-18)): 0 끝 · 1 실패 문서 있음 · 2 설정 문제 · 3 사전 점검·적재 확인 실패 · 75 마감·다른 run_pipeline이 도는 중(같은 벌에서 두 번 동시에 돌리면 뒤의 것). 진행 기록은 `deploy/host/scripts/test_space/batch_progress/`(문서별 `doc_<번호>.log`).
 
 실패 문서는 재시도 상태(DLQ)에 남는다 — 한 실행에서 한 번씩 다시 시도하고 3번 실패하면 dead(사람이 다시 넣을 때까지 `--skip-done` 목록에서 빠짐). 끝 줄에 `DLQ pending N건 · dead M건`이 나온다.
 ```bash
@@ -137,7 +147,7 @@ docker exec -it data-pipeline-<n> python -m pipeline.shared.dlq requeue --key <�
 ```bash
 bash deploy/host/scripts/pipe_exec.sh check_env                 # 설정·접속 점검(FAIL 줄 없어야)
 bash deploy/host/scripts/pipe_exec.sh ping_models               # 모델 주소 연결
-bash deploy/host/scripts/pipe_exec.sh parse --source-limit 3    # 파싱
+bash deploy/host/scripts/pipe_exec.sh parse --source /data/docs --source-limit 3    # 파싱
 bash deploy/host/scripts/pipe_exec.sh publish --dry-run         # 게시 미리 보기(쓰기 0)
 bash deploy/host/scripts/pipe_exec.sh migrate check --target all
 bash deploy/host/scripts/pipe_exec.sh show-stack                # 엔진 구성
@@ -181,7 +191,7 @@ bash deploy/host/scripts/prune_images.sh --apply               # 저장소마다
 
 컨테이너 안에는 docker가 없다 — 모듈을 `python -m`으로 바로 부른다.
 ```bash
-ssh -p 802<n> root@<서버 IP>          # 비밀번호 = 이미지에 넣은 root 비밀번호
+ssh -p 802<n> root@<서버 IP>          # 비밀번호 = settings.yaml option.devbox.root_password(바꾸면 host_ctl.sh up -d --force-recreate)
 cd /app
 ```
 
@@ -201,7 +211,7 @@ python -m pipeline.cli selftest               # 기대: [판정] 통과 · 일�
 ```bash
 python -m common.store.db.dbtool current --target all
 python -m common.store.db.dbtool up --target all --dim <임베딩 차원> --sql /app/output/up.sql   # DB 담당 검토용 SQL만
-python -m common.store.db.dbtool up --target all --dim <임베딩 차원>
+python -m common.store.db.dbtool up --target all --dim <임베딩 차원>   # 차원 = B-1 ping의 dim
 python -m common.store.db.dbtool master load
 python -m common.store.db.dbtool check --target all     # 기대: 갈래마다 판 끝, 종료 코드 0
 ```
@@ -256,10 +266,10 @@ python -m pipeline.load.pgvector_load --set PIPE_OUT_ROOT=$O load --bundle $O/bu
 ```bash
 python -m mcp_server.cli.search_ask ask --source DEV-1 --k 3 --q "<처리한 문서에 있는 낱말>"   # DB 검색만
 ```
-내 벌 코드로 MCP를 잠깐 열어 보기:
+내 벌 코드로 MCP를 잠깐 열어 보기(포트 끝자리 = 벌 번호 — 네트워크를 서버와 함께 쓰므로 벌끼리 겹치지 않게):
 ```bash
-python -m mcp_server.main --set MCP_PORT=18771 --set MCP_HOST=127.0.0.1 & echo $! > /tmp/mcp.pid
-python -m mcp_server.cli.mcp_smoke --url http://127.0.0.1:18771/mcp --source DEV-1 --q "<낱말>"
+python -m mcp_server.main --set MCP_PORT=1877<n> --set MCP_HOST=127.0.0.1 & echo $! > /tmp/mcp.pid
+python -m mcp_server.cli.mcp_smoke --url http://127.0.0.1:1877<n>/mcp --source DEV-1 --q "<낱말>"
 kill $(cat /tmp/mcp.pid)
 ```
 
@@ -281,7 +291,7 @@ rm -rf $O                                    # 원본 사본이 들어 있음
    git status && git diff --stat
    git add <파일> <파일>          # git add -A · git add . · git commit -a 는 쓰지 않는다
    ```
-4. **opencode는 `/app`에서 시작한다.** 그 밖의 폴더를 고치려 하면 묻는다. 커밋·push·되돌리기·지우기·포맷·docker 명령도 먼저 묻는다(이미지의 opencode 틀 — A-3).
+4. **opencode는 `/app`에서 시작한다.** 그 밖의 폴더를 고치려 하면 묻는다. 커밋·push·되돌리기·지우기·포맷·docker·다른 컨테이너 접속(ssh·scp·nc 등)도 먼저 묻는다(`opencode.jsonc`).
 5. **저장소 전체 포맷(`ruff format .` 등)을 돌리지 않는다.** 고친 파일만 `bash deploy/release/lint_changed.sh`로 본다.
 
 "파일이 전부 바뀌었다"고 나올 때:
@@ -307,13 +317,13 @@ git config core.fileMode false                  # 권한 비트 차이를 무시
    기대 마지막 줄: `[promote] 통과 — <VERSION>`. 처음이면 그다음 `bash deploy/host/scripts/pipe_exec.sh migrate master load`.
 4. 문서 100건 안팎을 끝까지:
    ```bash
-   nohup python3 deploy/host/scripts/run_pipeline.py --skip-done --limit 100 > run_100.out 2>&1 &
+   nohup python3 deploy/host/scripts/run_pipeline.py --limit 0 --skip-done --max-docs 100 > run_100.out 2>&1 &
    tail -f deploy/host/scripts/test_space/batch_progress/progress.log
    ```
    끝 줄의 실패 수·DLQ dead 수를 보고, 실패 문서는 `doc_<번호>.log`로 원인을 찾는다.
 5. 검색 MCP 확인:
    ```bash
    curl -s http://<서버 IP>:8051/health                           # 기대: {"ok":true,"ready":true,…}
-   ssh -p 8050 root@<서버 IP> 'cd /app && python -m mcp_server.cli.mcp_smoke --url http://<서버 IP>:8051/mcp --token "<토큰>" --source <원천> --q "<낱말>"'
+   ssh -p 8050 root@<서버 IP> 'cd /app && python -m mcp_server.cli.mcp_smoke --source <원천> --q "<낱말>"'   # 주소·토큰은 settings.yaml
    ```
 6. 통과하면 같은 이미지 조각·코드 묶음을 운영 서버로 옮긴다(prd.md 2부터).
