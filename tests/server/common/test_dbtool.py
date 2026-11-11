@@ -17,7 +17,13 @@ def selftest():
         and head("search") == "0007_search"
         and known("search") == ["0007_search", "0006_search", "0005_search", "0004_search", "0003_search", "0002_search", "0001_search"]
     )
-    assert head("applog") == "0004_applog" and known("applog") == ["0004_applog", "0003_applog", "0002_applog", "0001_applog"]
+    assert head("applog") == "0005_applog" and known("applog") == [
+        "0005_applog",
+        "0004_applog",
+        "0003_applog",
+        "0002_applog",
+        "0001_applog",
+    ]
     assert head("master") == "0002_master" and known("master") == ["0002_master", "0001_master"]
     assert not list((MIGRATIONS / "versions").glob("*struct*"))  # struct 갈래 없음(엔진 구성·원천 목록은 파일)
     print("[selftest] dbtool — 판 폴더 갈래 search 하나·끝 판·HNSW 2000 같음 통과")
@@ -173,6 +179,9 @@ UP_SQL = [
         [
             "CREATE TABLE applog.alembic_version",
             "CREATE TABLE applog.except_doc_info",
+            "CREATE TABLE applog.dlq_doc",
+            "CREATE INDEX ix_dlq_doc_status_failed ON applog.dlq_doc",
+            "SET version_num='0005_applog'",
             "PARTITION OF applog.pipe_event",
             "ALTER TABLE applog.pipe_event ADD COLUMN source_system TEXT;",
             "ADD COLUMN file_ext TEXT",
@@ -185,6 +194,15 @@ UP_SQL = [
         ["--target", "applog", "--from", "0003_applog"],  # 있는 DB — 0003 → 0004만
         ["ALTER TABLE applog.except_doc_info ADD COLUMN file_ext TEXT, ADD COLUMN file_size BIGINT", "SET version_num='0004_applog'"],
         ["CREATE TABLE applog.except_doc_info", "CREATE TABLE applog.alembic_version"],
+    ),
+    (
+        ["--target", "applog", "--from", "0004_applog"],
+        [
+            "CREATE TABLE applog.dlq_doc",
+            "CHECK (status IN ('pending','dead','resolved'))",
+            "SET version_num='0005_applog'",
+        ],
+        ["CREATE TABLE applog.except_doc_info", "ALTER TABLE applog.pipe_event"],
     ),
     (
         ["--target", "search", "--schema", "demo", "--dim", "768"],
