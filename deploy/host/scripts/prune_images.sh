@@ -1,5 +1,5 @@
 #!/bin/bash
-# 이미지·조각 정리 — 디스크·판 보관 기준(docs/operations/server-guide.md §5-7). 저장소(REPOS)마다 최신 KEEP개만 남기고
+# 이미지·조각 정리 — 저장소(REPOS)마다 최신 KEEP개만 남기고
 #   rmi + `image prune -f`(이름 없는 층만). 컨테이너(`ps -a` — 멈춘 것 포함)가 쓰는 태그는 남김 수와 상관없이 남긴다.
 #   조각·tar 폴더가 있으면 남은 것도 지운다(load.sh가 보통 직후 지움 — 여긴 안전망). 남의 이미지는 건드리지 않는다
 #   (이름 필터는 REPOS만, `system prune`·`-a` 금지).

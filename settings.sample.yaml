@@ -183,6 +183,9 @@ ops:
     container_cli: null                       # 컨테이너 명령 · docker·podman (null = podman, 없으면 docker)
     prune_stage_dir: null                     # prune_images.sh가 정리할 조각·tar 폴더 (null = 정리 안 함)
     prune_keep_versions: 2                    # 남길 이미지 판 수 · 정수
+    pipeline_container: data-pipeline         # 호스트 스크립트가 들어갈 파이프라인 컨테이너 · 개발 벌 N은 data-pipeline-N
+    mcp_container: mcp-server                 # 검색 MCP 컨테이너 이름
+    parse_container: mcp-data-parsing         # parse_document 작업 컨테이너 이름
   # ---- 상주 서비스 — parse MCP ----
   services:
     data_parsing:

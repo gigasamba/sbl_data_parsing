@@ -24,7 +24,7 @@
 
 | 할 일 | 방법 |
 |---|---|
-| 바꾸기 | 저장소의 파일을 고쳐 커밋 → 서버에는 **코드 폴더 바꾸기**로 보낸다([server-guide §4-5](../operations/server-guide.md#4-5-벌-폴더에-새-코드-덮어쓰기)) |
+| 바꾸기 | 저장소의 파일을 고쳐 커밋 → 서버에는 **코드 폴더 바꾸기**로 보낸다([dev.md A-14](../operations/dev.md#a-14-새-판-코드로-바꾸기벌-app-덮어쓰기) · [prd.md U-3](../operations/prd.md#u-3-운영-app-덮어쓰기설정결과env진행-기록은-그대로)) |
 | 되돌리기 | git으로 이전 파일로 되돌려 다시 코드 폴더를 바꾼다 |
 | 보기 | `show-stack`(PC `python -m pipeline.cli show-stack` · 이미지 `data-pipeline` 컨테이너) — 이름·sha·파일 경로와 내용 요약 |
 
@@ -46,7 +46,7 @@ LLM·VLM을 **부르는** 단계의 지시서 패키지 7개 — `resources/prom
 | `resources/prompts/pipeline/<패키지>/` | 파싱·구조화·평가 지시서 | 모든 이미지 |
 
 - 찾는 자리는 `common/core/paths.py` `resolve_agent_dir()` 한 곳이다. 순서는 ① `resources/prompts/common` ② `resources/prompts/pipeline` ③ `valid_env/answer_test`(`rag_qa` — PC 전용 데이터 · 이미지에 없음). 패키지 이름은 겹치지 않아 순서가 결과를 바꾸지는 않지만, 결정적이어야 캐시·로그가 재현된다.
-- `resources/`는 저장소 루트 바로 아래이고, 이미지 안에서는 `/app/deploy/resources`다(`paths.RES_ROOT` = 코드 패키지들이 import되는 자리의 `resources/`).
+- `resources/`는 저장소 루트 바로 아래이고, 이미지 안에서는 `/app/resources`다(`paths.RES_ROOT` = 코드 패키지들이 import되는 자리의 `resources/`).
 
 ### 2-2. 패키지 구성
 

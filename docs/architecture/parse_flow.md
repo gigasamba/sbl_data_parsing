@@ -503,10 +503,10 @@ flowchart TD
 | 시작 관문 | `common.config.settings.require_run_env()`·`common.config.settings.pin_env()` | `run_env`가 없거나 서버인데 설정이 틀리면 시작 거부 |
 | 한 번만 덮기 | `common.config.setarg.apply()` | `--set 이름=값`을 덮기 파일로 만들어 자기와 자식 프로세스에 넘김(비밀 칸은 거부) |
 | 자식에 넘기기 | `common.config.settings.child_env()`·`common.config.settings.put()` | 자식 프로세스에 설정 값을 덮기 파일로 넘김(`parse_module`이 `VLM_CONCURRENCY`·`DOC_DIR` 등에 씀) |
-| 이미지 약속 경로 | `common.config.settings.IMAGE_PATHS` → `deploy/host/scripts/host_settings.tsv` | `/app/output`·`/app/deploy`·`/data/docs`·`/app/output/prepared` — 호스트 쪽 `run_pipeline.py`는 `host_settings.tsv`로 읽음 |
+| 이미지 약속 경로 | `common.config.settings.IMAGE_PATHS` → `deploy/host/scripts/host_settings.tsv` | `/app/output`·`/app`·`/data/docs`·`/app/output/prepared` — 호스트 쪽 `run_pipeline.py`는 `host_settings.tsv`로 읽음 |
 | 호스트 셸 | `deploy/host/scripts/load_settings.sh`·`settings_to_env.py` | `load_settings`가 호스트 칸(이미지·`RAG_OUT`·`NIGHTLY_*`)을 셸 변수로 |
 
-키 설명: [operations/env-guide.md](../operations/env-guide.md), 요건 [ops-settings.md](../prd/ops-settings.md).
+키 설명: [operations/settings.md](../operations/settings.md), 요건 [ops-settings.md](../prd/ops-settings.md).
 
 ### 7-2. 지문(핑거프린트)과 캐시 — 무엇이 재사용을 정하나
 

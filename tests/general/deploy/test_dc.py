@@ -1,6 +1,6 @@
 """host_ctl.sh(op-20) — compose 하위 명령은 `docker compose -f deploy/host/compose/compose-<run_env>.yml <인자…>` 그대로(덧붙임 파일·
-묶음 이름 계산 없음), 모르는 run_env면 종료 2. mcp_keepalive.sh는 0번 벌만(redis·mcp-data-parsing-0·mcp-server-0) 보고 /health는
-mcp-server-0 안에서 http://<mcp_bind_host>:8051/health(docker exec). DOCKER=echo·대역 명령으로 명령 줄만 본다(docker·설정 읽기 없음 — PC 전용)."""
+묶음 이름 계산 없음), 모르는 run_env면 종료 2. mcp_keepalive.sh는 운영 묶음(redis·mcp-data-parsing·mcp-server — 이름은 settings.yaml)을 보고 /health는
+mcp-server 안에서 http://<mcp_bind_host>:8051/health(docker exec). DOCKER=echo·대역 명령으로 명령 줄만 본다(docker·설정 읽기 없음 — PC 전용)."""
 
 import os
 import subprocess
@@ -21,9 +21,9 @@ def _posix(p):
 
 CASES = [  # (run_env, 인자, 종료 코드, 표준 출력(compose 파일 자리는 이름만) 또는 표준 오류에 나올 문구)
     ("local", ["up", "-d"], 0, "compose -f compose-local.yml up -d"),
-    ("dev", ["up", "-d", "mcp-server-0"], 0, "compose -f compose-dev.yml up -d mcp-server-0"),
+    ("dev", ["up", "-d", "data-pipeline-1"], 0, "compose -f compose-dev.yml up -d data-pipeline-1"),
     ("prd", ["ps"], 0, "compose -f compose-prd.yml ps"),
-    ("prd", ["logs", "--tail", "5", "data-pipeline-0"], 0, "compose -f compose-prd.yml logs --tail 5 data-pipeline-0"),
+    ("prd", ["logs", "--tail", "5", "data-pipeline"], 0, "compose -f compose-prd.yml logs --tail 5 data-pipeline"),
     ("qa", ["up", "-d"], 2, "required.env.run_env는 local·dev·prd"),
 ]
 
@@ -89,19 +89,19 @@ def test_stale_shell_reads_own_root():
         assert r.stdout.strip() == f"{root_b}|{root_b}/settings.yaml|b|echo", r.stdout
 
 
-# (redis 상태, mcp-data-parsing-0 Running, mcp-server-0 상태, 기대 docker 명령(앞 낱말들))
+# (redis 상태, mcp-data-parsing Running, mcp-server 상태, 기대 docker 명령(앞 낱말들))
 #   /health는 늘 응답 없음(대역 docker exec 실패) — 다시 띄운 뒤에도 없어 종료 1
 KEEP_CASES = [
-    ("true healthy", "true", "running", [["restart", "mcp-server-0"]]),
-    ("true unhealthy", "true", "running", [["restart", "redis"], ["restart", "mcp-server-0"]]),
+    ("true healthy", "true", "running", [["restart", "mcp-server"]]),
+    ("true unhealthy", "true", "running", [["restart", "redis"], ["restart", "mcp-server"]]),
     (
         "",
         "false",
         "none",
         [
             ["compose", "--env-file", ".env", "-f", "compose-redis.yml", "up", "-d"],
-            ["compose", "-f", "compose-dev.yml", "up", "-d", "mcp-data-parsing-0"],
-            ["compose", "-f", "compose-dev.yml", "up", "-d", "mcp-server-0"],
+            ["compose", "-f", "compose-prd.yml", "up", "-d", "mcp-data-parsing"],
+            ["compose", "-f", "compose-prd.yml", "up", "-d", "mcp-server"],
         ],
     ),
 ]
@@ -128,7 +128,7 @@ def test_keepalive():
             (stub / exe).write_text(body, encoding="utf-8", newline="\n")
             (stub / exe).chmod(0o755)
         sf = Path(d) / "settings.yaml"
-        sf.write_text("required:\n  env: {run_env: dev}\n", encoding="utf-8")
+        sf.write_text("required:\n  env: {run_env: prd}\n", encoding="utf-8")
         script = _posix(SCRIPT.parent / "mcp_keepalive.sh")
         # 대역을 PATH 맨 앞에 — Git Bash(Windows) 입구는 시작 때 /usr/bin을 앞에 붙이므로 셸 안에서 붙이고 bash를 다시 부름
         cmd = f'PATH="{_posix(stub)}:$PATH" exec bash "{script}"'
@@ -139,11 +139,11 @@ def test_keepalive():
                 "PATH": os.environ.get("PATH", ""),
                 "SETTINGS_FILE": _posix(sf),
                 "SETTINGS_LOADED": _posix(sf),
-                "RUN_ENV": "dev",
+                "RUN_ENV": "prd",
                 "DOCKER": "dk",
                 "STATE_redis": redis,
-                "STATE_mcp_data_parsing_0": parse,
-                "STATE_mcp_server_0": "" if mcp == "none" else mcp,
+                "STATE_mcp_data_parsing": parse,
+                "STATE_mcp_server": "" if mcp == "none" else mcp,
             }
             r = subprocess.run([bash, "-c", cmd], env=env, capture_output=True, text=True, encoding="utf-8", timeout=60)
             got = [
@@ -153,4 +153,4 @@ def test_keepalive():
             ]
             assert r.returncode == 1 and got == want, (redis, parse, mcp, got, r.stdout, r.stderr)
             c = calls.read_text(encoding="utf-8")
-            assert c.startswith("exec mcp-server-0 python") and "server.host}:8051/health" in c, c
+            assert c.startswith("exec mcp-server python") and "server.host}:8051/health" in c, c

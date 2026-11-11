@@ -105,7 +105,7 @@ def test_timers():
 
 
 FAKE = """case "$1" in
-  "$DOWN") echo "[오류] 상주 컨테이너 data-pipeline-0가 떠 있지 않음 — 먼저 띄울 것"; exit 2 ;;
+  "$DOWN") echo "[오류] 상주 컨테이너 data-pipeline이 떠 있지 않음 — 먼저 띄울 것"; exit 2 ;;
   "$FAIL") echo boom; exit 1 ;;
   selftest*) [ -n "${NOJUDGE:-}" ] && { echo "N/M 통과"; exit 0; }; echo "[판정] 통과 — FAIL 0" ;;
   *) echo "ok $1" ;;
@@ -113,18 +113,26 @@ esac
 """
 # (FAIL 단계, NOJUDGE, 컨테이너가 꺼진 단계, 기대 종료 코드, 마지막 줄 시작, 나오면 안 되는 단계[, RUN_ENV — 없으면 dev])
 CHECK_CASES = [
-    ("", "", "", 0, "[host_ctl check] 통과 — 7개", None),
+    ("", "", "", 0, "[host_ctl check] 통과 — 5개", None),  # dev 벌 — 검색 MCP 없음
     ("", "", "", 0, "[host_ctl check] 통과 — 7개", None, "prd"),
     (".env 일치", "", "", 1, "[host_ctl check] 실패 — .env 일치:", "── check_env"),  # .env가 settings.yaml과 다르면 첫 단계에서 멈춤
     ("migrate check", "", "", 1, "[host_ctl check] 실패 — migrate check:", "── selftest data-pipeline"),
-    ("", "1", "", 1, "[host_ctl check] 실패 — selftest data-pipeline:", "── selftest mcp-server"),  # [판정] 줄이 없으면 종료 0이어도 실패
+    (
+        "",
+        "1",
+        "",
+        1,
+        "[host_ctl check] 실패 — selftest data-pipeline:",
+        "── selftest mcp-server",
+        "prd",
+    ),  # [판정] 줄이 없으면 종료 0이어도 실패
     # pipe_exec.sh가 "상주 컨테이너가 떠 있지 않음"(종료 코드 2) — 띄우지 않고 안내로 멈춤
     (
         "",
         "",
         "check_env",
         1,
-        "[host_ctl check] 실패 — check_env: data-pipeline-0 컨테이너가 안 떠 있음 → host_ctl.sh up -d data-pipeline-0",
+        "[host_ctl check] 실패 — check_env: data-pipeline 컨테이너가 안 떠 있음 → host_ctl.sh up -d data-pipeline",
         "── ping_models",
     ),
 ]
@@ -144,7 +152,9 @@ def test_check():
                 "SETTINGS_FILE": _posix(sf),
                 "SETTINGS_LOADED": _posix(sf),  # 이미 읽은 것으로 — settings_to_env.py를 부르지 않음
                 "RUN_ENV": run[0] if run else "dev",  # load_settings가 내던 값 — 판정 명령이 -e RUN_ENV로 넘김(e2-22)
+                "APP_OUTPUT_ROOT": "/app/output",  # load_settings가 내던 약속 경로(판정 때 임시 결과 폴더 자리)
                 "DOCKER": "echo",
+                "PIPE_CONTAINER": "data-pipeline",  # dev 벌은 이름을 채움(비우면 점검 거부)
                 "DC_FAKE": f"bash {_posix(fake)}",
                 "FAIL": fail,
                 "NOJUDGE": nojudge,

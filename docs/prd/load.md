@@ -17,7 +17,7 @@
 4. CRMS는 `FileStorageMap_CRMS.rm_contract_code → CRMS.RM_CM_PJTLIST`, LAS는 `FileStorageMap_LAS.manage_no → LAS.Contract`(최신 판). LAS `client_edw`(`PartnerCorpName`)는 지금 모두 비어 있다. FAQ는 고객 연결이 없다.
 5. 같은 sha256 묶음에도 고객은 전파하지 않는다.
 6. 만약 EDW를 못 읽으면 → 메타 없이 적재하고 경고·실행 기록 `meta_missing`을 남긴다. 적재 뒤 바뀐 연결은 자동으로 갱신하지 않는다 — `--replace`로 다시 적재해 채운다.
-7. 사슬 파일 = 코드 폴더 맨 위 `edw_chain.yaml`(git — 이미지에도 들어감, 적재·검색 MCP가 함께 읽음). 다른 파일을 쓰려면 설정 `ops.paths.edw_chain_file`. 만약 파일이 없거나 틀리면 → 적재는 시작 때 멈추고 검색은 오류(기본 파일로 돌아가지 않음). 서버 사본을 고쳐 쓰는 법은 [server-guide §3-9-2](../operations/server-guide.md#3-9-2-edw-조인-사슬-파일-고쳐-쓰기).
+7. 사슬 파일 = 코드 폴더 맨 위 `edw_chain.yaml`(git — 이미지에도 들어감, 적재·검색 MCP가 함께 읽음). 다른 파일을 쓰려면 설정 `ops.paths.edw_chain_file`. 만약 파일이 없거나 틀리면 → 적재는 시작 때 멈추고 검색은 오류(기본 파일로 돌아가지 않음). 서버 사본을 고쳐 쓰는 법은 [server-guide-0.4 §3-9-2](../history/server-guide-0.4.md#3-9-2-edw-조인-사슬-파일-고쳐-쓰기).
 8. 파일만 점검: `python -m pipeline.load.edw_doc_meta --check [--file F]`(EDW·PG에 붙지 않음).
 
 ### QA

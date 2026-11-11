@@ -8,7 +8,6 @@ from common.core.paths import (
     CRITERIA_FILE,
     DEPLOY_ROOT,
     GLOSSARY_ROOT,
-    LOCAL_RUN,
     PKG_ROOT,
     PROJ_ROOT,
     RES_ROOT,
@@ -26,7 +25,7 @@ def _demo():
 
     from common.config.settings import COMMON
 
-    assert DEPLOY_ROOT == (PROJ_ROOT if LOCAL_RUN else PROJ_ROOT / "deploy") and PKG_ROOT == DEPLOY_ROOT / "common"
+    assert DEPLOY_ROOT == PROJ_ROOT and PKG_ROOT == DEPLOY_ROOT / "common"  # 코드 폴더 하나(결과는 그 안 output/)
     assert APP_ROOT == PROJ_ROOT
     env = child_env({"X_DEMO": "1"})
     assert env["X_DEMO"] == "1" and str(PKG_ROOT.parent) in env["PYTHONPATH"].split(os.pathsep)

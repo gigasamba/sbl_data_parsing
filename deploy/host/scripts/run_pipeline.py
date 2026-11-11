@@ -43,13 +43,11 @@ ROOT = Path(__file__).resolve().parent
 # 운영 접속 값·비밀·운영 고정값은 코드에 두지 않고 서버 settings.yaml에서 읽는다(configure() — 시작 때 한 번).
 #   파일: --settings 또는 SETTINGS_FILE, 없으면 <루트>/settings.yaml(루트 = 코드 폴더 자체). 호스트 python에 PyYAML이 있어야 한다(pymssql처럼 —
 #   refactor.md C-09). 필요한 칸이 없으면 칸 경로만 찍고 종료 코드 2(값은 찍지 않음). required.env.run_env가 dev·prd가 아니면 거부(로컬 실행 금지 — CLAUDE.md 3절).
-#   docker exec로 부르는 상주 컨테이너(0번 data-pipeline-0)는 같은 파일을 붙여 읽으므로 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
+#   docker exec로 부르는 상주 컨테이너(ops.host.pipeline_container)는 같은 파일을 붙여 읽으므로 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
 #   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.run_pipeline.run_pipeline_work_dir(비우면 이 스크립트 옆 test_space/), 결과 공유 폴더는
 #   <루트>/output(compose-<환경>.yml이 컨테이너 /app/output으로 붙이는 원본 그대로).
 TEST = PROG = DOCSPACE = DOCFLOW = STAGING = None  # configure()가 채움
-PIPE_C = (
-    "data-pipeline-0"  # docker exec 대상 상주 컨테이너(목록·받기·파싱·게시·구조화·정리) — 새벽 배치는 0번만(compose-<환경>.yml 이름 그대로)
-)
+PIPE_C = "data-pipeline"  # docker exec 대상 상주 컨테이너 — configure()가 ops.host.pipeline_container로 채움
 DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.container_cli(없으면 docker, 그것도 없으면 podman)로 채움
 CODE_DIR = None  # --code(설정 배치 모듈 layout.py·이미지 경로 표를 찾을 코드 폴더 — 운영자 폴더에서 돌릴 때, 기본 배치 경로 없음)
 SOURCE_BUCKET = PG_CONTAINER = PG_USER = PG_DB = PG_SCHEMA = None  # staging 파일 이름의 원천 버킷 · 문서 수 세기(psql)
@@ -110,7 +108,7 @@ def _const(key):
 
 
 def _app():
-    return _img("code_root").rsplit("/", 1)[0]  # 컨테이너 작업 자리(코드 자리의 부모 — 이미지 WORKDIR)
+    return _img("code_root")  # 컨테이너 작업 자리 = 코드 자리(이미지 WORKDIR /app)
 
 
 @functools.cache
@@ -145,12 +143,14 @@ def work_dir(doc):
 def configure(settings_file=None):
     """서버 settings.yaml을 한 번 읽어 모듈 값(경로·접속)을 채운다 — 문제 목록(빈 목록이면 통과). 값은 찍지 않는다."""
     global TEST, PROG, DOCSPACE, DOCFLOW, STAGING, MCP_JOBS_DIR, SOURCE_BUCKET, PG_CONTAINER, PG_USER, PG_DB, PG_SCHEMA
-    global DOCKER, STAGING_TARGET, STAGING_WORKERS, STRUCT_WORKERS, VLM_CAP, LANE_WORKERS, _BACKLOG_SETTING
+    global DOCKER, PIPE_C, STAGING_TARGET, STAGING_WORKERS, STRUCT_WORKERS, VLM_CAP, LANE_WORKERS, _BACKLOG_SETTING
     doc, err = read_settings(settings_file)
     if err:
         return [err]
     probs = [f"설정 필요: {_host().layout().to_yaml(p)} — {why}" for p, why in SETTINGS_REQUIRED if _host().get(doc, p) in (None, "")]
     run_env = _host().get(doc, "common.run_env")
+    if run_env == "dev" and not _host().get(doc, "common.host.pipeline_container"):
+        probs.append("dev 벌은 ops.host.pipeline_container(data-pipeline-<n>)를 채울 것 — 비우면 출시 전 시험 컨테이너를 씀")
     if run_env not in (None, "") and run_env not in ("dev", "prd"):
         probs.append("required.env.run_env가 dev·prd가 아님 — 서버 전용 러너(로컬 실행 금지, CLAUDE.md 3절)")
     policy, bad = run_pipeline_policy(doc)
@@ -175,6 +175,7 @@ def configure(settings_file=None):
     MCP_JOBS_DIR = DOCSPACE / "_mcp_parse" / "jobs"  # mcp-data-parsing의 작업 폴더(같은 결과 폴더 — run_mcp_parsing.JOBS_DIR)
     SOURCE_BUCKET = _host().get(doc, "pipeline.connections.rdb.bucket")
     PG_CONTAINER = _host().get(doc, "common.host.pg_container")
+    PIPE_C = _host().get(doc, "common.host.pipeline_container") or PIPE_C
     PG_USER, PG_DB = _host().get(doc, "common.connections.pg.user"), _host().get(doc, "common.connections.pg.db")
     PG_SCHEMA = _host().get(doc, "common.connections.pg.db_schema") or "data_parsing"  # 앱 설정 모델 기본값과 같음
     return []

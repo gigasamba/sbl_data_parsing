@@ -67,7 +67,7 @@ def test_host_env_matches_export():
     assert got == want and len(got) == len(rows), (sorted(set(got) ^ set(want)), len(got), len(rows))
     every = H.lines(doc, [], "sh")  # 절 없이(load_settings.sh load_settings) — 설정 칸 + 약속 경로 APP_*
     assert sorted(every) == sorted(want + [f"export {k}='{v}'" for k, v in consts.items()]), sorted(set(every) ^ set(want))
-    assert consts["APP_OUTPUT_ROOT"] == "/app/output" and consts["APP_CODE_ROOT"] == "/app/deploy", consts
+    assert consts["APP_OUTPUT_ROOT"] == "/app/output" and consts["APP_CODE_ROOT"] == "/app", consts
     cases = [  # (값, 종류, 기대)
         ("4.0", "num", "4"),
         ("2.5", "num", "2.5"),

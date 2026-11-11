@@ -4,7 +4,7 @@
 
 ### 0. 읽기 전에 — 꼭 알아 둘 것
 
-> **⚠️ `docker compose`를 직접 부르지 않는다.** 서버 컨테이너는 늘 `bash deploy/host/scripts/host_ctl.sh …`로 다룬다(server-guide §1-7).
+> **⚠️ `docker compose`를 직접 부르지 않는다.** 서버 컨테이너는 늘 `bash deploy/host/scripts/host_ctl.sh …`로 다룬다([dev.md](docs/operations/dev.md) · [prd.md](docs/operations/prd.md)).
 >
 > **⚠️ 실제 값(비밀번호·키·토큰·서버 주소)은 문서·채팅·커밋에 쓰지 않는다.** 이 README의 예시 값은 모두 가짜다.
 >
@@ -44,11 +44,11 @@
 | 적재(gold) | 번들을 PostgreSQL(pgvector)에 넣는 일 |
 | 마스터 표 | 용어집·고객 명부·ID 꼴 표(`<스키마>_master.glossary`) — 원본은 git의 `resources/vocab/glossary/glossary.csv` |
 | 실행 이미지(`*-runtime`) | 코드가 없는 이미지 — 개발 서버는 코드 폴더를 붙여 쓴다 |
-| 루트 · 코드 폴더 · 벌 | 코드 폴더 = 코드 zip을 푼 폴더(예 `/home/sbl/sbl_data_parsing-main-1/`). 루트 = 코드 폴더 자체 — `settings.yaml`·`edw_chain.yaml`·`output/`이 그 안에 있다. 벌 = 한 서버에 따로 띄운 컨테이너 한 묶음(코드 폴더 하나) |
+| 루트 · 코드 폴더 · 벌 | 벌 = 한 서버에 따로 띄운 컨테이너 한 묶음 — 폴더 `<벌>/{app,home}`(개발 벌 `/home/sbl/data_pipeline-<n>/`, 운영 묶음 `/home/sbl/data_pipeline/`). 코드 폴더 = 루트 = `app/`(코드 zip을 푼 폴더) — `settings.yaml`·`edw_chain.yaml`·`output/`이 그 안, 컨테이너 `/app`. `home/`은 root 홈(컨테이너 `/root`) |
 | 핑거프린트 | 결과를 다시 쓸지 정하는 값 — 바뀌면 서버가 문서를 다시 처리한다 |
 | `$DOCKER` | 컨테이너 명령 — 서버는 `docker`(root 셸). 셸에서 `export DOCKER=docker` |
 
-**목차** — [1. 한눈에 보기](#1-한눈에-보기) · [2. 폴더 구조](#2-폴더-구조) · [3. 설정](#3-설정) · [4. PC에서 실행하기](#4-pc에서-실행하기) · [5. 서버(내부망)에 배포하고 실행하기](docs/operations/server-guide.md#1-새-서버-설치) · [6. 꼭 지킬 것](#6-꼭-지킬-것) · [7. 문서](#7-문서)
+**목차** — [1. 한눈에 보기](#1-한눈에-보기) · [2. 폴더 구조](#2-폴더-구조) · [3. 설정](#3-설정) · [4. PC에서 실행하기](#4-pc에서-실행하기) · [5. 서버(내부망)에 배포하고 실행하기](#5-서버내부망에-배포하고-실행하기) · [6. 꼭 지킬 것](#6-꼭-지킬-것) · [7. 문서](#7-문서)
 
 ---
 
@@ -88,7 +88,7 @@
 | `data-pipeline` | parse · publish · structure · load | 일괄 `data-pipeline`(일 없이 떠 있음 — `run_pipeline.py`·`pipe_exec.sh`가 exec) · `parse_document` 전용 `mcp-data-parsing` |
 | `mcp-server` | 검색 MCP | `mcp-server` |
 
-버전은 저장소 루트 `VERSION` 하나이고 두 이미지가 함께 쓴다(태그 `data-pipeline:<버전>` — 규칙: [server-guide §5-2](docs/operations/server-guide.md#5-2-버전)).
+버전은 저장소 루트 `VERSION` 하나이고 두 이미지가 함께 쓴다(태그 `data-pipeline:<버전>` — 규칙: [server-guide §5-2](docs/history/server-guide-0.4.md#5-2-버전)).
 
 <a id="실행-모드"></a>
 **실행 모드(`required.env.run_env`)마다 컨테이너를 띄우는 법이 다르다.** 이미지는 모두 `deploy/docker/Dockerfile` 한 파일에서 나온다 — 공통 `base` 단계(Python + `requirements-core.txt`) 위에 검색 MCP는 `mcp-runtime`, 파이프라인은 `parse-deps`(`requirements-image.txt` + LibreOffice) → `pipeline-runtime`(+ OCR 모델)을 쌓은 것이 **실행 이미지**(코드 없음)이고, 거기에 코드를 COPY한 것이 **코드가 든 이미지**다.
@@ -96,18 +96,18 @@
 | | local(PC) | dev(개발 서버) | prd(운영 서버) |
 |---|---|---|---|
 | 이미지(태그 꼴) | 없음 — Python으로 직접(§4). 이미지 시험만 코드가 든 이미지 `data-pipeline:<시험 태그>`·`mcp-server:<시험 태그>` | 실행 이미지 `data-pipeline-runtime:<이미지 판>`·`mcp-server-runtime:<이미지 판>` | 코드가 든 이미지 `data-pipeline:<VERSION>`·`mcp-server:<VERSION>` |
-| 코드가 오는 곳 | 저장소 체크아웃 그대로 · 시험 이미지는 빌드 때 COPY(Dockerfile 타깃 `pipeline`·`mcp`) | 코드 폴더(코드 git zip을 푼 폴더 — 예 `sbl_data_parsing-main-1`)를 컨테이너 `/app/deploy`에 읽기 전용(`:ro,z`)으로 붙임 | 이미지 안(굽기 때 COPY) — 붙이지 않음. 함께 오는 코드 묶음은 호스트 스크립트(`deploy/host/`)용 |
-| 만드는 법 | `ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh`(mcp는 `IMAGE_TARGET=mcp TAG=mcp-server:<시험 태그>`) | PC: `BUILD_ONLY=1 IMAGE_TARGET=pipeline-runtime bash deploy/release/build_ship.sh`(+ `mcp-runtime` — 이 커밋 코드를 붙여 selftest 판정) → 통과하면 `stage_images.sh`로 조각을 만들어 개인 이미지 저장소 `jehunlee302/sbl_images`에 push(사람) → 개발 서버 `load.sh <이미지 판>`(server-guide §5-3). 의존성이 같으면 다시 만들지 않는다 | 개발 서버의 시험한 코드 폴더에서 `bash deploy/release/bake_prod_image.sh <이미지 판>` — 그 실행 이미지 위에 코드만 COPY(`deploy/docker/Dockerfile.bake`, 네트워크 없음) → 운영 서버 `load.sh <VERSION>`([server-guide §5-4](docs/operations/server-guide.md#5-4-개발--운영--시험한-그대로-굽기)) |
-| 띄우는 법 | `.venv/bin/python -m mcp_server.main` 등(§4-4·§4-5) · 이미지 시험 `bash valid_env/docker/smoke_test.sh`(`valid_env/docker/compose.test.yml` — §4-7) | 코드 폴더에서 `bash deploy/host/scripts/host_ctl.sh up -d`(`compose-dev.yml` — 실행 이미지 + 벌 폴더를 `/app/deploy`에). 시작 스크립트 `runtime_entry.sh`가 마운트·의존성 지문을 확인하고 코드의 `deploy/docker/entrypoint.sh`로 넘긴다 | 같은 `host_ctl.sh up -d`(`compose-prd.yml` — 구운 이미지, 코드 폴더 마운트 없음) |
+| 코드가 오는 곳 | 저장소 체크아웃 그대로 · 시험 이미지는 빌드 때 COPY(Dockerfile 타깃 `pipeline`·`mcp`) | 벌의 `app/`(코드 git zip을 푼 코드 폴더 — 예 `/home/sbl/data_pipeline-1/app`)을 컨테이너 `/app`에, `home/`을 `/root`에 붙임(쓰기 가능 — 바로 고치고 시험) | 이미지 안(굽기 때 COPY) — 붙이지 않음. 함께 오는 코드 묶음은 호스트 스크립트(`deploy/host/`)용 |
+| 만드는 법 | `ALLOW_NO_ASSETS=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh`(mcp는 `IMAGE_TARGET=mcp TAG=mcp-server:<시험 태그>`) | PC: `IMAGE_TARGET=pipeline-runtime bash deploy/release/build_ship.sh`(+ `mcp-runtime` — 이 커밋 코드를 붙여 selftest 판정) → 통과하면 `stage_images.sh`로 조각을 만들어 개인 이미지 저장소 `jehunlee302/sbl_images`에 push(사람) → 개발 서버 `load.sh <이미지 판>`([local.md 8](docs/operations/local.md#8-서버와-같은-컨테이너로-시험compose-local) · [dev.md A-2](docs/operations/dev.md#a-2-실행-이미지-불러오기판마다-한-번)). 의존성이 같으면 다시 만들지 않는다 | 개발 서버의 시험한 벌 `app/`에서 `bash deploy/release/bake_prod_image.sh <이미지 판>` — 그 실행 이미지 위에 코드만 COPY(`deploy/docker/Dockerfile.bake`, 네트워크 없음) → 운영 서버 `promote.sh <VERSION> <이미지 저장소>`([prd.md](docs/operations/prd.md)) |
+| 띄우는 법 | `.venv/bin/python -m mcp_server.main` 등(§4-4·§4-5) · 이미지 시험 `bash valid_env/docker/smoke_test.sh`(`valid_env/docker/compose.test.yml` — §4-7) | 코드 폴더에서 `bash deploy/host/scripts/host_ctl.sh up -d`(`compose-dev.yml` — 실행 이미지 + 벌의 `app/`을 `/app`·`home/`을 `/root`에). 시작 스크립트 `runtime_entry.sh`가 마운트·의존성 지문을 확인하고 코드의 `deploy/docker/entrypoint.sh`로 넘긴다 | 같은 `host_ctl.sh up -d`(`compose-prd.yml` — 구운 이미지, 코드 폴더 마운트 없음) |
 | 이미지 | 셸 변수 `DATA_PIPELINE_IMAGE`·`MCP_SERVER_IMAGE`(이미지 시험) | `compose-dev.yml`에 `data-pipeline-runtime:<이미지 판>` · `mcp-server-runtime:<이미지 판>`(셸 `IMAGE_TAG`) | `compose-prd.yml`에 `data-pipeline:<VERSION>` · `mcp-server:<VERSION>`(셸 `IMAGE_TAG`) |
 | `run_env` | `local`(저장소 루트 `settings.yaml`) | `dev` | `prd` |
 
-**실행 이미지 판 고르기(dev·굽기).** 실행 이미지 판은 코드 판과 다를 수 있다. **이미지 판의 `BUILD.txt`에 적힌 `DEPS_HASH`가 코드의 `deploy/docker/DEPS_HASH`와 같은 판**을 쓴다(값 = `requirements-core.txt`·`requirements-image.txt`의 지문, `bash deploy/release/deps_hash.sh`). 다르면 컨테이너가 `의존성 지문이 다름`으로 멈추고(종료 2) `bake_prod_image.sh`도 멈춘다 — 같은 값인 판이 없으면 새 실행 이미지가 필요하다([server-guide §5-3](docs/operations/server-guide.md#5-3-pc에서--실행-이미지-만들기와-이미지-저장소에-올리기)).
+**실행 이미지 판 고르기(dev·굽기).** 실행 이미지 판은 코드 판과 다를 수 있다. **이미지 판의 `BUILD.txt`에 적힌 `DEPS_HASH`가 코드의 `deploy/docker/DEPS_HASH`와 같은 판**을 쓴다(값 = `requirements-core.txt`·`requirements-image.txt`의 지문, `bash deploy/release/deps_hash.sh`). 다르면 컨테이너가 `의존성 지문이 다름`으로 멈추고(종료 2) `bake_prod_image.sh`도 멈춘다 — 같은 값인 판이 없으면 새 실행 이미지가 필요하다([server-guide §5-3](docs/history/server-guide-0.4.md#5-3-pc에서--실행-이미지-만들기와-이미지-저장소에-올리기)).
 
 ```bash
 cat deploy/docker/DEPS_HASH                                                   # 코드 폴더에서 — 코드가 요구하는 지문
 grep -H DEPS_HASH ../sbl_images-main/*/BUILD.txt                              # 이미지 판마다 지문 — 같은 값인 판을 load.sh <판>
-$DOCKER run --rm --entrypoint cat data-pipeline-runtime:<판> /app/docker/deps_hash   # 이미 불러온 이미지의 지문
+$DOCKER run --rm --entrypoint cat data-pipeline-runtime:<판> /opt/sbl/docker/deps_hash   # 이미 불러온 이미지의 지문
 ```
 
 ### 1-4. DB — Alembic 마이그레이션
@@ -127,7 +127,7 @@ pgvector의 표는 코드가 실행 중에 만들지 않는다. 모두 Alembic �
 | `check --target …` | `current`와 같고, 끝 판이 아니면 종료 1(읽기만) |
 | `master load [--dir <폴더>]` | 마스터 표를 `glossary.csv`(기본 `resources/vocab/glossary/`)로 통째로 바꿈 |
 
-처음 설치(PC §4-4 ④, 서버 server-guide §1-5 6번) · 마이그레이션이 바뀐 릴리스(적재 전에 `up`) · 새 검색 스키마(임베딩 차원이 바뀜 — 새 `db_schema`에 `up --target all --schema <새 스키마> --dim <차원>`)일 때 실행한다. 자동 동작·오류 분기는 [server-guide §1-8](docs/operations/server-guide.md#1-8-db-표-만들기--migrate).
+처음 설치(PC §4-4 ④, 서버 [prd.md](docs/operations/prd.md) 7 · [dev.md](docs/operations/dev.md) B-3) · 마이그레이션이 바뀐 릴리스(적재 전에 `up`) · 새 검색 스키마(임베딩 차원이 바뀜 — 새 `db_schema`에 `up --target all --schema <새 스키마> --dim <차원>`)일 때 실행한다. 자동 동작·오류 분기는 [server-guide §1-8](docs/history/server-guide-0.4.md#1-8-db-표-만들기--migrate).
 
 ---
 
@@ -148,8 +148,8 @@ pgvector의 표는 코드가 실행 중에 만들지 않는다. 모두 Alembic �
 | 쓰는 법 | **기본값과 다르게 쓸 칸만** 적는다. 비운 칸은 코드 기본값 |
 | 필수 | `required.env.run_env` — `local`(PC) · `dev` · `prd`(서버 — 외부 모델 호출과 가짜 LLM을 거부하고, 설정 파일을 못 읽으면 시작하지 않는다) |
 | 파싱할 원천 | `required.source.source_systems` — 원천 목록(쉼표 구분 — 예 `DEV-1` · `DEV-1, DEV-2` · `SFDC, CRMS`, 대소문자 무관). 값은 `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`·`DEV-<1~99>`이고, 비우면 운영 5개 원천(`SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`)을 파싱한다(`DEV-<숫자>` 행은 뺌). 원천은 EDW `AI.FileStorageMap.source_system` 칸 값이다. `DEV-…`는 dev·local에서만 쓰며, prd에 적혀 있으면 시작하지 않는다. `DEV-<숫자>` 문서는 검색 스키마 `<기준>_dev_<숫자>`에 적재된다 — 목록에 새로 넣으면 먼저 `migrate up --target search`(없으면 적재가 멈춤). PC 폴더 원천은 맨 위 `DEV-<숫자>/` 폴더도 원천 폴더이고, 같은 목록으로 거른다 |
-| 칸별 안내 | [docs/operations/env-guide.md](docs/operations/env-guide.md) |
-| 서버용 파일 | git에 올리지 않는다. `settings.sample.yaml`을 복사해 `required`를 채운다(server-guide §1-6 "꼭 채울 값"). **PC 파일을 그대로 복사하지 않는다** — PC의 `run_env: local`·`allow_external: true`가 서버에서 외부 모델 호출을 연다 |
+| 칸별 안내 | [docs/operations/settings.md](docs/operations/settings.md) |
+| 서버용 파일 | git에 올리지 않는다. `settings.sample.yaml`을 복사해 `required`를 채운다([settings.md](docs/operations/settings.md) "꼭 채울 칸"). **PC 파일을 그대로 복사하지 않는다** — PC의 `run_env: local`·`allow_external: true`가 서버에서 외부 모델 호출을 연다 |
 
 **실행할 때 값을 넘기는 방법 2가지**
 
@@ -245,7 +245,7 @@ tuning:
 - PC 전용 칸(외부 모델 허용·지출 상한·단가, 시험 하네스)은 `dev` 절에 모여 있다(sample 맨 아래).
 - **외부 임베딩은 `allow_external: true`이고 `run_env: local`일 때만** 호출된다(서버 dev·prd는 늘 거부).
 - **LLM·VLM도 같다:** `required.models`의 `llm_*`·`vlm_*`(주소·모델·키)를 채우고 `dev.models.llm.llm_allow_external`·`dev.models.vlm.vlm_allow_external`을 `true`로 두면 PC에서 분류(SFDC·LAS)와 그림·스캔 쪽 VLM이 외부 모델을 부른다(`run_env: local`일 때만). 비우면 분류가 실패해 SFDC·LAS 문서는 적재되지 않는다. OpenRouter 하나로 임베딩·LLM·VLM을 모두 쓸 수 있다(같은 주소·키, 모델만 다름 — 단가표 `common/ai/llm.py` `PRICES`에 있는 모델이어야 예산 상한이 걸림).
-- **VLM 설정은 한 벌:** 스캔·이미지 문서의 VLM 엔진(`qwen_vlm`)·쪽 VLM·그림 VLM이 같은 호출과 같은 칸(`common.models.vlm.*` — 동시 수·제한 시간·재시도·`vlm_extra_request_body`, 해상도 `extract.page_render_dpi` 150, 쪽 상한 `transform.vlm.vlm_max_pages_per_doc`)을 쓴다. 생각(추론) 모델이면 `common.models.vlm.vlm_extra_request_body`에 생각 끄기를 넣는다(OpenRouter는 `{"reasoning": {"enabled": false}}`) — 칸 설명은 [env-guide §2](docs/operations/env-guide.md), 규칙은 PRD [pl-43](docs/prd/transform.md#pl-43).
+- **VLM 설정은 한 벌:** 스캔·이미지 문서의 VLM 엔진(`qwen_vlm`)·쪽 VLM·그림 VLM이 같은 호출과 같은 칸(`common.models.vlm.*` — 동시 수·제한 시간·재시도·`vlm_extra_request_body`, 해상도 `extract.page_render_dpi` 150, 쪽 상한 `transform.vlm.vlm_max_pages_per_doc`)을 쓴다. 생각(추론) 모델이면 `common.models.vlm.vlm_extra_request_body`에 생각 끄기를 넣는다(OpenRouter는 `{"reasoning": {"enabled": false}}`) — 칸 설명은 [env-guide §2](docs/history/env-guide-0.4.md#2-자원병렬-보통-안-건드림), 규칙은 PRD [pl-43](docs/prd/transform.md#pl-43).
 - **내부망 서버(dev·prd)에서 시험·운영할 때는 세 칸 `embed_allow_external`·`llm_allow_external`·`vlm_allow_external`을 모두 `false`(0)로 둔다.** 서버는 `run_env`가 dev·prd라 켜 두어도 외부 호출을 거부하지만, 서버 settings.yaml에는 외부 허용을 남기지 않는다.
 - **게시(silver)·EDW·원본 — PC는 가짜 대상만 쓴다.** 값은 `dev.local` 묶음에 기본값으로 들어 있어 적지 않아도 된다(바꿀 때만 — 저장소 루트 기준 상대 경로 또는 절대 경로):
   ```yaml
@@ -399,14 +399,23 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 |---|---|
 | 답변 생성 점검(LLM 설정·예산 필요) | `.venv/bin/python -m validation.e2e.answer_gen --url http://127.0.0.1:18769/mcp --q "<질문>"` |
 | 이미지 배치 그대로 PC Docker 시험(코드가 든 시험 이미지 — 실행 이미지는 코드를 붙이지 않아 멈춤) | `DATA_PIPELINE_IMAGE=data-pipeline:<시험 태그> MCP_SERVER_IMAGE=mcp-server:<시험 태그> DOC_SRC=<문서 폴더> RAG_OUT=<빈 폴더> SMOKE_SETTINGS=<설정 파일> SMOKE_PG_PASSWORD=<시험용> SMOKE_SYSTEM=<원천> bash valid_env/docker/smoke_test.sh` — 필요한 값은 스크립트 첫 줄 설명 |
-| 이미지 로컬 빌드(시험 태그) | `ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh`(mcp는 `IMAGE_TARGET=mcp TAG=mcp-server:<시험 태그>`) — TAG를 빼면 배포용 `data-pipeline:<VERSION>` |
+| 이미지 로컬 빌드(시험 태그) | `ALLOW_NO_ASSETS=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh`(mcp는 `IMAGE_TARGET=mcp TAG=mcp-server:<시험 태그>`) — TAG를 빼면 배포용 `data-pipeline:<VERSION>` |
 | 커밋 전 점검 | `bash deploy/release/lint_changed.sh`(`FIX=1`이면 자동 수정) |
 
 ---
 
 ## 5. 서버(내부망)에 배포하고 실행하기
 
-서버 설치, 환경별 실행 명령(local · dev · prd), 일상 운영, 새 판 올리기, 릴리스는 [docs/operations/server-guide.md](docs/operations/server-guide.md#3-일상-운영) 한 문서에 있다.
+환경마다 실행 순서 한 장씩이다 — 그 기계에 들어가 위에서부터 친다.
+
+| 환경 | 문서 |
+|---|---|
+| PC | [docs/operations/local.md](docs/operations/local.md) |
+| 개발 서버 | [docs/operations/dev.md](docs/operations/dev.md) — 호스트 설치·운영(A) · 벌 컨테이너 안 시험(B) · 벌끼리 간섭 없이 일하기(C) · 출시 전 시험(D) |
+| 운영 서버 | [docs/operations/prd.md](docs/operations/prd.md) — 설치·운영 반영(`promote.sh`)·판 올리기·되돌리기 |
+| 설정 칸 | [docs/operations/settings.md](docs/operations/settings.md) |
+
+일상 운영·문제 해결·릴리스·gitea의 자세한 설명은 [docs/history/server-guide-0.4.md](docs/history/server-guide-0.4.md).
 
 ---
 
@@ -414,7 +423,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 ## 6. 꼭 지킬 것
 
-규칙 전체는 [CLAUDE.md](CLAUDE.md) §2~server-guide §1(핑거프린트·계약·비밀값·운영 접속 가드·배포 환경·새 패키지).
+규칙 전체는 [CLAUDE.md](CLAUDE.md) §2~§5(핑거프린트·계약·비밀값·운영 접속 가드·배포 환경·새 패키지).
 
 ---
 
@@ -422,4 +431,4 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 문서 지도는 [docs/INDEX.md](docs/INDEX.md). 알려진 문제·미개발 항목은 [docs/PRD.md](docs/PRD.md) 표의 `todo` 행.
 
-`parse_document`는 서버당 Redis 하나(`compose-redis.yml` — 공식 이미지, 8010)를 쓴다. 검색 MCP·작업 컨테이너는 벌 0만 띄운다. 설치·자원·AOF 운영은 [서버 가이드](docs/operations/server-guide.md#1-3-1-parse_document-redis-큐113), 배포 확인은 [C-116](docs/refactoring/refactor.md)을 따른다.
+`parse_document`는 서버당 Redis 하나(`compose-redis.yml` — 공식 이미지, 8010)를 쓴다. 검색 MCP·작업 컨테이너는 운영 묶음(`compose-prd.yml`)에만 있다. 설치·자원·AOF 운영은 [서버 가이드](docs/history/server-guide-0.4.md#1-3-1-parse_document-redis-큐113), 배포 확인은 [C-116](docs/refactoring/refactor.md)을 따른다.

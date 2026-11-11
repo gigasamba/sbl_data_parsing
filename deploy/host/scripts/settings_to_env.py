@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]  # 코드 폴더(PC 저장소 · 서버 sbl_data_parsing-<판>)
+ROOT = HERE.parents[2]  # 코드 폴더(PC 저장소 · 서버 벌의 app)
 TABLE = HERE / "host_settings.tsv"
 
 

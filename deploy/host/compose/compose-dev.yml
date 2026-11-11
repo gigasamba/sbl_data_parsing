@@ -1,4 +1,6 @@
-# 개발 서버 — 벌 0~4 + 벌 0의 검색 MCP·parse_document 작업. 띄우기: bash deploy/host/scripts/host_ctl.sh up -d [서비스…]
+# 개발 서버 — 개발자 벌 1~4의 SSH 작업 공간. 벌 N = ${SBL_ROOT}/data_pipeline-N/{app,home}
+#   app → /app(코드·settings.yaml·output) · home → /root. 검색 MCP·parse_document는 compose-prd.yml(운영 묶음)로.
+#   띄우기: bash deploy/host/scripts/host_ctl.sh up -d [서비스…]   (그 벌의 app 폴더에서)
 name: docker-dev
 x-dev: &dev
   restart: unless-stopped
@@ -7,108 +9,53 @@ x-dev: &dev
   user: "0"
   extra_hosts: ["host.docker.internal:host-gateway"]
   pids_limit: 4096
+  cpus: 2
+  mem_limit: 8g
+  memswap_limit: 8g
   logging:
     options: {max-size: "50m", max-file: "3"}
 
 services:
-  data-pipeline-0:
-    <<: *dev
-    image: data-pipeline-runtime:${IMAGE_TAG:-0.4.0}
-    container_name: data-pipeline-0
-    command: ["devbox"]
-    environment: {SSH_PORT: "8020", SETTINGS_FILE: /app/deploy/settings.yaml}
-    volumes:
-      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-0:/app/deploy:z
-      - ${DOC_SRC:-/data/docs}:/data/docs:ro,z
-    cpus: 4
-    mem_limit: 12g
-    memswap_limit: 16g
-
   data-pipeline-1:
     <<: *dev
-    image: data-pipeline-runtime:${IMAGE_TAG:-0.4.0}
+    image: data-pipeline-runtime:${IMAGE_TAG:-0.5.0}
     container_name: data-pipeline-1
     command: ["devbox"]
-    environment: {SSH_PORT: "8021", SETTINGS_FILE: /app/deploy/settings.yaml}
+    environment: {SSH_PORT: "8021", SETTINGS_FILE: /app/settings.yaml}
     volumes:
-      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-1:/app/deploy:z
+      - ${SBL_ROOT:-/home/sbl}/data_pipeline-1/app:/app:z
+      - ${SBL_ROOT:-/home/sbl}/data_pipeline-1/home:/root:z
       - ${DOC_SRC:-/data/docs}:/data/docs:ro,z
-    cpus: 2
-    mem_limit: 8g
-    memswap_limit: 8g
 
   data-pipeline-2:
     <<: *dev
-    image: data-pipeline-runtime:${IMAGE_TAG:-0.4.0}
+    image: data-pipeline-runtime:${IMAGE_TAG:-0.5.0}
     container_name: data-pipeline-2
     command: ["devbox"]
-    environment: {SSH_PORT: "8022", SETTINGS_FILE: /app/deploy/settings.yaml}
+    environment: {SSH_PORT: "8022", SETTINGS_FILE: /app/settings.yaml}
     volumes:
-      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-2:/app/deploy:z
+      - ${SBL_ROOT:-/home/sbl}/data_pipeline-2/app:/app:z
+      - ${SBL_ROOT:-/home/sbl}/data_pipeline-2/home:/root:z
       - ${DOC_SRC:-/data/docs}:/data/docs:ro,z
-    cpus: 2
-    mem_limit: 8g
-    memswap_limit: 8g
 
   data-pipeline-3:
     <<: *dev
-    image: data-pipeline-runtime:${IMAGE_TAG:-0.4.0}
+    image: data-pipeline-runtime:${IMAGE_TAG:-0.5.0}
     container_name: data-pipeline-3
     command: ["devbox"]
-    environment: {SSH_PORT: "8023", SETTINGS_FILE: /app/deploy/settings.yaml}
+    environment: {SSH_PORT: "8023", SETTINGS_FILE: /app/settings.yaml}
     volumes:
-      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-3:/app/deploy:z
+      - ${SBL_ROOT:-/home/sbl}/data_pipeline-3/app:/app:z
+      - ${SBL_ROOT:-/home/sbl}/data_pipeline-3/home:/root:z
       - ${DOC_SRC:-/data/docs}:/data/docs:ro,z
-    cpus: 2
-    mem_limit: 8g
-    memswap_limit: 8g
 
   data-pipeline-4:
     <<: *dev
-    image: data-pipeline-runtime:${IMAGE_TAG:-0.4.0}
+    image: data-pipeline-runtime:${IMAGE_TAG:-0.5.0}
     container_name: data-pipeline-4
     command: ["devbox"]
-    environment: {SSH_PORT: "8024", SETTINGS_FILE: /app/deploy/settings.yaml}
+    environment: {SSH_PORT: "8024", SETTINGS_FILE: /app/settings.yaml}
     volumes:
-      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-4:/app/deploy:z
+      - ${SBL_ROOT:-/home/sbl}/data_pipeline-4/app:/app:z
+      - ${SBL_ROOT:-/home/sbl}/data_pipeline-4/home:/root:z
       - ${DOC_SRC:-/data/docs}:/data/docs:ro,z
-    cpus: 2
-    mem_limit: 8g
-    memswap_limit: 8g
-
-  mcp-server-0:
-    <<: *dev
-    image: mcp-server-runtime:${IMAGE_TAG:-0.4.0}
-    container_name: mcp-server-0
-    command: ["devbox", "mcp", "--set", "MCP_PORT=8051"]
-    environment: {SSH_PORT: "8050", SETTINGS_FILE: /app/deploy/settings.yaml}
-    volumes:
-      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-0:/app/deploy:z
-      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-0/output:/app/deploy/output:ro,z
-      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-0/output/_mcp_parse/jobs:/app/deploy/output/_mcp_parse/jobs:z
-      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-0/home/mcp:/app/deploy/home:z
-    cpus: 3
-    mem_limit: 12g
-    memswap_limit: 12g
-
-  mcp-data-parsing-0:
-    <<: *dev
-    image: data-pipeline-runtime:${IMAGE_TAG:-0.4.0}
-    container_name: mcp-data-parsing-0
-    command: ["run-mcp-parsing"]
-    environment: {SETTINGS_FILE: /app/deploy/settings.yaml}
-    volumes:
-      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-0:/app/deploy:ro,z
-      - ${SBL_ROOT:-/home/sbl}/sbl_data_parsing-main-0/output:/app/deploy/output:z
-      - ${DOC_SRC:-/data/docs}:/data/docs:ro,z
-    cpus: 4
-    cpu_shares: 4096
-    mem_limit: 12g
-    memswap_limit: 12g
-    pids_limit: 1024
-    healthcheck:
-      test: ["CMD", "python", "-m", "pipeline.run_mcp_parsing", "--health"]
-      interval: 15s
-      timeout: 15s
-      retries: 3
-      start_period: 15s

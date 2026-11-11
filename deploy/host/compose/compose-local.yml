@@ -1,49 +1,50 @@
-# PC 시험. 띄우기: bash deploy/host/scripts/host_ctl.sh up -d [서비스…]
+# PC 시험 — 운영 묶음과 같은 컨테이너 3개, 실행 이미지 + 이 저장소를 코드 폴더(/app, 읽기 전용)로 · 결과는 ./output.
+#   띄우기: bash deploy/host/scripts/host_ctl.sh up -d [서비스…]   (저장소 루트에서)
 name: sbl-local
 x-local: &local
   init: true
   user: "0"
   extra_hosts: ["host.docker.internal:host-gateway"]
-  environment: {SETTINGS_FILE: /app/deploy/settings.yaml}
+  environment: {SETTINGS_FILE: /app/settings.yaml}
   logging:
     options: {max-size: "20m", max-file: "3"}
 
 services:
-  data-pipeline-0:
+  data-pipeline:
     <<: *local
-    image: data-pipeline-runtime:${IMAGE_TAG:-0.4.0}
-    container_name: data-pipeline-0
+    image: data-pipeline-runtime:${IMAGE_TAG:-0.5.0}
+    container_name: data-pipeline
     command: ["idle"]
     volumes:
-      - ../../..:/app/deploy:ro,z
-      - ../../../output:/app/deploy/output:z
+      - ../../..:/app:ro,z
+      - ../../../output:/app/output:z
       - ${DOC_SRC:-../../../valid_env/object_storage}:/data/docs:ro,z
     cpus: 4
     mem_limit: 12g
     memswap_limit: 12g
 
-  mcp-server-0:
+  mcp-server:
     <<: *local
-    image: mcp-server-runtime:${IMAGE_TAG:-0.4.0}
-    container_name: mcp-server-0
+    image: mcp-server-runtime:${IMAGE_TAG:-0.5.0}
+    container_name: mcp-server
     command: ["mcp", "--set", "MCP_PORT=8051", "--set", "MCP_HOST=auto"]
     ports: ["0.0.0.0:8051:8051"]
     volumes:
-      - ../../..:/app/deploy:ro,z
-      - ../../../output:/app/deploy/output:ro,z
-      - ../../../output/_mcp_parse/jobs:/app/deploy/output/_mcp_parse/jobs:z
+      - ../../..:/app:ro,z
+      - ../../../output:/app/output:ro,z
+      - ../../../output/_mcp_parse/jobs:/app/output/_mcp_parse/jobs:z
     cpus: 2
     mem_limit: 4g
     memswap_limit: 4g
 
-  mcp-data-parsing-0:
+  mcp-data-parsing:
     <<: *local
-    image: data-pipeline-runtime:${IMAGE_TAG:-0.4.0}
-    container_name: mcp-data-parsing-0
+    image: data-pipeline-runtime:${IMAGE_TAG:-0.5.0}
+    container_name: mcp-data-parsing
     command: ["run-mcp-parsing"]
     volumes:
-      - ../../..:/app/deploy:ro,z
-      - ../../../output:/app/deploy/output:z
+      - ../../..:/app:ro,z
+      - ../../../output:/app/output:z
       - ${DOC_SRC:-../../../valid_env/object_storage}:/data/docs:ro,z
     cpus: 2
     cpu_shares: 4096

@@ -16,5 +16,31 @@
       }
     }
   },
-  "model": "internal/<model id>"
+  "model": "internal/<model id>",
+  "permission": {
+    "edit": "allow",
+    "external_directory": "ask",
+    "bash": {
+      "*": "allow",
+      "git push*": "ask",
+      "git commit*": "ask",
+      "git add -A*": "ask",
+      "git add .*": "ask",
+      "git reset*": "ask",
+      "git checkout*": "ask",
+      "git clean*": "ask",
+      "git rebase*": "ask",
+      "rm -rf*": "ask",
+      "rm -fr*": "ask",
+      "rm -r *": "ask",
+      "git add --all*": "ask",
+      "git -C*": "ask",
+      "* && git *": "ask",
+      "sudo*": "ask",
+      "podman*": "ask",
+      "ruff format*": "ask",
+      "chmod*": "ask",
+      "docker*": "ask"
+    }
+  }
 }

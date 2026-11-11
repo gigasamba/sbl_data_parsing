@@ -1,47 +1,39 @@
 #!/bin/bash
 # 문서 파이프라인 이미지 진입점 — 실행 전 점검(자원·연결·쓰기 권한·시간대) 뒤 명령을 실행한다.
-# 코드는 /app/deploy(PYTHONPATH) — 명령은 모두 `python -m <패키지>.<이름>`으로 부른다.
+# 코드는 /app(PYTHONPATH) — 명령은 모두 `python -m <패키지>.<이름>`으로 부른다.
 #   docker run --rm --init -v <settings.yaml>:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=<dev|prd> \
-#     -v <원본>:/data/docs:ro -v <결과>:/app/deploy/output data-pipeline:<버전> <명령>   (/app/output = 그리로 가는 바로가기)
+#     -v <원본>:/data/docs:ro -v <결과>:/app/output data-pipeline:<버전> <명령>
 # 명령: help · check · resources · services · check-modules · tool <이름> [인자] · mcp ·
 #       ask --q …  (서버 입구는 run_pipeline 하나)
 #
-#   tool <이름> = 고정 표의 도구 하나(check_env·ping_models·check_modules·cli·rdb_discover·gen_roster·glossary_suggest — pipe_exec.sh가 쓰는 자리)
-#     이름만 받는다(다른 형태는 종료 64).
-#   모듈(트리거 1회): parse(= 가져오기(폴더·rdb:csv, PARSE_SOURCE) → dedup → prepare → 파싱·대표 결과) · structure(구조화·임베딩) · load(PostgreSQL) · publish(대표 결과 .md Object Storage 업로드 + 처리 기록 파일 — pipeline.load.publish_parse_result --apply)
-#   migrate up|current|check [--target search|all] [--schema S] [--dim N|--bundle B] = pgvector 우리 스키마 판 관리(Alembic,
-#     common.store.db.dbtool) — data-pipeline 이미지만, up은 load와 같은 잠금(current·check는 읽기만 — 잠금 없음). 서버 절차 docs/operations/server-guide.md §1-8
-#   show-stack = 지금 엔진 구성(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 코드 폴더 바꾸기) — 두 이미지. docs/architecture/resources.md §1
-#   이미지 2개: RAG_MODULE마다 쓸 수 있는 명령이 다름(아래 case가 거름):
-#     pipeline(data-pipeline)=parse·publish·show-stack·idle·migrate·run-mcp-parsing ·
-#     mcp(mcp-server)=mcp·ask·show-stack · 공통(모든 이미지) = help·check·resources·services·
-#     check-modules·tool·selftest(서버 반입 시험 /app/deploy/tests/server를 파일마다, 다른 이미지(RAG_MODULE) 폴더 사례·다른 이미지 패키지가 없어서만 실패한 사례는 SKIP,
-#     서드파티 패키지가 없으면 FAIL — 반입 판정은 /app/docker/selftest_gate.sh)
+#   tool <이름> = 고정 표의 도구 하나(아래 case — 표 밖 이름은 거부)
+#   parse·publish = 트리거 1회 · migrate up|current|check [--target …] = pgvector 판 관리(common.store.db.dbtool — up만 잠금)
+#   show-stack = 지금 엔진 구성(docs/architecture/resources.md §1) · selftest = 반입 시험(판정은 selftest_gate.sh)
+#   이미지마다 쓸 수 있는 명령이 다름(RAG_MODULE — pipeline: parse·publish·idle·migrate·run-mcp-parsing · mcp: mcp·ask, 나머지 공통)
 set -euo pipefail
+O=/app/output   # 결과 자리 = 코드 폴더/output(common.core.paths와 같음)
 cd /app
-umask 0002   # 그룹도 쓸 수 있게(파일 664·폴더 775) — 서버 운영 계정이 UID 10001이 쓴 결과를 고치고 지우게(결과 폴더 그룹·setgid는 server-guide §1-5)
-# 실제로 도는 코드의 판·커밋([image] 줄의 커밋은 실행 이미지를 빌드한 커밋이라 코드만 바꾼 배포와 다름).
-# 코드 폴더(실행 이미지 마운트)·구운 이미지 모두 /app/deploy/VERSION·CODE_COMMIT. CODE_COMMIT은 zip·git archive로 받을 때만 채워짐.
-_code_ver=$(tr -d ' \r\n' 2>/dev/null < /app/deploy/VERSION || true)  # 2>를 < 앞에 — 파일이 없을 때 셸 오류 줄도 숨김
-_code_commit=$(tr -d '\r\n' 2>/dev/null < /app/deploy/CODE_COMMIT || true)
+umask 0002   # 그룹도 쓸 수 있게(파일 664·폴더 775) — 서버 운영 계정이 결과를 고치고 지우게(결과 폴더 그룹·setgid는 host_ctl.sh init)
+# 실제로 도는 코드의 판·커밋(/app/VERSION·CODE_COMMIT — CODE_COMMIT은 zip·git archive로 받을 때만 채워짐)
+_code_ver=$(tr -d ' \r\n' 2>/dev/null < /app/VERSION || true)  # 2>를 < 앞에 — 파일이 없을 때 셸 오류 줄도 숨김
+_code_commit=$(tr -d '\r\n' 2>/dev/null < /app/CODE_COMMIT || true)
 case "$_code_commit" in ''|'$Format'*) _code_commit="표시 없음(git clone — zip·git archive로 받으면 채워짐)" ;; *) _code_commit=${_code_commit##* } ;; esac
 echo "[code] 판 ${_code_ver:-?} · 커밋 ${_code_commit}" >&2
 
 preflight() {
   echo "[점검] $(date '+%F %T %Z') · 시간대 ${TZ:-?} · 사용자 $(id -un)"
   python -m common.core.resources
-  [ -w /app/output ] || { echo "[오류] /app/output(= /app/deploy/output) 쓰기 불가 — 코드 폴더의 output/ 또는 -v <결과폴더>:/app/deploy/output 와 그 폴더 소유자(UID 10001) 확인"; exit 2; }
+  [ -w "$O" ] || { echo "[오류] $O 쓰기 불가 — -v <결과폴더>:$O 와 그 폴더 소유자(UID 10001) 확인"; exit 2; }
   [ -z "${DOC_DIR:-}" ] || [ -d "$DOC_DIR" ] || echo "[경고] 원본 폴더 ${DOC_DIR} 없음 — -v <원본>:${DOC_DIR}:ro"   # mcp 이미지는 DOC_DIR 없음
   if [ -n "${PG_HOST:-}" ] && { [ "$PG_HOST" = "127.0.0.1" ] || [ "$PG_HOST" = "localhost" ]; } && [ "${NETWORK_HOST:-0}" != "1" ]; then
     echo "[경고] 컨테이너 안의 PG_HOST=$PG_HOST 는 컨테이너 자신 — 호스트의 PostgreSQL이면 --network host(+NETWORK_HOST=1) 또는 PG_HOST=<서버 IP>/host.docker.internal"
   fi
   [ -n "${PG_HOST:-}" ] || echo "[안내] PG_HOST 없음 — 컨테이너 안에서는 docker ps로 찾을 수 없으므로 PostgreSQL 적재를 하려면 PG_HOST·PG_PORT·PG_PASSWORD를 지정(없으면 로컬 묶음만)"
-  df -h /app/output | tail -1 | awk '{print "[디스크] /app/output 남은 공간 " $4}'
+  df -h "$O" | tail -1 | awk -v o="$O" '{print "[디스크] " o " 남은 공간 " $4}'
 }
 
-# 같은 결과 폴더에 두 작업이 동시에 쓰지 않게(cron 겹침·사람이 두 번 실행) — 잡혀 있으면 바로 끝냄
-#   종료 코드 75 = 이미 실행 중. exec로 바꿔 띄워 docker stop 신호가 파이프라인까지 그대로 감(--init 권장)
-locked() { echo "[잠금] /app/output/.pipeline.lock (이미 실행 중이면 종료 코드 75로 바로 끝남)"; exec flock -n -E 75 /app/output/.pipeline.lock "$@"; }
+# 같은 결과 폴더에 두 작업이 동시에 쓰지 않게 — 잡혀 있으면 종료 코드 75. exec라 docker stop 신호가 그대로 감
+locked() { echo "[잠금] $O/.pipeline.lock (이미 실행 중이면 종료 코드 75로 바로 끝남)"; exec flock -n -E 75 "$O/.pipeline.lock" "$@"; }
 
 cmd="${1:-help}"; shift || true
 # 이미지마다 자기 앱만 들어 있음(RAG_MODULE pipeline·mcp) — 없는 앱의 명령은 바로 거부(종료 코드 64)
@@ -51,12 +43,8 @@ case "${RAG_MODULE:-}:$cmd" in
   mcp:parse|mcp:publish|mcp:idle|mcp:migrate|mcp:run-mcp-parsing)
     echo "[오류] '$cmd'는 이 이미지(mcp-server)에 없음 — 파싱·구조화·적재·판 관리(migrate)는 data-pipeline. 이 이미지는 mcp·ask·show-stack만"; exit 64;;
 esac
-# 실행 환경(RUN_ENV) 없이는 앱 명령을 시작하지 않음. 이미지 ENV에는 넣지 않는다(서버가 dev·prd를
-# 정해 compose environment로 줌 — refactor.md C-34). 시험·점검 명령(help·selftest·check·check-modules·resources·services·tool check_env)은 뺀다
-# (tool ping_models는 외부 모델을 부르므로 빼지 않음 — RUN_ENV가 외부 모델 허용을 정함).
-# python 한 번(common.config.boot)으로: ① 관문(--gate — 서버면 설정 파일을 못 읽거나 이 이미지 절
-# 검증에 실패해도 이유만 찍고 종료 2) ② 이 셸이 쓰는 칸(DOC_DIR·DOC_DIR_PREPARED·PARSE_SOURCE·PG_HOST — settings.yaml, 비면 이미지 기본값(common/config/settings.py IMAGE_PATHS — 셸에는 기본값 없음)) ③ 라이브러리 env
-# (settings.yaml ops.runtime.library_env — 사용자 env는 안 덮고 이미지 ENV 값(/app/docker/image_env.txt)은 덮음). 값은 출력하지 않는다(eval만).
+# common.config.boot 한 번: ① 관문(--gate — 실행 환경·설정 검증 실패면 이유만 찍고 종료 2, 점검 명령은 면제)
+#   ② 이 셸이 쓰는 칸(DOC_DIR 등 — settings.yaml, 비면 이미지 기본값) ③ 라이브러리 env(ops.runtime.library_env). 값은 찍지 않는다(eval만).
 gate=1
 case "$cmd" in
   help|selftest|check|check-modules|resources|services) gate=0;;
@@ -67,7 +55,7 @@ case "$cmd" in
   parse|publish|check|idle|migrate|show-stack)
     shell_names="DOC_DIR DOC_DIR_PREPARED PARSE_SOURCE PG_HOST";;
 esac
-# 점검 명령(관문 면제)은 설정 파일이 틀려도 돌아 원인을 보이게 — 내부 신호 SETTINGS_LENIENT=1(서버에서도 경고만, 앱 명령은 안 줌)
+# 점검 명령은 설정 파일이 틀려도 돌아 원인을 보이게 — 내부 신호 SETTINGS_LENIENT=1
 [ "$gate" = 1 ] || export SETTINGS_LENIENT=1
 if [ "$cmd" != help ]; then
   gate_arg=""
@@ -85,9 +73,9 @@ case "$cmd" in
   check-modules) exec python -m common.check.check_modules "$@";;
   tool)
     name="${1:?도구 이름(예: rdb_discover·check_env)}"; shift || true
-    # 이름을 python -c 소스 문자열에 그대로 끼워 넣으면 코드 주입 경로가 됨. 모듈 이름 문법만 허용.
+    # 모듈 이름 문법만 허용(python -c 주입 방지)
     [[ "$name" =~ ^[a-z_][a-z0-9_]*$ ]] || { echo "bad tool name"; exit 64; }
-    # 도구 이름 → 모듈 고정 표. 표 밖 이름은 거부. 이 이미지에 없는 모듈(mcp-server의 pipeline)도 거부.
+    # 이름 → 모듈 고정 표 — 표 밖 이름·이 이미지에 없는 모듈은 거부
     case "$name" in
       check_env)        set -- common.check.checker env "$@";;
       ping_models)      set -- common.check.checker ping "$@";;
@@ -101,13 +89,12 @@ case "$cmd" in
     python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec(sys.argv[1].rsplit('.', 1)[0]) else 2)" "$1" 2>/dev/null \
       || { echo "[tool] 이 이미지에 없는 도구: $name ($1)" >&2; exit 2; }
     exec python -m "$@";;
-  mcp)        exec python -m mcp_server.main "$@";;        # 검색 MCP(deploy/host/compose/compose-<환경>.yml mcp-server-0) — 잠금 없음(읽기 전용)
+  mcp)        exec python -m mcp_server.main "$@";;        # 검색 MCP — 잠금 없음(읽기 전용)
   # 모듈(트리거 1회 실행). 종료 코드: 0 끝남·건너뜀 · 3 앞 모듈 결과 없음 · 4 PostgreSQL 없음 · 75 실행 중·마감
   parse)
     preflight
     locked python -m pipeline.cli parse --source "${PARSE_SOURCE:-${DOC_DIR:?}}" --src "${DOC_DIR_PREPARED:?}" "$@";;
-  migrate)    # pgvector 판 관리. up은 적재와 겹치지 않게 같은 잠금, 읽기만 하는 current·check는 잠금·
-    # 쓰기 확인(preflight) 없이. 명령 낱말은 인자 어디에 있어도 찾는다(옵션 값은 건너뜀 — 예: `migrate --target x check`)
+  migrate)    # up은 적재와 같은 잠금, 읽기만 하는 current·check는 잠금·preflight 없이. 명령 낱말은 인자 어디에 있어도 찾음
     verb=""; skip=0
     for arg in "$@"; do
       if [ "$skip" = 1 ]; then skip=0; continue; fi
@@ -121,19 +108,16 @@ case "$cmd" in
       current|check) exec python -m common.store.db.dbtool "$@";;
       *)             preflight; locked python -m common.store.db.dbtool "$@";;
     esac;;
-  publish)    # 대표 결과(.md) Object Storage 업로드 + 처리 기록 파일 publish/silver.jsonl(원본은 올리지 않음) — 자동 스케줄 없음, 트리거 전용
-    # publish --dry-run = 무엇을 올리고 쓸지 표만(쓰기 0) — 첫 publish 전에. 그 밖은 늘 --apply.
+  publish)    # 대표 결과(.md) Object Storage 업로드 + publish/silver.jsonl · --dry-run은 표만(쓰기 0), 그 밖은 늘 --apply
     if [ "${1:-}" = --dry-run ]; then shift; preflight; exec python -m pipeline.load.publish_parse_result "$@"; fi
     preflight; locked python -m pipeline.load.publish_parse_result --apply "$@";;
   ask)   # 검색 명령은 mcp_server/cli/search_ask.py
     preflight; exec python -m mcp_server.cli.search_ask ask "$@";;
-  show-stack|selftest)   # pipeline.cli 점검 명령 — 두 이미지 모두(mcp-server에도 pipeline/cli.py가 있음 — selftest_gate.sh가 이미지마다 부름)
+  show-stack|selftest)   # pipeline.cli 점검 명령 — 두 이미지 모두(mcp-server에도 pipeline/cli.py가 있음)
     preflight; exec python -m pipeline.cli "$cmd" "$@";;
-  # idle — 상주 컨테이너 data-pipeline은 일을 하지 않고 떠 있기만 한다.
-  # run_pipeline.py가 그 안에서 docker exec로 문서별 작업을 돌린다. MCP parse_document 작업 서비스는 위 run-mcp-parsing(전용 컨테이너 mcp-data-parsing-0 — 여기에 띄우지 않음, Redis 소비자).
-  run-mcp-parsing)   # MCP parse_document Redis Streams 작업 소비자, 전용 상주 컨테이너 mcp-data-parsing-0의 주 프로세스
+  run-mcp-parsing)   # parse_document 작업 소비자(Redis Streams) — 전용 컨테이너 mcp-data-parsing의 주 프로세스
     preflight; exec python -u -m pipeline.run_mcp_parsing;;
-  idle)
+  idle)   # 떠 있기만 — run_pipeline.py·pipe_exec.sh가 docker exec로 작업을 넣음
     preflight
     exec sleep infinity;;
   *) echo "모르는 명령: $cmd (help 참고)"; exit 64;;

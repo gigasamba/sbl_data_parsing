@@ -5,8 +5,8 @@
 PKG_ROOT = 공용 패키지 루트(DEPLOY_ROOT/common) — 하위 프로세스 cwd·표시 기준(데이터 파일은 RES_ROOT).
 DEPLOY_ROOT = 패키지들이 import되는 자리 — 하위 프로세스 PYTHONPATH로만 쓴다(아래 child_env) — `-m pipeline.x`·
 `-m validation.e2e.x` 형태로 불러야 하므로 PKG_ROOT 자신이 아니라 그 부모가 필요하다.
-APP_ROOT = 런타임 루트(output/·assets/가 있는 곳) = PROJ_ROOT: PC는 저장소 루트, 이미지는 `/app`
-(컨테이너 안 트리가 저장소와 같은 깊이).
+APP_ROOT = 런타임 루트(output/이 있는 곳) = PROJ_ROOT = 코드 폴더: PC는 저장소 루트, 이미지는 `/app`
+(결과는 늘 `<코드 폴더>/output` — 이미지·compose는 그 자리에 붙이기만 한다).
 
 원자적 쓰기 — 임시 파일에 다 쓰고 os.replace로 이름을 바꿔 중간에 끊겨도 0바이트·반쪽 결과가 남지 않게 한다.
 Windows에서 다른 프로세스가 대상 파일을 열고 있으면 os.replace가 잠깐 PermissionError를 내므로 _replace가 그 오류만
@@ -17,12 +17,12 @@ import os
 import time
 from pathlib import Path
 
-# common/core/paths.py: parents[0]=core/, parents[1]=common/, parents[2]=deploy/(이미지) 또는 저장소 루트(PC), parents[3]=이미지 루트.
+# common/core/paths.py: parents[0]=core/, parents[1]=common/, parents[2]=코드 폴더(이미지 /app · PC 저장소 루트).
 # LOCAL_RUN(로컬 배치) — PC 저장소는 패키지가 저장소 바로 아래(deploy/ 단 없음)라 parents[2]가 루트.
-# RUN_ENV=local이고 코드가 이미지 배치(/app/deploy/<패키지>)가 아닐 때만 참 — PC 시험 Docker 컨테이너(RUN_ENV=local)는
+# RUN_ENV=local이고 코드가 이미지 배치(/app/<패키지>)가 아닐 때만 참 — PC 시험 Docker 컨테이너(RUN_ENV=local)는
 # 이미지 배치라 서버와 같게 본다. RUN_ENV는 settings.resolve_run_env로 읽는다(못 읽거나 모르는 값이면 로컬 아님).
 # mcp_server retriever도 이 값을 쓴다.
-# 판정 한계: 이미지 배치는 폴더 이름(parents[2] == "deploy")으로만 가른다 — PC에서 저장소 폴더 이름이 deploy면 로컬 배치가 꺼진다.
+# 판정 한계: 이미지 배치는 폴더 이름(parents[2] == "app")으로만 가른다 — PC에서 저장소 폴더 이름이 app이면 로컬 배치가 꺼진다.
 _HERE = Path(__file__).resolve()
 
 
@@ -35,8 +35,8 @@ def _run_env():
         return None
 
 
-LOCAL_RUN = _HERE.parents[2].name != "deploy" and _run_env() == "local"
-PROJ_ROOT = _HERE.parents[2 if LOCAL_RUN else 3]
+LOCAL_RUN = _HERE.parents[2].as_posix() != "/app" and _run_env() == "local"
+PROJ_ROOT = _HERE.parents[2]  # 코드 폴더 — 결과(output/)·상대 경로의 기준
 
 DEPLOY_ROOT = Path(__file__).resolve().parents[2]  # deploy/ — 모든 패키지가 import되는 자리(하위 프로세스 PYTHONPATH)
 PKG_ROOT = DEPLOY_ROOT / "common"  # 공용 패키지 루트 — 하위 프로세스 cwd·표시 기준(데이터 파일은 RES_ROOT)
@@ -45,13 +45,13 @@ PARSING_ROOT = (
     DEPLOY_ROOT / "pipeline" / "transform" / "parse"
 )  # 엔진 폴더(engines/)의 부모 — parse_engines.engine_code_fp가 이 기준 상대 경로('engines/…')로 해시(바꾸면 엔진 지문이 바뀜)
 # 코드가 읽는 데이터(지시서·설정 기본값·원천 표·어휘) — 패키지들과 같은 자리(PC=저장소 루트/resources,
-# 이미지=/app/deploy/resources), 모든 이미지에 폴더째 들어간다.
+# 이미지=/app/resources), 모든 이미지에 폴더째 들어간다.
 RES_ROOT = DEPLOY_ROOT / "resources"
 CRITERIA_FILE = RES_ROOT / "config" / "criteria.json"  # 판정 문턱값 정본
 STACK_FILE = RES_ROOT / "config" / "pipeline_stack.json"  # 엔진 구성(DB 표의 시드·PC 대체)
 GLOSSARY_ROOT = RES_ROOT / "vocab" / "glossary"  # 용어집·명부 예시·고객 seed(코드 기본값·selftest용)
 EDW_CHAIN_FILE = DEPLOY_ROOT / "edw_chain.yaml"  # EDW 조인 사슬 정본 — 코드 폴더 맨 위(git 관리, 이미지에도 COPY — common.store.edw_chain)
-APP_ROOT = PROJ_ROOT  # 런타임 루트(output/·assets/가 있는 곳) — PC=저장소 루트, 이미지=/app
+APP_ROOT = PROJ_ROOT  # 런타임 루트(output/이 있는 곳) — 코드 폴더(PC=저장소 루트, 이미지=/app)
 LOG_DIR = APP_ROOT / "output" / "logs"  # 파일 로그 한 곳 — PC JSON 로그·DB 실패 예비 기록의 기본 폴더
 LOCAL_EDW_SEED = PROJ_ROOT / "valid_env" / "edw" / "edw.sqlite"  # PC 가짜 EDW 원본(git — 쓰지 않음)
 LOCAL_EDW_COPY = PROJ_ROOT / "valid_env" / "edw" / "edw_copy.sqlite"  # local 가짜 EDW 기본 — 없으면 원본을 복사(common.store.mssql, op-14)

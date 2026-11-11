@@ -1,4 +1,6 @@
-# 운영 서버 — 구운 이미지(코드 포함). 띄우기: bash deploy/host/scripts/host_ctl.sh up -d [서비스…]
+# 운영 묶음(개발 서버의 출시 전 시험도 이것) — 구운 이미지(코드 포함) 컨테이너 3개.
+#   폴더 ${PRD_DIR}/{app,home}: app에 settings.yaml·output, home → /root.
+#   띄우기: bash deploy/host/scripts/host_ctl.sh up -d [서비스…]   (${PRD_DIR}/app에서)
 name: sbl-prd
 x-prd: &prd
   restart: always
@@ -11,51 +13,51 @@ x-prd: &prd
     options: {max-size: "50m", max-file: "3"}
 x-ssh: &ssh
   <<: *prd
-  entrypoint: ["/usr/bin/tini", "-s", "--", "/etc/devbox/dev_entry.sh"]
+  entrypoint: ["/usr/bin/tini", "-s", "--", "/etc/devbox/dev_entry.sh"]   # 구운 이미지 ENTRYPOINT(entrypoint.sh) 대신 SSH 작업 공간으로
 
 services:
-  data-pipeline-0:
+  data-pipeline:
     <<: *ssh
-    image: data-pipeline:${IMAGE_TAG:-0.4.0}
-    container_name: data-pipeline-0
+    image: data-pipeline:${IMAGE_TAG:-0.5.0}
+    container_name: data-pipeline
     command: ["devbox"]
-    environment: {SSH_PORT: "8020", SETTINGS_FILE: /etc/rag/settings.yaml, APP_ENTRY: /app/docker/entrypoint.sh}
+    environment: {SSH_PORT: "8020", SETTINGS_FILE: /etc/rag/settings.yaml, APP_ENTRY: /opt/sbl/docker/entrypoint.sh}
     volumes:
-      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/settings.yaml:/etc/rag/settings.yaml:ro,z
-      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/output:/app/deploy/output:z
-      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/home:/app/deploy/home:z
+      - ${PRD_DIR:-/home/sbl/data_pipeline}/app/settings.yaml:/etc/rag/settings.yaml:ro,z
+      - ${PRD_DIR:-/home/sbl/data_pipeline}/app/output:/app/output:z
+      - ${PRD_DIR:-/home/sbl/data_pipeline}/home:/root:z
       - ${DOC_SRC:-/data/docs}:/data/docs:ro,z
     cpus: 4
     mem_limit: 12g
     memswap_limit: 16g
 
-  mcp-server-0:
+  mcp-server:
     <<: *ssh
-    image: mcp-server:${IMAGE_TAG:-0.4.0}
-    container_name: mcp-server-0
+    image: mcp-server:${IMAGE_TAG:-0.5.0}
+    container_name: mcp-server
     command: ["devbox", "mcp", "--set", "MCP_PORT=8051"]
-    environment: {SSH_PORT: "8050", SETTINGS_FILE: /etc/rag/settings.yaml, APP_ENTRY: /app/docker/entrypoint.sh}
+    environment: {SSH_PORT: "8050", SETTINGS_FILE: /etc/rag/settings.yaml, APP_ENTRY: /opt/sbl/docker/entrypoint.sh}
     volumes:
-      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/settings.yaml:/etc/rag/settings.yaml:ro,z
-      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/output:/app/deploy/output:ro,z
-      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/output/_mcp_parse/jobs:/app/deploy/output/_mcp_parse/jobs:z
-      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/home/mcp:/app/deploy/home:z
+      - ${PRD_DIR:-/home/sbl/data_pipeline}/app/settings.yaml:/etc/rag/settings.yaml:ro,z
+      - ${PRD_DIR:-/home/sbl/data_pipeline}/app/output:/app/output:ro,z
+      - ${PRD_DIR:-/home/sbl/data_pipeline}/app/output/_mcp_parse/jobs:/app/output/_mcp_parse/jobs:z   # parse_document 업로드·결과
+      - ${PRD_DIR:-/home/sbl/data_pipeline}/home/mcp:/root:z
     cpus: 3
     mem_limit: 12g
     memswap_limit: 12g
 
-  mcp-data-parsing-0:
+  mcp-data-parsing:
     <<: *prd
-    image: data-pipeline:${IMAGE_TAG:-0.4.0}
-    container_name: mcp-data-parsing-0
+    image: data-pipeline:${IMAGE_TAG:-0.5.0}
+    container_name: mcp-data-parsing
     command: ["run-mcp-parsing"]
     environment: {SETTINGS_FILE: /etc/rag/settings.yaml}
     volumes:
-      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/settings.yaml:/etc/rag/settings.yaml:ro,z
-      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/output:/app/deploy/output:z
+      - ${PRD_DIR:-/home/sbl/data_pipeline}/app/settings.yaml:/etc/rag/settings.yaml:ro,z
+      - ${PRD_DIR:-/home/sbl/data_pipeline}/app/output:/app/output:z
       - ${DOC_SRC:-/data/docs}:/data/docs:ro,z
     cpus: 4
-    cpu_shares: 4096
+    cpu_shares: 4096   # 사람이 기다리는 요청 — 파이프라인의 4배 몫
     mem_limit: 12g
     memswap_limit: 12g
     pids_limit: 1024

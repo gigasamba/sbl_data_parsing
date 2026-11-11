@@ -7,7 +7,7 @@ import re
 
 from common.core.paths import DEPLOY_ROOT
 
-ROOT = DEPLOY_ROOT  # 저장소 루트(PC) · 이미지 /app/deploy — paths 상수
+ROOT = DEPLOY_ROOT  # 저장소 루트(PC) · 이미지 /app — paths 상수
 DOC = ROOT / "docs" / "architecture" / "db_schema.md"
 DECISIONS = ("유지", "삭제", "새로")
 

@@ -27,15 +27,15 @@ def _load():
 RD = _load()
 
 GOLDEN = {
-    "staging": "docker exec data-pipeline-0 bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && mkdir -p /app/output/_staging && python -m pipeline.extract.candidate_ready --set SOURCE_STAGING=/app/output/_staging --set SOURCE_FETCH_WORKERS=2 stage --csv /app/output/_docflow/9/batch.csv --out /app/output/_docflow/9 --prepared /app/output/_docflow/9/prepared --no-scan-rotate'",
-    "parse_light": "docker exec data-pipeline-0 bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/7 && echo [envcheck] gate=9 채널=light; python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/_docflow/7 --set DOC_DIR_PREPARED=/app/output/_docflow/7/prepared --set PARSE_IMAGES_ROOT=/app/output/_docflow/7/parse/_images --set PARSE_RAW_ROOT=/app/output/_docflow/7/parse --set VLM_MAX_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set CPU_MAX_LOAD=9 parse --staged'",
-    "parse_vlm": "docker exec data-pipeline-0 bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/9 && echo [envcheck] gate=1.3 채널=vlm; python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/_docflow/9 --set DOC_DIR_PREPARED=/app/output/_docflow/9/prepared --set PARSE_IMAGES_ROOT=/app/output/_docflow/9/parse/_images --set PARSE_RAW_ROOT=/app/output/_docflow/9/parse --set VLM_MAX_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set VLM_MAX_CONCURRENCY=6 --set VLM_CONCURRENCY=6 --set PARSE_POST=supsub,charts,figures,context,attachments,vlm_page --set VLM_PAGE_MAX= --set CPU_MAX_LOAD=1.3 parse --staged'",
-    "struct": "docker exec data-pipeline-0 bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/9 && python -m pipeline.transform.structure.gold_bundle --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --parse-dir /app/output/_docflow/9/parse --src /app/output/_docflow/9/prepared --out /app/output/_docflow/9/bundle && python -m pipeline.load.pgvector_load --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 load --bundle /app/output/_docflow/9/bundle --rep-dir /app/output/_docflow/9/parse/_rep --silver /app/output/_docflow/9/publish/silver.jsonl >> /app/output/_docflow/9/structure.log 2>&1'",
-    "list": "docker exec data-pipeline-0 bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && python -m pipeline.extract.candidate_pick list --filter RFP,proposal --start-offset 0 --skip-done --max-docs 30 --faq-seen /app/output/_faq_seen.txt --out /app/output/_docflow/targets.json'",
-    "publish": "docker exec data-pipeline-0 bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/9 && python -m pipeline.load.publish_parse_result --out /app/output/_docflow/9 --source-system FileStorageMap --apply >> /app/output/_docflow/9/publish.log 2>&1'",
-    "error": "docker exec data-pipeline-0 bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && python -m pipeline.shared.except_docs error --csv /app/output/_docflow/9/batch.csv --reason load_failed'",
-    "sweep": "docker exec data-pipeline-0 bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && for p in /proc/[0-9]*; do grep -aqzx \"RUN_PIPELINE_DOC=/app/output/_docflow/9\" $p/environ 2>/dev/null && kill ${p##*/} 2>/dev/null; done'",
-    "list_all": "docker exec data-pipeline-0 bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && python -m pipeline.extract.candidate_pick list --start-offset 0 --faq-seen /app/output/_faq_seen.txt --out /app/output/_docflow/targets.json'",
+    "staging": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && mkdir -p /app/output/_staging && python -m pipeline.extract.candidate_ready --set SOURCE_STAGING=/app/output/_staging --set SOURCE_FETCH_WORKERS=2 stage --csv /app/output/_docflow/9/batch.csv --out /app/output/_docflow/9 --prepared /app/output/_docflow/9/prepared --no-scan-rotate'",
+    "parse_light": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/7 && echo [envcheck] gate=9 채널=light; python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/_docflow/7 --set DOC_DIR_PREPARED=/app/output/_docflow/7/prepared --set PARSE_IMAGES_ROOT=/app/output/_docflow/7/parse/_images --set PARSE_RAW_ROOT=/app/output/_docflow/7/parse --set VLM_MAX_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set CPU_MAX_LOAD=9 parse --staged'",
+    "parse_vlm": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/9 && echo [envcheck] gate=1.3 채널=vlm; python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/_docflow/9 --set DOC_DIR_PREPARED=/app/output/_docflow/9/prepared --set PARSE_IMAGES_ROOT=/app/output/_docflow/9/parse/_images --set PARSE_RAW_ROOT=/app/output/_docflow/9/parse --set VLM_MAX_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set VLM_MAX_CONCURRENCY=6 --set VLM_CONCURRENCY=6 --set PARSE_POST=supsub,charts,figures,context,attachments,vlm_page --set VLM_PAGE_MAX= --set CPU_MAX_LOAD=1.3 parse --staged'",
+    "struct": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/9 && python -m pipeline.transform.structure.gold_bundle --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --parse-dir /app/output/_docflow/9/parse --src /app/output/_docflow/9/prepared --out /app/output/_docflow/9/bundle && python -m pipeline.load.pgvector_load --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 load --bundle /app/output/_docflow/9/bundle --rep-dir /app/output/_docflow/9/parse/_rep --silver /app/output/_docflow/9/publish/silver.jsonl >> /app/output/_docflow/9/structure.log 2>&1'",
+    "list": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && python -m pipeline.extract.candidate_pick list --filter RFP,proposal --start-offset 0 --skip-done --max-docs 30 --faq-seen /app/output/_faq_seen.txt --out /app/output/_docflow/targets.json'",
+    "publish": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/9 && python -m pipeline.load.publish_parse_result --out /app/output/_docflow/9 --source-system FileStorageMap --apply >> /app/output/_docflow/9/publish.log 2>&1'",
+    "error": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && python -m pipeline.shared.except_docs error --csv /app/output/_docflow/9/batch.csv --reason load_failed'",
+    "sweep": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && for p in /proc/[0-9]*; do grep -aqzx \"RUN_PIPELINE_DOC=/app/output/_docflow/9\" $p/environ 2>/dev/null && kill ${p##*/} 2>/dev/null; done'",
+    "list_all": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && python -m pipeline.extract.candidate_pick list --start-offset 0 --faq-seen /app/output/_faq_seen.txt --out /app/output/_docflow/targets.json'",
 }
 
 
@@ -124,9 +124,9 @@ def test_sweep_marker_matches_parse():
 
 def test_one_env_for_every_command():
     """rn-09 — 컨테이너 명령은 모두 한 도우미(pexec)가 만들어 앞부분(umask·작업 폴더·PYTHONPATH·라이브러리 env)이 같다."""
-    head = "umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache"
+    head = "umask 0002 && cd /app && export PYTHONPATH=/app PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache"
     for name, cmd in _built().items():
-        assert cmd.startswith("docker exec data-pipeline-0 bash -c ") and _inner(cmd).startswith(head), name
+        assert cmd.startswith("docker exec data-pipeline bash -c ") and _inner(cmd).startswith(head), name
 
 
 def test_failed_stage_sweeps_doc(tmp_path):
@@ -236,12 +236,14 @@ def test_read_settings_new_layout(tmp_path):
 
 
 def test_configure_fixed_container(tmp_path):
-    """새벽 배치는 0번 벌 하나(compose-<환경>.yml의 data-pipeline-0) — 루트 이름·셸 env로 컨테이너가 갈리지 않고 PG 스키마는 설정 값."""
+    """컨테이너 = settings.yaml ops.host.pipeline_container(비우면 data-pipeline) — 루트 이름으로 갈리지 않고 PG 스키마는 설정 값."""
     req = {p: "x" for p, _ in RD.SETTINGS_REQUIRED}
-    for run, name in (("dev", "sbl_data_parsing-main-0"), ("prd", "sbl_data_parsing-main"), ("dev", "sbl_data_parsing-main-2")):
+    for run, name, pc in (("prd", "app", None), ("dev", "app2", "data-pipeline-2")):
         rd = _load()  # 모듈 값을 바꾸므로 따로 읽음
         model = {}
         base = {**req, "common.run_env": run, "common.connections.pg.db_schema": "rag", "common.connections.rdb.port": "1433"}
+        if pc:
+            base["common.host.pipeline_container"] = pc
         for p, v in base.items():
             rd._host().layout().set_path(model, p, v)
         root = tmp_path / name
@@ -250,7 +252,17 @@ def test_configure_fixed_container(tmp_path):
         f.write_text(yaml.safe_dump(rd._host().layout().to_file(model)), encoding="utf-8")
         with mock.patch.object(rd, "_root", return_value=root):
             probs = rd.configure(f)
-        assert probs == [] and (rd.PIPE_C, rd.PG_SCHEMA) == ("data-pipeline-0", "rag"), (run, name, probs)
+        assert probs == [] and (rd.PIPE_C, rd.PG_SCHEMA) == (pc or "data-pipeline", "rag"), (run, name, probs)
+    # dev 벌이 이름을 비우면 거부(기본 data-pipeline = 출시 전 시험 컨테이너)
+    rd = _load()
+    model = {}
+    for p, v in {**req, "common.run_env": "dev", "common.connections.rdb.port": "1433"}.items():
+        rd._host().layout().set_path(model, p, v)
+    f = tmp_path / "dev_unset.yaml"
+    f.write_text(yaml.safe_dump(rd._host().layout().to_file(model)), encoding="utf-8")
+    with mock.patch.object(rd, "_root", return_value=tmp_path):
+        probs = rd.configure(f)
+    assert any("pipeline_container" in m for m in probs), probs
 
 
 def test_staging_name_same():

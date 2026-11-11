@@ -7,7 +7,7 @@ set -eu
 if [ "${1:-}" != devbox ]; then
   exec "$APP_ENTRY" "$@"
 fi
-# The pipeline image sets HOME=/tmp; the workspace uses the passwd home (/home/rag — the persisted home volume).
+# The pipeline image sets HOME=/tmp; the workspace uses the passwd home (root: /root — the bench home folder mounted there).
 HOME=$(getent passwd "$(id -u)" | cut -d: -f6)
 export HOME
 K=$HOME/.devbox
@@ -36,14 +36,14 @@ if [ "$(id -u)" = 0 ]; then
   elif [ "$(getent shadow root | cut -d: -f2 | cut -c1)" = '$' ]; then
     echo "[devbox] $P missing or empty — using the root password built into the image" >&2
   else
-    echo "[devbox] the image has no root password and $P is missing or empty — rebuild with the root_pw build secret (server-guide §6-6)" >&2; exit 2
+    echo "[devbox] the image has no root password and $P is missing or empty — rebuild with the root_pw build secret" >&2; exit 2
   fi
   unset W
   git config --global --replace-all safe.directory '*'   # code folder is owned by 10001; root git would refuse it
   SSHD_OPTS=(-o PermitRootLogin=yes -o PasswordAuthentication=yes)
 fi
 # `devbox <command>`: also run that app command in the background (e.g. `devbox mcp` — the MCP server next to sshd).
-# Not supervised: if it exits, the container stays up with sshd only (restart by hand — server-guide §6-6).
+# Not supervised: if it exits, the container stays up with sshd only (restart the container by hand).
 shift
 if [ $# -gt 0 ]; then "$APP_ENTRY" "$@" & fi
 exec /usr/sbin/sshd -D -e -f /etc/devbox/sshd_config -p "${SSH_PORT:-2222}" \

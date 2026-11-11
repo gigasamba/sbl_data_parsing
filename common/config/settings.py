@@ -42,7 +42,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from common.config import layout as L
 from common.core import exitclean  # 맡은 덮기 파일은 프로세스가 끝날 때 지움
 
-REPO_ROOT = Path(__file__).resolve().parents[2]  # PC = 저장소 루트 · 이미지 = /app/deploy
+REPO_ROOT = Path(__file__).resolve().parents[2]  # PC = 저장소 루트 · 이미지 = /app
 LOCAL_FILE = REPO_ROOT / "settings.yaml"  # RUN_ENV=local 기본 자리 — 저장소 루트, settings.sample.yaml 옆(git 밖 — .gitignore)
 RUN_ENVS = ("local", "dev", "prd")  # 그 밖의 값은 시작 거부
 SERVER_ENVS = ("dev", "prd")
@@ -50,15 +50,16 @@ MIN_SECRET_LENGTH = 8  # 서버 시작 관문만 적용; local 마스킹 경계 
 SECTIONS = ("common", "pipeline", "mcp")
 OVERLAY_KEYS = ("base", "overrides")  # 덮기 파일의 최상위 열쇠(위 모듈 설명)
 STRICT = True  # RUN_ENV가 없으면 거부
-IN_IMAGE = REPO_ROOT.name == "deploy"  # 코드가 이미지 배치(/app/deploy/<패키지>) — paths.LOCAL_RUN과 같은 판정
+IN_IMAGE = REPO_ROOT.as_posix() == "/app"  # 코드가 이미지 배치(/app/<패키지>) — paths.LOCAL_RUN과 같은 판정
 # ── 이미지 배치 약속 경로 — 코드에 둔 컨테이너 안 자리는 이 두 표에만(CLAUDE.md 경로 규칙의 예외) ──
 # 이미지(Dockerfile·compose 마운트·entrypoint)가 만드는 자리라 서버 설정 값이 아니라 이미지와 함께 바뀐다.
 IMAGE_PATHS = {
     # 컨테이너 안 약속 경로는 이 표 하나(두 이미지 공통). 호스트 쪽(compose·run_pipeline·스크립트)은 deploy/release/gen_host_keys.py가
-    # 이 표로 만든 deploy/host/scripts/image_paths.json을 읽는다(호스트 python엔 pydantic이 없음 — load_settings.sh가 APP_* env로도 냄).
-    "output_root": "/app/output",  # 결과 폴더를 붙이는 자리(compose RAG_OUT → 이 자리)
-    "code_root": "/app/deploy",  # 코드 자리(PYTHONPATH — 실행 이미지는 서버 코드 폴더를 여기에 붙임)
-    "image_env": "/app/docker/image_env.txt",  # 빌드 때 이미지 ENV를 적어 둔 파일(common.config.boot — 라이브러리 env가 이미지 값만 덮게)
+    # 이 표로 만든 deploy/host/scripts/host_settings.tsv를 읽는다(호스트 python엔 pydantic이 없음 — load_settings.sh가 APP_* env로도 냄).
+    "code_root": "/app",  # 코드 자리(PYTHONPATH — 실행 이미지는 서버 코드 폴더를 여기에 붙임)
+    "output_root": "/app/output",  # 결과 자리 = 코드 폴더/output(paths.APP_ROOT/output과 같음 — compose가 여기에 붙임)
+    "image_env": "/opt/sbl/docker/image_env.txt",  # 빌드 때 이미지 ENV를 적어 둔 파일(common.config.boot — 라이브러리 env가 이미지 값만 덮게)
+    "assets_root": "/opt/sbl/assets",  # 반입 자산(assets.py install이 읽음 — Dockerfile COPY 자리)
     "docs_mount": "/data/docs",  # 원본 폴더를 읽기 전용으로 붙이는 자리(compose DOC_SRC → 이 자리 · pipeline DOC_DIR 기본값)
 }
 # 코드가 읽지 않는 약속 자리(compose·Dockerfile·dev_entry.sh에만 같은 글자 — 바꾸면 그 파일들을 함께):
@@ -87,7 +88,7 @@ def image_default(env, pc=None):
 
 
 # settings.yaml ops.runtime.library_env로 줄 수 있는 라이브러리 env 이름(비밀 아님 — 이 목록 밖은 거부).
-# 컨테이너 entrypoint(common.config.boot)가 시작 때 env로 낸다 — 사용자 env는 안 덮고, 이미지 ENV 값(/app/docker/image_env.txt)은 덮는다.
+# 컨테이너 entrypoint(common.config.boot)가 시작 때 env로 낸다 — 사용자 env는 안 덮고, 이미지 ENV 값(/opt/sbl/docker/image_env.txt)은 덮는다.
 # 담은 것: 스레드·캐시·오프라인 신호(OMP_NUM_THREADS·HF_HUB_OFFLINE·TZ 등) + Dockerfile ENV(TZ·LANG·HF_*·DO_NOT_TRACK·
 # SCARF_NO_ANALYTICS) + 코드가 자식·라이브러리에 넘기는 이름(OMP·MKL·OPENBLAS·NUMEXPR·TORCH, PIPELINE_VERSION, TESSDATA_PREFIX·HF_HOME).
 # 이미지 바탕(PYTHONPATH·HOME·PYTHONUTF8 등)·내부 신호(RAG_MODULE·RUN_ENV·SETTINGS_FILE)는 넣지 않는다.
@@ -113,8 +114,8 @@ LIB_ENV_NAMES = (
 
 def repo_path(v):
     """경로 칸(F repo=True)의 상대 경로를 저장소 루트(paths.PROJ_ROOT) 기준 절대 경로로 — 한 곳(op-14). 앞머리 `file://`·`rdb:csv:`는
-    두고 뒤 경로만 푼다(`file://valid_env/x` → `file://<루트>/valid_env/x`). 절대 경로·다른 주소(s3:// 등)·sqlite `:memory:`·빈 값은 그대로 — 서버는 작업
-    폴더가 /app(= PROJ_ROOT)라 결과가 같다."""
+    두고 뒤 경로만 푼다(`file://valid_env/x` → `file://<루트>/valid_env/x`). 절대 경로·다른 주소(s3:// 등)·sqlite `:memory:`·빈 값은 그대로 — 서버는 코드
+    폴더(/app = PROJ_ROOT) 기준."""
     pre = next((p for p in ("file://", "rdb:csv:") if v.startswith(p)), "")
     rest = v[len(pre) :]
     if not rest or "://" in rest or rest.startswith(("/", "\\", "rdb:", ":")) or Path(rest).is_absolute():
@@ -1467,6 +1468,13 @@ class CommonHost(Section):
         "호스트에서 psql을 docker exec할 PostgreSQL(pgvector) 컨테이너 이름 — run_pipeline.py 문서 수 세기(S7e1 — 옛 코드 고정값)",
     )
     prune_keep: int | None = F(2, "PRUNE_KEEP", "prune_images.sh가 남길 이미지 판 수(지금 판 포함, --keep 기본값)")
+    pipeline_container: str | None = F(
+        "data-pipeline",
+        "PIPE_CONTAINER",
+        "호스트 스크립트(run_pipeline.py·pipe_exec.sh·host_ctl.sh)가 docker exec로 들어갈 파이프라인 컨테이너 — 개발 벌 N은 data-pipeline-N",
+    )
+    mcp_container: str | None = F("mcp-server", "MCP_CONTAINER", "검색 MCP 컨테이너 이름(mcp_keepalive.sh·host_ctl.sh)")
+    parse_container: str | None = F("mcp-data-parsing", "PARSE_CONTAINER", "parse_document 작업 컨테이너 이름(mcp_keepalive.sh)")
 
 
 class CommonPaths(Section):
