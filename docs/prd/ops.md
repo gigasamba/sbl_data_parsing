@@ -354,7 +354,7 @@ DB 스키마(마이그레이션 — `doc` 칸·`doc` 색인·`except_doc_info`·
 
 ### 규칙
 1. `deploy/host/compose/compose-dev.yml` 한 파일: `data-pipeline-0`~`4`(실행 이미지 `data-pipeline-runtime`, SSH 8020~8024), `mcp-server-0`(`mcp-server-runtime`, SSH 8050 · HTTP 8051), `mcp-data-parsing-0`(SSH 없음). 묶음 이름 `docker-dev`, 네트워크는 서버 네트워크 그대로(`network_mode: host`). 검색 DB는 `compose-pgvector.yml`(`pgvector/pgvector:pg16`, 5433 → 5432, 데이터 `PG_DATA` 기본 `/data/pg/pipeline`, 계정·비밀번호는 코드 폴더 맨 위 `.env`의 `PG_USER`·`PG_DB`·`PG_PASSWORD`, 처음 만들 때만)로 따로 띄우고, 컨테이너는 `<서버 IP>:5433`으로 붙는다.
-2. 벌 폴더 `<SBL_ROOT>/sbl_data_parsing-main-<n>` 전체를 `/app/deploy`에 쓰기 가능으로, 그 `settings.yaml`은 같은 자리에 읽기 전용으로 다시, `output/` → `/app/output`, `home/` → `/root`. `mcp-server-0`은 벌 0을 쓰고(결과는 읽기 전용) 홈만 `home/mcp/`(홈은 git·굽기 묶음에서 빠짐).
+2. 벌 폴더 `<SBL_ROOT>/sbl_data_parsing-main-<n>` 전체를 `/app/deploy`에 쓰기 가능으로(`settings.yaml`·`output/` 포함 — 결과는 `/app/deploy/output` 한 곳, 이미지의 `/app/output`은 그리로 가는 바로가기·VOLUME 없음), root 홈은 그 안 `home/`(이미지의 root 홈 = `/app/deploy/home`). `mcp-server-0`은 벌 0을 쓰고(결과는 읽기 전용) 홈만 `home/mcp/`를 같은 자리에 다시(홈은 git·굽기 묶음에서 빠짐).
 3. 컨테이너마다 `cpus`·`mem_limit`·`memswap_limit`(메모리+스왑 합)·`ports`를 그 칸에 직접 적는다. 바꿀 env: `SBL_ROOT`(기본 `/home/sbl`)·`IMAGE_TAG`·`DOC_SRC`.
 4. 컨테이너는 root(`user: "0"`)로 `devbox`를 띄운다. `dev_entry.sh`가 root면 실행 환경(앱과 같은 풀이 — 붙인 settings.yaml `required.env.run_env`, compose는 env `RUN_ENV`를 주지 않음)이 `dev`·`prd`일 때만 sshd에 root·비밀번호 로그인을 연다(비밀번호 = 이미지에 넣은 값 — [op-20](#op-20) 규칙 4). dev·prd가 아니면 종료 2.
 5. `devbox <명령>`이면 그 앱 명령도 뒤에서 함께 돈다(`mcp-server-0` = `devbox mcp` — 따로 지켜보지 않음, 멈추면 손으로 다시 시작).

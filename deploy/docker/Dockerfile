@@ -114,7 +114,8 @@ WORKDIR /app
 # 시작 스크립트 runtime_entry.sh가 코드 폴더·의존성 지문(deps_hash ↔ 코드 deploy/docker/DEPS_HASH)을 보고 코드의 entrypoint로 넘김.
 # 코드가 든 이미지(아래 mcp·pipeline 타깃)는 이 단계 + 코드 COPY라 두 갈래의 바탕·의존성이 어긋나지 않는다.
 COPY deploy/docker/runtime_entry.sh /app/docker/runtime_entry.sh
-RUN mkdir -p /app/output /app/assets /app/deploy /data/docs && chown -R rag /app/output /data \
+RUN mkdir -p /app/assets /app/deploy/output /app/deploy/home /data/docs && ln -s /app/deploy/output /app/output && chown -R rag /app/deploy/output /data \
+    && chmod 700 /app/deploy/home && sed -i 's#:/root:#:/app/deploy/home:#' /etc/passwd \
     && sed -i 's/\r$//' /app/docker/runtime_entry.sh && chmod +x /app/docker/runtime_entry.sh \
     && cat /tmp/requirements-core.txt /tmp/requirements-image.txt | tr -d '\r' | sha256sum | cut -c1-16 > /app/docker/deps_hash
 ENV TZ=Asia/Seoul LANG=C.UTF-8 PYTHONUTF8=1 PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/app/deploy \
@@ -126,7 +127,7 @@ ARG VCS_REF=
 RUN echo "mcp-server-runtime ${APP_VERSION:-?} ${VCS_REF:-?}" > /app/docker/image_ref   # op-06 — 실행 기록에 남길 이미지 판
 LABEL org.opencontainers.image.version=$APP_VERSION org.opencontainers.image.revision=$VCS_REF org.opencontainers.image.title=mcp-server-runtime
 USER rag
-VOLUME ["/app/output"]
+# 결과·root 홈은 코드 폴더 안 output/·home/ 한 곳(/app/output은 그리로 가는 바로가기, root 홈 = /app/deploy/home) — VOLUME 없음
 # dev_entry.sh: `devbox`면 SSH 작업 공간, 그 밖은 APP_ENTRY(이 이미지의 시작 스크립트)로 그대로. tini -s — --init 없이 띄워도 고아 프로세스를 거둠
 ENV APP_ENTRY=/app/docker/runtime_entry.sh
 ENTRYPOINT ["/usr/bin/tini", "-s", "--", "/etc/devbox/dev_entry.sh"]
@@ -177,7 +178,8 @@ print(f"rapidocr 모델 {len(fs)}개 복사" + ("" if fs else " — assets/rapid
 os.system(f"chown -R rag {dst}")                      # 실행 사용자(rag)가 모델을 받아 둘 수 있게(없으면 PermissionError로 회전 보정 실패)
 EOF
 COPY deploy/docker/runtime_entry.sh /app/docker/runtime_entry.sh
-RUN mkdir -p /app/output /app/assets /app/deploy /data/docs && chown -R rag /app/output /data \
+RUN mkdir -p /app/assets /app/deploy/output /app/deploy/home /data/docs && ln -s /app/deploy/output /app/output && chown -R rag /app/deploy/output /data \
+    && chmod 700 /app/deploy/home && sed -i 's#:/root:#:/app/deploy/home:#' /etc/passwd \
     && sed -i 's/\r$//' /app/docker/runtime_entry.sh && chmod +x /app/docker/runtime_entry.sh \
     && cat /tmp/requirements-core.txt /tmp/requirements-image.txt | tr -d '\r' | sha256sum | cut -c1-16 > /app/docker/deps_hash
 # 실행 환경 기본값 — 시간대는 새벽 마감(NIGHT_DEADLINE) 계산에 쓰임(UTC면 9시간 어긋남). 바꾸려면 settings.yaml ops.runtime.lib_env(S7e2 — 옛 --env-file)
@@ -195,7 +197,7 @@ ARG VCS_REF=
 RUN echo "data-pipeline-runtime ${APP_VERSION:-?} ${VCS_REF:-?}" > /app/docker/image_ref   # op-06 — 실행 기록에 남길 이미지 판
 LABEL org.opencontainers.image.version=$APP_VERSION org.opencontainers.image.revision=$VCS_REF org.opencontainers.image.title=data-pipeline-runtime
 USER rag
-VOLUME ["/app/output"]
+# 결과·root 홈은 코드 폴더 안 output/·home/ 한 곳(/app/output은 그리로 가는 바로가기, root 홈 = /app/deploy/home) — VOLUME 없음
 # dev_entry.sh: `devbox`면 SSH 작업 공간, 그 밖은 APP_ENTRY(이 이미지의 시작 스크립트)로 그대로. tini -s — --init 없이 띄워도 고아 프로세스를 거둠
 ENV APP_ENTRY=/app/docker/runtime_entry.sh
 ENTRYPOINT ["/usr/bin/tini", "-s", "--", "/etc/devbox/dev_entry.sh"]

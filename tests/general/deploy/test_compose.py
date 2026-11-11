@@ -8,7 +8,7 @@ from common.core.paths import DEPLOY_ROOT
 
 COMPOSE = DEPLOY_ROOT / "deploy" / "host" / "compose"
 HEALTH = ["CMD", "python", "-m", "pipeline.run_mcp_parsing", "--health"]
-JOBS = ":/app/output/_mcp_parse/jobs:z"  # parse_document 업로드·결과(검색 MCP는 결과가 읽기 전용이라 이 폴더만 쓰기)
+JOBS = ":/app/deploy/output/_mcp_parse/jobs:z"  # parse_document 업로드·결과(검색 MCP는 결과가 읽기 전용이라 이 폴더만 쓰기)
 
 # 파일 → (묶음 이름, 재시작 정책(None = 없음), {서비스: (이미지 앞부분, 명령, 포트)})
 # 서버(dev·prd)는 서버 네트워크 그대로(network_mode: host) — 포트 칸 대신 SSH_PORT(문자열, SSH 없으면 None)
@@ -75,7 +75,7 @@ def test_compose_files():
             if f == "compose-prd.yml" and name != "mcp-data-parsing-0":  # 구운 이미지 ENTRYPOINT를 작업 공간(SSH)으로
                 assert s["entrypoint"][-1] == "/etc/devbox/dev_entry.sh" and s["environment"]["APP_ENTRY"] == "/app/docker/entrypoint.sh"
             if f == "compose-prd.yml":
-                assert not any(":/app/deploy" in v for v in vols), (name, vols)  # 코드는 이미지 안
+                assert not any(":/app/deploy:" in v for v in vols), (name, vols)  # 코드는 이미지 안(결과만 /app/deploy/output에)
 
 
 def test_secret_env():

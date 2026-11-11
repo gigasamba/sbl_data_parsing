@@ -1,25 +1,14 @@
-# 운영 서버 묶음: 0번 data-pipeline + 검색 MCP mcp-server + parse_document 작업 컨테이너 mcp-data-parsing을 한 파일로 띄운다. 포트·네트워크는 compose-dev.yml과 같다.
-#   PG(compose-pgvector.yml)·Redis(compose-redis.yml)는 따로 한 번 띄운다(코드 폴더 맨 위 .env의 비밀번호로). 준비·접속 순서: docs/operations/server-guide.md §6-6
-#   띄우기: bash deploy/host/scripts/host_ctl.sh up -d [서비스…](운영 폴더 settings.yaml required.env.run_env = prd면 이 파일)     내리기: … down
-#   이미지 = 개발 서버에서 구운 코드가 든 이미지(data-pipeline:<판> · mcp-server:<판> — server-guide §0-3, edw_chain.yaml 포함) — 코드 폴더를 붙이지 않는다.
-#   컨테이너는 모두 root로 뜬다. SSH 컨테이너(data-pipeline-0·mcp-server-0)는 root 비밀번호 SSH를 연다(비밀번호 = 이미지에 넣은 값).
-#   실행 환경은 settings.yaml required.env.run_env(prd) — dev·prd가 아니면 SSH 컨테이너가 시작을 거부한다. 재시작 정책 always.
-#   바꿀 자리: PRD_DIR(운영 폴더 — 기본 /home/sbl/sbl_data_parsing-main: settings.yaml·output/·home/) · IMAGE_TAG(굽기 판 = 코드 VERSION)
-#     · DOC_SRC(원본 문서 폴더 — host_ctl.sh가 settings.yaml required.deploy.host_docs_dir에서 냄) — 셸 env나 이 파일 옆 .env
-#     컨테이너마다 SSH_PORT·cpus·mem_limit·memswap_limit(메모리+스왑 합 — 같으면 스왑 안 씀)는 아래 각 칸에 직접 적는다.
-#   네트워크: 서버 네트워크 그대로(network_mode: host) — SSH는 SSH_PORT(8020·8050)로 연다. PG(5433)·Redis(8010)·모델은 settings.yaml에 적은 <서버 IP>.
-#   검색 MCP: settings.yaml search.server — mcp_bind_host <서버 IP>(0.0.0.0 금지) · mcp_port 8051 · required.tokens.mcp_token.
-name: sbl-prd                                 # compose 묶음 이름
+# 운영 서버 — 구운 이미지(코드 포함). 띄우기: bash deploy/host/scripts/host_ctl.sh up -d [서비스…]
+name: sbl-prd
 x-prd: &prd
   restart: always
-  network_mode: host                          # 서버 네트워크 그대로(포트 연결 없음)
+  network_mode: host
   init: true
-  user: "0"                                   # root — 운영 폴더에 쓰는 파일도 root 소유가 됨
-  extra_hosts: ["host.docker.internal:host-gateway"]   # 옛 설정(host.docker.internal)도 서버 자신으로 — 새 설정은 <서버 IP>
+  user: "0"
+  extra_hosts: ["host.docker.internal:host-gateway"]
   pids_limit: 4096
   logging:
     options: {max-size: "50m", max-file: "3"}
-# 구운 이미지의 ENTRYPOINT는 entrypoint.sh — SSH 컨테이너는 작업 공간(dev_entry.sh)으로 바꾸고, 앱 명령은 entrypoint.sh로 넘긴다
 x-ssh: &ssh
   <<: *prd
   entrypoint: ["/usr/bin/tini", "-s", "--", "/etc/devbox/dev_entry.sh"]
@@ -33,31 +22,28 @@ services:
     environment: {SSH_PORT: "8020", SETTINGS_FILE: /etc/rag/settings.yaml, APP_ENTRY: /app/docker/entrypoint.sh}
     volumes:
       - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/settings.yaml:/etc/rag/settings.yaml:ro,z
-      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/output:/app/output:z
-      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/home:/root:z                # root 홈 — SSH 호스트 열쇠·작업 기록
+      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/output:/app/deploy/output:z
+      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/home:/app/deploy/home:z
       - ${DOC_SRC:-/data/docs}:/data/docs:ro,z
     cpus: 4
     mem_limit: 12g
     memswap_limit: 16g
 
-  # 검색 MCP — `devbox mcp` = sshd + MCP 서버(mcp_keepalive.sh가 /health로 확인해 다시 시작). 결과는 읽기 전용(parse_document 작업 폴더만 쓰기).
   mcp-server-0:
     <<: *ssh
     image: mcp-server:${IMAGE_TAG:-0.4.0}
     container_name: mcp-server-0
-    command: ["devbox", "mcp", "--set", "MCP_PORT=8051"]   # HTTP 8051 고정 · 바인드 주소는 settings.yaml mcp_bind_host(서버 IP)
+    command: ["devbox", "mcp", "--set", "MCP_PORT=8051"]
     environment: {SSH_PORT: "8050", SETTINGS_FILE: /etc/rag/settings.yaml, APP_ENTRY: /app/docker/entrypoint.sh}
     volumes:
       - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/settings.yaml:/etc/rag/settings.yaml:ro,z
-      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/output:/app/output:ro,z
-      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/output/_mcp_parse/jobs:/app/output/_mcp_parse/jobs:z   # parse_document 업로드·결과
-      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/home/mcp:/root:z
+      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/output:/app/deploy/output:ro,z
+      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/output/_mcp_parse/jobs:/app/deploy/output/_mcp_parse/jobs:z
+      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/home/mcp:/app/deploy/home:z
     cpus: 3
     mem_limit: 12g
     memswap_limit: 12g
 
-  # parse_document 작업 컨테이너 — Redis 소비자(pipeline.run_mcp_parsing)가 주 프로세스. SSH 없음(이미지 ENTRYPOINT entrypoint.sh 그대로).
-  #   CPU 나눔 비율은 data-pipeline(1024)의 4배. 4 CPU = worker 2 × 엔진 2.
   mcp-data-parsing-0:
     <<: *prd
     image: data-pipeline:${IMAGE_TAG:-0.4.0}
@@ -66,14 +52,14 @@ services:
     environment: {SETTINGS_FILE: /etc/rag/settings.yaml}
     volumes:
       - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/settings.yaml:/etc/rag/settings.yaml:ro,z
-      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/output:/app/output:z
+      - ${PRD_DIR:-/home/sbl/sbl_data_parsing-main}/output:/app/deploy/output:z
       - ${DOC_SRC:-/data/docs}:/data/docs:ro,z
     cpus: 4
     cpu_shares: 4096
     mem_limit: 12g
     memswap_limit: 12g
     pids_limit: 1024
-    healthcheck:                               # Redis PING + 이 컨테이너 소비자 heartbeat
+    healthcheck:
       test: ["CMD", "python", "-m", "pipeline.run_mcp_parsing", "--health"]
       interval: 15s
       timeout: 15s

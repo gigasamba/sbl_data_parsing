@@ -84,12 +84,13 @@ if [ "$RUNTIME" = 1 ]; then
   chmod -R u=rwX,go=rX "$CODE_DIR"
   mkdir -p "$(dirname "$CODE_OUT")"
   tar -czf - -C "$CODE_DIR" . > "$CODE_OUT"   # 표준 출력으로(Windows 경로 C:/…를 tar가 원격 호스트로 읽지 않게)
+  mkdir -p "$CODE_DIR/output"   # 판정 때 임시 결과 자리(--tmpfs)를 붙일 빈 폴더 — 묶음에는 안 들어감
   # 맨 위 폴더 755 + 모든 항목 모두가 읽기(head로 자르지 않음 — pipefail에서 tar가 SIGPIPE로 실패함)
   bad=$(tar -tvzf - < "$CODE_OUT" | awk 'NR==1 && $1 != "drwxr-xr-x" {print "맨위폴더 " $1} $1 !~ /^.r..r..r/ {print $NF}')
   [ -z "$bad" ] || { echo "[오류] 코드 폴더 묶음 권한 — 컨테이너 사용자 10001이 못 읽음: $bad"; exit 1; }
   echo "[코드 폴더 묶음] $CODE_OUT ($(du -h "$CODE_OUT" | cut -f1)) — 서버의 벌 폴더(sbl_data_parsing-main-<번호>)로 풂(server-guide.md §4-5 — op-13)"
   export MSYS_NO_PATHCONV=1   # Windows Git Bash가 -v 인자를 바꾸지 않게
-  RUN_ARGS="-v $(cygpath -m "$CODE_DIR" 2>/dev/null || echo "$CODE_DIR"):$APP_CODE_ROOT:ro"
+  RUN_ARGS="-v $(cygpath -m "$CODE_DIR" 2>/dev/null || echo "$CODE_DIR"):$APP_CODE_ROOT:ro --tmpfs $APP_CODE_ROOT/output:mode=1777"   # 코드 읽기 전용 — 결과(/app/output)는 임시 자리
 fi
 # 판정 시험의 DB 사례는 PG에 붙는다(e2-22): 설정 파일(SETTINGS_FILE 또는 루트 settings.yaml)·RUN_ENV를 주고 host 네트워크로(상주 compose와 같게).
 #   PC BUILD_ONLY: Docker Desktop 컨테이너의 127.0.0.1은 PC가 아님 — PG 주소만 host.docker.internal로 덮음(--set).
@@ -124,8 +125,8 @@ R_ARGS=""
 if [ "$RUNTIME" = 1 ]; then   # 판정용 코드 폴더를 같이 보내 붙임
   rsync --partial "$CODE_OUT" "$TARGET:$REMOTE_DIR/" 2>/dev/null || scp "$CODE_OUT" "$TARGET:$REMOTE_DIR/"
   RCODE="$REMOTE_DIR/code-$APP_VERSION-$VCS_REF"
-  ssh "$TARGET" "rm -rf $RCODE && mkdir -p $RCODE && tar -xzf $REMOTE_DIR/$(basename "$CODE_OUT") --no-same-owner -C $RCODE"
-  R_ARGS="-v $RCODE:$APP_CODE_ROOT:ro,z"
+  ssh "$TARGET" "rm -rf $RCODE && mkdir -p $RCODE && tar -xzf $REMOTE_DIR/$(basename "$CODE_OUT") --no-same-owner -C $RCODE && mkdir -p $RCODE/output"
+  R_ARGS="-v $RCODE:$APP_CODE_ROOT:ro,z --tmpfs $APP_CODE_ROOT/output:mode=1777"
 fi
 ssh "$TARGET" "$REMOTE_DOCKER run --rm $R_ARGS $TAG resources"
 bash deploy/release/selftest_gate.sh ssh "$TARGET" "$REMOTE_DOCKER run --rm --network host -v $REMOTE_SETTINGS_FILE:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=$REMOTE_RUN_ENV $R_ARGS $TAG selftest"

@@ -2,7 +2,7 @@
 # 문서 파이프라인 이미지 진입점 — 실행 전 점검(자원·연결·쓰기 권한·시간대) 뒤 명령을 실행한다.
 # 코드는 /app/deploy(PYTHONPATH) — 명령은 모두 `python -m <패키지>.<이름>`으로 부른다.
 #   docker run --rm --init -v <settings.yaml>:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=<dev|prd> \
-#     -v <원본>:/data/docs:ro -v <결과>:/app/output data-pipeline:<버전> <명령>
+#     -v <원본>:/data/docs:ro -v <결과>:/app/deploy/output data-pipeline:<버전> <명령>   (/app/output = 그리로 가는 바로가기)
 # 명령: help · check · resources · services · check-modules · tool <이름> [인자] · mcp ·
 #       ask --q …  (서버 입구는 run_pipeline 하나)
 #
@@ -30,7 +30,7 @@ echo "[code] 판 ${_code_ver:-?} · 커밋 ${_code_commit}" >&2
 preflight() {
   echo "[점검] $(date '+%F %T %Z') · 시간대 ${TZ:-?} · 사용자 $(id -un)"
   python -m common.core.resources
-  [ -w /app/output ] || { echo "[오류] /app/output 쓰기 불가 — -v <결과폴더>:/app/output 와 그 폴더 소유자(UID 10001) 확인"; exit 2; }
+  [ -w /app/output ] || { echo "[오류] /app/output(= /app/deploy/output) 쓰기 불가 — 코드 폴더의 output/ 또는 -v <결과폴더>:/app/deploy/output 와 그 폴더 소유자(UID 10001) 확인"; exit 2; }
   [ -z "${DOC_DIR:-}" ] || [ -d "$DOC_DIR" ] || echo "[경고] 원본 폴더 ${DOC_DIR} 없음 — -v <원본>:${DOC_DIR}:ro"   # mcp 이미지는 DOC_DIR 없음
   if [ -n "${PG_HOST:-}" ] && { [ "$PG_HOST" = "127.0.0.1" ] || [ "$PG_HOST" = "localhost" ]; } && [ "${NETWORK_HOST:-0}" != "1" ]; then
     echo "[경고] 컨테이너 안의 PG_HOST=$PG_HOST 는 컨테이너 자신 — 호스트의 PostgreSQL이면 --network host(+NETWORK_HOST=1) 또는 PG_HOST=<서버 IP>/host.docker.internal"

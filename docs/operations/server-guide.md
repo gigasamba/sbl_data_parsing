@@ -152,7 +152,7 @@ bash deploy/host/scripts/host_ctl.sh up -d            # settings.yaml run_env: d
 bash deploy/host/scripts/host_ctl.sh ps               # 기대: data-pipeline-0~4 · mcp-server-0 · mcp-data-parsing-0 Up
 ```
 - 하나만 띄울 때는 서비스 이름을 적는다(예 `host_ctl.sh up -d data-pipeline-1`). 어느 벌 폴더에서 불러도 같은 `compose-dev.yml`이다(벌 폴더 자리는 `SBL_ROOT` — 기본 `/home/sbl`).
-- 붙는 것: 벌 폴더 전체 → `/app/deploy`(쓰기 가능 — 코드·`edw_chain.yaml`), 그 안 `settings.yaml`만 다시 읽기 전용, `output/` → `/app/output`, `home/` → `/root`(root 홈), 원본 문서 폴더 → `/data/docs`(읽기만 — `DOC_SRC`, `host_ctl.sh`가 settings.yaml `required.deploy.host_docs_dir`에서 냄). 검색 MCP는 `output/`을 읽기 전용으로, `output/_mcp_parse/jobs`만 쓰기 가능으로 붙인다.
+- 붙는 것: 벌 폴더 전체 → `/app/deploy`(쓰기 가능 — 코드·`settings.yaml`·`edw_chain.yaml`), 결과는 그 안 `output/` 한 곳(이미지의 `/app/output`은 `/app/deploy/output`으로 가는 바로가기 — 따로 붙이지 않음), root 홈은 그 안 `home/`(이미지의 root 홈 = `/app/deploy/home` — 따로 붙이지 않음), 원본 문서 폴더 → `/data/docs`(읽기만 — `DOC_SRC`, `host_ctl.sh`가 settings.yaml `required.deploy.host_docs_dir`에서 냄). 검색 MCP는 `output/`을 같은 자리에 읽기 전용으로 다시, `output/_mcp_parse/jobs`만 쓰기 가능으로 붙인다.
 - 컨테이너는 서버 네트워크를 그대로 쓴다 — 서버의 PG(5433)·Redis(8010)·모델은 settings.yaml에 적은 `<서버 IP>`로 붙는다.
 
 **③ 점검**
@@ -165,7 +165,7 @@ docker exec data-pipeline-0 bash $E tool ping_models        # 모델 주소 연�
 docker exec data-pipeline-0 bash $E migrate check --target all   # DB 표 판이 끝 판
 bash deploy/release/selftest_gate.sh docker run --rm --network host \
   -v $B/settings.yaml:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=dev \
-  -v $B:/app/deploy:ro,z data-pipeline-runtime:<이미지 판> selftest   # 예 <이미지 판> = 0.3.0 · 기대: [판정] 통과
+  -v $B:/app/deploy:ro,z --tmpfs /app/deploy/output:mode=1777 data-pipeline-runtime:<이미지 판> selftest   # 예 <이미지 판> = 0.3.0 · 기대: [판정] 통과
 ```
 
 **④ 검색·MCP 기능 시험**
@@ -514,9 +514,9 @@ bash deploy/host/scripts/pipe_exec.sh check           # 자원·쓰기 권한·�
 
 이미지 점검(손으로):
 ```bash
-$DOCKER run --rm -v "$PWD:/app/deploy:ro,z" data-pipeline-runtime:<판> check-modules
-bash deploy/release/selftest_gate.sh $DOCKER run --rm --network host -v "$PWD/settings.yaml:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=dev -v "$PWD:/app/deploy:ro,z" data-pipeline-runtime:<판> selftest   # 기대: [판정] 통과 — FAIL 0
-bash deploy/release/selftest_gate.sh $DOCKER run --rm --network host -v "$PWD/settings.yaml:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=dev -v "$PWD:/app/deploy:ro,z" mcp-server-runtime:<판> selftest      # 기대: [판정] 통과 — FAIL 0
+$DOCKER run --rm -v "$PWD:/app/deploy:ro,z" --tmpfs /app/deploy/output:mode=1777 data-pipeline-runtime:<판> check-modules
+bash deploy/release/selftest_gate.sh $DOCKER run --rm --network host -v "$PWD/settings.yaml:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=dev -v "$PWD:/app/deploy:ro,z" --tmpfs /app/deploy/output:mode=1777 data-pipeline-runtime:<판> selftest   # 기대: [판정] 통과 — FAIL 0
+bash deploy/release/selftest_gate.sh $DOCKER run --rm --network host -v "$PWD/settings.yaml:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=dev -v "$PWD:/app/deploy:ro,z" --tmpfs /app/deploy/output:mode=1777 mcp-server-runtime:<판> selftest      # 기대: [판정] 통과 — FAIL 0
 ```
 selftest는 종료 코드가 아니라 `[판정]` 줄로 판정한다([§5-5](#5-5-배포-판정--selftest)). 운영 서버(구운 이미지)는 `-v "$PWD:/app/deploy…"` 없이 `data-pipeline:<판>`·`mcp-server:<판>`, `RUN_ENV=prd`.
 
@@ -839,7 +839,7 @@ systemctl list-timers 'data-pipeline-nightly*' 'mcp-server-keepalive*'
 ### 2-13. 개발 작업 공간 — SSH·opencode(선택)
 
 - 개발·운영 서버의 앱 컨테이너(`data-pipeline-*`·`mcp-server-0`)는 늘 SSH 작업 공간(명령 `devbox` — sshd)으로 뜬다. 사용자는 root, 비밀번호는 이미지에 넣은 값이다([§6-6](#6-6-서버-묶음--compose-파일과-root-ssh)). 작업 컨테이너 `mcp-data-parsing-0`은 SSH가 없다. PC(`compose-local.yml`)는 SSH를 열지 않는다.
-- 접속: `ssh -p 8020 root@<서버>`(벌 0) · `ssh -p 8021 root@<서버>`(벌 1) → `cd /app/deploy`(벌 폴더 — 쓰기 가능, `settings.yaml`만 읽기 전용). 홈 `/root` = `<벌 폴더>/home`(SSH 호스트 열쇠·git 계정·작업 기록 — 컨테이너를 다시 만들어도 남음). 열쇠 로그인을 쓰려면 `<벌 폴더>/home/.ssh/authorized_keys`에 내 공개 열쇠를 둔다(폴더 700 · 파일 600).
+- 접속: `ssh -p 8020 root@<서버>`(벌 0) · `ssh -p 8021 root@<서버>`(벌 1) → `cd /app/deploy`(벌 폴더 — 쓰기 가능, `settings.yaml` 포함). 홈 `/app/deploy/home` = `<벌 폴더>/home`(SSH 호스트 열쇠·git 계정·작업 기록 — 컨테이너를 다시 만들어도 남음). 열쇠 로그인을 쓰려면 `<벌 폴더>/home/.ssh/authorized_keys`에 내 공개 열쇠를 둔다(폴더 700 · 파일 600).
 - 이미지에는 개발 도구(sshd·git·uv·ruff·mypy·pytest·ripgrep·sqlite3·tmux·vim 등)와 opencode(이미지를 만들 때 `assets/opencode/opencode`가 있으면)가 들어 있다. 앱은 이 도구를 쓰지 않는다.
 - 저장소 루트 `opencode.jsonc`는 opencode 프로젝트 설정 자리다 — 외부망에는 빈 틀(`{}`)만 있고, 내부망 gitea에서 모델 주소·이름을 채워 커밋한다(키는 적지 않음 — 아래 `INTERNAL_LLM_API_KEY`). 외부망 새 판을 들여올 때 덮지 않는다([§6-1](#6-1-저장소-처음-만들기--관리자가-한-번) ⑥ `--exclude opencode.jsonc`).
 - opencode는 내부망 모델만 쓴다(외부 모델 목록 받기·자동 업데이트 끔). 첫 시작에 홈의 `~/.config/opencode/opencode.json`에 틀이 복사되니 모델 주소(`baseURL` — OpenAI 호환 `/v1`)·이름(`<model id>` 두 곳)을 채운다. 키가 필요한 모델이면 SSH 셸에서 `export INTERNAL_LLM_API_KEY=<키>`(틀이 이 env를 읽음 — 컨테이너 env·settings.yaml에는 넣지 않는다).
@@ -1750,7 +1750,7 @@ bash deploy/host/scripts/pipe_exec.sh migrate check --target applog           # 
 
 - 이미지 시작 스크립트(`entrypoint.sh`)는 다른 이미지의 명령을 종료 64로 거부한다(맞는 이미지를 알려 줌). data-pipeline: `parse`·`publish`·`show-stack`·`idle`·`migrate`·`run-mcp-parsing` · mcp-server: `mcp`·`ask`·`show-stack`. 어느 이미지에서나: `help`·`check`·`resources`·`services`·`check-modules`·`tool <이름> [인자]`·`selftest`.
 - **코드 폴더** = 코드 zip(또는 코드 묶음)을 푼 폴더(저장소 트리 그대로)를 벌 폴더 이름으로 바꾼 것(예 `/home/sbl/sbl_data_parsing-main-0` — 이름 끝 `-<숫자>`가 벌 번호, §2-1). **루트** = 코드 폴더 자체 — 호스트 스크립트는 자기 자리에서 루트를 구해 `<루트>/settings.yaml`·`<루트>/output/`을 쓴다. 사람·systemd는 코드 폴더에서 `bash deploy/host/scripts/…`를 부른다.
-- 개발 서버는 실행 이미지(`*-runtime`)에 벌 폴더를 `/app/deploy`에 붙인다(`compose-dev.yml` — 쓰기 가능, `settings.yaml`만 읽기 전용). 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2) — 실행 이미지 판은 `BUILD.txt`의 `DEPS_HASH`가 코드의 `deploy/docker/DEPS_HASH`와 같은 판을 쓴다. 운영 서버는 개발 서버에서 구운 코드가 든 이미지(§5-4)를 마운트 없이 쓴다.
+- 개발 서버는 실행 이미지(`*-runtime`)에 벌 폴더를 `/app/deploy`에 붙인다(`compose-dev.yml` — 쓰기 가능, `settings.yaml` 포함). 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2) — 실행 이미지 판은 `BUILD.txt`의 `DEPS_HASH`가 코드의 `deploy/docker/DEPS_HASH`와 같은 판을 쓴다. 운영 서버는 개발 서버에서 구운 코드가 든 이미지(§5-4)를 마운트 없이 쓴다.
 - **코드 폴더만으로 못 바꾸는 것**(바꾸면 새 실행 이미지 버전): `deploy/docker/requirements*.txt`·`Dockerfile`·`wheels/`·시스템 패키지·`assets/` 모델 파일. 시작할 때 코드의 `deploy/docker/DEPS_HASH`(requirements 두 파일의 지문)가 이미지 지문과 다르면 컨테이너가 멈춘다. 휠·Dockerfile·assets만 바뀐 경우는 자동으로 막지 않으니 사람이 판을 올려 새로 빌드한다.
 
 ### 5-2. 버전
@@ -1977,7 +1977,7 @@ chmod 700 $B/home/.ssh && chmod 600 $B/home/.ssh/authorized_keys
 ```
 **④ 띄우기** — SSH 작업 공간(코드 쓰기 가능)으로:
 ```bash
-bash deploy/host/scripts/host_ctl.sh up -d data-pipeline-1   # compose-dev.yml의 칸 — 벌 폴더를 /app/deploy에 쓰기 가능으로(settings.yaml만 읽기 전용)
+bash deploy/host/scripts/host_ctl.sh up -d data-pipeline-1   # compose-dev.yml의 칸 — 벌 폴더를 /app/deploy에 쓰기 가능으로(settings.yaml 포함)
 ```
 
 **⑤ 첫 확인** — git 셸 (가):
