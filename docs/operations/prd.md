@@ -35,17 +35,15 @@ cd $B && bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>
 SSH를 쓰면 개발 홈 묶음을 `$P/home`과 `$P/home/mcp`에 푼다([dev.md A-3](dev.md#a-3-개발-홈-묶음-풀기컨테이너-띄우기-전)).
 
 ## 4. 설정 채우기
-`$B/settings.yaml`의 빈 칸을 채운다(`required.env.run_env: prd` · SSH root 비밀번호 `option.devbox.root_password` — 컨테이너 이름 칸 `ops.host.*_container`는 비워 둠). 확인:
+`$B/settings.yaml`의 빈 칸을 채운다(`required.env.run_env: prd` — 컨테이너 이름 칸 `ops.host.*_container`는 비워 둠). 비밀번호는 `$B/deploy/host/compose/compose-prd.yml`의 `null` 칸에 직접 적는다(서버 사본에서만 — 값의 `$`는 `$$`): `configs.root_pw.content`(SSH root, 8자 이상) · `pgvector`의 `POSTGRES_DB`·`POSTGRES_USER`·`POSTGRES_PASSWORD` · `redis`의 `REDIS_PASSWORD`(PG·Redis는 settings.yaml과 같은 값). `chmod 600 deploy/host/compose/compose-prd.yml`. 확인:
 ```bash
 bash deploy/host/scripts/host_ctl.sh config --quiet && echo 설정 OK
 ```
 
 ## 5. PG·Redis(처음)
 ```bash
-vi .env && chmod 600 .env       # PG_USER · PG_DB · PG_PASSWORD · REDIS_PASSWORD — settings.yaml과 같은 값
 mkdir -p /data/pg/pipeline /data/redis
-docker compose --env-file .env -f deploy/host/compose/compose-pgvector.yml up -d   # DB 담당이 따로 둔 PG면 건너뜀
-docker compose --env-file .env -f deploy/host/compose/compose-redis.yml up -d
+bash deploy/host/scripts/host_ctl.sh --profile db up -d pgvector redis   # compose-prd.yml의 프로필 db · DB 담당이 따로 둔 PG면 redis만
 until docker exec pgvector pg_isready -h 127.0.0.1 -U <계정> -d <DB>; do sleep 1; done
 docker exec pgvector psql -U <계정> -d <DB> -c 'CREATE EXTENSION IF NOT EXISTS vector'
 ```
@@ -59,7 +57,7 @@ docker exec pgvector psql -U <계정> -d <DB> -c 'CREATE EXTENSION IF NOT EXISTS
 | ② 폴더 준비 | `mkdir -p app/output/_mcp_parse/jobs home/mcp` |
 | ③ DB 판 올리기 | `docker run --rm --network host … data-pipeline:<VERSION> migrate up --target all [인자…]` |
 | ④ 컨테이너 3개 띄우기 | `host_ctl.sh up -d --force-recreate` |
-| ⑤ 배포 뒤 점검 | `host_ctl.sh check` — .env 일치 · check_env · ping_models · migrate check · 두 이미지 selftest · 검색 MCP /health |
+| ⑤ 배포 뒤 점검 | `host_ctl.sh check` — check_env · ping_models · migrate check · 두 이미지 selftest · 검색 MCP /health |
 
 ```bash
 cd $B && bash deploy/release/promote.sh <VERSION> $S/sbl_images --dim <임베딩 차원>   # --dim은 처음만
@@ -122,13 +120,14 @@ docker exec -i pgvector pg_restore -l < "$BK/pg.dump" | grep -c ' TABLE '   # �
 ### U-2. 새 굽기 결과 옮기기
 1·2를 새 판으로.
 
-### U-3. 운영 app 덮어쓰기(설정·결과·.env·진행 기록은 그대로)
+### U-3. 운영 app 덮어쓰기(설정·결과·진행 기록은 그대로, 채운 compose는 다시 채움)
 ```bash
-T=deploy/host/scripts/test_space
-{ [ ! -d "$B/$T" ] || mv "$B/$T" "$P/test_space.keep"; } &&
-  find "$B" -mindepth 1 -maxdepth 1 ! -name output ! -name "settings*" ! -name .env -exec rm -rf {} + &&
+T=deploy/host/scripts/test_space; C=deploy/host/compose/compose-prd.yml
+{ [ ! -d "$B/$T" ] || mv "$B/$T" "$P/test_space.keep"; } && cp -p "$B/$C" "$P/compose.keep.yml" &&   # 채운 비밀번호 보관
+  find "$B" -mindepth 1 -maxdepth 1 ! -name output ! -name "settings*" -exec rm -rf {} + &&
   tar -xzf $S/code-<새 VERSION>-<커밋>.tar.gz --no-same-owner -C "$B" &&
   { [ ! -d "$P/test_space.keep" ] || mv "$P/test_space.keep" "$B/$T"; }
+vi "$B/$C" && chmod 600 "$B/$C" && rm "$P/compose.keep.yml"   # 새 판 파일의 null 칸을 compose.keep.yml의 값으로 다시 채움
 cd $B && bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>
 ```
 

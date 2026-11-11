@@ -74,9 +74,9 @@ common:
     edw:
       edw_extra_connect_args: null            # EDW pymssql 추가 인자 JSON · 예 {"login_timeout": 10} (null = 추가 인자 없음) [비밀]
     redis:
-      redis_host: host.docker.internal        # parse_document Redis 주소 · 컨테이너에서 서버 자신(compose-redis.yml)
-      redis_port: 8010                        # Redis 포트 · 서버마다 하나(compose-redis.yml이 8010에 연다) · 정수
-      redis_password: null                    # Redis 비밀번호(필수 — 서버마다 채움 · .env의 REDIS_PASSWORD와 같은 값) · 예 서버에서 openssl rand -hex 32를 실행해 나온 64자 [비밀]
+      redis_host: host.docker.internal        # parse_document Redis 주소 · 컨테이너에서 서버 자신(compose 파일의 redis)
+      redis_port: 8010                        # Redis 포트 · 서버마다 하나(compose 파일의 redis가 8010에 연다) · 정수
+      redis_password: null                    # Redis 비밀번호(필수 — 서버마다 채움 · compose 파일 redis의 REDIS_PASSWORD와 같은 값) · 예 서버에서 openssl rand -hex 32를 실행해 나온 64자 [비밀]
       redis_db: 0                             # Redis 데이터베이스 번호 · 정수 0 이상
       redis_key_prefix: mcp_parse             # Redis 키 접두 · 설정값 그대로(서버당 한 벌)
   # ---- 모델 호출 — 임베딩·LLM·VLM ----
@@ -431,4 +431,3 @@ option:
   devbox:
     git_user_name: null                       # git 커밋 이름(user.name) · 예 홍길동 (null = 설정 안 함)
     git_user_email: null                      # git 커밋 메일(user.email) · 예 hong@corp.local (null = 설정 안 함)
-    root_password: null                       # SSH 컨테이너 root 비밀번호(dev·prd 필수 — 8자 이상, 한 벌의 compose가 모든 SSH 컨테이너에 같은 값) [비밀]

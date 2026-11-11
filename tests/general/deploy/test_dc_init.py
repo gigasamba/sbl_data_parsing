@@ -115,7 +115,7 @@ esac
 CHECK_CASES = [
     ("", "", "", 0, "[host_ctl check] 통과 — 5개", None),  # dev 벌 — 검색 MCP 없음
     ("", "", "", 0, "[host_ctl check] 통과 — 7개", None, "prd"),
-    (".env 일치", "", "", 1, "[host_ctl check] 실패 — .env 일치:", "── check_env"),  # .env가 settings.yaml과 다르면 첫 단계에서 멈춤
+    ("check_env", "", "", 1, "[host_ctl check] 실패 — check_env:", "── ping_models"),  # 첫 단계에서 멈춤
     ("migrate check", "", "", 1, "[host_ctl check] 실패 — migrate check:", "── selftest data-pipeline"),
     (
         "",

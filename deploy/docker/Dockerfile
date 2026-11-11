@@ -51,7 +51,7 @@ COPY --from=src /src/opencode/ /usr/local/bin/
 COPY deploy/docker/devbox/ /etc/devbox/
 RUN sed -i 's/\r$//' /etc/devbox/* && chmod 755 /etc/devbox/dev_entry.sh && ln -s /etc/devbox/profile.sh /etc/profile.d/zz-devbox.sh
 # Image root password (user exception): BuildKit secret `--secret id=root_pw,src=<file outside git>` — first line.
-#   Not in the repo or `docker history`; the hash stays in /etc/shadow. Optional — servers give it at start instead: settings.yaml option.devbox.root_password → compose secret /run/secrets/root_pw (dev_entry.sh), which wins.
+#   Not in the repo or `docker history`; the hash stays in /etc/shadow. Optional — servers give it at start instead: compose configs.root_pw → /run/secrets/root_pw (dev_entry.sh), which wins.
 RUN --mount=type=secret,id=root_pw,required=false \
     if [ -s /run/secrets/root_pw ]; then head -n1 /run/secrets/root_pw | tr -d '\r' | sed 's/^/root:/' | chpasswd; fi
 ENV OPENCODE_DISABLE_MODELS_FETCH=1 OPENCODE_DISABLE_AUTOUPDATE=1

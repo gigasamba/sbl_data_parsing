@@ -230,12 +230,10 @@ def _selftest_finish_keep():
     print("[selftest] finish — 처리 기록 + sha256 기록, 원본은 남김 통과")
 
 
-@pc.PIPE.env(SOURCE_SYSTEMS=None)  # 원천 목록 비움(운영 5개 원천) — 서버 설정의 source_systems에 기대지 않음
 def test_main():  # 옛 `if "--selftest" in sys.argv:` 갈래
     selftest()
 
 
-@pc.PIPE.env(SOURCE_SYSTEMS=None)  # 원천 목록 비움(운영 5개 원천) — 서버 설정의 source_systems에 기대지 않음
 def test_folder_tree():
     """F2(11-03 PC 시험) — 원천별 하위 폴더(`SFDC/<uuid>/<파일>`)면 평평한 폴더에 복사하고 manifest에 상대 키·원본 주소. 평평한 폴더는 그대로."""
     import tempfile
@@ -277,7 +275,6 @@ RERUN_CASES = [  # (실행마다 이번에 고르는 원본 키) — 같은 결�
 ]
 
 
-@pc.PIPE.env(SOURCE_SYSTEMS=None)  # 원천 목록 비움(운영 5개 원천) — 서버 설정의 source_systems에 기대지 않음
 def test_rerun_keeps_source():  # 용어집·고객 명부는 실 pgvector 임시 스키마의 마스터 표(e2-22)
     with pgcase.with_master():
         _rerun_keeps_source()
@@ -347,7 +344,6 @@ def _rerun_keeps_source():
             assert ST.source_of(d["source_system"]) != "other", d  # 적재가 _other에 넣지 않음
 
 
-@pc.PIPE.env(SOURCE_SYSTEMS=None)  # 원천 목록 비움(운영 5개 원천) — 서버 설정의 source_systems에 기대지 않음
 def test_stage_batch():  # 예외 기록(applog)은 실 pgvector 임시 스키마로(goldseed.gold — 서버 applog에 안 씀)
     from tests.server.pipeline.goldseed import gold
 

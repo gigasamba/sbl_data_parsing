@@ -103,7 +103,7 @@
 - 규칙: `parse_document` 작업 서비스는 전용 컨테이너 `mcp-data-parsing`(같은 이미지, entrypoint `run-mcp-parsing` = `pipeline.run_mcp_parsing`, Redis Streams 소비자). 자원 = compose 파일 `mcp-data-parsing-0` 칸 `cpus` 4·`mem_limit` 12g·`cpu_shares` 4096(일괄 `data-pipeline`은 1024). worker마다 엔진 기본 수는 max(1, min(2, CPU − 1))라 worker 2 × 엔진 2 = 총 4개다(사용자 결정 2026-11-09). 4 CPU 미만 호스트는 컨테이너 CPU 상한을 낮추고 worker마다 엔진 수를 1로 적는다. cpus는 예약이 아니라 상한이며, 4 vCPU 개발 서버에서 일괄 파싱·검색 MCP와 나눌 때 cpu_shares가 우선순위를 정한다. 결과 폴더를 붙인다. 검색 MCP는 `<결과 폴더>/_mcp_parse/jobs`에 업로드 파일·job.json을 쓰고 Redis HASH+active SET+STREAM에 한 트랜잭션으로 등록한다(#113). worker는 XREADGROUP(COUNT 1)으로 가져가 파싱하고 result-<attempts>.json을 쓴 뒤 완료 HASH+LIST+TTL+active 해제+XACK+XDEL을 한 트랜잭션으로 기록한다. 프록시는 BLPOP으로 즉시 깨어나며 1초 HTTP 폴링은 없다. `mcp_parse_workers`(기본 2, 허용 1~2)만큼 spawn 프로세스를 띄우고 죽은 자식은 주 프로세스가 재시작한다. heartbeat 없음 연속 30초 + idle 60초를 확인한 유실 소비자는 XCLAIM, 살아 있으나 멈춘 소비자는 (job_timeout+60)초 뒤 XAUTOCLAIM, 최대 3회 전달 뒤 포기한다. heartbeat(10초 갱신, TTL 30초)와 Redis PING으로 건강 상태를 확인한다. health는 컨테이너 로컬 supervisor 토큰에 해당하는 소비자만 확인한다. 미등록이 확실한 업로드만 정리하고, 수정 시간 기준 최근 10분 폴더는 active 등록 전에도 purge에서 보호한다. 죽으면 `restart`, 꺼지면 `mcp_keepalive.sh`(keepalive 타이머)가 띄운다. 일괄 엔진 자식은 nice +10.
 - 측정: 작업마다 새 `pipe_run(command=mcp_parse, args에 job_id)` 1건과 `pipe_event(stage=mcp_parse.job)` 1행을 남긴다. 파일 이름·확장자·바이트·동시 실행 수, `metrics.job_id`·`queue_wait_ms`·제출 때 앞 작업 수(`queue_position`)·mode·scan·빈 결과 note를 기록하고 자식 단계는 같은 run_id를 잇는다. 실패·시간 초과도 기록하며 worker는 다음 작업을 계속한다. `perf_report --mcp [--since 시간]`과 `mcp_log.result_keys.job_id` 조인으로 응답·대기·파싱 시간을 비교한다([서버 가이드 §3-4-1](../history/server-guide-0.4.md#3-4-1-mcp-파싱-작업-성능)).- parse_document 회수 보강(#177): 종료 확인·running 소유권 변경은 WATCH로 묶고, 시도별 `a<n>/`에서 파싱한 뒤 HASH의 `result_file` 이름으로 결과를 읽는다. heartbeat 없음 연속 30초 + idle 60초를 모두 확인한 소비자는 한 건씩 회수하며, 살아 있지만 멈춘 소비자는 기존 (job_timeout+60)초 XAUTOCLAIM으로 회수한다. 손상된 HASH는 failed로 끝내고 일반 worker 오류는 traceback으로 기록한다.
 - parse_document 빠른 거절·제출 복구(#177): worker가 확장자·허용 루트(설정 경로의 normpath와 resolve된 실제 경로 모두)·크기 정책을 시작 때와 10초 heartbeat마다 Redis에 TTL 120초로 공개한다. proxy는 정책이 있으면 확장자와 정규화한 절대경로를 폴더 생성 전에 검사한다(존재·실제 크기·심볼릭 링크는 worker가 검사). 정책이 없으면 제출한다. 제출 EXEC 응답이 유실되면 새 EXISTS로 등록 여부를 확인해 등록된 작업은 계속 기다리고, 미등록이 확실할 때만 폴더를 지운다. 확인도 실패하면 폴더를 보존하고 job_id와 연결 오류 끝에 “— 제출 여부 확인 불가(job_id로 수집 서버 담당자 확인)”를 반환한다. 제출 전 연결 실패에는 job_id를 붙이지 않는다.
-- Redis 비밀번호(#177·op-20): 코드 폴더 맨 위 `.env`의 `REDIS_PASSWORD`(settings.yaml과 같은 값 — 사람이 적음)로 `redis-server --requirepass`를 띄운다. 데이터는 /data(`REDIS_DATA`)에만 둔다. 비밀번호를 바꾸면 Redis를 다시 만들고 두 앱을 다시 시작한다. 인증 사람 검토는 C-117.
+- Redis 비밀번호(#177·op-20): compose 파일 `redis`의 `REDIS_PASSWORD` 칸(settings.yaml과 같은 값 — 서버 사본에서 채움)으로 `redis-server --requirepass`를 띄운다. 데이터는 /data(`REDIS_DATA`)에만 둔다. 비밀번호를 바꾸면 Redis를 다시 만들고 두 앱을 다시 시작한다. 인증 사람 검토는 C-117.
 
 
 - 파일: `common/store/redisq.py`, `mcp_server/services/parse_proxy.py`, `pipeline/run_mcp_parsing.py`, `deploy/host/compose/compose-{local,dev,prd,redis}.yml`, 호스트 `host_ctl.sh`·`mcp_keepalive.sh`·`settings_to_env.py`. Redis는 AOF everysec. 기동은 Redis → worker → MCP.
@@ -126,7 +126,7 @@
   3. 원본 받기는 한 길이다 — `python -m pipeline.extract.candidate_ready stage`가 문서를 `_staging/`(`extract.source.source_staging_dir`)에 한 번 받고, 같은 실행에서 바로 중복 제외(받은 파일 SHA-256 — 같은 묶음·gold에 끝난 다른 원본, pl-02)와 형식·DRM·암호·미지원 거르기(`filter_and_rotate`)를 이 순서로 한다. 살아남은 문서만 파싱하고, 파싱(`parse --staged`)은 받아 둔 파일만 읽는다 — 받지 못한 문서는 파싱 실패, 받기가 뺀 문서(중복·DRM·암호)는 건너뜀이고 받기가 `except_doc_info` `skip`에 쓴다(pl-24). DRM 문서는 표시만 하고 건너뛴다(처리 단계 없음). 회전은 기본 꺼짐 그대로다. 원본은 게시가 성공한 뒤 `drop_original()`만 지운다(pl-24).
   4. PC(`RUN_ENV=local`)도 같은 `run_pipeline`로 E2E를 돈다 — 가짜 대상만(EDW sqlite·`file://` 게시 폴더·상대 경로, op-14). PC만의 분기는 접속 대상을 고르는 한 곳이다.
   5. 커밋 전 점검 스크립트는 점검 도구 자리 `common/check/`에 있다(`.githooks/pre-commit`·CLAUDE.md §5-2·README가 그 경로를 부른다).
-  6. run_pipeline 한 번이 e2e다 — ① 사전 점검(설정 `checker env` → 모델 연결 `checker ping` → DB 판 `dbtool check --target all` → 배포 시험 `selftest_gate.sh … selftest`) → ② 문서 처리 → ③ 적재·검색 확인(적재까지 마친 문서 하나로 실행 기록 applog `pipe_run`·그 문서 `pipe_event` 1행+ → DB 검색 `search_ask` 근거 1건+ → 검색 MCP `mcp_smoke` — prd는 검색 컨테이너(`ops.host.mcp_container`) 안에서 · 적재 0건이면 하지 않음). 단계 순서대로, 첫 실패에서 멈추고, 끝에 `[판정] 통과|실패 — 이유 · 종료 코드` 한 줄을 남긴다. 종료 코드는 [pl-18](#pl-18)(마감·잠금은 `[판정] 멈춤`). 새벽 배치도 같은 run_pipeline을 부른다.
+  6. run_pipeline 한 번이 e2e다 — ① 사전 점검(설정 `checker env` → 모델 연결 `checker ping` → DB 판 `dbtool check --target all` → 배포 시험 `selftest_gate.sh … selftest`) → ② 문서 처리 → ③ 적재·검색 확인(적재까지 마친 문서 하나로 실행 기록 applog `pipe_run`·그 문서 `pipe_event` 1행+ → DB 검색 `search_ask` 근거 1건+ → 검색 MCP `mcp_smoke` — prd는 검색 컨테이너(`ops.host.mcp_container`) 안에서, 개발 벌은 운영 묶음 MCP가 DEV 원천을 검색하지 않아 DB 검색까지 · 적재 0건이면 하지 않음). 단계 순서대로, 첫 실패에서 멈추고, 끝에 `[판정] 통과|실패 — 이유 · 종료 코드` 한 줄을 남긴다. 종료 코드는 [pl-18](#pl-18)(마감·잠금은 `[판정] 멈춤`). 새벽 배치도 같은 run_pipeline을 부른다.
   7. 실행 자리: 개발 서버(dev)는 벌 컨테이너 안(`cd /app`)에서 명령을 바로 부르고, 운영 서버(prd)는 호스트에서 `ops.host.*_container` 컨테이너에 `docker exec`로 부른다. 그 밖의 자리(dev인데 컨테이너 밖)는 시작을 거부한다.
   8. 단계 켜기·건수는 settings.yaml `ops.run_pipeline.steps.steps_precheck`·`steps_verify`(기본 켜짐)·`ops.run_pipeline.run_limit`(사람 실행 기본 2건)이고, 명령 인자 `--limit N`·`--set RUN_PIPELINE_<칸>=값`이 설정보다 앞선다. 새벽 배치는 `--limit 0`(건수는 `--max-docs`).
 - 비고(현재와 다른 점):
@@ -328,7 +328,7 @@
 
 ### 정한 것
 1. 벌 폴더 = `/home/sbl/data_pipeline-<n>/{app,home}` — `app/` = 코드 폴더(`settings.yaml`·`output/`이 그 안), `home/` = root 홈([doc.md#op-13](doc.md#op-13)). `backup/`은 만들지 않는다. 공용 폴더(`/home/sbl/`)에는 이미지 폴더.
-2. `init`의 권한 정리(`a+rX`)는 settings.yaml·`.env`·output/을 건드리지 않는다(비밀값 파일 640 유지).
+2. `init`의 권한 정리(`a+rX`)는 settings.yaml·compose 파일(`deploy/host/compose` — 비밀번호)·output/을 건드리지 않는다.
 3. 판 올리기는 사람이 한다 — 새 zip을 풀어 벌의 `app/`에 덮어쓴다(옛 것은 각자 백업, gitea에도 올림).
 4. 벌마다 실행법(폴더 구조·명령)은 [dev.md](../operations/dev.md)에 둔다.
 5. 벌 컨테이너 이름(`data-pipeline-<n>`)·포트는 `compose-dev.yml`에 벌마다 직접 적고, 호스트 스크립트는 그 벌 settings.yaml `ops.host.pipeline_container: data-pipeline-<n>`로 이름을 안다. PG 스키마·EDW 표·게시 경로에 붙이던 `_<벌>` 접미사는 없앤다. 적재 판(`gold_version`)에도 벌 표시를 붙이지 않는다.
@@ -364,10 +364,10 @@ DB 스키마(마이그레이션 — `doc` 칸·`doc` 색인·`except_doc_info`·
 개발·운영 서버에서 컨테이너를 띄우고, 서버 바깥에서 root 비밀번호로 바로 SSH 접속해 코드를 고치고 시험하거나(개발) 상태를 본다(운영). `host_ctl.sh`의 작업 공간(op-16 — rag, 열쇠 로그인)과 따로 쓰는 길이다.
 
 ### 규칙
-1. `deploy/host/compose/compose-dev.yml` 한 파일: 개발자 벌 `data-pipeline-1`~`4`만(실행 이미지 `data-pipeline-runtime`, SSH 8021~8024). 검색 MCP·parse_document 작업 컨테이너는 운영 묶음(규칙 6)에만 있다. 묶음 이름 `docker-dev`, 네트워크는 서버 네트워크 그대로(`network_mode: host`). 검색 DB는 `compose-pgvector.yml`(`pgvector/pgvector:pg16`, 5433 → 5432, 데이터 `PG_DATA` 기본 `/data/pg/pipeline`, 계정·비밀번호는 코드 폴더 맨 위 `.env`의 `PG_USER`·`PG_DB`·`PG_PASSWORD`, 처음 만들 때만)로 따로 띄우고, 컨테이너는 `<서버 IP>:5433`으로 붙는다.
+1. `deploy/host/compose/compose-dev.yml` 한 파일: 개발자 벌 `data-pipeline-1`~`4`만(실행 이미지 `data-pipeline-runtime`, SSH 8021~8024). 검색 MCP·parse_document 작업 컨테이너는 운영 묶음(규칙 6)에만 있다. 묶음 이름 `docker-dev`, 네트워크는 bridge(벌마다 SSH 포트 `0.0.0.0:802<n>` → 컨테이너 802<n> — 컨테이너마다 자기 127.0.0.1이라 opencode 서버(4096)가 벌끼리 섞이지 않음). 검색 DB는 같은 파일의 `pgvector`(프로필 `db` — `host_ctl.sh --profile db up -d`로 따로 켬, `pgvector/pgvector:pg16`, 5433 → 5432, 데이터 `PG_DATA` 기본 `/data/pg/pipeline`, 계정·비밀번호는 파일의 `null` 칸에 서버에서 적음 — 처음 만들 때만)이고, 컨테이너는 `<서버 IP>:5433`으로 붙는다.
 2. 벌 N 폴더 `<SBL_ROOT>/data_pipeline-<n>`의 `app/` → `/app`(쓰기 가능 — 코드·`settings.yaml`·`output/`, 결과는 `/app/output` 한 곳), `home/` → `/root`(root 홈), 원본 문서 → `/data/docs`(읽기 전용). 이미지에는 VOLUME·경로 고정이 없다 — 무엇을 어디 붙일지는 compose가 정한다(이미지 부품은 `/opt/sbl/{docker,assets}`).
 3. 컨테이너마다 `cpus`·`mem_limit`·`memswap_limit`(메모리+스왑 합)·`ports`를 그 칸에 직접 적는다. 바꿀 env: `SBL_ROOT`(기본 `/home/sbl`)·`PRD_DIR`(기본 `/home/sbl/data_pipeline`)·`IMAGE_TAG`·`DOC_SRC` — `host_ctl.sh`가 부른 `app/` 폴더의 위치에서 `SBL_ROOT`·`PRD_DIR`을 정한다.
-4. 컨테이너는 root(`user: "0"`)로 `devbox`를 띄운다. `dev_entry.sh`가 root면 실행 환경(앱과 같은 풀이 — 붙인 settings.yaml `required.env.run_env`, compose는 env `RUN_ENV`를 주지 않음)이 `dev`·`prd`일 때만 sshd에 root·비밀번호 로그인을 연다(비밀번호 = 이미지에 넣은 값 — [op-20](#op-20) 규칙 4). dev·prd가 아니면 종료 2.
+4. 컨테이너는 root(`user: "0"`)로 `devbox`를 띄운다. `dev_entry.sh`가 root면 실행 환경(앱과 같은 풀이 — 붙인 settings.yaml `required.env.run_env`, compose는 env `RUN_ENV`를 주지 않음)이 `dev`·`prd`일 때만 sshd에 root·비밀번호 로그인을 연다(비밀번호 = compose 파일 `configs.root_pw` — [op-20](#op-20) 규칙 4). dev·prd가 아니면 종료 2.
 5. `devbox <명령>`이면 그 앱 명령도 뒤에서 함께 돈다(`mcp-server` = `devbox mcp` — 따로 지켜보지 않음, 멈추면 손으로 다시 시작).
 6. `compose-prd.yml`(운영 묶음 — 운영 서버, 그리고 개발 서버의 출시 전 시험): `data-pipeline`(SSH 8020)·`mcp-server`(SSH 8050 · HTTP 8051)·`mcp-data-parsing`(SSH 없음). 이미지는 구운 이미지(`data-pipeline:<판>`·`mcp-server:<판>` — 코드 폴더 마운트 없음), SSH 컨테이너는 ENTRYPOINT를 `dev_entry.sh`로 바꾸고 `APP_ENTRY` = `/opt/sbl/docker/entrypoint.sh`. 폴더 `PRD_DIR`: `app/settings.yaml` → `/etc/rag/settings.yaml`(읽기 전용) · `app/output` → `/app/output`(검색 MCP는 읽기 전용 + `_mcp_parse/jobs`만 쓰기) · `home` → `/root`(검색 MCP는 `home/mcp`). 재시작 `always`(사용자 결정).
 7. 이미지에 `sudo`(개발 도구 줄). rag에는 sudo 권한을 주지 않는다 — rag로 뜨는 길(op-16·운영)은 그대로.
@@ -384,20 +384,20 @@ DB 스키마(마이그레이션 — `doc` 칸·`doc` 색인·`except_doc_info`·
 보안 경계(root 비밀번호 SSH — 운영 서버 포함, 모든 주소에 연 포트 — 운영 PG 5433 포함, 운영 이미지에도 sudo).
 
 <a id="op-19"></a>
-## op-19 · Redis — 공식 이미지 하나(compose-redis.yml)
+## op-19 · Redis — 공식 이미지 하나(compose 파일의 redis)
 
 ### 무엇·왜
 parse_document 작업 큐(Redis Streams)를 서버마다 Redis 하나로 띄운다. 우리 이미지를 만들지 않고 공식 이미지를 쓴다(사용자 결정).
 
 ### 규칙
 1. 이미지는 공식 `redis:7.4.8-alpine` 그대로(패키지 설치 없음). 반입은 다른 이미지와 같은 배치(`stage_images.sh redis` → `sbl_images/<판>/redis/` 조각 + sha256 — `load.sh`가 함께 불러옴).
-2. `deploy/host/compose/compose-redis.yml`: 서비스·컨테이너 `redis`, 서버 `0.0.0.0:8010` → 컨테이너 6379, 데이터 `REDIS_DATA`(기본 `/data/redis`, AOF everysec), 재시작 `always`. 사람이 한 번 따로 띄운다(`compose-<환경>.yml`보다 먼저).
-3. 비밀번호는 settings.yaml `common.connections.redis.redis_password` 하나(필수 — sample은 비움, 서버마다 채움). Redis 컨테이너는 settings.yaml을 읽지 않으므로 사람이 같은 값을 코드 폴더 맨 위 `.env`(git 제외, 600)의 `REDIS_PASSWORD`에 적고, compose가 `redis-server --requirepass … --protected-mode yes --bind 0.0.0.0`(AOF)로 띄운다(`--env-file .env` — 값이 비면 멈춤). 비밀번호는 명령 인자로 `docker inspect`에 보인다(서버 root·docker 권한자만 — 사용자 결정). 상태 검사는 비밀번호 없이 `redis-cli ping`의 PONG·NOAUTH.
+2. `compose-dev.yml`(개발 서버)·`compose-prd.yml`(운영 서버)의 `redis`(프로필 `db`): 서비스·컨테이너 `redis`, 서버 `0.0.0.0:8010` → 컨테이너 6379, 데이터 `REDIS_DATA`(기본 `/data/redis`, AOF everysec), 재시작 `always`. 사람이 한 번 `host_ctl.sh --profile db up -d`로 따로 띄운다(앱 컨테이너보다 먼저 — 앱을 내려도 그대로).
+3. 비밀번호는 settings.yaml `common.connections.redis.redis_password` 하나(필수 — sample은 비움, 서버마다 채움). Redis 컨테이너는 settings.yaml을 읽지 않으므로 같은 값을 compose 파일의 `REDIS_PASSWORD` 칸(저장소는 `null` — 서버 사본에서 채움, 600)에 적고, `redis-server --requirepass "$REDIS_PASSWORD" --protected-mode yes --bind 0.0.0.0`(AOF)로 띄운다. 비밀번호는 컨테이너 env로 `docker inspect`에 보인다(서버 root·docker 권한자만 — 사용자 결정). 상태 검사는 같은 칸으로 `redis-cli ping`의 PONG.
 4. 서버 앱 컨테이너는 `<서버 IP>:8010`으로 붙는다(settings.yaml `redis_host: <서버 IP>` — 코드 기본값 `host.docker.internal`은 PC용).
 5. 클러스터는 두지 않는다.
 
 ### QA
-- `tests/general/deploy/test_compose.py`(이미지·포트·재시작·`--requirepass ${REDIS_PASSWORD:?…}`·데이터 마운트만·비밀번호 없는 상태 검사) · 서버 시험(띄우기 → 앱 컨테이너에서 PING → 틀린 비밀번호 거부 → 다시 시작 뒤 값 유지).
+- `tests/general/deploy/test_compose.py`(이미지·포트·재시작·프로필 `db`·`--requirepass "$$REDIS_PASSWORD"`·비밀번호 칸 `null`) · 서버 시험(띄우기 → 앱 컨테이너에서 PING → 틀린 비밀번호 거부 → 다시 시작 뒤 값 유지).
 - Status: dev
 
 ### 사람 검토
@@ -411,11 +411,11 @@ parse_document 작업 큐(Redis Streams)를 서버마다 Redis 하나로 띄운�
 
 ### 규칙
 1. 파일: `compose-local.yml`(PC — 재시작 정책 없음, 실행 이미지 + 저장소를 `/app` 읽기 전용) · `compose-dev.yml`(개발 서버 벌 1~4 `data-pipeline-<n>`, `unless-stopped`) · `compose-prd.yml`(운영 묶음, `always`, 구운 이미지). local·prd에는 번호 없는 `data-pipeline`·`mcp-server`·파싱 worker `mcp-data-parsing`.
-2. 앱 컨테이너(dev·prd)는 서버 네트워크를 그대로 쓴다(`network_mode: host` — 포트 연결 없음). SSH는 컨테이너마다 `SSH_PORT`(개발 벌 8021~8024, 운영 묶음 8020·8050), 검색 MCP는 `<서버 IP>:8051`. PG·Redis는 자기 compose에서 `0.0.0.0`에 연다. PC `compose-local.yml`만 docker 자체 네트워크 + 포트 연결. 서버에 있는 것(PG 5433, Redis 8010, 모델)은 `host.docker.internal`로 붙는다.
+2. SSH 작업 공간(개발 벌 `data-pipeline-<n>`·운영 `data-pipeline`)은 bridge 네트워크 + SSH 포트 연결(`0.0.0.0:<SSH_PORT>` → 같은 포트 — 개발 벌 8021~8024, 운영 8020). 컨테이너마다 자기 127.0.0.1이라 그 안에서 뜨는 opencode 서버(4096)가 컨테이너끼리 섞이지 않는다. 검색 MCP(`mcp-server` — SSH 8050, `<서버 IP>:8051`에 바로 바인드)·파싱 worker는 서버 네트워크를 그대로 쓴다(`network_mode: host`). PG·Redis는 `0.0.0.0`에 연다. 컨테이너는 서버에 있는 것(PG 5433, Redis 8010, 모델, 검색 MCP 8051)에 `<서버 IP>`로 붙는다(bridge 컨테이너에서 `127.0.0.1`은 자기 자신). PC `compose-local.yml`은 docker 자체 네트워크 + 포트 연결, 서버의 것은 `host.docker.internal`.
 3. 컨테이너 이름·이미지·CPU·메모리·포트는 compose 파일에 직접 적는다. 호스트 스크립트(`host_ctl.sh`·`pipe_exec.sh`·`mcp_keepalive.sh`·`run_pipeline.py`)가 들어갈 컨테이너 이름은 settings.yaml `ops.host.pipeline_container`·`mcp_container`·`parse_container` 세 칸(기본 `data-pipeline`·`mcp-server`·`mcp-data-parsing` — 개발 벌 N은 `pipeline_container: data-pipeline-N`).
-4. 모든 앱 컨테이너는 root(파싱 worker 포함). SSH 컨테이너의 root 비밀번호는 settings.yaml `option.devbox.root_password` 하나 — `host_ctl.sh`가 compose 비밀값 `root_pw`로 넘겨 컨테이너 `/run/secrets/root_pw`에 둔다(이미지·git·컨테이너 env에는 없음). 비면 `host_ctl.sh up`이 거부한다.
-5. `host_ctl.sh`는 얇다: `up`·`down` 등은 settings.yaml `run_env`(부른 폴더)에 맞는 `compose-<환경>.yml` 하나로 `docker compose`를 부른다. `init`·`secrets`·`timers`·`check`는 하위 명령. 덧붙임 파일·벌 번호 계산은 없다.
-6. PG(`compose-pgvector.yml`)·Redis(`compose-redis.yml`)는 사람이 따로 한 번 띄우고 늘 `always`. 비밀번호는 settings.yaml 하나(`required.pg.pg_password`·`common.connections.redis.redis_password`) — PG·Redis 컨테이너에는 같은 값을 코드 폴더 맨 위 `.env`(`REDIS_PASSWORD`·`PG_USER`·`PG_DB`·`PG_PASSWORD`, 600, git 제외)에 사람이 적어 `docker compose --env-file .env`로 넘긴다. 다른 비밀번호 파일은 없다.
+4. 모든 앱 컨테이너는 root(파싱 worker 포함). SSH 컨테이너의 root 비밀번호는 compose 파일의 `configs.root_pw.content`(저장소는 `null` — 서버 사본에서 채움, 8자 이상) 하나 — 컨테이너 `/run/secrets/root_pw`(root만 읽음)로 붙는다(이미지·git·컨테이너 env에는 없음). 비어 있으면 compose가 거부한다.
+5. `host_ctl.sh`는 얇다: `up`·`down` 등은 settings.yaml `run_env`(부른 폴더)에 맞는 `compose-<환경>.yml` 하나로 `docker compose`를 부른다. `init`·`timers`·`check`는 하위 명령. 덧붙임 파일·벌 번호 계산은 없다.
+6. PG·Redis는 `compose-dev.yml`(개발 서버)·`compose-prd.yml`(운영 서버)의 `pgvector`·`redis` — 프로필 `db`라 사람이 한 번 `host_ctl.sh --profile db up -d`로 따로 띄우고 늘 `always`(앱 컨테이너를 내리거나 다시 만들어도 그대로). 비밀번호(root·PG·Redis)는 compose 파일의 `null` 칸에 서버 사본에서만 적는다(600, 저장소에는 `null`) — PG·Redis는 앱이 읽는 settings.yaml(`required.pg.pg_password`·`common.connections.redis.redis_password`)과 같은 값. `.env`·다른 비밀번호 파일은 없다.
 7. Redis는 공식 `redis:7.4.8-alpine` 하나, 포트 8010, 모든 주소에서 받고 비밀번호 필수. 클러스터는 없다(나중에).
 8. 밤 배치·MCP 살리기는 운영 묶음만 본다(`data-pipeline`·`mcp-server`·`mcp-data-parsing`·Redis — 이름은 규칙 3의 세 칸). MCP 살리기는 검색 MCP 컨테이너 안에서 `http://<mcp_bind_host>:8051/health`로 확인한다.
 9. EDW 사슬 파일 `edw_chain.yaml`은 저장소 맨 위(git)에 있고 이미지에도 들어간다 — 서버 사본·복사 단계는 없다.
@@ -423,7 +423,7 @@ parse_document 작업 큐(Redis Streams)를 서버마다 Redis 하나로 띄운�
 
 ### 비고
 - `compose-local.yml`은 SSH를 열지 않는다 — `dev_entry.sh`가 local에서 root SSH를 거부하므로 앱 명령(`idle`·`mcp`·`run-mcp-parsing`)만 띄운다.
-- `host_ctl.sh check`는 prd 7단계(.env 일치·check_env·ping_models·migrate check·두 이미지 selftest·검색 MCP), dev(개발 벌 — 검색 MCP 없음)는 앞 5단계. `timers`(단위 4개)는 운영 묶음 `app/`에서.
+- `host_ctl.sh check`는 prd 7단계(compose 비밀번호 칸·check_env·ping_models·migrate check·두 이미지 selftest·검색 MCP), dev(개발 벌 — 검색 MCP 없음)는 앞 5단계. `timers`(단위 4개)는 운영 묶음 `app/`에서.
 - 남은 것: 서버·PC에서 실제로 띄워 보는 시험(QA의 PC·서버 항목).
 
 ### QA
@@ -431,7 +431,7 @@ parse_document 작업 큐(Redis Streams)를 서버마다 Redis 하나로 띄운�
 - Status: dev
 
 ### 사람 검토
-보안 경계(모든 앱 컨테이너 root, 모든 주소에 연 PG·Redis·SSH 포트), 설정 칸 삭제(서버 settings.yaml 정리 필요).
+보안 경계(모든 앱 컨테이너 root, 모든 주소에 연 PG·Redis·SSH 포트), 비밀값(비밀번호를 서버의 compose 파일에 — 판 올릴 때 다시 채움), 설정 칸 삭제(서버 settings.yaml 정리 필요).
 
 <a id="op-21"></a>
 ## op-21 · 운영 반영 스크립트

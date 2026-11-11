@@ -32,18 +32,17 @@
 | `required.deploy.host_docs_dir` | 서버의 원본 문서 폴더(컨테이너 `/data/docs`) | — | ✓ | ✓ |
 | `required.deploy.pg_container_name` | PG 컨테이너 이름 | `pgvector` | `pgvector` | `pgvector` |
 | `common.connections.redis.redis_host` | 작업 큐(Redis) 주소 — 포트는 비움(8010) | — | `<서버 IP>` | `<서버 IP>` |
-| `common.connections.redis.redis_password` | Redis 비밀번호 = `.env`의 `REDIS_PASSWORD` | — | ✓ | ✓ |
+| `common.connections.redis.redis_password` | Redis 비밀번호 = compose 파일 `redis`의 `REDIS_PASSWORD` | — | ✓ | ✓ |
 | `search.server.mcp_bind_host` | 검색 MCP 주소(`0.0.0.0` 금지) | `127.0.0.1` | `<서버 IP>` | `<서버 IP>` |
 | `search.server.mcp_port` | 검색 MCP 포트 | 예 `18769` | `8051` | `8051` |
 | `transform.represent.post_steps` | 서버 값 `all` | — | `all` | `all` |
 | `ops.host.container_cli` | 컨테이너 도구 | — | `docker` | `docker` |
 | `ops.host.pipeline_container` | 호스트 스크립트(`run_pipeline.py`·`pipe_exec.sh`·`host_ctl.sh`)가 들어갈 파이프라인 컨테이너 — 비우면 `data-pipeline` | — | `data-pipeline-<n>` | 비움 |
 | `ops.host.mcp_container`·`parse_container` | 검색 MCP·parse_document 작업 컨테이너 — 비우면 `mcp-server`·`mcp-data-parsing` | — | — | 비움 |
-| `option.devbox.root_password` | SSH 컨테이너 root 비밀번호(8자 이상 — compose 비밀값으로 넘김) | — | ✓ | ✓ |
 
 PC만 쓰는 칸은 아래 [PC 전용 칸](#pc-전용-칸).
 
-`.env`(PG·Redis를 띄우는 `app` 폴더 맨 위 — 개발 서버는 `data_pipeline/app`, 600): `PG_USER`·`PG_DB`·`PG_PASSWORD`·`REDIS_PASSWORD` — settings.yaml과 같은 값. `host_ctl.sh check` 첫 단계가 대조한다.
+PG·Redis 컨테이너와 SSH root 비밀번호는 settings.yaml이 아니라 compose 파일(`compose-dev.yml`·`compose-prd.yml`)의 `null` 칸에 서버 사본에서 적는다 — PG 계정·비밀번호와 Redis 비밀번호는 위 칸과 같은 값([dev.md A-5](dev.md#a-5-설정-채우기)).
 
 ## 파싱할 원천 — `required.source.source_systems`
 

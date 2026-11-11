@@ -69,25 +69,34 @@ for b in data_pipeline-1 data_pipeline-2 data_pipeline-3 data_pipeline-4 data_pi
 | 폴더 | `required.env.run_env` | `ops.host.pipeline_container` | `required.source.source_systems` |
 |---|---|---|---|
 | `data_pipeline-<n>/app` | `dev` | `data-pipeline-<n>` | `DEV-<n>` |
-| `data_pipeline/app` | `prd` | 비움(= `data-pipeline`) | 시험할 원천 |
+| `data_pipeline/app` | `prd` | 비움(= `data-pipeline`) | 시험할 운영 원천(예 `SFDC` — `DEV-*`는 prd가 시작 거부) |
 
-SSH root 비밀번호는 `option.devbox.root_password`(벌을 띄우는 `data_pipeline-1/app`과 `data_pipeline/app`에 — compose가 컨테이너에 비밀값으로 넘김).
+비밀번호는 compose 파일의 `null` 칸에 직접 적는다 — 서버 사본에서만(저장소에는 `null`만 둔다). 값에 `$`가 있으면 `$$`로 적는다.
+
+| 파일 | 채울 칸 |
+|---|---|
+| `deploy/host/compose/compose-dev.yml`(벌 1~4 모두 — 벌 1 폴더에서 띄우고, 나머지 벌은 판 올리기·다시 만들기 때 자기 폴더의 사본으로) | `configs.root_pw.content`(SSH root, 8자 이상) · `pgvector`의 `POSTGRES_DB`·`POSTGRES_USER`·`POSTGRES_PASSWORD` · `redis`의 `REDIS_PASSWORD` — PG·Redis는 settings.yaml `required.pg`·`common.connections.redis.redis_password`와 같은 값 |
+| `deploy/host/compose/compose-prd.yml`(`data_pipeline/app`) | `configs.root_pw.content`만(개발 서버의 PG·Redis는 compose-dev.yml의 것) |
+
+```bash
+cd $S/data_pipeline-1/app && vi deploy/host/compose/compose-dev.yml && chmod 600 deploy/host/compose/compose-dev.yml
+for n in 2 3 4; do cp -p deploy/host/compose/compose-dev.yml $S/data_pipeline-$n/app/deploy/host/compose/; done
+cd $S/data_pipeline/app && vi deploy/host/compose/compose-prd.yml && chmod 600 deploy/host/compose/compose-prd.yml
+```
+git으로 받은 폴더(C절)는 `git update-index --skip-worktree deploy/host/compose/compose-dev.yml`(채운 값이 커밋되지 않게 — 그 파일이 새 판에서 바뀌면 직접 옮겨 적는다).
 
 ```bash
 cd $S/data_pipeline-1/app && bash deploy/host/scripts/host_ctl.sh config --quiet && echo 설정 OK
 ```
 
-### A-6. PG·Redis 띄우기(서버에 한 번 — 출시 전 시험 폴더에서)
+### A-6. PG·Redis 띄우기(서버에 한 번 — 벌 1 폴더에서)
 ```bash
-cd $S/data_pipeline/app
-vi .env && chmod 600 .env       # PG_USER=<계정> · PG_DB=<DB> · PG_PASSWORD=<비밀번호> · REDIS_PASSWORD=<비밀번호> — settings.yaml과 같은 값
+cd $S/data_pipeline-1/app
 mkdir -p /data/pg/pipeline /data/redis
-docker compose --env-file .env -f deploy/host/compose/compose-pgvector.yml up -d
-docker compose --env-file .env -f deploy/host/compose/compose-redis.yml up -d
+bash deploy/host/scripts/host_ctl.sh --profile db up -d pgvector redis   # compose-dev.yml의 프로필 db — 벌을 내리거나 다시 만들어도 그대로
 until docker exec pgvector pg_isready -h 127.0.0.1 -U <계정> -d <DB>; do sleep 1; done
 docker exec pgvector psql -U <계정> -d <DB> -c 'CREATE EXTENSION IF NOT EXISTS vector'
 docker ps --filter name=^redis$ --format '{{.Status}}'        # 기대: Up … (healthy)
-for n in 1 2 3 4; do cp -p .env $S/data_pipeline-$n/app/; done   # 벌 점검(A-9 ⓪)이 벌 폴더의 .env를 settings.yaml과 대조
 ```
 
 ### A-7. 방화벽
@@ -112,7 +121,7 @@ cd $S/data_pipeline-<n>/app && bash deploy/host/scripts/host_ctl.sh check   # �
 
 ### A-10. 한 번에 돌리기 — run_pipeline.py(EDW 목록 → 받기 → 파싱 → 게시 → 구조화·적재)
 벌 컨테이너 **안에서**만 돈다(호스트에서 직접 부르면 거부). 순서: ① 사전 점검(설정·모델·DB 판·배포 시험) → ② 문서 처리 → ③ 적재·검색 확인. 첫 실패에서 멈추고 끝에 `[판정]` 줄을 남긴다.
-③은 같은 서버의 검색 MCP(D의 운영 묶음)를 settings.yaml `dev.search_ui.search_ui_mcp_url`(`http://<서버 IP>:8051/mcp`)로 부른다 — 운영 묶음이 없으면 `--set RUN_PIPELINE_STEPS_VERIFY=false`를 붙인다.
+벌의 ③은 실행 기록과 DB 검색까지다 — 운영 묶음의 검색 MCP는 DEV 원천을 검색하지 않는다(MCP까지는 B-9처럼 벌 안에 MCP를 띄워 확인).
 
 호스트에서 한 줄로(`R` = 아래 표의 인자):
 ```bash
@@ -138,8 +147,8 @@ EDW가 아닌 **폴더의 파일**을 넣을 때는 run_pipeline이 아니라 B-
 
 실패 문서는 재시도 상태(DLQ)에 남는다 — 한 실행에서 한 번씩 다시 시도하고 3번 실패하면 dead(사람이 다시 넣을 때까지 `--skip-done` 목록에서 빠짐). 끝 줄에 `DLQ pending N건 · dead M건`이 나온다.
 ```bash
-docker exec -it data-pipeline-<n> python -m pipeline.shared.dlq list --status dead      # dead 목록
-docker exec -it data-pipeline-<n> python -m pipeline.shared.dlq requeue --key <원본 키>  # 다시 넣기(--all-dead는 전부)
+docker exec data-pipeline-<n> python -m pipeline.shared.dlq list --status dead      # dead 목록
+docker exec data-pipeline-<n> python -m pipeline.shared.dlq requeue --key <원본 키>  # 다시 넣기(--all-dead는 전부)
 ```
 
 ### A-11. 단계 하나씩 — pipe_exec.sh
@@ -169,11 +178,12 @@ docker exec pgvector pg_dump -U <계정> -d <DB> -Fc -n <스키마> -n '<스키�
 ### A-14. 새 판 코드로 바꾸기(벌 app 덮어쓰기)
 ```bash
 cd $S && unzip -q <코드 zip>
-B=$S/data_pipeline-<n>/app; T=deploy/host/scripts/test_space
-{ [ ! -d "$B/$T" ] || mv "$B/$T" "$B.test_space"; } &&
-  find "$B" -mindepth 1 -maxdepth 1 ! -name .git ! -name output ! -name "settings*" ! -name .env -exec rm -rf {} + &&
+B=$S/data_pipeline-<n>/app; T=deploy/host/scripts/test_space; C=deploy/host/compose/compose-dev.yml
+{ [ ! -d "$B/$T" ] || mv "$B/$T" "$B.test_space"; } && cp -p "$B/$C" "$B.compose.yml" &&   # 채운 비밀번호 보관
+  find "$B" -mindepth 1 -maxdepth 1 ! -name .git ! -name output ! -name "settings*" -exec rm -rf {} + &&
   cp -a sbl_data_parsing-<판>/. "$B/" && rm -rf "$B/valid_env" &&
   { [ ! -d "$B.test_space" ] || mv "$B.test_space" "$B/$T"; }
+vi "$B/$C" && chmod 600 "$B/$C" && rm "$B.compose.yml"   # 새 판 파일의 null 칸을 $B.compose.yml의 값으로 다시 채움
 cd "$B" && bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>
 bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline-<n>
 ```
@@ -191,7 +201,7 @@ bash deploy/host/scripts/prune_images.sh --apply               # 저장소마다
 
 컨테이너 안에는 docker가 없다 — 모듈을 `python -m`으로 바로 부른다.
 ```bash
-ssh -p 802<n> root@<서버 IP>          # 비밀번호 = settings.yaml option.devbox.root_password(바꾸면 host_ctl.sh up -d --force-recreate)
+ssh -p 802<n> root@<서버 IP>          # 비밀번호 = compose-dev.yml configs.root_pw(바꾸면 host_ctl.sh up -d --force-recreate data-pipeline-<n>)
 cd /app
 ```
 
@@ -204,7 +214,7 @@ python -m common.check.checker ping           # 모델 주소 연결 — 실패 
 
 ### B-2. 배포 판정 시험
 ```bash
-python -m pipeline.cli selftest               # 기대: [판정] 통과 · 일부만: --only <이름 일부>
+python -m pipeline.cli selftest               # 기대: 끝 줄 N/N 통과(FAIL 없음) · 일부만: --only <이름 일부>
 ```
 
 ### B-3. DB 표(처음 · DB 판이 바뀐 판)
@@ -266,7 +276,7 @@ python -m pipeline.load.pgvector_load --set PIPE_OUT_ROOT=$O load --bundle $O/bu
 ```bash
 python -m mcp_server.cli.search_ask ask --source DEV-1 --k 3 --q "<처리한 문서에 있는 낱말>"   # DB 검색만
 ```
-내 벌 코드로 MCP를 잠깐 열어 보기(포트 끝자리 = 벌 번호 — 네트워크를 서버와 함께 쓰므로 벌끼리 겹치지 않게):
+내 벌 코드로 MCP를 잠깐 열어 보기(벌마다 bridge 망이라 127.0.0.1이 벌마다 따로 — 끝자리 벌 번호는 구별용):
 ```bash
 python -m mcp_server.main --set MCP_PORT=1877<n> --set MCP_HOST=127.0.0.1 & echo $! > /tmp/mcp.pid
 python -m mcp_server.cli.mcp_smoke --url http://127.0.0.1:1877<n>/mcp --source DEV-1 --q "<낱말>"
@@ -309,7 +319,7 @@ git config core.fileMode false                  # 권한 비트 차이를 무시
 운영 서버와 같은 컨테이너 3개를 개발 서버의 `data_pipeline/{app,home}`에 띄워 본다. 순서는 [prd.md](prd.md)와 같고 다른 점만 적는다.
 
 1. 시험한 벌에서 굽는다(prd.md 1): `cd $S/data_pipeline-<n>/app && bash deploy/release/bake_prod_image.sh <실행 이미지 판>`
-2. 굽기 결과의 코드 묶음을 `data_pipeline/app`에 푼다(prd.md 판 올리기 U-3, `$B=$S/data_pipeline/app`).
+2. 굽기 결과의 코드 묶음(`/var/tmp/bake/code-<VERSION>-<커밋>.tar.gz`)을 `data_pipeline/app`에 푼다(prd.md 판 올리기 U-3 — `P=$S/data_pipeline B=$P/app`, U-3의 `$S/code-…` 자리에 이 묶음).
 3. 운영 반영 스크립트로 올린다(처음이면 `--dim <임베딩 차원>`):
    ```bash
    cd $S/data_pipeline/app && bash deploy/release/promote.sh <VERSION> /var/tmp/bake/sbl_images
@@ -324,6 +334,6 @@ git config core.fileMode false                  # 권한 비트 차이를 무시
 5. 검색 MCP 확인:
    ```bash
    curl -s http://<서버 IP>:8051/health                           # 기대: {"ok":true,"ready":true,…}
-   ssh -p 8050 root@<서버 IP> 'cd /app && python -m mcp_server.cli.mcp_smoke --source <원천> --q "<낱말>"'   # 주소·토큰은 settings.yaml
+   docker exec mcp-server python -m mcp_server.cli.mcp_smoke --source <원천> --q "<낱말>"   # 주소·토큰은 settings.yaml(ssh에 명령을 붙이면 로그인 셸이 아니라 설정 자리를 못 봄)
    ```
 6. 통과하면 같은 이미지 조각·코드 묶음을 운영 서버로 옮긴다(prd.md 2부터).

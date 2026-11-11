@@ -99,9 +99,7 @@ def _inside(seq, sub=""):
 
 
 def _img(name):
-    """명령이 보는 약속 경로 — prd는 컨테이너 안 약속 경로(settings.IMAGE_PATHS 한 곳), dev(DIRECT)는 이 프로세스가 보는 코드·결과 자리."""
-    if DIRECT and name in ("code_root", "output_root"):
-        return Path(_code_root() if name == "code_root" else DOCSPACE).as_posix()
+    """명령이 보는 약속 경로(settings.IMAGE_PATHS 한 곳) — dev(DIRECT)도 컨테이너 안이라 같은 자리."""
     return _const(f"image.{name}")
 
 
@@ -123,10 +121,6 @@ def _const(key):
         if len(row) >= 4 and row[2] == "const" and row[0] == key:  # 칸이 모자란 줄(손 편집·잘린 사본)은 건너뜀
             return row[3]
     sys.exit(f"run_pipeline: host_settings.tsv에 {key} 없음 — PYTHONPATH=. python deploy/release/gen_host_keys.py로 다시 만들 것")
-
-
-def _app():
-    return _img("code_root")  # 컨테이너 작업 자리 = 코드 자리(이미지 WORKDIR /app)
 
 
 @functools.cache
@@ -255,7 +249,7 @@ def pexec(script, seq=None, box=None):
     export라 script 안 여러 python(구조화 → 적재)에 같은 env가 간다. script는 통째로 따옴표(shlex) — 안의 따옴표도 그대로."""
     env = f"PYTHONPATH={_img('code_root')} {LIB_ENV}" + (f" {DOC_MARK}={_inside(seq)}" if seq is not None else "")
     run = "bash -c " if DIRECT else f"{DOCKER} exec {box or PIPE_C} bash -c "
-    return run + shlex.quote(f"umask 0002 && cd {_app()} && export {env} && {script}")
+    return run + shlex.quote(f"umask 0002 && cd {_img('code_root')} && export {env} && {script}")
 
 
 def sets(*pairs):
@@ -559,20 +553,23 @@ def precheck():
     return None
 
 
-def verify(rows, done_keys, since=0.0):
+def verify(rows, done_keys, since):
     """③ 적재·검색 확인 → 실패한 확인 이름(통과면 None). 이번 실행에서 적재까지 끝난 문서 하나로 — 실행 기록(applog: since 뒤
     pipe_run 1행+ · 그 문서 pipe_event 1행+) → 그 이름(확장자 뺌)을 질문으로 원천 DB 검색(search_ask, 근거 1건 이상) →
-    검색 MCP 바깥 호출(mcp_smoke — 주소 dev.search_ui.search_ui_mcp_url · 토큰 required.tokens.mcp_token)."""
+    검색 MCP 바깥 호출(mcp_smoke — 주소 dev.search_ui.search_ui_mcp_url · 토큰 required.tokens.mcp_token). 개발 벌(DIRECT)은 DB 검색까지 —
+    운영 묶음 검색 MCP는 DEV 원천을 검색하지 않는다(op-17)."""
     row = next((rows[s] for s in rows if rows[s]["s3_key"] in done_keys), None)
     if row is None:
         log("[확인] 적재 — 이번 실행에서 적재까지 끝난 문서 0건")
         return "적재"
-    src, q = shlex.quote(str(row["source_system"])), shlex.quote(Path(_doc_name(row)).stem)
-    log(f"[확인] 적재 — 통과(원천 {row['source_system']} · 질문 {Path(_doc_name(row)).stem})")
-    t, doc = f"to_timestamp({since:.0f})", "'" + _doc_name(row).replace("'", "''") + "'"
+    name = _doc_name(row)
+    stem = Path(name).stem
+    src, q = shlex.quote(str(row["source_system"])), shlex.quote(stem)
+    log(f"[확인] 적재 — 통과(원천 {row['source_system']} · 질문 {stem})")
+    t, doc = f"to_timestamp({since:.0f})", "'" + name.replace("'", "''") + "'"
     rc, out, err = _psql(
-        f"SELECT (SELECT count(*) FROM applog.pipe_run WHERE started_at >= {t}) AS runs,"  # 칸 이름이 같으면 PG_PY 사전에서 하나로 겹침
-        f" (SELECT count(*) FROM applog.pipe_event WHERE doc_id = {doc} AND ts_start >= {t}) AS events"
+        f"SELECT (SELECT count(*) FROM applog.pipe_run WHERE started_at >= {t}),"
+        f" (SELECT count(*) FROM applog.pipe_event WHERE doc_id = {doc} AND ts_start >= {t})"
     )
     try:
         runs, events = (int(x) for x in (out or "").strip().splitlines()[-1].split("|")) if rc == 0 else (0, 0)
@@ -589,6 +586,9 @@ def verify(rows, done_keys, since=0.0):
     if n < 1:
         return _step_fail("확인", "DB 검색", rc or 1, out, err)
     log(f"[확인] DB 검색 — 통과(근거 {n}건)")
+    if DIRECT:
+        log("[확인] 검색 MCP — 건너뜀(개발 벌 — 운영 묶음 MCP는 DEV 원천을 검색하지 않음)")
+        return None
     rc, out, err = sh(pexec(f"python -m mcp_server.cli.mcp_smoke --source {src} --q={q}", box=MCP_C), timeout=300)
     if rc != 0:
         return _step_fail("확인", "검색 MCP", rc, out, err)
@@ -985,7 +985,7 @@ PG_SOURCES = (
 
 
 # dev 컨테이너 안에는 psql·docker가 없어 앱의 PG 접속(required.pg)으로 같은 꼴(psql -At: 칸은 |, 행은 줄)을 찍는다.
-PG_PY = "import sys; from common.store.pg import PG, conf; [print('|'.join(map(str, r.values()))) for r in PG(conf()).q(sys.argv[1])]"
+PG_PY = "import sys; from common.store.pg import PG, conf; [print('|'.join(map(str, r))) for r in PG(conf()).cn.execute(sys.argv[1]).fetchall()]"
 
 
 def _psql(sql):
@@ -1011,7 +1011,7 @@ def pg_count():
     """(문서 수, 청크 수) — 원천 스키마(5벌 + 있는 DEV 원천)의 합. 못 세면 (0, 0)."""
     srcs = pg_sources()
     doc, chunk = (" + ".join(f"(SELECT count(*) FROM {PG_SCHEMA}_{s}.{t})" for s in srcs) for t in ("doc", "chunk"))
-    rc, out, _ = _psql(f"SELECT {doc} AS docs, {chunk} AS chunks")
+    rc, out, _ = _psql(f"SELECT {doc}, {chunk}")
     try:
         parts = out.replace("|", " ").split()
         return int(parts[0]), int(parts[1])
@@ -1412,7 +1412,7 @@ def main():
     return finish(rc, main_flow, rows, t_all)
 
 
-def finish(rc, flow, rows, since=0.0):
+def finish(rc, flow, rows, since):
     """② 뒤 끝 판정 — 실패 문서면 1(③ 안 함) · 적재 0건(마감·모두 건너뜀)이면 rc 그대로(③ 안 함) · ③ 실패면 3 · 그 밖은 rc 그대로."""
     if rc == EXIT_FAIL:
         return verdict(rc, f"② 문서 처리 — 실패 {len(flow['failed_keys'])}건")

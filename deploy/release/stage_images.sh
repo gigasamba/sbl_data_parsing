@@ -30,8 +30,8 @@ repo_of() {    # 대상 검사 — 이미지 저장소는 하나
 stage_one() {
   local target="$1" tag name dir n
   repo_of "$target" >/dev/null || { echo "[stage_images] 모르는 대상: $target (pipeline·mcp·pipeline-runtime·mcp-runtime·redis)"; return 2; }
-  if [ "$target" = redis ]; then   # 공식 Redis 이미지(compose-redis.yml과 같은 판 — 앱 판과 별개, 이름 그대로 반입)
-    tag=$(sed -n 's/^ *image: *//p' deploy/host/compose/compose-redis.yml | head -n1)   # 판은 compose-redis.yml 한 곳
+  if [ "$target" = redis ]; then   # 공식 Redis 이미지(compose-prd.yml redis와 같은 판 — 앱 판과 별개, 이름 그대로 반입)
+    tag=$(sed -n '/^  redis:/,/image:/s/^ *image: *//p' deploy/host/compose/compose-prd.yml)
     name=redis
   else
     name=$(image_name_of "$target")

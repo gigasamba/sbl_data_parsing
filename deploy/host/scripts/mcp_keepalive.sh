@@ -14,7 +14,7 @@ redis_state=$($DOCKER inspect -f '{{.State.Running}} {{if .State.Health}}{{.Stat
 case "$redis_state" in
   "true healthy"|"true starting") ;;
   "true unhealthy") $DOCKER restart redis >/dev/null || echo "[mcp_keepalive] Redis 재시작 실패 — 검색 MCP 확인은 계속" >&2 ;;
-  *) $DOCKER compose --env-file .env -f deploy/host/compose/compose-redis.yml up -d || echo "[mcp_keepalive] Redis 기동 실패(코드 폴더 맨 위 .env의 REDIS_PASSWORD 확인) — 검색 MCP 확인은 계속" >&2 ;;
+  *) $DOCKER start redis >/dev/null 2>&1 || $UP redis || echo "[mcp_keepalive] Redis 기동 실패(compose 파일 redis의 REDIS_PASSWORD 칸 확인) — 검색 MCP 확인은 계속" >&2 ;;
 esac
 # parse_document 작업 컨테이너 — 꺼졌으면 up -d만(응답 확인은 검색 MCP의 몫).
 if [ "$($DOCKER inspect -f '{{.State.Running}}' "$PARSE" 2>/dev/null)" != true ]; then

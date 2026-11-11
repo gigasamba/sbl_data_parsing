@@ -84,9 +84,9 @@ NOTE_COL = 46  # 칸 주석이 시작하는 열(값 자리와 주석을 떼어 �
 
 # 칸마다 주석 한 줄 — 짧은 설명 · 값 또는 예. 기본값이 null인 선택 칸은 "(null = 비우면 되는 것)". 모든 칸이 있어야 한다(build가 확인).
 NOTES = {
-    "common.connections.redis.redis_host": "parse_document Redis 주소 · 컨테이너에서 서버 자신(compose-redis.yml)",
-    "common.connections.redis.redis_port": "Redis 포트 · 서버마다 하나(compose-redis.yml이 8010에 연다)",
-    "common.connections.redis.redis_password": "Redis 비밀번호(필수 — 서버마다 채움 · .env의 REDIS_PASSWORD와 같은 값) · 예 서버에서 openssl rand -hex 32를 실행해 나온 64자",
+    "common.connections.redis.redis_host": "parse_document Redis 주소 · 컨테이너에서 서버 자신(compose 파일의 redis)",
+    "common.connections.redis.redis_port": "Redis 포트 · 서버마다 하나(compose 파일의 redis가 8010에 연다)",
+    "common.connections.redis.redis_password": "Redis 비밀번호(필수 — 서버마다 채움 · compose 파일 redis의 REDIS_PASSWORD와 같은 값) · 예 서버에서 openssl rand -hex 32를 실행해 나온 64자",
     "common.connections.redis.redis_db": "Redis 데이터베이스 번호",
     "common.connections.redis.redis_key_prefix": "Redis 키 접두 · 설정값 그대로(서버당 한 벌)",
     "common.parse_queue.mcp_parse_workers": "Redis 소비자 프로세스 수 · 1~2(현재 최대 2), 늘리려면 CPU·메모리·엔진 수도 조정",
@@ -202,7 +202,6 @@ NOTES = {
     "common.host.parse_container": "parse_document 작업 컨테이너 이름",
     "common.host.devbox.git_user_name": "git 커밋 이름(user.name) · 예 홍길동 (null = 설정 안 함)",
     "common.host.devbox.git_user_email": "git 커밋 메일(user.email) · 예 hong@corp.local (null = 설정 안 함)",
-    "common.host.devbox.root_password": "SSH 컨테이너 root 비밀번호(dev·prd 필수 — 8자 이상, 한 벌의 compose가 모든 SSH 컨테이너에 같은 값)",
     "common.runtime.data_parsing_port": "더 쓰지 않음(#113 Redis 큐로 대체) — 다음 판에서 지움",
     "common.runtime.parse_max_mb": "parse_document 파일 상한(MB)",
     "pipeline.service.data_parsing.roots": "parse 서비스가 읽어도 되는 폴더 목록 · 쉼표 구분 · 예 /data/inbox, /data/shared (null = <서비스 폴더>/inbox)",

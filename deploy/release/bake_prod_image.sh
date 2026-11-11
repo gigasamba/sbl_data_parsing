@@ -12,12 +12,10 @@ if [ "$#" -gt 0 ]; then TARGETS=("$@"); else TARGETS=(pipeline mcp); fi
 OUT="${OUT:-/var/tmp/bake}"; mkdir -p "$OUT"; OUT=$(cd "$OUT" && pwd)   # stage_images.sh가 cd하므로 절대 경로로
 CODE_DIR=$(cd "${CODE_DIR:-$(dirname "$0")/../..}" && pwd)
 . "$(dirname "$0")/../host/scripts/load_settings.sh"   # docker_default — 이 스크립트가 든 코드 폴더의 것
-load_settings || exit 2   # 판정 시험의 DB 사례가 이 벌의 PG에 붙음(SETTINGS_FILE·RUN_ENV — host_ctl.sh check와 같게)
-DOCKER="${DOCKER:-$(docker_default)}"
+load_settings || exit 2; gate_args   # 판정 시험 옵션 GATE — host_ctl.sh check와 같게(이 벌의 PG에 붙음)
 HERE=$(cd "$(dirname "$0")" && pwd)   # 이 스크립트 폴더 — stage_images.sh는 여기 것(CODE_DIR가 stage_images.sh 없는 다른 판 코드 폴더여도)
 cd "$CODE_DIR"
 . deploy/release/image_names.sh
-APP_OUTPUT_ROOT=$(awk -F'\t' '$1=="image.output_root"{print $4}' deploy/host/scripts/host_settings.tsv)   # 판정 때 임시 결과 폴더 자리
 TAG="${TAG:-$(app_version)}"
 [ "$TAG" = "$(app_version)" ] || [ "${BAKE_TEST:-}" = 1 ] \
   || { echo "[bake_prod_image] TAG($TAG) ≠ 코드 VERSION($(app_version)) — 태그 = 버전(D-036). 다시 구우려면 VERSION을 올린 코드로" >&2; exit 2; }
@@ -52,8 +50,7 @@ for t in "${TARGETS[@]}"; do
     --build-arg RUNTIME_IMAGE="$rt" --build-arg RUNTIME_ID="$rid" \
     --build-arg APP_VERSION="$(app_version)" --build-arg VCS_REF="$commit" -t "$tag" .
   # 판정·저장이 실패하면 구운 태그를 지운다(다시 실행이 "이미 있는 태그"로 막히지 않게)
-  bash deploy/release/selftest_gate.sh $DOCKER run --rm --network host --add-host host.docker.internal:host-gateway --tmpfs "$APP_OUTPUT_ROOT:mode=1777" \
-    -v "$SETTINGS_FILE:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e "RUN_ENV=$RUN_ENV" "$tag" selftest \
+  bash deploy/release/selftest_gate.sh $DOCKER run --rm "${GATE[@]}" "$tag" selftest \
     || { echo "[bake_prod_image] 반입 판정 실패 — $tag 지움" >&2; $DOCKER rmi "$tag" >/dev/null || true; exit 1; }   # 코드 폴더 마운트 없이
   OUT="$OUT" DOCKER="$DOCKER" CODE_BUNDLE="$BUNDLE" bash "$HERE/stage_images.sh" "$TAG" "$t" \
     || { echo "[bake_prod_image] 저장 실패 — $tag 지움" >&2; $DOCKER rmi "$tag" >/dev/null || true; exit 1; }

@@ -1,6 +1,6 @@
-"""서버 compose 파일(op-18·op-19·op-20): 환경마다 하나(compose-<run_env>.yml) + 따로 띄우는 PG·Redis.
+"""서버 compose 파일(op-18·op-19·op-20): 환경마다 하나(compose-<run_env>.yml). dev·prd에 PG·Redis(프로필 db).
 dev = 개발자 벌 1~4만(벌 N = data_pipeline-N/{app,home} → /app·/root). prd·local = 번호 없는 컨테이너 3개.
-SSH 컨테이너의 root 비밀번호는 compose 비밀값(settings.yaml option.devbox.root_password → /run/secrets/root_pw)뿐 — 볼륨으로 붙이지 않는다.
+비밀번호(SSH root·PG·Redis)는 compose 파일의 null 칸 — 서버 사본에서만 채우고 저장소에는 null만.
 옛 덧붙임 파일(compose.*.yml)·EDW 사슬 사본 마운트는 없다(사슬은 코드 폴더·이미지 안 edw_chain.yaml)."""
 
 import yaml
@@ -12,8 +12,10 @@ HEALTH = ["CMD", "python", "-m", "pipeline.run_mcp_parsing", "--health"]
 JOBS = ":/app/output/_mcp_parse/jobs:z"  # parse_document 업로드·결과(검색 MCP는 결과가 읽기 전용이라 이 폴더만 쓰기)
 MCP_CMD = ["devbox", "mcp", "--set", "MCP_PORT=8051"]
 
+DB = {"pgvector": ("pgvector/pgvector:pg16", None, ["0.0.0.0:5433:5432"]), "redis": ("redis:7.4.8-alpine", None, ["0.0.0.0:8010:6379"])}
+ROOT_PW = [{"source": "root_pw", "target": "/run/secrets/root_pw", "mode": 0o400}]
 # 파일 → (묶음 이름, 재시작 정책(None = 없음), {서비스: (이미지 앞부분, 명령, 포트)})
-# 서버(dev·prd)는 서버 네트워크 그대로(network_mode: host) — 포트 칸 대신 SSH_PORT(문자열, SSH 없으면 None)
+# 서버(dev·prd)는 포트 칸 대신 SSH_PORT(문자열, SSH 없으면 None) — SSH 작업 공간은 bridge, 검색 MCP·작업 컨테이너는 network_mode: host
 FILES = {
     "compose-local.yml": (
         "sbl-local",
@@ -27,7 +29,7 @@ FILES = {
     "compose-dev.yml": (
         "docker-dev",
         "unless-stopped",
-        {f"data-pipeline-{n}": ("data-pipeline-runtime:", ["devbox"], f"802{n}") for n in range(1, 5)},
+        {f"data-pipeline-{n}": ("data-pipeline-runtime:", ["devbox"], f"802{n}") for n in range(1, 5)} | DB,
     ),
     "compose-prd.yml": (
         "sbl-prd",
@@ -36,10 +38,9 @@ FILES = {
             "data-pipeline": ("data-pipeline:", ["devbox"], "8020"),
             "mcp-server": ("mcp-server:", MCP_CMD, "8050"),
             "mcp-data-parsing": ("data-pipeline:", ["run-mcp-parsing"], None),
-        },
+        }
+        | DB,
     ),
-    "compose-pgvector.yml": ("sbl-pgvector", "always", {"pgvector": ("pgvector/pgvector:pg16", None, ["0.0.0.0:5433:5432"])}),
-    "compose-redis.yml": ("sbl-redis", "always", {"redis": ("redis:7.4.8-alpine", None, ["0.0.0.0:8010:6379"])}),
 }
 
 
@@ -57,12 +58,18 @@ def test_compose_files():
             vols = [str(v) for v in s.get("volumes", [])]
             env = s.get("environment", {})
             assert s["image"].startswith(image) and s["container_name"] == name, (f, name)
+            if name in DB:  # 서버 하나에 하나 — 늘 always, 따로 켬(벌·묶음을 내려도 그대로)
+                assert s["restart"] == "always" and s["profiles"] == ["db"] and s["ports"] == ports, (f, s)
+                continue
             assert (cmd is None or s.get("command") == cmd) and s.get("restart") == restart, (f, name)
             if f in ("compose-dev.yml", "compose-prd.yml"):
-                assert s["network_mode"] == "host" and "ports" not in s, (f, name)
+                if name.startswith("data-pipeline"):  # SSH 작업 공간은 bridge — 컨테이너마다 opencode 서버(127.0.0.1:4096)
+                    assert "network_mode" not in s and s["ports"] == [f"0.0.0.0:{ports}:{ports}"], (f, name)
+                else:  # 검색 MCP(<서버 IP>:8051 바인드)·파싱 worker는 서버 네트워크 그대로
+                    assert s["network_mode"] == "host" and "ports" not in s, (f, name)
                 assert env.get("SSH_PORT") == ports, (f, name)
-                assert s.get("secrets") == (["root_pw"] if ports else None), (f, name)  # SSH 컨테이너만
-                assert doc["secrets"]["root_pw"] == {"environment": "ROOT_PW"}, f
+                assert s.get("configs") == (ROOT_PW if ports else None), (f, name)  # SSH 컨테이너만
+                assert doc["configs"]["root_pw"] == {"content": None} and "secrets" not in doc, f
             else:
                 assert s.get("ports") == ports, (f, name)
             assert not any("edw_chain" in v or "root_pw" in v or "redis_pw" in v for v in vols), (f, name, vols)
@@ -86,18 +93,16 @@ def test_compose_files():
                     assert any(v.endswith(":/root:z") for v in vols), (name, vols)
 
 
-def test_secret_env():
-    """PG·Redis 비밀번호는 코드 폴더 맨 위 .env(사람이 적음)에서만 — 비어 있으면 compose가 멈춤(:?), 파일 붙임 없음."""
-    pg = _load("compose-pgvector.yml")["services"]["pgvector"]
-    env = pg["environment"]
-    assert env["POSTGRES_PASSWORD"] == "${PG_PASSWORD:?.env에 PG_PASSWORD 필요}" and "POSTGRES_PASSWORD_FILE" not in env, env
-    assert env["POSTGRES_USER"].startswith("${PG_USER:?") and env["POSTGRES_DB"].startswith("${PG_DB:?"), env
-    assert not any(isinstance(v, dict) or "secrets" in str(v) for v in pg["volumes"]), pg["volumes"]
-    redis = _load("compose-redis.yml")["services"]["redis"]
-    assert redis["command"][:3] == ["redis-server", "--requirepass", "${REDIS_PASSWORD:?.env에 REDIS_PASSWORD 필요}"], redis["command"]
-    assert redis["volumes"] == ["${REDIS_DATA:-/data/redis}:/data:z"] and "environment" not in redis, redis
-    # 상태 확인은 비밀번호로 PONG(틀린 비밀번호면 unhealthy) — 값은 .env에서 compose가 채움(env로 넘기지 않음)
-    assert redis["healthcheck"]["test"][1] == "REDISCLI_AUTH='${REDIS_PASSWORD}' redis-cli --no-auth-warning ping | grep -q PONG"
+def test_password_slots():
+    """비밀번호 칸은 저장소에서 null(서버 사본에서 채움) — Redis는 env 칸 하나를 명령·상태 확인이 함께 씀."""
+    for f in ("compose-dev.yml", "compose-prd.yml"):
+        svc = _load(f)["services"]
+        assert all(svc["pgvector"]["environment"][k] is None for k in ("POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD")), f
+        redis = svc["redis"]
+        assert redis["environment"] == {"REDIS_PASSWORD": None}, f
+        assert '--requirepass "$$REDIS_PASSWORD"' in redis["command"][2] and "$$REDIS_PASSWORD" in redis["healthcheck"]["test"][1], f
+        assert redis["command"][2].startswith('[ -n "$$REDIS_PASSWORD" ] ||'), f  # 칸이 비면 비밀번호 없이 뜨지 않고 멈춤
+        assert "exec docker-entrypoint.sh redis-server " in redis["command"][2], f  # 이미지 입구가 root → redis 사용자로 바꿈
 
 
 def test_entry_commands():

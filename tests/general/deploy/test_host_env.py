@@ -85,31 +85,22 @@ def test_host_env_matches_export():
     )
 
 
-# .env 대조(host_ctl.sh check 첫 단계): (.env 줄, 기대 다른 이름) — settings.yaml은 아래 SET_DOC 하나
-ENV_DOC = {"common": {"connections": {"redis": {"redis_password": "r1"}, "pg": {"user": "u", "db": "d", "password": "p1"}}}}
-ENV_CASES = [
-    ("REDIS_PASSWORD=r1\nPG_USER=u\nPG_DB=d\nPG_PASSWORD=p1\n", []),
-    ("# 주석\nREDIS_PASSWORD=r2\nPG_USER=u\nPG_DB=d\nPG_PASSWORD=p1\n", ["REDIS_PASSWORD"]),  # 다르면 이름만
-    ("REDIS_PASSWORD=r1\nPG_USER=u\nPG_DB=d\n", ["PG_PASSWORD"]),  # 빠지면 이름만
-]
-
-
-def test_env_mismatch():
-    s2e = _load("s2e_env", "deploy/host/scripts/settings_to_env.py")
+def test_compose_mismatch():
+    """host_ctl.sh check ⓪ — compose 비밀번호 칸(채운 것만)이 settings.yaml과 같은지·root 8자 이상, 이름만 돌려줌."""
+    H = _host_env()
+    doc = {"common": {"connections": {"pg": {"db": "rag", "user": "u", "password": "p$w"}, "redis": {"redis_password": "r1"}}}}
+    pg = {"POSTGRES_DB": "rag", "POSTGRES_USER": "u", "POSTGRES_PASSWORD": "p$$w"}  # compose의 $$ = $
+    cases = [  # (pgvector env, redis env, root 비밀번호, 기대 이름)
+        (pg, {"REDIS_PASSWORD": "r1"}, "longenough", []),
+        ({k: None for k in pg}, {"REDIS_PASSWORD": None}, "longenough", []),  # null 칸 = 이 파일이 띄우지 않음
+        (pg | {"POSTGRES_PASSWORD": "x"}, {"REDIS_PASSWORD": "r2"}, "longenough", ["pgvector.POSTGRES_PASSWORD", "redis.REDIS_PASSWORD"]),
+        (pg, {"REDIS_PASSWORD": "r1"}, "short", ["configs.root_pw"]),
+        (pg, {"REDIS_PASSWORD": "r1"}, "two\nlines!", ["configs.root_pw"]),
+        (pg, {"REDIS_PASSWORD": "r1"}, None, []),
+    ]
     with tempfile.TemporaryDirectory() as d:
-        f = Path(d) / ".env"
-        for body, want in ENV_CASES:
-            f.write_text(body, encoding="utf-8")
-            assert s2e.env_mismatch(ENV_DOC, f) == want, (body, want)
-
-
-def test_secret_for_compose():
-    """--secret: SSH root 비밀번호 칸 하나만 그대로 냄(compose 비밀값) — 비었거나 8자 미만이면 종료 1·아무것도 안 냄."""
-    s2e = _host_env()
-    for value, rc in (("pw-for-test-1", 0), (None, 1), ("short", 1)):
-        f = Path(tempfile.mkdtemp()) / "settings.yaml"
-        f.write_text(yaml.safe_dump({"option": {"devbox": {"root_password": value}}}), encoding="utf-8")
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
-            got = s2e.main(["--file", str(f), "--secret", "common.host.devbox.root_password"])
-        assert (got, out.getvalue()) == (rc, value if rc == 0 else ""), (value, got)
+        f = Path(d) / "compose.yml"
+        for pgenv, renv, pw, want in cases:
+            c = {"services": {"pgvector": {"environment": pgenv}, "redis": {"environment": renv}}, "configs": {"root_pw": {"content": pw}}}
+            f.write_text(yaml.safe_dump(c), encoding="utf-8")
+            assert H.compose_mismatch(doc, f) == want, (pgenv, renv, pw)

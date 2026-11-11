@@ -1,13 +1,15 @@
-# 개발 서버 — 개발자 벌 1~4의 SSH 작업 공간. 벌 N = ${SBL_ROOT}/data_pipeline-N/{app,home}
+# 개발 서버 — 개발자 벌 1~4의 SSH 작업 공간 + 서버 하나에 하나인 PG·Redis(프로필 db). 벌 N = ${SBL_ROOT}/data_pipeline-N/{app,home}
 #   app → /app(코드·settings.yaml·output) · home → /root. 검색 MCP·parse_document는 compose-prd.yml(운영 묶음)로.
-#   띄우기: bash deploy/host/scripts/host_ctl.sh up -d [서비스…]   (그 벌의 app 폴더에서)
+#   띄우기: bash deploy/host/scripts/host_ctl.sh up -d [서비스…]   (그 벌의 app 폴더에서) · PG·Redis: host_ctl.sh --profile db up -d
+#   비밀번호 null 칸(root·PG·Redis)은 서버 사본에서만 채운다(git에 올리지 않음 — docs/operations/dev.md A-5). 값의 $는 $$로.
 name: docker-dev
 x-dev: &dev
+  image: data-pipeline-runtime:${IMAGE_TAG:-0.5.0}
+  command: ["devbox"]
   restart: unless-stopped
-  network_mode: host
-  init: true
+  init: true   # bridge — 컨테이너마다 자기 127.0.0.1(opencode 서버 4096이 벌끼리 섞이지 않게) · 서버의 PG·Redis·모델은 <서버 IP>로
   user: "0"
-  secrets: [root_pw]
+  configs: [{source: root_pw, target: /run/secrets/root_pw, mode: 0400}]
   extra_hosts: ["host.docker.internal:host-gateway"]
   pids_limit: 4096
   cpus: 2
@@ -19,10 +21,9 @@ x-dev: &dev
 services:
   data-pipeline-1:
     <<: *dev
-    image: data-pipeline-runtime:${IMAGE_TAG:-0.5.0}
     container_name: data-pipeline-1
-    command: ["devbox"]
     environment: {SSH_PORT: "8021", SETTINGS_FILE: /app/settings.yaml}
+    ports: ["0.0.0.0:8021:8021"]
     volumes:
       - ${SBL_ROOT:-/home/sbl}/data_pipeline-1/app:/app:z
       - ${SBL_ROOT:-/home/sbl}/data_pipeline-1/home:/root:z
@@ -30,10 +31,9 @@ services:
 
   data-pipeline-2:
     <<: *dev
-    image: data-pipeline-runtime:${IMAGE_TAG:-0.5.0}
     container_name: data-pipeline-2
-    command: ["devbox"]
     environment: {SSH_PORT: "8022", SETTINGS_FILE: /app/settings.yaml}
+    ports: ["0.0.0.0:8022:8022"]
     volumes:
       - ${SBL_ROOT:-/home/sbl}/data_pipeline-2/app:/app:z
       - ${SBL_ROOT:-/home/sbl}/data_pipeline-2/home:/root:z
@@ -41,10 +41,9 @@ services:
 
   data-pipeline-3:
     <<: *dev
-    image: data-pipeline-runtime:${IMAGE_TAG:-0.5.0}
     container_name: data-pipeline-3
-    command: ["devbox"]
     environment: {SSH_PORT: "8023", SETTINGS_FILE: /app/settings.yaml}
+    ports: ["0.0.0.0:8023:8023"]
     volumes:
       - ${SBL_ROOT:-/home/sbl}/data_pipeline-3/app:/app:z
       - ${SBL_ROOT:-/home/sbl}/data_pipeline-3/home:/root:z
@@ -52,15 +51,65 @@ services:
 
   data-pipeline-4:
     <<: *dev
-    image: data-pipeline-runtime:${IMAGE_TAG:-0.5.0}
     container_name: data-pipeline-4
-    command: ["devbox"]
     environment: {SSH_PORT: "8024", SETTINGS_FILE: /app/settings.yaml}
+    ports: ["0.0.0.0:8024:8024"]
     volumes:
       - ${SBL_ROOT:-/home/sbl}/data_pipeline-4/app:/app:z
       - ${SBL_ROOT:-/home/sbl}/data_pipeline-4/home:/root:z
       - ${DOC_SRC:-/data/docs}:/data/docs:ro,z
 
-secrets:
-  root_pw:   # SSH root 비밀번호 — host_ctl.sh가 settings.yaml option.devbox.root_password를 넘김 → 컨테이너 /run/secrets/root_pw
-    environment: ROOT_PW
+  pgvector:   # 검색 DB — 계정은 데이터 폴더가 비었을 때 한 번만 쓰인다(settings.yaml required.pg와 같은 값). 메모리 값은 서버에 맞춰
+    profiles: [db]
+    image: pgvector/pgvector:pg16
+    container_name: pgvector
+    restart: always
+    ports: ["0.0.0.0:5433:5432"]
+    environment:
+      POSTGRES_DB: null
+      POSTGRES_USER: null
+      POSTGRES_PASSWORD: null
+    volumes:
+      - ${PG_DATA:-/data/pg/pipeline}:/var/lib/postgresql/data:z
+    command: >
+      postgres -c shared_buffers=4GB -c effective_cache_size=12GB -c work_mem=64MB
+               -c maintenance_work_mem=2GB -c max_parallel_maintenance_workers=2
+               -c max_parallel_workers_per_gather=2 -c max_connections=100
+    shm_size: 3g
+    cpus: 4
+    mem_limit: 12g
+    memswap_limit: 12g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      options: {max-size: "50m", max-file: "3"}
+
+  redis:   # parse_document 작업 큐(이미지 입구를 거쳐 redis 사용자로) — 비밀번호는 settings.yaml common.connections.redis.redis_password와 같은 값
+    profiles: [db]
+    image: redis:7.4.8-alpine
+    container_name: redis
+    restart: always
+    environment:
+      REDIS_PASSWORD: null
+    command: ["sh", "-c", '[ -n "$$REDIS_PASSWORD" ] || { echo "[redis] REDIS_PASSWORD 칸이 비었음 — compose 파일에 채울 것" >&2; exit 1; }; exec docker-entrypoint.sh redis-server --requirepass "$$REDIS_PASSWORD" --appendonly yes --appendfsync everysec --protected-mode yes --bind 0.0.0.0']
+    ports: ["0.0.0.0:8010:6379"]
+    volumes:
+      - ${REDIS_DATA:-/data/redis}:/data:z
+    healthcheck:
+      test: ["CMD-SHELL", 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli --no-auth-warning ping | grep -q PONG']
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    pids_limit: 1024
+    cpus: 1
+    mem_limit: 2g
+    memswap_limit: 2g
+    logging:
+      options: {max-size: "20m", max-file: "3"}
+
+configs:
+  root_pw:   # SSH root 비밀번호(8자 이상) — 컨테이너 /run/secrets/root_pw
+    content: null

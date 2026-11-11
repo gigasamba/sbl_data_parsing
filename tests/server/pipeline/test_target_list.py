@@ -150,7 +150,6 @@ TABLES = [
 ]
 
 
-@pc.PIPE.env(SOURCE_SYSTEMS=None)  # 원천 목록 비움(운영 5개 원천) — 서버 설정의 source_systems에 기대지 않음
 def test_file_table():
     from common.config.settings import require_run_env
 
@@ -210,7 +209,6 @@ def test_source_systems_gate():
             assert code == want and (want is not None or got == run_env), (run_env, systems, code)
 
 
-@pc.PIPE.env(SOURCE_SYSTEMS=None)  # 원천 목록 비움(운영 5개 원천) — 서버 설정의 source_systems에 기대지 않음
 def test_dlq_targets():
     from pipeline.shared import dlq
 
@@ -238,7 +236,6 @@ def test_dlq_targets():
             assert states[K["big"]] == "dead" and states["gone"] == "pending"
 
 
-@pc.PIPE.env(SOURCE_SYSTEMS=None)  # 원천 목록 비움(운영 5개 원천) — 서버 설정의 source_systems에 기대지 않음
 def test_dlq_read_failure():
     """DLQ만 못 읽으면 기존 skip-done 선택. 경고는 종류만 한 줄(비밀값 없음)."""
     import io

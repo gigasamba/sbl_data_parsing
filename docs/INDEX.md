@@ -20,7 +20,7 @@
 
 ## 예외
 
-- `deploy/host/compose/` compose 파일: 환경마다 하나 `compose-local.yml`·`compose-dev.yml`·`compose-prd.yml` + 따로 띄우는 `compose-pgvector.yml`·`compose-redis.yml`.
+- `deploy/host/compose/` compose 파일: 환경마다 하나 `compose-local.yml`·`compose-dev.yml`·`compose-prd.yml`(dev·prd 안에 PG·Redis — 프로필 `db`).
 
 ## Glossary
 

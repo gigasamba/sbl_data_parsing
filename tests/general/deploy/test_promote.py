@@ -2,12 +2,11 @@
 
 import os
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
 from common.core.paths import DEPLOY_ROOT
-from tests.general.deploy.test_dc import PW_YAML, _posix
+from tests.general.deploy.test_dc import ENV_YAML, _posix
 from tests.general.deploy.test_trigger_gate import _bash
 
 SCRIPT = DEPLOY_ROOT / "deploy" / "release" / "promote.sh"
@@ -35,14 +34,13 @@ def test_promote_steps():
             (d / rel).write_text(body, encoding="utf-8", newline="\n")
             (d / rel).chmod(0o755)
         sf = d / "settings.yaml"
-        sf.write_text(PW_YAML.format("prd"), encoding="utf-8")
+        sf.write_text(ENV_YAML.format("prd"), encoding="utf-8")
         cmd = f'PATH="{_posix(d / "bin")}:$PATH" exec bash "{_posix(SCRIPT)}" 0.5.0 "{_posix(d / "images")}" --dim 1024'
         for fail, rc, last in CASES:
             env = {  # env 남김 — 하위 프로세스(호스트 셸이 load_settings로 받는 이름 — 시험)
                 "PATH": os.environ.get("PATH", ""),
                 "SETTINGS_FILE": _posix(sf),
                 "SETTINGS_LOADED": _posix(sf),
-                "PY": Path(sys.executable).as_posix(),  # host_ctl.sh가 비밀번호 칸을 읽는 python
                 "RUN_ENV": "prd",
                 "DOCKER": "dk",
                 "DK_FAIL": fail,

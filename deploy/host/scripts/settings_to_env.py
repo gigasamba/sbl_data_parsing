@@ -139,25 +139,30 @@ def lines(doc, sections, fmt="sh"):
     return out
 
 
-ENV_PAIRS = (  # .env(compose-redis.yml·compose-pgvector.yml) 이름 → settings.yaml 모델 경로 — 둘이 같아야 앱이 붙음
-    ("REDIS_PASSWORD", "common.connections.redis.redis_password"),
-    ("PG_USER", "common.connections.pg.user"),
-    ("PG_DB", "common.connections.pg.db"),
-    ("PG_PASSWORD", "common.connections.pg.password"),
+COMPOSE_PAIRS = (  # compose 파일 (서비스, env 이름) → settings.yaml 모델 경로 — 채운 칸은 둘이 같아야 앱이 붙음
+    ("pgvector", "POSTGRES_DB", "common.connections.pg.db"),
+    ("pgvector", "POSTGRES_USER", "common.connections.pg.user"),
+    ("pgvector", "POSTGRES_PASSWORD", "common.connections.pg.password"),
+    ("redis", "REDIS_PASSWORD", "common.connections.redis.redis_password"),
 )
 
 
-SECRET_PAIRS = (("ROOT_PW", "common.host.devbox.root_password"),)  # compose 비밀값 이름 → 모델 경로(host_ctl.sh — 셸 env로 내보내지 않음)
+def compose_mismatch(doc, compose_file):
+    """compose 비밀번호 칸이 settings.yaml과 다르거나 root 비밀번호가 8자 미만·여러 줄인 이름 목록 — 값은 돌려주지 않는다.
+    null 칸은 그 파일이 띄우지 않는 것이라 건너뛴다(개발 서버 data_pipeline/app의 PG·Redis는 compose-dev.yml)."""
+    import yaml
 
-
-def env_mismatch(doc, env_file):
-    """.env와 settings.yaml이 다른(또는 빈) 이름 목록 — 값은 돌려주지 않는다."""
-    env = {}
-    for line in Path(env_file).read_text(encoding="utf-8").splitlines():
-        k, sep, v = line.partition("=")
-        if sep and not k.lstrip().startswith("#"):
-            env[k.strip()] = v.strip()
-    return [n for n, p in ENV_PAIRS if not env.get(n) or env.get(n) != str(get(doc, p) or "")]
+    c = yaml.safe_load(Path(compose_file).read_text(encoding="utf-8")) or {}
+    svc = c.get("services") or {}
+    bad = []
+    for s, name, path in COMPOSE_PAIRS:
+        v = ((svc.get(s) or {}).get("environment") or {}).get(name)
+        if v is not None and str(v).replace("$$", "$") != str(get(doc, path) or ""):
+            bad.append(f"{s}.{name}")
+    pw = ((c.get("configs") or {}).get("root_pw") or {}).get("content")
+    if pw is not None and (len(str(pw)) < 8 or "\n" in str(pw).strip("\n")):  # 서버 앱 시작 관문과 같은 길이(settings.MIN_SECRET_LENGTH)
+        bad.append("configs.root_pw")
+    return bad
 
 
 def main(argv=None):
@@ -165,9 +170,8 @@ def main(argv=None):
     ap.add_argument("sections", nargs="*", help="모델 경로 절(없으면 표 전부 — 호스트 칸 모두)")
     ap.add_argument("--file", help="설정 파일(없으면 SETTINGS_FILE)")
     ap.add_argument("--format", choices=("env", "sh"), default="env")
-    ap.add_argument("--check-env", help=".env가 settings.yaml과 같은지만 확인(다른 이름만 찍음 — host_ctl.sh check)")
     ap.add_argument(
-        "--secret", choices=[p for _, p in SECRET_PAIRS], help="비밀 칸 값 하나만(host_ctl.sh가 compose 비밀값으로 — 비면 종료 1)"
+        "--check-compose", help="compose 파일의 비밀번호 칸이 settings.yaml과 같은지만 확인(다른 이름만 찍음 — host_ctl.sh check)"
     )
     a = ap.parse_args(argv)
     path = a.file or os.environ.get("SETTINGS_FILE")  # env 남김 — 설정 파일 자리 신호(load_settings가 정함)
@@ -175,23 +179,16 @@ def main(argv=None):
         print("[settings_to_env] 설정 파일 없음 — --file 또는 SETTINGS_FILE", file=sys.stderr)
         return 2
     doc, err = load_or_error(path)
-    if not err and a.secret:
-        v = str(get(doc, a.secret) or "")
-        if len(v) < 8 or "\n" in v:  # 서버 앱 시작 관문과 같은 길이(settings.MIN_SECRET_LENGTH)
-            print(f"[settings_to_env] {a.secret} 비었거나 8자 미만(또는 여러 줄)", file=sys.stderr)
-            return 1
-        sys.stdout.write(v)
-        return 0
-    if not err and a.check_env:
+    if not err and a.check_compose:
         try:
-            bad = env_mismatch(doc, a.check_env)
+            bad = compose_mismatch(doc, a.check_compose)
         except OSError:
-            print(f"[settings_to_env] .env를 읽지 못함: {a.check_env}", file=sys.stderr)
+            print(f"[settings_to_env] compose 파일을 읽지 못함: {a.check_compose}", file=sys.stderr)
             return 2
         if bad:
-            print("[settings_to_env] .env가 settings.yaml과 다름(또는 빔): " + " ".join(bad), file=sys.stderr)
+            print("[settings_to_env] compose 칸이 settings.yaml과 다름(또는 root 비밀번호 8자 미만): " + " ".join(bad), file=sys.stderr)
             return 1
-        print("[settings_to_env] .env = settings.yaml(" + " ".join(n for n, _ in ENV_PAIRS) + ")")
+        print("[settings_to_env] compose 비밀번호 칸 = settings.yaml")
         return 0
     try:
         out = [] if err else lines(doc, a.sections, a.format)

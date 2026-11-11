@@ -36,7 +36,7 @@ if [ "$mod" = "scheduled" ]; then
   # 건수 제한 없음(--limit 0 — 사람 실행 기본 run_limit을 덮음, 상한은 --max-docs). dev는 컨테이너 안에서 돈다(rn-05).
   rp=(deploy/host/scripts/run_pipeline.py --start-offset 0 --skip-done --max-docs "$n" --deadline "$dl" --limit 0 "$@")
   if [ "${RUN_ENV:-}" = dev ]; then
-    ${DOCKER:-docker} exec -w "$APP_CODE_ROOT" "${PIPE_CONTAINER:?dev는 settings.yaml ops.host.pipeline_container 필요}" python3 "${rp[@]}"; rc=$?
+    $DOCKER exec -w "$APP_CODE_ROOT" "${PIPE_CONTAINER:?dev는 settings.yaml ops.host.pipeline_container 필요}" python3 "${rp[@]}"; rc=$?
   else
     python3 "${rp[@]}"; rc=$?
   fi

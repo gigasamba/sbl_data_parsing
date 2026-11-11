@@ -323,10 +323,10 @@ def test_steps_stop_at_first_failure():
         ):
             RD.precheck()
             assert f"{gate}selftest_gate.sh" in shell.call_args.args[0], shell.call_args
-            RD.verify({1: {"s3_key": "k", "source_system": "S", "original_filename": "a.pdf"}}, {"k"})
-            assert all((box or "bash -c ") in c.args[0] and "exec data-pipeline" not in c.args[0] for c in shell.call_args_list[-2:]), (
-                direct
-            )
+            RD.verify({1: {"s3_key": "k", "source_system": "S", "original_filename": "a.pdf"}}, {"k"}, 0)
+            third = shell.call_args_list[-(1 if direct else 2) :]  # 개발 벌은 DB 검색까지(검색 MCP 건너뜀)
+            assert all((box or "bash -c ") in c.args[0] and "exec data-pipeline" not in c.args[0] for c in third), direct
+            assert ("mcp_smoke" in shell.call_args.args[0]) != direct, direct
     rows = {1: {"s3_key": "k1", "source_system": "DEV-1", "original_filename": "a/보관 기간.pdf"}}
     hit, miss = (0, 'log\n{"evidence": [{"x": 1}]}', ""), (0, '{"evidence": []}', "")
     ok_log = (0, "3|12", "")  # (applog 조회) 이번 실행 pipe_run 3행 · 그 문서 pipe_event 12행
@@ -371,7 +371,7 @@ def test_finish_exit_codes():
             mock.patch.object(RD, "verify", return_value=bad) as check,
             mock.patch.object(RD, "log") as out,
         ):
-            assert RD.finish(rc, flow, {}) == want and check.called == called, (rc, loaded, on, bad)
+            assert RD.finish(rc, flow, {}, 0) == want and check.called == called, (rc, loaded, on, bad)
         assert out.call_args.args[0].startswith("[판정] ") and out.call_args.args[0].endswith(f"종료 코드 {want}")
 
 

@@ -1319,13 +1319,13 @@ class CommonConnectionsPg(Section):
 
 class CommonConnectionsRedis(Section):
     redis_host: str = F(
-        "host.docker.internal", "REDIS_HOST", "parse_document Redis 호스트 — 컨테이너에서 서버 자신(compose-redis.yml, 서버마다 하나)"
+        "host.docker.internal", "REDIS_HOST", "parse_document Redis 호스트 — 컨테이너에서 서버 자신(compose 파일의 redis, 서버마다 하나)"
     )
-    redis_port: Port = F(8010, "REDIS_PORT", "parse_document Redis 포트(compose-redis.yml이 서버 8010에 연다)")
+    redis_port: Port = F(8010, "REDIS_PORT", "parse_document Redis 포트(compose 파일의 redis가 서버 8010에 연다)")
     redis_password: SecretStr | None = F(
         None,
         "REDIS_PASSWORD",
-        "Redis 비밀번호(필수 — 서버마다 채움) — 코드 폴더 맨 위 .env의 REDIS_PASSWORD(compose-redis.yml)와 같은 값. 로그·셸 env에 내보내지 않음",
+        "Redis 비밀번호(필수 — 서버마다 채움) — compose 파일 redis의 REDIS_PASSWORD 칸과 같은 값. 로그·셸 env에 내보내지 않음",
     )
     redis_db: int = F(0, "REDIS_DB", "Redis 데이터베이스 번호", ge=0)
     redis_key_prefix: str = F("mcp_parse", "REDIS_KEY_PREFIX", "Redis 큐 키 접두 — 설정값 그대로(서버당 한 벌)", min_length=1)
@@ -1452,11 +1452,6 @@ class CommonDev(Section):
 class CommonHostDevbox(Section):
     git_user_name: str | None = F(None, "DEVBOX_GIT_USER_NAME", "개발 작업 공간의 git 커밋 이름(git config user.name, 선택)")
     git_user_email: str | None = F(None, "DEVBOX_GIT_USER_EMAIL", "개발 작업 공간의 git 커밋 메일(git config user.email, 선택)")
-    root_password: SecretStr | None = F(
-        None,
-        "ROOT_PW",
-        "서버 SSH 컨테이너 root 비밀번호(dev·prd 필수) — host_ctl.sh가 compose 비밀값 root_pw로 넘김(셸 env·로그에 내보내지 않음)",
-    )
 
 
 class CommonHost(Section):

@@ -21,6 +21,6 @@ def test_local_source_skips_publish_dir():
             ("rag-silver", res, ["SFDC/id1/a.pdf"]),  # 버킷을 바꿔도 남은 PC 게시 폴더는 원본 아님
             ("rag-silver", other, None),  # 게시 폴더가 아니면 Parsing_Result도 맨 위 폴더 — 원천 이름이 아니라 평평한 폴더
         ):
-            with pc.PIPE.env(PM_BUCKET=bucket, LOCAL_PM_DIR=local_dir, SOURCE_SYSTEMS=None):
+            with pc.PIPE.env(PM_BUCKET=bucket, LOCAL_PM_DIR=local_dir):
                 files = CP._tree_files(src)
             assert (None if files is None else [p.relative_to(src).as_posix() for p in files]) == want, (bucket, files)

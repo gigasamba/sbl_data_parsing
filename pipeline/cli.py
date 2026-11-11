@@ -184,6 +184,8 @@ def case_env(mod):
         blank: dict[str, str | None] = {
             **dict.fromkeys(("LLM_BASE_URL", "VLM_BASE_URL", "EMBED_BASE_URL", "LLM_BUDGET_USD")),
             **dict.fromkeys(("LLM_ALLOW_EXTERNAL", "VLM_ALLOW_EXTERNAL", "EMBED_ALLOW_EXTERNAL"), "0"),  # 외부 전송 늘 끔
+            "SOURCE_SYSTEMS": None,  # 원천 목록 비움(운영 5개 원천) — 서버 설정의 source_systems에 기대지 않음
+            "PM_PREFIX": None,  # 게시 접두 비움 — 서버 설정의 publish prefix에 기대지 않음
             "APPLOG_DB_ENABLED": "0",  # 판정 시험은 서버 applog에 로그를 쓰지 않음(e2-22 — 운영 DB는 읽기만)
             # 하루 장부를 시험마다 따로 — 개발자의 output/_llm_spend 장부에 섞이지 않게
             "LLM_SPEND_FILE": str(Path(tempfile.mkdtemp(prefix="selftest_spend_")) / "spend.txt"),

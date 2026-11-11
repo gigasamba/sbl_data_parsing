@@ -19,7 +19,7 @@ def _posix(p):
     return f"/{p[0].lower()}{p[2:]}" if p[1:2] == ":" else p  # Git Bash(Windows)가 절대 경로로 보는 꼴
 
 
-PW_YAML = "required:\n  env: {{run_env: {}}}\noption:\n  devbox: {{root_password: test-pw-1}}\n"  # host_ctl.sh up이 읽는 SSH 비밀번호 칸
+ENV_YAML = "required:\n  env: {{run_env: {}}}\n"
 
 CASES = [  # (run_env, 인자, 종료 코드, 표준 출력(compose 파일 자리는 이름만) 또는 표준 오류에 나올 문구)
     ("local", ["up", "-d"], 0, "compose -f compose-local.yml up -d"),
@@ -38,13 +38,12 @@ def test_dc_command():
     assert subprocess.run([bash, "-n", str(SCRIPT)], capture_output=True).returncode == 0
     with tempfile.TemporaryDirectory() as d:
         sf = Path(d) / "settings.yaml"
-        sf.write_text(PW_YAML.format("dev"), encoding="utf-8")
+        sf.write_text(ENV_YAML.format("dev"), encoding="utf-8")
         for run_env, args, rc, want in CASES:
             env = {  # env 남김 — 하위 프로세스(호스트 셸이 load_settings로 받는 이름 — 시험)
                 "PATH": os.environ.get("PATH", ""),
                 "SETTINGS_FILE": _posix(sf),
                 "SETTINGS_LOADED": _posix(sf),  # 이미 읽은 것으로 — 호스트 칸은 settings_to_env.py를 부르지 않음
-                "PY": Path(sys.executable).as_posix(),  # 비밀번호 칸만 settings_to_env.py --secret으로 읽음
                 "RUN_ENV": run_env,
                 "DOCKER": "echo",
             }
@@ -97,12 +96,14 @@ def test_stale_shell_reads_own_root():
 KEEP_CASES = [
     ("true healthy", "true", "running", [["restart", "mcp-server"]]),
     ("true unhealthy", "true", "running", [["restart", "redis"], ["restart", "mcp-server"]]),
+    ("false", "true", "running", [["start", "redis"], ["restart", "mcp-server"]]),  # 멈춘 redis — 어느 묶음 것이든 start만
     (
         "",
         "false",
         "none",
         [
-            ["compose", "--env-file", ".env", "-f", "compose-redis.yml", "up", "-d"],
+            ["start", "redis"],  # 컨테이너 없음 — start 실패 뒤 만듦
+            ["compose", "-f", "compose-prd.yml", "up", "-d", "redis"],  # 프로필 db — 서비스 이름을 주면 켜짐
             ["compose", "-f", "compose-prd.yml", "up", "-d", "mcp-data-parsing"],
             ["compose", "-f", "compose-prd.yml", "up", "-d", "mcp-server"],
         ],
@@ -125,13 +126,14 @@ def test_keepalive():
             "#!/bin/bash\n"
             'if [ "$1" = inspect ]; then n=${@: -1}; n=STATE_${n//-/_}; echo "${!n:-}"; [ -n "${!n:-}" ]; exit; fi\n'
             f'if [ "$1" = exec ]; then echo "$*" >> "{_posix(calls)}"; exit 1; fi\n'
+            f'if [ "$1" = start ]; then echo "$*" >> "{_posix(log)}"; n=STATE_${{2//-/_}}; [ -n "${{!n:-}}" ]; exit; fi\n'
             f'echo "$*" >> "{_posix(log)}"\n'
         )
         for exe, body in (("sleep", "#!/bin/sh\nexit 0\n"), ("dk", dk)):
             (stub / exe).write_text(body, encoding="utf-8", newline="\n")
             (stub / exe).chmod(0o755)
         sf = Path(d) / "settings.yaml"
-        sf.write_text(PW_YAML.format("prd"), encoding="utf-8")
+        sf.write_text(ENV_YAML.format("prd"), encoding="utf-8")
         script = _posix(SCRIPT.parent / "mcp_keepalive.sh")
         # 대역을 PATH 맨 앞에 — Git Bash(Windows) 입구는 시작 때 /usr/bin을 앞에 붙이므로 셸 안에서 붙이고 bash를 다시 부름
         cmd = f'PATH="{_posix(stub)}:$PATH" exec bash "{script}"'

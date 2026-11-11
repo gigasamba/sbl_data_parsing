@@ -23,7 +23,7 @@ O=$HOME/.config/opencode/opencode.json
 python /etc/devbox/git_cred.py || echo "[devbox] git name/email setup failed — check option.devbox.git_user_*" >&2
 [ -f "$K/ssh_host_ed25519_key" ] || ssh-keygen -q -t ed25519 -N '' -f "$K/ssh_host_ed25519_key"
 # root (server compose compose-dev.yml / compose-prd.yml, user "0"): root password from the compose secret /run/secrets/root_pw
-# (settings.yaml option.devbox.root_password, passed by host_ctl.sh), else one built into the image; root password login. Servers only (dev, prd). Never via env or the repo.
+# (compose file configs.root_pw, filled on the server copy only), else one built into the image; root password login. Servers only (dev, prd). Never via env.
 SSHD_OPTS=()
 if [ "$(id -u)" = 0 ]; then
   # run_env as the apps resolve it (env RUN_ENV, else the mounted settings.yaml) — only dev or prd opens root login
@@ -36,7 +36,7 @@ if [ "$(id -u)" = 0 ]; then
   elif [ "$(getent shadow root | cut -d: -f2 | cut -c1)" = '$' ]; then
     echo "[devbox] $P missing or empty — using the root password built into the image" >&2
   else
-    echo "[devbox] no root password — fill settings.yaml option.devbox.root_password and run host_ctl.sh up -d --force-recreate" >&2; exit 2
+    echo "[devbox] no root password — fill configs.root_pw in the compose file and run host_ctl.sh up -d --force-recreate <this service>" >&2; exit 2
   fi
   unset W
   git config --global --replace-all safe.directory '*'   # code folder is owned by 10001; root git would refuse it

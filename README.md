@@ -73,7 +73,7 @@
 | 운영 서버 | [docs/operations/prd.md](docs/operations/prd.md) — 설치·운영 반영(`promote.sh`)·판 올리기·되돌리기 |
 | 설정 칸 | [docs/operations/settings.md](docs/operations/settings.md) |
 
-`parse_document`는 서버당 Redis 하나(`compose-redis.yml`)를 쓴다 — 요건 [PRD op-19](docs/prd/ops.md#op-19).
+`parse_document`는 서버당 Redis 하나(compose 파일의 `redis` — 프로필 `db`)를 쓴다 — 요건 [PRD op-19](docs/prd/ops.md#op-19).
 
 ## 6. 꼭 지킬 것 · 문서
 
