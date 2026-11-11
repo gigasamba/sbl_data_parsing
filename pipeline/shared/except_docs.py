@@ -1,11 +1,13 @@
 """적재되지 않은 문서 기록(op-17) — `applog.except_doc_info`에 원본 키 + 종류(`except_type`)당 한 행(처음·마지막 본 시각·횟수).
 - `skip` = 영구 뺌: 다시 받아도 파싱할 수 없는 원본(지원 안 하는 확장자·확장자 없음·DRM·암호)과 내용 중복(`duplicate_sha256` — 같은 묶음·
   이번 실행·끝난 문서와 같은 내용). 대상 목록(`candidate_pick.list_targets --skip-done`)이 그 키를 뺀다 — 밤마다 같은 문서를 다시 받지 않게.
-- `error` = 파싱·적재 실패: 기록만 하고 다음 실행이 다시 고른다(`skipped_keys`에 들지 않음).
+- `error` = 파싱·적재 실패: 컨테이너는 이력만, 호스트 error CLI가 DLQ 상태를 기록한다. 다음 실행 본 흐름에서 다시 고른다(--skip-done일 때 dead 제외)(`skipped_keys`에 들지 않음).
 - `part`(수준 warn) = 안 문서(압축 안 파일·첨부·개체)를 일부 못 꺼냄(pl-65): 성한 안 파일은 붙여 적재됨, 기록만.
 - `silver`(수준 warn) = 실버만 게시 — 골드 전(pl-68): 게시가 쓰고 골드 적재가 성공하면 지운다. 남아 있으면 골드 실패·중단·실버까지만 실행.
-표는 `dbtool up --target applog`(판 0003)가 만든다 — PG 접속 정보가 없으면 멈춤. 명령 `python -m pipeline.shared.except_docs error --csv <문서 위치 표> --reason <이유>` — run_pipeline이
-문서의 파싱·게시·적재 실패를 적는다."""
+`except_doc_info`는 `dbtool up --target applog` 판 0003, `dlq_doc`는 판 0005가 만든다 — PG 접속 정보가 없으면 멈춤.
+호스트 명령: `python -m pipeline.shared.except_docs error --key=<원본 키> --name=<파일 이름> --system=<원천> --reason <이유>`
+(`--csv <문서 위치 표>`로 크기·빈 메타데이터 보충, 키가 없으면 CSV 대체). DLQ는 호스트 CLI만 기록하며,
+이미 쓴 이력의 중복 집계를 피할 때 `--dlq-only`로 이력 없이 DLQ만 쓴다."""
 
 import csv
 import sys
@@ -78,13 +80,21 @@ def record(rows):
     return len(todo)
 
 
-def record_error(rows, kind="error", level="error", what="실패"):
-    """rows = [{source_key, source_system, file_name, reason, file_size(있으면)}] — 파싱·적재 실패를 error 행으로 upsert(다음 실행은 다시 고름). 반환: 쓴 행 수.
+def record_error(rows, kind="error", level="error", what="실패", *, to_dlq=False, history=True):
+    """rows = [{source_key, source_system, file_name, reason, file_size(있으면)}] — 파싱·적재 실패 이력. 호스트 CLI만 to_dlq=True로 DLQ도 기록. 반환: 쓴 행 수.
     kind·level은 record_part(part·warn)가 바꿔 쓴다."""
     todo = [r for r in rows if r.get("source_key") and r.get("reason")]
     if todo:
-        _upsert(todo, kind, level)
-        print(f"[except] {what} {len(todo)}건 기록({_schema()}.{TABLE} {kind})", flush=True)
+        if to_dlq and kind == "error":
+            from pipeline.shared import dlq
+
+            try:
+                dlq.record_failure(todo)
+            except (Exception, SystemExit) as ex:
+                print(f"[DLQ] 실패 기록 못 씀({type(ex).__name__}) — 계속", file=sys.stderr, flush=True)
+        if history:
+            _upsert(todo, kind, level)
+            print(f"[except] {what} {len(todo)}건 기록({_schema()}.{TABLE} {kind})", flush=True)
     return len(todo)
 
 
@@ -140,21 +150,39 @@ def _error_cmd(argv):
     import argparse
 
     ap = argparse.ArgumentParser(prog="pipeline.shared.except_docs error")
-    ap.add_argument("--csv", required=True, help="문서 위치 표(run_pipeline batch.csv — s3_key·original_filename·source_system)")
+    ap.add_argument("--csv", help="문서 위치 표(run_pipeline batch.csv — s3_key·original_filename·source_system)")
+    ap.add_argument("--key", help="원본 키(위치 표보다 우선)")
+    ap.add_argument("--system", help="명시한 원본 키의 원천 시스템")
+    ap.add_argument("--name", help="명시한 원본 키의 파일 이름")
     ap.add_argument("--reason", required=True, help="실패 이유(예 parse_failed·publish_failed·load_failed)")
+    ap.add_argument("--dlq-only", action="store_true", help="컨테이너가 이미 남긴 이력을 중복 집계하지 않고 DLQ만 기록")
     a = ap.parse_args(argv)
-    with Path(a.csv).open(encoding="utf-8-sig", newline="") as fh:
-        rows = [
-            {
-                "source_key": r["s3_key"],
-                "source_system": r.get("source_system"),
-                "file_name": r.get("original_filename"),
-                "file_size": r.get("file_size"),
-                "reason": a.reason,
-            }
-            for r in csv.DictReader(fh)
-        ]
-    record_error(rows)
+    if a.key:
+        rows = [{"source_key": a.key, "source_system": a.system, "file_name": a.name, "reason": a.reason}]
+        if a.csv and Path(a.csv).is_file():
+            with Path(a.csv).open(encoding="utf-8-sig", newline="") as fh:
+                matched = next((r for r in csv.DictReader(fh) if r["s3_key"] == a.key), None)
+            if matched is not None:
+                rows[0].update(
+                    file_size=matched.get("file_size"),
+                    file_name=a.name or matched.get("original_filename"),
+                    source_system=a.system or matched.get("source_system"),
+                )
+    elif a.csv and Path(a.csv).is_file():
+        with Path(a.csv).open(encoding="utf-8-sig", newline="") as fh:
+            rows = [
+                {
+                    "source_key": r["s3_key"],
+                    "source_system": r.get("source_system"),
+                    "file_name": r.get("original_filename"),
+                    "file_size": r.get("file_size"),
+                    "reason": a.reason,
+                }
+                for r in csv.DictReader(fh)
+            ]
+    else:
+        ap.error("--csv 파일 또는 --key가 필요함")
+    record_error(rows, to_dlq=True, history=not a.dlq_only)
     return 0
 
 

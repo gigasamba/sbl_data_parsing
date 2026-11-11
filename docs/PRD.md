@@ -102,6 +102,7 @@
 | 원천 = EDW `AI.FileStorageMap.source_system` 칸 값 하나 — 고르기·구조화·적재(`SFDC`·`CRMS`·`LAS`·`FAQ`, 그 밖은 `other`)·게시가 모두 그 값을 쓴다(목록 파일·manifest로 넘김, PC 폴더는 맨 위 폴더 이름). `faq` 스키마만 `chunk.faq_group` 칸 | 원본 경로에서 원천을 다시 구하지 않는다 — 원천 칸 하나로 정함 | done | [pl-28](prd/load-schema.md#pl-28) |  |
 | 게시는 gold `doc`에 같은 원본 키가 이미 있는지 먼저 보고, 있으면 올리지 않는다(`--reparse` 목록만 예외) | 끝난 문서의 결과를 Object Storage에 또 쌓지 않는다 | done | [pl-61](prd/load.md#pl-61) |  |
 | 단계 순서는 받기 → 변환(실버 → 골드) → 적재다. 예외 하나 — 실버 대표 결과는 골드 변환 전에 먼저 게시·적재해도 된다(골드 중 프로세스가 꺼져도 실버가 남게). 골드가 실패·중단되었거나 실버까지만 돌린 실행은 상태 기록을 보고 실버만 게시한다 | 사용자 11-08. 역방향 호출은 이것과 받기의 FAQ 교체 확인(`candidate_pick.faq_sync`)이 적재 명령 `pgvector_load faq-sync`를 자식 프로세스로 부르는 것 둘뿐이다 | done | [pl-68](prd/load.md#pl-68) | 게시가 `applog.except_doc_info`에 `silver` 행(수준 `warn`)을 쓰고 골드 적재가 성공하면 지운다 — 남은 행 = 실버만 있는 문서 |
+| DLQ — 호스트 실패 CLI가 PostgreSQL `applog.dlq_doc`에 문서당 한 번 실패 횟수·pending/dead/resolved를 관리한다. pending은 다음 실행 본 흐름에서 다시 시도, 3회 실패하면 dead를 제외하고 사람이 requeue | 실패 이력과 관리 상태 분리(#174 합의), 자동 재시도 정책은 12월 | dev | [pl-69](prd/load.md#pl-69) | code_fp·FINGERPRINT 불변. 판 0005 먼저 → 코드 폴더 교체 필수, DB 담당 승인 C-119 |
 
 ## 검색 MCP (mcp) — AI 클라이언트가 부르는 도구 서버(이미지 `mcp-server`)
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |

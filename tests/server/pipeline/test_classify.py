@@ -216,7 +216,7 @@ def test_load_labels_and_skips_failed():
             rows = {r["file_path"]: r["doc_class"] for r in sf.q(f"SELECT file_path, attrs->>'doc_class' AS doc_class FROM {S}_sfdc.doc")}
             db.cn.close()
         assert rows == {"SFDC/u/rfp.pdf": "RFP"}, rows  # 실패한 bad.pdf는 안 들어감 · 두 번째 답(Proposal)으로 덮지 않음
-        assert counts["by_source"]["sfdc"]["docs"] == 1, counts
+        assert counts["by_source"]["sfdc"]["docs"] == 1 and counts["classify_failed"] == 1, counts
         assert first == ("Acme", {"sf_op_id": "006A", "title": "RFP reply", "doc_class": "RFP"}), first  # attrs = EDW 키 + 분류(pl-52)
         assert any("RFP reply" in s for s in seen), seen  # 분류 힌트를 attrs에서 읽음
     finally:

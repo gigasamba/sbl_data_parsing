@@ -232,3 +232,41 @@ def test_embed_guard():
             db.cn.close()
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_classify_failure_exit_and_runtrace():
+    import io
+    import json
+    import tempfile
+    from contextlib import nullcontext, redirect_stdout
+    from pathlib import Path
+    from unittest.mock import Mock, patch
+
+    from common.store.db import dbtool
+    from pipeline.shared import runtrace
+
+    with tempfile.TemporaryDirectory() as tmp:
+        (Path(tmp) / "meta.json").write_text("{}", encoding="utf-8")
+        for failed, strict, code in ((0, False, None), (1, False, None), (0, True, None), (1, True, 3)):
+            counts = {"docs": 0, "chunks": 0, "terms": 0, "sec": 0, "classify_failed": failed}
+            rows, stdout = [], io.StringIO()
+            with (
+                patch.object(M, "conf", return_value={}),
+                patch.object(M, "PG", return_value=Mock(schema="test")),
+                patch.object(dbtool, "require_current"),
+                patch.object(M, "require_vectors"),
+                patch.object(M, "load", return_value=counts),
+                patch.object(M.SP, "span", return_value=nullcontext(Mock())),
+                patch.object(runtrace.jsonlog, "get_context", return_value={}),
+                patch.object(runtrace, "_start_row", return_value={}),
+                patch.object(runtrace, "_emit_run", side_effect=lambda row, event, rows=rows: rows.append((dict(row), event))),
+                redirect_stdout(stdout),
+            ):
+                got = None
+                try:
+                    with runtrace.run("pgvector_load", ["load"]):
+                        M.main(["load", "--bundle", tmp, *(["--fail-on-classify"] if strict else [])])
+                except SystemExit as ex:
+                    got = ex.code
+            assert got == code and json.loads(stdout.getvalue())["classify_failed"] == failed
+            assert rows[-1][1] == "run.end" and rows[-1][0]["status"] == ("fail" if failed and strict else "ok")
