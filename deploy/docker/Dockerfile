@@ -78,7 +78,7 @@ RUN set -e; n=$(ls /tmp/wheels | grep -c '\.whl$' || true); \
 RUN if [ "$APT" = "1" ]; then \
       apt-get update && apt-get install -y --no-install-recommends \
         openssh-server openssh-client telnet git curl wget iputils-ping dnsutils netcat-openbsd net-tools procps lsof \
-        vim nano zip unzip tree file ripgrep sqlite3 tini tmux \
+        vim nano zip unzip tree file ripgrep sqlite3 tini tmux sudo \
       && rm -rf /var/lib/apt/lists/*; fi \
     && mkdir -p /run/sshd && chmod 755 /run/sshd
 ARG UV_VERSION=0.11.26
@@ -87,6 +87,10 @@ RUN pip install --no-cache-dir $(cat /tmp/pipopt) uv==${UV_VERSION} -r /tmp/requ
 COPY --from=src /src/opencode/ /usr/local/bin/
 COPY deploy/docker/devbox/ /etc/devbox/
 RUN sed -i 's/\r$//' /etc/devbox/* && chmod 755 /etc/devbox/dev_entry.sh && ln -s /etc/devbox/profile.sh /etc/profile.d/zz-devbox.sh
+# Image root password (user exception): BuildKit secret `--secret id=root_pw,src=<file outside git>` — first line.
+#   Not in the repo or `docker history`; the hash stays in /etc/shadow. A non-empty <SBL_ROOT>/root_pw still overrides it at start.
+RUN --mount=type=secret,id=root_pw,required=false \
+    if [ -s /run/secrets/root_pw ]; then head -n1 /run/secrets/root_pw | tr -d '\r' | sed 's/^/root:/' | chpasswd; fi
 ENV OPENCODE_DISABLE_MODELS_FETCH=1 OPENCODE_DISABLE_AUTOUPDATE=1
 
 # 파싱 엔진·OCR 의존성(무거움) — 코드 바뀌어도 다시 설치 안 되게 코드 복사 전에
@@ -137,6 +141,7 @@ COPY --from=src /src/mcp_server /app/deploy/mcp_server
 COPY --from=src /src/pipeline/__init__.py /src/pipeline/cli.py /src/pipeline/config.py /app/deploy/pipeline/
 COPY --from=src /src/resources /app/deploy/resources
 COPY --from=src /src/VERSION /app/deploy/VERSION
+COPY --from=src /src/edw_chain.yaml /app/deploy/edw_chain.yaml
 COPY --from=src /src/appdocker /app/docker
 COPY --from=src /src/tests/__init__.py /src/tests/runner.py /app/deploy/tests/
 COPY --from=src /src/tests/server/__init__.py /app/deploy/tests/server/
@@ -206,6 +211,7 @@ COPY --from=src /src/pipeline /app/deploy/pipeline
 COPY --from=src /src/mcp_server/__init__.py /src/mcp_server/config.py /app/deploy/mcp_server/
 COPY --from=src /src/resources /app/deploy/resources
 COPY --from=src /src/VERSION /app/deploy/VERSION
+COPY --from=src /src/edw_chain.yaml /app/deploy/edw_chain.yaml
 COPY --from=src /src/appdocker /app/docker
 COPY --from=src /src/tests/__init__.py /src/tests/runner.py /app/deploy/tests/
 COPY --from=src /src/tests/server/__init__.py /app/deploy/tests/server/

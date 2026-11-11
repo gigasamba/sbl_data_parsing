@@ -183,7 +183,11 @@ def _mail_with_locked_zip():
 def test_part_row():
     """pl-65 — 안 문서를 못 꺼낸 원본: 성한 안 파일은 꺼내고(문서는 그대로 남음), 받기가 part 행(수준 warn, 이유 = 못 꺼낸 이름과 까닭)을
     원본 키당 한 행 남긴다. 다시 돌리면(다시 풀지 않아도) 횟수가 오른다. 대상 목록에서 빼는 키가 아니다."""
-    with tempfile.TemporaryDirectory() as d, applog_pg(Path(d) / "pg"):
+    with (
+        tempfile.TemporaryDirectory() as d,
+        applog_pg(Path(d) / "pg"),
+        pc.PIPE.env(ATTACH_MAX_DEPTH="2"),
+    ):  # 표는 기본 깊이 2 기준 — 서버 settings.yaml 값과 상관없이
         src, prepared, state = Path(d) / "src", Path(d) / "prepared", Path(d) / "state"
         src.mkdir()
         state.mkdir()

@@ -33,16 +33,14 @@ def _host_env():
 
 def _value(path, name, kind):
     if kind == "num":
-        return 4.0 if name.endswith("CPUS") else 7  # 4.0 → "4"(compose cpus)
+        return 7
     if name == "RUN_ENV":
         return "dev"
     if name in ("NIGHTLY_TIME", "NIGHTLY_DEADLINE"):
         return "01:30" if name == "NIGHTLY_TIME" else "06:00"  # HH:MM 칸(#99)
     if name == "DOCKER":
         return "podman"
-    if name.endswith("_CONTAINER") or name == "COMPOSE_PROJECT":
-        return f"v-{name.lower()}"  # 이름 꼴(태그 없음)
-    return f"/srv/x/{name.lower()}" if "DIR" in name or name in ("DOC_SRC", "RAG_OUT") else f"v-{name.lower()}:0.2.0"
+    return f"/srv/x/{name.lower()}" if "DIR" in name or name == "DOC_SRC" else f"v-{name.lower()}:0.2.0"
 
 
 def test_host_env_matches_export():
@@ -85,3 +83,21 @@ def test_host_env_matches_export():
     print(
         f"[시험] 호스트 칸 → 셸 env — PyYAML만으로 export와 같은 줄 {len(got)}개 · host_settings.tsv = 설정 모델 · 값 꼴 {len(cases)}개 통과"
     )
+
+
+# .env 대조(host_ctl.sh check 첫 단계): (.env 줄, 기대 다른 이름) — settings.yaml은 아래 SET_DOC 하나
+ENV_DOC = {"common": {"connections": {"redis": {"redis_password": "r1"}, "pg": {"user": "u", "db": "d", "password": "p1"}}}}
+ENV_CASES = [
+    ("REDIS_PASSWORD=r1\nPG_USER=u\nPG_DB=d\nPG_PASSWORD=p1\n", []),
+    ("# 주석\nREDIS_PASSWORD=r2\nPG_USER=u\nPG_DB=d\nPG_PASSWORD=p1\n", ["REDIS_PASSWORD"]),  # 다르면 이름만
+    ("REDIS_PASSWORD=r1\nPG_USER=u\nPG_DB=d\n", ["PG_PASSWORD"]),  # 빠지면 이름만
+]
+
+
+def test_env_mismatch():
+    s2e = _load("s2e_env", "deploy/host/scripts/settings_to_env.py")
+    with tempfile.TemporaryDirectory() as d:
+        f = Path(d) / ".env"
+        for body, want in ENV_CASES:
+            f.write_text(body, encoding="utf-8")
+            assert s2e.env_mismatch(ENV_DOC, f) == want, (body, want)

@@ -4,7 +4,9 @@ HTTP 본문 상한(SDK 기본 4MiB)은 base64 크기에 맞춰 올린다. 상한
 import asyncio
 import base64
 import json
+import os
 import tempfile
+import unittest
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
@@ -250,6 +252,8 @@ def test_redis_errors_without_redis_import():
 
 
 def test_policy_rejects_before_files_and_submit():
+    if os.name == "nt":
+        raise unittest.SkipTest("POSIX paths/symlinks — Linux server only")
     from unittest.mock import Mock
 
     for available in (True, False):
@@ -359,6 +363,8 @@ def test_presubmit_connection_error_has_no_job_id():
 
 
 def test_proxy_accepts_symlink_policy_roots():
+    if os.name == "nt":
+        raise unittest.SkipTest("POSIX paths/symlinks — Linux server only")
     r = FakeRedis()
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)

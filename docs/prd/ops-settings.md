@@ -31,7 +31,7 @@
   9. 게시(silver)·EDW 칸은 `required` 한곳에 — `publish`(`publish_bucket`·`publish_prefix`)·`object_storage`(`object_storage_endpoint`·`object_storage_access_key`·`object_storage_secret_key`)·`edw`(`edw_host`·`edw_port`·`edw_database`·`edw_read_*`). 서버(dev·prd)가 채우는 칸이고 local은 무시한다(op-14). 기본값이 있는 칸(`edw_port`·`pg_schema` `data_parsing`)은 비우면 코드 기본값 — 서버(dev·prd)에서 `pg_schema`를 비우면 칸 자리와 쓰는 기본값을 경고 한 줄로 알린다(`pg.conf`). EDW 계정은 읽기 계정 하나다(EDW는 읽기만 — op-17 · 쓰기 계정 칸은 없다).
   10. 칸(잎) 이름은 파일 전체에서 하나뿐이고 절 경로 없이도 뜻이 보인다 — 역할을 이름 앞에 붙인다(`pg_host`·`edw_host`, `embed_base_url`·`llm_base_url`·`vlm_base_url`, run_pipeline 덮기 칸은 `batch_`, parse MCP 작업 서비스 칸은 `mcp_parse_`). 줄임은 흔한 것만(pg·edw·mcp·vlm·llm·ocr·cpu). 세 모델의 접속 칸은 `required.models` 한 곳에 모델마다 묶는다. 시험 `tests/server/common/test_leaf_names.py`가 지킨다.
   11. 칸 주석은 100자 안팎, 허용값 또는 예를 하나 넣는다 — 켜기·고른 글자·숫자 칸은 sample이 꼴(`true·false`·값 목록·`정수`·`숫자`)을 붙인다.
-  12. 모드마다 꼭 채울 칸: local = `run_env`·모델 접속(`embed_base_url`·`embed_model`·`llm_base_url`·`llm_model`·`vlm_base_url`·`vlm_model`)·PG 접속 5칸. dev·prd = 그 위에 EDW(`edw_host`·`edw_database`·`edw_read_user`·`edw_read_password`)·`publish_bucket`·Object Storage 3칸·토큰(`mcp_token`·원문 도구를 쓰면 `fulltext_sign_key`)·배포 4칸(`pipeline_image`·`mcp_image`·`host_docs_dir`·`pg_container_name`). sample 칸 주석의 `[필수 · …]`가 이 표와 같다.
+  12. 모드마다 꼭 채울 칸: local = `run_env`·모델 접속(`embed_base_url`·`embed_model`·`llm_base_url`·`llm_model`·`vlm_base_url`·`vlm_model`)·PG 접속 5칸. dev·prd = 그 위에 EDW(`edw_host`·`edw_database`·`edw_read_user`·`edw_read_password`)·`publish_bucket`·Object Storage 3칸·토큰(`mcp_token`·원문 도구를 쓰면 `fulltext_sign_key`)·배포 2칸(`host_docs_dir`·`pg_container_name`). sample 칸 주석의 `[필수 · …]`가 이 표와 같다.
 - 메모(사용자 11-04 — 칸 줄이기): 읽는 곳이 없거나 겹치는 칸을 지웠다 — `secure_doc.password`, `pg.conn_file`, `ops.paths.output_root`(공용), `transport.ping_timeout`(점검기 상수 60초), EDW 원천 표의 선택 열(`bucket`·`company`·`doc_type`·`etag` 등 10개)과 `company`·`doc_type` 거르기, `structure.embed`(`gold_bundle --embed` 기본 api), publish `parse_date`·`path_map`, `server.instructions`, `search.min_score`, `search.pg.vector_search`, `edw_query.tables`·`tables_strict`, `gold_dir` 두 칸(op-11). 옛 파일에 남으면 시작 거부(rn-07). `search.server.fulltext_secret`은 `required.tokens.fulltext_sign_key`로 옮겼다. 남긴 칸과 이유: `tuning.ops.runtime.glossary_lock_timeout_sec`(용어 초안 잠금 — 핸드오프 파일이 읽음), `llm_price_in_usd_per_mtok`·`llm_price_out_usd_per_mtok`(가격표에 없는 모델), `extract.max_new_docs_per_run`(명령 기본값), `publish_upload_statuses`, `load.stored_path_prefix`, `search.edw_meta.edw_meta_catalog_dir`(mc-07).
 - 파일: `common/config/{sample,settings,keyscan,layout}.py`, `pipeline/config.py`, `mcp_server/config.py`, `settings.sample.yaml`.
 - QA: `python -m common.config.sample --check` · sample이 설정 모델과 같음. `tests/server/common/test_sample_yaml.py`(복사한 sample로 서버 STRICT 시작 · 적힌 값 = 코드 기본값)·`test_leaf_names.py`(잎 이름 하나씩)·`test_sample_copy.py`(복사 뒤 빈 칸만 채워 시작 — local은 run_env·모델만, local에 적힌 서버 칸은 비우고 경고, dev는 pg_schema 비우면 data_parsing + 경고 · local 가짜 EDW 사본) · 통과.
@@ -77,15 +77,15 @@
 - Status: done
 
 <a id="op-15"></a>
-## op-15 · 한 서버에 여러 벌(개발자별) — 벌 번호는 폴더 이름, 포트는 설정으로
-- 이유(사용자 11-04): 개발 서버에 개발자마다 컨테이너를 따로 띄운다. 컨테이너 이름(`data-pipeline` 등)·compose 묶음 이름·systemd 타이머 이름이 고정이라 두 번째 벌이 첫 벌을 덮었다. 벌 번호를 폴더 이름에서 읽어 설정 칸 없이 나눈다(사용자 11-06).
+## op-15 · 한 서버에 여러 벌(개발자별) — 벌마다 코드 폴더, 이름·포트는 compose-dev.yml
+- 이유: 개발 서버에 개발자마다 컨테이너를 따로 띄운다.
 - 규칙:
-  1. 벌 폴더(코드 폴더 = 루트) 하나 = 한 벌. 벌 번호 = 코드 폴더 이름 끝 `-<숫자>`(예 `sbl_data_parsing-main-2` → `2`) — 있으면 컨테이너 3개·compose 묶음(`compose-<번호>`)·systemd 단위 4개 이름 끝에 `-<번호>`. 없으면(`sbl_data_parsing-main`·`sbl_data_parsing-0.3.0`) 이름 그대로(한 벌). 벌 이름 설정 칸은 없다(`ops.host.instance_name`이 남으면 모르는 칸으로 시작 거부).
-  2. 번호를 구하는 곳은 `load_settings.sh load_settings`(`INSTANCE`·`NAME_SUFFIX`) 한 곳, 호스트 스크립트(`host_ctl.sh`·`mcp_keepalive.sh`·`nightly_batch.sh`·`pipe_exec.sh`)와 compose 파일은 그 값을 쓴다. `run_pipeline.py`는 같은 규칙(`instance_of`)으로 `configure()`에서.
+  1. 벌 폴더(코드 폴더 = 루트 — `<SBL_ROOT>/sbl_data_parsing-main-<n>`) 하나 = 한 벌. 벌 컨테이너(`data-pipeline-<n>`)·SSH 포트·폴더는 `compose-dev.yml`에 벌마다 한 칸씩 직접 적는다(벌을 늘리려면 칸을 복사). 벌 이름·번호 설정 칸은 없다.
+  2. 검색 MCP·parse_document 작업 컨테이너·새벽 배치·MCP 살리기·systemd 타이머는 벌 0만(`mcp-server-0`·`mcp-data-parsing-0`·`data-pipeline-0`).
   3. PG 스키마·EDW 기록 표·게시 경로·버전에는 벌 표시를 붙이지 않는다 — 모든 벌이 같은 기준 스키마를 함께 쓰므로 모든 벌이 같은 코드 판이어야 한다(벌끼리 데이터를 나누는 길은 [op-17](ops.md#op-17)).
-  4. 포트 두 칸(`search.server.mcp_port` · `ops.services.data_parsing.data_parsing_port` — 작업 서비스와 검색 MCP가 같은 칸)은 벌마다 다르게 — 번호가 붙은 벌인데 기본값이면 시작 거부. `prd`에서 번호가 붙은 폴더면 시작 거부(종료 2). 거부는 `load_settings.sh`·`run_pipeline.py configure()` 둘 — server-guide §2-1.
-- 파일: `deploy/host/scripts/{load_settings.sh,host_ctl.sh,mcp_keepalive.sh,nightly_batch.sh,pipe_exec.sh,run_pipeline.py}` · `deploy/host/compose/compose.{pipeline,data-parsing,mcp-server}.yml` · server-guide §2-1.
-- QA: `tests/general/deploy/test_dc.py`(묶음 이름 `compose`·`compose-2` · 판 번호 폴더 `sbl_data_parsing-0.3.0`은 한 벌 · 기본 포트·prd 종료 2) · `test_dc_init.py`(루트 = 코드 폴더 · 타이머 단위 이름 끝) · `test_run_pipeline.py::test_instance_names` · `test_compose.py`(컨테이너 이름 끝 `${NAME_SUFFIX:-}`) · 통과.
+  4. 서버 쪽 포트는 compose 파일에 직접(컨테이너 안 포트는 같음 — 설정 칸으로 벌마다 바꾸지 않음).
+- 파일: `deploy/host/compose/compose-dev.yml` · `deploy/host/scripts/{host_ctl.sh,mcp_keepalive.sh,run_pipeline.py}`.
+- QA: `tests/general/deploy/test_compose.py`(`compose-dev.yml` 벌 0·1) · `test_dc_init.py`(루트 = 코드 폴더) · `test_run_pipeline.py::test_configure_fixed_container` · 통과.
 - Status: done
 
 <a id="pl-21"></a>

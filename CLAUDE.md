@@ -48,7 +48,7 @@
 - `.sh`는 **bash 3.2(macOS)와 bash 4/5(RHEL) 모두에서 동작하는** 문법만 쓴다. `set -u`와 빈 배열의 조합을 조심하고, 변수 바로 뒤에 한글을 붙이지 않는다(`${N}개`처럼 중괄호로 감싼다 — bash 3.2는 뒤에 붙은 한글까지 변수 이름으로 읽는다). Windows에서 만든 `.sh`에는 실행 권한을 준다(`git update-index --chmod=+x`).
 - OS별 분기(파일 잠금의 `fcntl`/`msvcrt` 등)는 한 곳에만 둔다.
 - 외부 프로그램(soffice, tesseract, 글꼴)은 PATH와 설정 항목으로만 찾는다.
-- 컨테이너: RHEL은 SELinux를 쓰므로 bind 마운트에 `:z`를 붙인다. 서버의 컨테이너 도구는 docker다(재부팅 때 docker 서비스가 `restart: unless-stopped` 컨테이너를 다시 띄움 — 사용자 11-09). 컨테이너 사용자는 UID 10001이다.
+- 컨테이너: RHEL은 SELinux를 쓰므로 bind 마운트에 `:z`를 붙인다. 서버의 컨테이너 도구는 docker다(재부팅 때 docker 서비스가 `restart: unless-stopped` 컨테이너를 다시 띄움 — 사용자 11-09). 이미지의 기본 사용자는 UID 10001이고, 서버·PC compose 파일은 앱 컨테이너를 root(`user: "0"`)로 띄운다(사용자 결정 — PRD [op-20](docs/prd/ops.md#op-20)).
 
 ---
 

@@ -35,19 +35,15 @@ def app_selftest(app_cls, top):
     secret = "tok-" + "y" * 10
     with tempfile.TemporaryDirectory() as td:
         f = Path(td) / "s.yaml"
-        host_leaf = next(p for p, fi, _ in rows if p.startswith(top + ".host.") and S._args(fi.annotation) == [str])
         sec_leaf = next(p for p, fi, _ in rows if S.is_secret(fi))  # 앱 절에 비밀 칸이 없으면 common 것
         doc = {}
-        L.set_path(doc, host_leaf, "v1")
         L.set_path(doc, sec_leaf, secret)
         L.set_path(doc, "common.run_env", "dev")
         import yaml
 
         f.write_text(yaml.safe_dump(to_file(doc)), encoding="utf-8")
         st = S.load(app_cls, file=f, environ={})
-        out = E.lines(st, [f"{top}.host"]) + E.lines(st, [top])
-        env_host = S.env_name(dict((p, fi) for p, fi, _ in rows)[host_leaf])
-        check(f"{top}: export — 호스트 절 칸을 KEY=VALUE로", f"{env_host}=v1" in out)
+        out = E.lines(st, [top])  # 호스트 절 KEY=VALUE 내보내기는 test_settings(common.host)가 봄
         check(f"{top}: export — 비밀 칸은 내보내지 않음", not any(secret in line for line in out))
         check(f"{top}: 요약에 비밀 값 없음(이름만)", secret not in "\n".join(summary(st)) and sec_leaf in "\n".join(summary(st)))
         import contextlib
@@ -58,8 +54,8 @@ def app_selftest(app_cls, top):
         for argv in (
             ["--file"],
             ["export", "--file", str(f)],
-            ["--file", str(f), "export", "--section", f"{top}.host", "--format", "sh"],
-            ["export", "--section", f"{other}.host", "--file", str(f)],
+            ["--file", str(f), "export", "--section", top, "--format", "sh"],
+            ["export", "--section", other, "--file", str(f)],
         ):
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                 try:

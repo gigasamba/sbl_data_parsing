@@ -39,9 +39,20 @@ NAME_LIST = {
 }
 # YAML에 넣지 않는 이름 — env로 남김(라이브러리가 읽음) · 인자(빌드·반입·시험 스크립트). 코드가 읽지 않는 이름은 대조하지 않는다.
 NOT_SETTINGS = {
-    "REDIS_CONF_DIR": ("인자", "호스트 전용 보호 설정 폴더 — 셸 덮기만 허용, settings.yaml 칸 없음(#177 F7)"),
-    "REDIS_CONF_CHANGED": ("env로 남김", "내부 신호 — prepare_redis의 파일 내용 변경을 호스트 재시작에 전달(#177 F7)"),
-    "REDISCLI_AUTH": ("env로 남김", "Redis CLI 라이브러리 인증 — 보호 파일에서만 전달, 설정 칸은 redis_password"),
+    **{
+        n: ("인자", f"서버 compose 파일 변수 — {what}(셸 env나 compose 파일 옆 .env, settings.yaml 칸 없음 — op-20)")
+        for n, what in (
+            ("SBL_ROOT", "벌 폴더들의 위 폴더(기본 /home/sbl)"),
+            ("IMAGE_TAG", "이미지 판"),
+            ("PRD_DIR", "운영 폴더(compose-prd.yml)"),
+            ("PG_DATA", "PG 데이터 폴더(compose-pgvector.yml)"),
+            ("REDIS_DATA", "Redis AOF 데이터 폴더(compose-redis.yml)"),
+        )
+    },
+    **{
+        n: ("인자", "PC 시험 Docker compose 변수(valid_env/docker/compose.test.yml — smoke_test.sh 인자)")
+        for n in ("DATA_PIPELINE_IMAGE", "MCP_SERVER_IMAGE", "RAG_OUT")
+    },
     "APPLOG_CONTEXT": ("env로 남김", "내부 신호 — 부모 → 자식 request/run/span ID(JSON), 설정 아님"),
     "SETTINGS_FILE": ("env로 남김", "설정 파일 위치(새 — D-015)"),
     "SETTINGS_LENIENT": (
@@ -61,7 +72,7 @@ NOT_SETTINGS = {
     ),
     "PYTHONUTF8": ("env로 남김", "파이썬 실행 옵션(이미지·셸)"),
     "APP_ENTRY": ("env로 남김", "이미지 신호(Dockerfile ENV) — dev_entry.sh가 `devbox` 밖의 명령을 넘길 이미지 시작 스크립트"),
-    "SSH_PORT": ("env로 남김", "compose.dev.yml → dev_entry.sh — 값은 option.devbox.ssh_port(DEVBOX_SSH_PORT)"),
+    "SSH_PORT": ("env로 남김", "compose-dev.yml·compose-prd.yml → dev_entry.sh(컨테이너 안 22)"),
     "UV_VERSION": ("env로 남김", "Dockerfile 빌드 인자(uv 판)"),
     "DO_NOT_TRACK": ("env로 남김", "외부 라이브러리 원격 측정 끄기 — Dockerfile ENV(U-1, S7a2) · settings·빈 틀에서만 뺌(S7e)"),
     "HF_HOME": ("env로 남김", "라이브러리(huggingface)가 읽음"),
@@ -112,26 +123,12 @@ NOT_SETTINGS = {
     "BAKE_TEST": ("인자", "bake_prod_image.sh — PC 시험 태그면 1(태그가 VERSION과 달라도 멈추지 않음, op-09)"),
     "CODE_DIR": (
         "인자",
-        "호스트 스크립트 변수 — 개발 서버 코드 폴더(in_container.sh가 실행 이미지일 때 pwd로 채움, compose.code*.yml 마운트 — op-09)",
+        "빌드·굽기 스크립트 변수 — 코드 폴더(build_ship.sh·bake_prod_image.sh — op-09)",
     ),
     "RAG_ROOT": (
         "인자",
-        "호스트 스크립트 변수 — 서버 루트(코드 폴더 자체 — load_settings.sh가 구해 compose edw_chain.yaml 마운트에, op-13)",
+        "호스트 스크립트 변수 — 서버 루트(코드 폴더 자체 — load_settings.sh가 구함, op-13)",
     ),
-    "INSTANCE": ("인자", "호스트 스크립트 변수 — 벌 번호(코드 폴더 이름 끝 -<숫자> — load_settings.sh가 구함, op-17)"),
-    "NAME_SUFFIX": (
-        "인자",
-        "호스트 스크립트 변수 — 여러 벌 이름 끝 -<벌 번호 — 코드 폴더 이름 끝 숫자>(load_settings.sh가 구해 compose container_name·묶음 이름·타이머에, op-15)",
-    ),
-    **{
-        n: ("인자", f"호스트 스크립트 변수 — {what} 이름 = 밑 이름(설정 {key}) + NAME_SUFFIX(load_settings.sh가 구해 compose·스크립트에)")
-        for n, what, key in (
-            ("PIPELINE_CNAME", "data-pipeline 컨테이너", "PIPELINE_CONTAINER"),
-            ("DATA_PARSING_CNAME", "mcp-data-parsing 컨테이너", "DATA_PARSING_CONTAINER"),
-            ("MCP_CNAME", "mcp-server 컨테이너", "MCP_CONTAINER"),
-            ("COMPOSE_PNAME", "compose 묶음", "COMPOSE_PROJECT"),
-        )
-    },
     "POSTGRES_DB": ("env로 남김", "PG 컨테이너 env — compose가 PG_DB로 채움(설정 칸은 op-08에 지움)"),
     "POSTGRES_USER": ("env로 남김", "PG 컨테이너 env — compose가 PG_USER로 채움(설정 칸은 op-08에 지움)"),
 }

@@ -59,7 +59,6 @@ tessdata_best/
 # pr-reviewer scratch notes (never commit)
 /comment.md
 /findings.md
-/edw_chain.yaml
 /home/
 # 코드 폴더 안 git worktree(server-guide §6-4)
 /.worktrees/
