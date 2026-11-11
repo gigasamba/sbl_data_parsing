@@ -578,7 +578,7 @@ bash deploy/host/scripts/pipe_exec.sh migrate check --target all                
 bash deploy/host/scripts/pipe_exec.sh show-stack                                # 엔진 구성 파일(이름·sha·경로)이 보이면 정상 — 못 읽으면 종료 2
 ```
 
-- `--target`: `search`·`applog`·`master`·`all`(셋 모두). 끝 판: search `0007_search` · applog `0004_applog` · master `0002_master`. `up --sql <파일>`(+ 있는 DB는 `--from <지금 판>`)은 DB에 붙지 않고 실행할 SQL만 파일로 — DB 담당 검토용([§4-7](#4-7-db-판-올리기--migrate-up)).
+- `--target`: `search`·`applog`·`master`·`all`(셋 모두). 끝 판: search `0007_search` · applog `0005_applog` · master `0002_master`. `up --sql <파일>`(+ 있는 DB는 `--from <지금 판>`)은 DB에 붙지 않고 실행할 SQL만 파일로 — DB 담당 검토용([§4-7](#4-7-db-판-올리기--migrate-up)).
 - 표는 있는데 버전 기록이 없는 스키마(판 관리 전에 만든 것)에는 `up`이 종료 2로 멈춘다 — 새 `required.pg.pg_schema`로 올리고 전체를 다시 적재한다.
 - 적재(`pgvector_load`)는 새 스키마면 만들고 기록, 기록이 있으면 `up`, 기록 없는 기존 스키마면 경고만 하고 계속한다. DB 판이 코드보다 낮으면 종료 2(`migrate up` 안내), 코드가 모르는 리비전이 있으면(옛 이미지로 되돌린 뒤 등) 적재·`up` 모두 종료 2. 검색 MCP는 버전을 보지 않는다.
 - 판을 바꾸는 리비전(표·컬럼)은 데이터 계약 변경이다 — DB 담당 협의가 먼저.
@@ -866,7 +866,7 @@ tail -f deploy/host/scripts/test_space/batch_progress/progress.log  # Ctrl+C로 
 ```
 - 대상은 settings.yaml `source_systems`(예 `DEV-1`)의 행만이다. 문서 이름으로 더 좁히려면 `--filter <키워드,…>`.
 - 진행 줄(문서마다 셋): `doc#<번호> 파싱 OK(…)` → `doc#<번호> publish OK(…)` → `doc#<번호> 구조화+적재 OK(…)`.
-- **성공이면 끝 줄**: `=== 문서별 flow 끝: 2건(완료 2 · 건너뜀 0 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 0) · … · 종료 코드 0 ===`.
+- **성공이면 끝 줄**: `=== 문서별 flow 끝: 2건(완료 2 · 건너뜀 0 · …) · 최종 실패 0 · DLQ pending … · dead … · …분 · 문서당 평균 …분 · PG doc=… chunk=… · 종료 코드 0 ===`.
 - `처리할 문서 없음 — 종료` → EDW 목록에 `dev-1` 행이 없거나 이미 다 처리했다(2-1 — 담당에게 행 확인).
 - `[중단] <칸 경로> …` → 그 settings.yaml 칸이 비었다(종료 2). 채우고 다시.
 - `다른 run_pipeline이 도는 중(…) — 종료 코드 75` → 이 벌에서 이미 하나가 돈다(새벽 배치 포함). 끝난 뒤 다시.
@@ -1203,8 +1203,31 @@ bash deploy/host/scripts/host_ctl.sh check                                # 기�
 ```bash
 grep -E 'doc#[0-9]+ (파싱|publish|구조화\+적재) FAIL' <작업 폴더>/batch_progress/progress.log | grep -oE 'doc#[0-9]+' | sort -u | tr -d 'doc#' | paste -sd, -
 ```
-- **다시 돌리기:** 원인을 고친 뒤(설정·EDW·모델 등) 그 번호만 — `nohup python3 deploy/host/scripts/run_pipeline.py --seqs <번호,번호,…> > <작업 폴더>/rerun.out 2>&1 &`(코드 폴더에서). 실패한 문서는 gold `doc` 행이 없으므로 다음 `--skip-done` 실행도 다시 고른다.
+- **다시 돌리기:** 원인을 고친 뒤(설정·EDW·모델 등) 그 번호만 — `nohup python3 deploy/host/scripts/run_pipeline.py --seqs <번호,번호,…> > <작업 폴더>/rerun.out 2>&1 &`(코드 폴더에서). `--skip-done` 실행은 pending을 다음 실행 본 흐름에서 다시 시도하고 dead는 제외한다(FAQ도 동일). dead는 아래 명령으로 사람이 다시 넣는다.
 - 다시 받아도 같은 결과인 문서(DRM·암호·지원 안 함·확장자 없음)와 내용 중복은 `applog.except_doc_info`에 `skip` 행으로 들어가 다음 실행이 고르지 않는다(§3-12 ④).
+
+#### 실패 문서 확인·다시 넣기(pl-69)
+
+**DB 담당 승인 뒤 `dbtool up --target applog`(판 `0005_applog`) 먼저 → 그다음 코드 폴더 교체가 필수다(C-119).** 서버에서는 `bash deploy/host/scripts/pipe_exec.sh migrate up --target applog`로 적용한다. 새 표 추가는 옛 코드에 무해하지만, 새 코드는 applog가 head가 아니면 `dbtool maintain --target applog`를 거부한다. 다음 명령은 판 적용 뒤 서버 `data-pipeline` 컨테이너 안에서 실행한다(여러 벌이면 그 벌 컨테이너).
+
+```bash
+python -m pipeline.shared.dlq list --status dead
+python -m pipeline.shared.dlq list --status pending --json
+python -m pipeline.shared.dlq requeue --key 'SFDC/원본/파일.pdf' --key 'CRMS/원본/다른파일.pdf'
+python -m pipeline.shared.dlq requeue --all-dead
+```
+
+한 실행은 본 흐름 1회다. `--skip-done`은 gold 완료·영구 뺌·DLQ dead를 빼고 pending은 평소처럼 다시 시도한다(FAQ도 동일). DLQ 실패는 호스트 run_pipeline의 `except_docs error` CLI가 문서 번호마다 한 번만 기록한다. 컨테이너 publish·load의 실패 기록은 except_doc_info 이력만 남긴다. 이미 컨테이너가 이력을 쓴 경우 호스트는 `--dlq-only`로 DLQ만 갱신한다. 단독 publish·load 명령은 DLQ 횟수를 늘리지 않는다. 실패 3회면 dead다(`pipeline.shared.dlq.MAX_ATTEMPTS = 3` 상수). 원인을 고친 뒤 사람이 requeue하면 pending·attempts=0이 되어 다음 실행 본 흐름에서 받기부터 처리한다. `--max-docs`·`--limit` 등 기존 목록 제한은 그대로 적용한다. 자동 재시도 패스와 시점·건수 정책은 12월 안정화 단계에서 논의한다(#174 합의).
+
+DLQ 상태를 못 읽으면 대상 목록은 `[DLQ] 상태 못 읽음(<예외 종류>) — DLQ 제외 없이 진행(applog 판 0005·접속 확인)`을 남기고 gold/영구 뺌만 제외한다. 호스트 요약 조회도 실패하면 `DLQ 상태 모름`으로 표시하고 단계 결과로 종료 코드를 정한다. 조회 실패 자체는 종료 1의 이유가 아니다. 실패·stuck이면 1, 실패 없이 마감 때문에 새 받기를 멈췄으면 75, 그 외 0이다. 이미 본 흐름을 다 끝냈다면 마감 시각을 지났어도 0이다.
+
+```sql
+SELECT source_key, source_system, stage, attempts, last_reason, dead_at, pipeline_version
+FROM applog.dlq_doc WHERE status='dead' ORDER BY dead_at DESC;
+```
+
+gold 적재 성공과 skip-done 목록의 gold/영구 뺌 대조로 해소된 행은 resolved로 남는다. 매일 `migrate maintain --target applog`는 `log_retention_days`보다 오래된 resolved만 지우고 pending·dead는 보존한다. 원본 부재 해소는 이번 범위에 없다. 종료 요약은 pending/dead 전체·이번 실행 새 dead와 조회 명령을 보여 준다. 대상이 0건이면 시작 DLQ 요약만 남기고 `처리할 문서 없음 — 종료` 후 종료 0으로 끝난다. silver만 있는 문서도 현재는 받기부터 다시 처리한다(gold만 재생성은 pl-32 뒤 후속). 호스트는 `--fail-on-classify`를 붙여 분류 실패 시 종료 3을 요청하고 classify_failed로 실패 집계·DLQ 기록한다. publish에서 엔진 없는 rep을 failed로 제외하면 기존 publish.log JSON의 by_status.failed를 읽어 parse_failed로 집계·DLQ 기록하고 종료 1로 끝낸다(원본 보존·gold 생략). publish의 JSON·종료 코드 의미는 그대로다. 호스트는 실패 CLI가 출력한 `[DLQ] 확인 필요`와 기록 실패 경고를 모두 progress.log에 옮긴다. 성공·영구 뺌 뒤 정리·기록 오류는 경고만 남긴다.
+
 - **적재 거부 — 임베딩 모델이 다른 묶음.** 묶음의 임베딩 모델이 검색 스키마에 이미 적재된 문서의 모델과 다르면 적재는 아무것도 쓰지 않고 종료 2(`[load] 임베딩 모델이 다름 — 적재 거부 …`). `applog.pipe_event`에 남는다:
 ```sql
 SELECT ts_start, run_id, model, err FROM applog.pipe_event

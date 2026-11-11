@@ -12,8 +12,10 @@
 3) 문서별 순서(pl-24): 파싱 → silver 게시(publish — Object Storage + 처리 기록 파일, 게시 스레드 1개) → 원본 삭제(게시 성공 뒤에만) →
    gold(gold_bundle → pgvector_load — doc 행에 처리 기록, STRUCT_WORKERS(기본 2)개 스레드) → 임시 삭제. 배치 장벽 없이 끝나는 순서대로 흐름.
    파싱·게시 실패 = 원본(staging)을 남기고 gold로 안 감 · gold 실패 = silver는 그대로. 실패는 로그와 applog.except_doc_info error
-   (다음 실행이 다시 고름 — op-17).
-4) 종료 코드(pl-18): 0 = 대상 0건·모두 끝 · 1 = 실패 문서 있음 · 75 = 마감 도달(실패 없음) 또는 다른 run_pipeline이 도는 중
+   + applog.dlq_doc 재시도 상태(pl-69). 한 실행에서 한 문서는 시도 1회, 3회 실패하면 dead(사람만 requeue).
+4) --skip-done 실행은 pending을 다음 실행 본 흐름에서 다시 시도하며 dead를 본 목록에서 뺀다. 사람이 requeue하면 다시 고른다.
+   --seqs만 주거나 --skip-done 없이 실행하면 dead도 처리한다(--seqs와 --skip-done을 함께 주면 같은 제외 규칙 적용).
+5) 종료 코드(pl-18): 0 = 대상 0건·모두 끝 · 1 = 실패 문서 있음 · 75 = 마감 도달(실패 없음) 또는 다른 run_pipeline이 도는 중
    (잠금 batch_progress/run_pipeline.lock — 사람이 돌린 실행과 새벽 배치가 겹치지 않게) · 2 = 설정 문제.
 
 사용: python3 run_pipeline.py [--start-offset N](기본 0) [--staging 20] [--struct-workers 2]
@@ -237,6 +239,9 @@ DOC_MARK = "RUN_PIPELINE_DOC"  # 문서 표지 env(설정 칸 아님) — 고아
 #   다른 문서의 프로세스는 값이 달라(-zx 통째 비교) 끄지 않는다.
 
 
+_ERROR_NOTED: set = set()  # 호스트만 DLQ 기록 — 한 실행의 문서 번호마다 실패 CLI를 한 번만 호출
+
+
 def pexec(script, seq=None):
     """컨테이너 명령 한 줄(목록·받기·분류·파싱·게시·구조화·정리 모두 여기서) — docker exec · umask · 작업 폴더 · PYTHONPATH ·
     라이브러리 env가 모두 같다. seq를 주면 그 문서 표지 env(DOC_MARK)도 붙인다(실패·시간 초과 뒤 sweep_cmd가 끔).
@@ -292,7 +297,7 @@ def struct_cmd(seq):
     return pexec(
         f"python -m pipeline.transform.structure.gold_bundle{st} --parse-dir {inside}/parse --src {inside}/prepared"
         f" --out {inside}/bundle && "
-        f"python -m pipeline.load.pgvector_load{st} load --bundle {inside}/bundle --rep-dir {inside}/parse/_rep "
+        f"python -m pipeline.load.pgvector_load{st} load --fail-on-classify --bundle {inside}/bundle --rep-dir {inside}/parse/_rep "
         f"--silver {inside}/publish/silver.jsonl >> {inside}/structure.log 2>&1",
         seq,
     )
@@ -307,16 +312,29 @@ def publish_cmd(seq):
     )
 
 
-def error_cmd(seq, reason):
-    """문서 1개 실패 기록 — applog.except_doc_info error(다음 실행이 다시 고름, op-17). 문서 위치 표는 stage_one이 쓴 batch.csv."""
-    return pexec(f"python -m pipeline.shared.except_docs error --csv {_inside(seq)}/batch.csv --reason {reason}")
+def error_cmd(seq, reason, row=None, dlq_only=False):
+    """문서 1개 실패 기록 — applog.except_doc_info error + DLQ 상태(pl-69). 문서 위치 표는 stage_one이 쓴 batch.csv."""
+    opt = ""
+    if row is not None:
+        opt = f" --key={shlex.quote(row['s3_key'])} --name={shlex.quote(_doc_name(row))}"
+        if row.get("source_system"):
+            opt += f" --system={shlex.quote(row['source_system'])}"
+    opt += " --dlq-only" if dlq_only else ""
+    return pexec(f"python -m pipeline.shared.except_docs error --csv {_inside(seq)}/batch.csv --reason {reason}{opt}")
 
 
-def note_error(seq, reason):
-    """실패 기록(error_cmd) — 기록이 실패해도 흐름은 계속(로그에만 — 다음 실행은 어차피 다시 고름). 임시 폴더를 지우기 전에 부른다."""
-    rc, _, _ = sh(error_cmd(seq, reason), timeout=120)
+def note_error(seq, reason, row=None, dlq_only=False):
+    """실패 기록(error_cmd) — 기록이 실패해도 흐름은 계속(경고 로그). 임시 폴더를 지우기 전에 부른다."""
+    with _flow_lock:
+        if seq in _ERROR_NOTED:
+            return
+        _ERROR_NOTED.add(seq)
+    rc, out, err = sh(error_cmd(seq, reason, row, dlq_only), timeout=120)
+    for line in ((out or "") + "\n" + (err or "")).splitlines():
+        if line.startswith("[DLQ]"):
+            log(line)  # dead 전이·기록 경고는 컨테이너 출력에만 묻히지 않게
     if rc != 0:
-        log(f"doc#{seq} 실패 기록(except_doc_info) 못 씀 — rc {rc}")
+        log(f"doc#{seq} 실패 기록(DLQ·except_doc_info) 못 씀 — rc {rc}")
 
 
 def sweep_cmd(seq):
@@ -634,6 +652,7 @@ def deadline_at(hhmm, now=None):
     return t.timestamp()
 
 
+_STAGE_FAILED: set = set()  # 받기 스레드 예외가 난 문서 자리(실행 중 누적)
 _STAGE_ERR = [0]  # 받기 워커 스레드 예외 수 — main()이 실패 수(thread_err)에 더함
 
 
@@ -667,6 +686,7 @@ def downloader(rows, order):
                 _fetching.add(seq)
             row = rows[seq]
             t_w = time.time()
+            dispatched = False  # 레인에 넘긴 뒤에는 기록만 실패해도 문서 처리를 레인에 맡김
             try:
                 ok = stage_one(seq, row)
                 # sec = 컨테이너 기동·head·전송·기록을 모두 합친 단계 전체 시간(순수 전송 속도 아님 — 그건 source.py 쪽 계측)
@@ -681,15 +701,21 @@ def downloader(rows, order):
                 classify_doc(seq, row, cache=cache)  # OCR 필요도 사전 분류(캐시 우선) → 워커 배분용
                 with _flow_lock:
                     LANEQ[_class.get(seq) or "light"].append(seq)
+                    dispatched = True
                     _fetching.discard(seq)
                     _flow_lock.notify_all()
                 mark(seq, "dispatched")
             except Exception as ex:  # 받기·분류·기록 예외(디스크 가득 등) — 워커가 죽으면 _fetching에 남아 _flow_done()이 안 끝남
                 _thread_error("받기", seq, ex)
+                if dispatched:  # 임시 파일·실패 상태는 레인이 끝까지 책임짐
+                    continue
                 with _flow_lock:
                     _STAGE_ERR[0] += 1
+                    _STAGE_FAILED.add(seq)
                     _fetching.discard(seq)
                     _flow_lock.notify_all()
+                _safe(note_error, seq, "stage_failed", row)
+                _safe(drop_temp, seq)
                 continue
             depth("dispatch")
 
@@ -729,22 +755,40 @@ def parse_one(seq, row):
 SKIP = "skip"  # parse_one — 받기가 뺀 문서(파싱·게시·gold 없이 원본·임시 폴더만 지움)
 
 
+PARSE_FAILED = "parse_failed"  # publish 명령은 성공했지만 그 문서를 파싱 실패로 제외함
+
+
+def _publish_parse_failed(seq):
+    """기존 publish JSON 출력의 by_status만 읽는다(게시 출력·종료 코드 계약은 그대로)."""
+    report = DOCFLOW / str(seq) / "publish.log"
+    for line in reversed(report.read_text(encoding="utf-8").splitlines()):
+        try:
+            result = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(result, dict) and "by_status" in result:
+            return result["by_status"].get("failed", 0) > 0
+    raise ValueError("publish 결과 JSON 없음")
+
+
 def publish_one(seq):
     """silver 게시(Object Storage + 처리 기록 파일 — 파싱 바로 뒤, gold 전). 성공해야 원본을 지우고 gold로 넘어간다."""
     t1 = time.time()
     mark(seq, "pub_start")
     rc = doc_sh(seq, publish_cmd(seq), 900, PROG / f"doc_{seq}.log")
-    ok = rc == 0
+    parse_failed = rc == 0 and _publish_parse_failed(seq)
+    ok = rc == 0 and not parse_failed
     mark(seq, "pub_end", ok=ok, sec=round(time.time() - t1, 1))
     log(
         f"doc#{seq} publish {'OK' if ok else 'FAIL'}({(time.time() - t1) / 60:.1f}분)"
-        + ("" if ok else f" — 원본 남김 · {_fail_note(rc, seq, 'publish.log')}")
+        + (" — 파싱 실패(parse_failed)로 게시 제외 · 원본 남김" if parse_failed else "")
+        + (f" — 원본 남김 · {_fail_note(rc, seq, 'publish.log')}" if rc != 0 else "")
     )
-    return ok
+    return PARSE_FAILED if parse_failed else ok
 
 
 def gold_one(seq, enq_t=None):
-    """gold = 구조화+적재(문서 경계 없이 — 게시 성공 뒤). enq_t=게시 끝 시각(구조화 대기 계산)."""
+    """gold = 구조화+적재(문서 경계 없이 — 게시 성공 뒤). 반환은 명령 종료 코드(3=분류 실패). enq_t=게시 끝 시각(구조화 대기 계산)."""
     t0 = time.time()
     wait = round(t0 - enq_t, 1) if enq_t else 0
     mark(seq, "struct_start", queue_wait=wait)
@@ -753,9 +797,10 @@ def gold_one(seq, enq_t=None):
     mark(seq, "struct_end", ok=ok, sec=round(time.time() - t0, 1))
     log(
         f"doc#{seq} 구조화+적재 {'OK' if ok else 'FAIL'}(대기 {wait / 60:.1f}분 · 실행 {(time.time() - t0) / 60:.1f}분)"
+        + (" — 분류 실패(classify_failed)" if rc == 3 else "")
         + ("" if ok else f" — silver는 남김(게시됨, gold는 silver에서 다시 만듦) · {_fail_note(rc, seq, 'structure.log')}")
     )
-    return ok
+    return rc
 
 
 def _doc_name(row):
@@ -897,12 +942,18 @@ def mcp_busy():
     return False
 
 
+def _mcp_pause_monitor_once():
+    """레인 워커를 띄우기 전에 초기 MCP 양보 상태를 읽는다."""
+    global _mcp_pause
+    _mcp_pause = mcp_busy()
+
+
 def _mcp_pause_monitor():
     """5초마다 MCP 작업 감지해 _mcp_pause 토글(사람 대기 파싱 → medium 레인 완보)."""
     global _mcp_pause
     while not _stop.is_set():
         _mcp_pause = mcp_busy()
-        time.sleep(5)
+        _stop.wait(5)
 
 
 def _thread_error(stage, seq, ex):
@@ -918,13 +969,213 @@ def _safe(fn, *args):
         _thread_error("정리", args[0], ex)
 
 
-def _ran(stage, fn, seq, *args):
+def _ran(stage, fn, seq, *args, failure=False):
     """단계(파싱·게시·구조화) 실행 — 예외는 그 단계 실패로(progress.log에 남기고 False). 집계·정리는 호출자가 함."""
     try:
         return fn(seq, *args)
     except Exception as ex:
         log(f"doc#{seq} {stage} 예외 — {type(ex).__name__}: {str(ex)[:120]}")
-        return False
+        return failure
+
+
+def dlq_state():
+    """호스트는 앱을 import하지 않고 컨테이너 CLI로 상태를 읽는다(접속 정보 출력 없음)."""
+    rc, out, _ = sh(pexec("python -m pipeline.shared.dlq list --status pending,dead --json"), timeout=120)
+    try:
+        return {r["source_key"]: r for r in json.loads(out.strip().splitlines()[-1])} if rc == 0 else None
+    except (ValueError, IndexError, TypeError, KeyError):
+        return None
+
+
+def run_flow(rows, order):
+    """받기 → 파싱 → silver 게시 → gold를 한 번 실행하고 결과를 반환."""
+    completed, failed_keys = set(), set()
+    t_all = time.time()
+    tf = threading.Thread(target=downloader, args=(rows, order), daemon=True, name="downloader")
+    tf.start()
+
+    # 문서별 순서: 파싱 → silver 게시(pub_q, 게시 스레드) → 원본 삭제 → gold(struct_q, 구조화 스레드) → 임시 삭제.
+    # 게시를 따로 두어 구조화가 업로드를 기다리지 않는다. 파싱 실패·게시 실패면 원본을 남기고 gold로 가지 않는다.
+    cnt = {
+        "ok": 0,
+        "skipped": 0,
+        "parse_fail": 0,
+        "pub_fail": 0,
+        "gold_fail": 0,
+        "thread_err": 0,
+    }  # thread_err — 집계 전에 스레드 예외(종료 코드 1로)
+
+    def _queue_loop(q, stage, work):
+        """q에서 꺼내 work(*item)를 돌리는 스레드 — None이면 끝. 예외 처리·기록 중 예외(디스크 가득 등)도 스레드를 죽이지 않게 —
+        죽으면 q.join()이 안 끝남."""
+        while True:
+            item = q.get()
+            depth(f"{stage}_get")
+            with _flow_lock:
+                _flow_lock.notify_all()  # 중간 대기 하나 줄어듦 → 상한에서 기다리던 레인 워커
+            if item is None:
+                q.task_done()
+                return
+            try:
+                work(*item)
+            except Exception as ex:
+                _thread_error(stage, item[0], ex)
+                with _flow_lock:
+                    if rows[item[0]]["s3_key"] in completed:
+                        continue  # 성공 뒤 관찰·정리 오류는 문서 실패가 아님
+                    cnt["thread_err"] += 1
+                    failed_keys.add(rows[item[0]]["s3_key"])
+                _safe(note_error, item[0], {"pub": "publish_failed", "struct": "load_failed"}[stage], rows[item[0]])
+            finally:
+                q.task_done()
+
+    def _skip(seq, row):  # 받기가 뺀 문서(중복·DRM·암호) — 기록은 받기가 except_doc_info skip에 씀, 게시·gold 없음
+        _safe(drop_original, seq, row)
+        with _flow_lock:
+            cnt["skipped"] += 1
+            completed.add(row["s3_key"])
+        _safe(drop_temp, seq)
+        _safe(mark, seq, "done")
+
+    def _publish(seq, row):
+        result = _ran("publish", publish_one, seq)
+        if result == PARSE_FAILED or not result:
+            parse_failed = result == PARSE_FAILED
+            with _flow_lock:
+                cnt["parse_fail" if parse_failed else "pub_fail"] += 1
+                failed_keys.add(row["s3_key"])
+            if parse_failed:
+                _safe(note_error, seq, "parse_failed", row, True)  # 게시가 이미 쓴 실패 이력은 중복 집계하지 않음
+            else:
+                _safe(note_error, seq, "publish_failed", row)
+            _safe(drop_temp, seq)
+            return
+        _safe(drop_original, seq, row)  # 게시 성공 뒤에만
+        _struct_q.put((seq, row, time.time()))
+        _safe(depth, "struct_put")
+
+    def _gold(seq, row, enq_t):
+        rc = _ran("구조화", gold_one, seq, enq_t, failure=-1)
+        ok = rc == 0
+        with _flow_lock:  # 집계를 기록(mark — 디스크 가득이면 예외)보다 먼저
+            cnt["ok" if ok else "gold_fail"] += 1
+            (completed if ok else failed_keys).add(row["s3_key"])
+            report = ok and cnt["ok"] % 5 == 0
+        if not ok:
+            if rc == 3:
+                _safe(note_error, seq, "classify_failed", row, True)  # 적재가 쓴 이력은 유지, DLQ는 호스트만
+            else:
+                _safe(note_error, seq, "load_failed", row)
+        _safe(drop_temp, seq)
+        _safe(mark, seq, "done")
+        if report:  # psql(최대 60초)은 잠금 밖에서 — 레인·받기 워커를 막지 않게
+            nd, nc = pg_count()
+            log(f"PG 누적: doc={nd} chunk={nc}")
+
+    # ponytail: 게시 스레드 1개 — 업로드는 파싱·구조화보다 훨씬 짧음, 밀리면 설정 칸(설정 모델 — 핑거프린트 파일)으로
+    queue_threads = [threading.Thread(target=_queue_loop, args=(_pub_q, "pub", _publish), daemon=True, name="publish")]
+    for _ in range(max(1, STRUCT_WORKERS)):
+        queue_threads.append(threading.Thread(target=_queue_loop, args=(_struct_q, "struct", _gold), daemon=True, name=f"structure-{_}"))
+    for thread in queue_threads:
+        thread.start()
+
+    def _one(doc_seq, row_doc):
+        res = _ran("파싱", parse_one, doc_seq, row_doc)
+        if res == SKIP:  # 실패 아님 — 다음 밤에는 대상 목록이 except_doc_info skip 키로 뺌
+            _skip(doc_seq, row_doc)
+        elif res:
+            _pub_q.put((doc_seq, row_doc))
+            _safe(depth, "pub_put")
+        else:
+            with _flow_lock:
+                cnt["parse_fail"] += 1
+                failed_keys.add(row_doc["s3_key"])
+            _safe(note_error, doc_seq, "parse_failed", row_doc)
+            _safe(drop_temp, doc_seq)  # 원본(staging)은 남김
+
+    # ── 레인 워커(규칙: rn-01·rn-02): 레인마다 전담(자기 레인만)·공유(자기 레인 먼저, 비면 가장 긴 다른 레인 — pick_lane).
+    # 구조화 대기가 STRUCT_BACKLOG 이상이면 새 파싱을 시작하지 않음. MCP 업로드 처리 중에는 medium 전담 워커가 쉼.
+    def _flow_done():
+        with _flow_lock:
+            return (
+                _picked_all.is_set()
+                and not _fetching
+                and all(not q for q in LANEQ.values())
+                and all(v == 0 for v in _lane_inflight.values())
+            )
+
+    def lane_worker(own, shared):
+        while not _stop.is_set():
+            seq = None
+            with _flow_lock:
+                hold = (own == "medium" and not shared and _mcp_pause) or (STRUCT_BACKLOG and _waiting() >= STRUCT_BACKLOG)
+                c = None if hold else pick_lane(own, shared, LANEQ, _lane_inflight, VLM_CAP)
+                if c is None:
+                    if _flow_done():
+                        return
+                    _flow_lock.wait(5)
+                    continue
+                seq = LANEQ[c].popleft()
+                _lane_inflight[c] += 1
+                depth("pick")
+                _flow_lock.notify_all()  # 파싱 1개 시작 → 받기 보충 신호
+            try:
+                _one(seq, rows[seq])
+            except Exception as ex:  # 예외 처리·기록 중 예외도 레인을 죽이지 않게 — 죽으면 큐가 안 비어 _flow_done() 대기가 안 끝남
+                _thread_error("파싱", seq, ex)
+                with _flow_lock:
+                    if rows[seq]["s3_key"] in completed:
+                        continue  # 영구 뺌·성공 뒤 오류는 경고만
+                    cnt["thread_err"] += 1
+                    failed_keys.add(rows[seq]["s3_key"])
+                _safe(note_error, seq, "parse_failed", rows[seq])
+            finally:
+                with _flow_lock:
+                    _lane_inflight[c] -= 1
+                    _flow_lock.notify_all()  # 슬롯 반납 → 받기 보충 신호
+                depth("parse_end")
+
+    _mcp_pause_monitor_once()
+    monitor = threading.Thread(target=_mcp_pause_monitor, daemon=True, name="mcp-watch")
+    monitor.start()  # MCP 업로드 감시(medium 전담 워커 쉼)
+
+    lane_threads = []
+    for c in LANES:
+        ded, shr = LANE_WORKERS[c]
+        for shared in [False] * ded + [True] * shr:
+            t = threading.Thread(target=lane_worker, args=(c, shared), daemon=True, name=f"lane-{c}-{'shared' if shared else 'own'}")
+            t.start()
+            lane_threads.append(t)
+    while not _flow_done() and not _stop.is_set():
+        time.sleep(5)
+    for t in lane_threads:
+        t.join(timeout=30)
+
+    _pub_q.put(None)  # 파싱 전부 끝 → 게시 끝 → 구조화 끝(센티널 차례로)
+    _pub_q.join()
+    for _ in range(max(1, STRUCT_WORKERS)):
+        _struct_q.put(None)
+    _struct_q.join()
+    _stop.set()
+    with _flow_lock:
+        _flow_lock.notify_all()
+    tf.join(timeout=5)
+    monitor.join(timeout=5)
+    for thread in queue_threads:
+        thread.join(timeout=30)
+    alive = [thread.name for thread in [*lane_threads, tf, monitor, *queue_threads] if thread.is_alive()]
+    if alive:
+        log(f"[중단] 종료 대기 시간 초과 — 남은 스레드: {', '.join(alive)}")
+    cnt["thread_err"] += _STAGE_ERR[0]
+    failed_keys.update(rows[i]["s3_key"] for i in _STAGE_FAILED)
+    cnt.update(completed=completed, failed_keys=failed_keys, deadline=_deadline_hit.is_set(), stuck=bool(alive))
+    failed = len(failed_keys)
+    log(
+        f"=== flow 끝: 완료 {cnt['ok']} · 건너뜀 {cnt['skipped']} · 실패 {failed} "
+        f"(파싱 {cnt['parse_fail']} · 게시 {cnt['pub_fail']} · gold {cnt['gold_fail']} · 스레드 예외 {cnt['thread_err']}) · "
+        f"{(time.time() - t_all) / 60:.1f}분 ==="
+    )
+    return cnt
 
 
 def main():
@@ -997,6 +1248,14 @@ def main():
     STAGING.mkdir(mode=0o777, parents=True, exist_ok=True)
     DOCFLOW.mkdir(mode=0o777, parents=True, exist_ok=True)
     stack_check()
+    t_all = time.time()
+    before = dlq_state()
+    if before is None:
+        log("[DLQ] 상태 못 읽음 — 단계별 결과로 진행(applog 판 0005·접속 확인)")
+    else:
+        log(
+            f"[DLQ] 시작: pending {sum(r['status'] == 'pending' for r in before.values())}건 · dead {sum(r['status'] == 'dead' for r in before.values())}건"
+        )
     picked = pick_targets(a)
     if picked is None:
         return EXIT_FAIL
@@ -1009,160 +1268,28 @@ def main():
     if not order:
         log("처리할 문서 없음 — 종료")
         return 0
-    t_all = time.time()
-    tf = threading.Thread(target=downloader, args=(rows, order), daemon=True)
-    tf.start()
-
-    # 문서별 순서: 파싱 → silver 게시(pub_q, 게시 스레드) → 원본 삭제 → gold(struct_q, 구조화 스레드) → 임시 삭제.
-    # 게시를 따로 두어 구조화가 업로드를 기다리지 않는다. 파싱 실패·게시 실패면 원본을 남기고 gold로 가지 않는다.
-    cnt = {
-        "ok": 0,
-        "skipped": 0,
-        "parse_fail": 0,
-        "pub_fail": 0,
-        "gold_fail": 0,
-        "thread_err": 0,
-    }  # thread_err — 집계 전에 스레드 예외(종료 코드 1로)
-
-    def _queue_loop(q, stage, work):
-        """q에서 꺼내 work(*item)를 돌리는 스레드 — None이면 끝. 예외 처리·기록 중 예외(디스크 가득 등)도 스레드를 죽이지 않게 —
-        죽으면 q.join()이 안 끝남."""
-        while True:
-            item = q.get()
-            depth(f"{stage}_get")
-            with _flow_lock:
-                _flow_lock.notify_all()  # 중간 대기 하나 줄어듦 → 상한에서 기다리던 레인 워커
-            if item is None:
-                q.task_done()
-                return
-            try:
-                work(*item)
-            except Exception as ex:
-                _thread_error(stage, item[0], ex)
-                with _flow_lock:
-                    cnt["thread_err"] += 1
-            finally:
-                q.task_done()
-
-    def _skip(seq, row):  # 받기가 뺀 문서(중복·DRM·암호) — 기록은 받기가 except_doc_info skip에 씀, 게시·gold 없음
-        _safe(drop_original, seq, row)
-        with _flow_lock:
-            cnt["skipped"] += 1
-        _safe(drop_temp, seq)
-        mark(seq, "done")
-
-    def _publish(seq, row):
-        ok = _ran("publish", publish_one, seq)
-        if not ok:
-            with _flow_lock:
-                cnt["pub_fail"] += 1
-            _safe(note_error, seq, "publish_failed")
-            _safe(drop_temp, seq)
-            return
-        _safe(drop_original, seq, row)  # 게시 성공 뒤에만
-        _struct_q.put((seq, row, time.time()))
-        depth("struct_put")
-
-    def _gold(seq, row, enq_t):
-        ok = _ran("구조화", gold_one, seq, enq_t)
-        with _flow_lock:  # 집계를 기록(mark — 디스크 가득이면 예외)보다 먼저
-            cnt["ok" if ok else "gold_fail"] += 1
-            report = ok and cnt["ok"] % 5 == 0
-        if not ok:
-            _safe(note_error, seq, "load_failed")
-        _safe(drop_temp, seq)
-        mark(seq, "done")
-        if report:  # psql(최대 60초)은 잠금 밖에서 — 레인·받기 워커를 막지 않게
-            nd, nc = pg_count()
-            log(f"PG 누적: doc={nd} chunk={nc}")
-
-    # ponytail: 게시 스레드 1개 — 업로드는 파싱·구조화보다 훨씬 짧음, 밀리면 설정 칸(설정 모델 — 핑거프린트 파일)으로
-    threading.Thread(target=_queue_loop, args=(_pub_q, "pub", _publish), daemon=True).start()
-    for _ in range(max(1, STRUCT_WORKERS)):
-        threading.Thread(target=_queue_loop, args=(_struct_q, "struct", _gold), daemon=True).start()
-
-    def _one(doc_seq, row_doc):
-        res = _ran("파싱", parse_one, doc_seq, row_doc)
-        if res == SKIP:  # 실패 아님 — 다음 밤에는 대상 목록이 except_doc_info skip 키로 뺌
-            _skip(doc_seq, row_doc)
-        elif res:
-            _pub_q.put((doc_seq, row_doc))
-            depth("pub_put")
-        else:
-            with _flow_lock:
-                cnt["parse_fail"] += 1
-            _safe(note_error, doc_seq, "parse_failed")
-            _safe(drop_temp, doc_seq)  # 원본(staging)은 남김
-
-    # ── 레인 워커(규칙: rn-01·rn-02): 레인마다 전담(자기 레인만)·공유(자기 레인 먼저, 비면 가장 긴 다른 레인 — pick_lane).
-    # 구조화 대기가 STRUCT_BACKLOG 이상이면 새 파싱을 시작하지 않음. MCP 업로드 처리 중에는 medium 전담 워커가 쉼.
-    def _flow_done():
-        with _flow_lock:
-            return (
-                _picked_all.is_set()
-                and not _fetching
-                and all(not q for q in LANEQ.values())
-                and all(v == 0 for v in _lane_inflight.values())
-            )
-
-    def lane_worker(own, shared):
-        while not _stop.is_set():
-            seq = None
-            with _flow_lock:
-                hold = (own == "medium" and not shared and _mcp_pause) or (STRUCT_BACKLOG and _waiting() >= STRUCT_BACKLOG)
-                c = None if hold else pick_lane(own, shared, LANEQ, _lane_inflight, VLM_CAP)
-                if c is None:
-                    if _flow_done():
-                        return
-                    _flow_lock.wait(5)
-                    continue
-                seq = LANEQ[c].popleft()
-                _lane_inflight[c] += 1
-                depth("pick")
-                _flow_lock.notify_all()  # 파싱 1개 시작 → 받기 보충 신호
-            try:
-                _one(seq, rows[seq])
-            except Exception as ex:  # 예외 처리·기록 중 예외도 레인을 죽이지 않게 — 죽으면 큐가 안 비어 _flow_done() 대기가 안 끝남
-                _thread_error("파싱", seq, ex)
-                with _flow_lock:
-                    cnt["thread_err"] += 1
-            finally:
-                with _flow_lock:
-                    _lane_inflight[c] -= 1
-                    _flow_lock.notify_all()  # 슬롯 반납 → 받기 보충 신호
-                depth("parse_end")
-
-    threading.Thread(target=_mcp_pause_monitor, daemon=True, name="mcp-watch").start()  # MCP 업로드 감시(medium 전담 워커 쉼)
-
-    lane_threads = []
-    for c in LANES:
-        ded, shr = LANE_WORKERS[c]
-        for shared in [False] * ded + [True] * shr:
-            t = threading.Thread(target=lane_worker, args=(c, shared), daemon=True, name=f"lane-{c}-{'shared' if shared else 'own'}")
-            t.start()
-            lane_threads.append(t)
-    while not _flow_done() and not _stop.is_set():
-        time.sleep(5)
-    for t in lane_threads:
-        t.join(timeout=30)
-
-    _pub_q.put(None)  # 파싱 전부 끝 → 게시 끝 → 구조화 끝(센티널 차례로)
-    _pub_q.join()
-    for _ in range(max(1, STRUCT_WORKERS)):
-        _struct_q.put(None)
-    _struct_q.join()
-    _stop.set()
-    with _flow_lock:
-        _flow_lock.notify_all()
-    tf.join(timeout=5)
+    t_main = time.time()
+    main_flow = run_flow(rows, order)
+    main_elapsed = time.time() - t_main
+    failed = main_flow["failed_keys"] or main_flow["stuck"]
+    rc = EXIT_FAIL if failed else (EXIT_DEADLINE if main_flow["deadline"] else 0)
+    state = dlq_state() if before is not None else None
+    if before is not None and state is None:
+        log("[DLQ] 실행 뒤 상태 못 읽음 — 단계별 결과로 진행(applog 판 0005·접속 확인)")
+    dlq_summary = "DLQ 상태 모름"
+    if state is not None:
+        dead = {k for k, r in state.items() if r["status"] == "dead"}
+        new_dead = {k for k in dead if before.get(k, {}).get("status") != "dead" and k in main_flow["failed_keys"]}
+        dlq_summary = f"DLQ pending {sum(r['status'] == 'pending' for r in state.values())}건 · dead {len(dead)}건(이번 실행 새로 {len(new_dead)}건) — 조회: python -m pipeline.shared.dlq list --status dead"
     nd, nc = pg_count()
-    cnt["thread_err"] += _STAGE_ERR[0]
-    failed = cnt["parse_fail"] + cnt["pub_fail"] + cnt["gold_fail"] + cnt["thread_err"]
-    done = cnt["ok"] + cnt["skipped"] + failed
-    rc = EXIT_FAIL if failed else (EXIT_DEADLINE if _deadline_hit.is_set() else 0)
+    main_failed = sum(main_flow[k] for k in ("parse_fail", "pub_fail", "gold_fail", "thread_err"))
+    main_done = main_flow["ok"] + main_flow["skipped"] + main_failed
     log(
-        f"=== 문서별 flow 끝: {done}건(완료 {cnt['ok']} · 건너뜀 {cnt['skipped']} · 파싱실패 {cnt['parse_fail']} · 게시실패 {cnt['pub_fail']} · gold실패 {cnt['gold_fail']} · 스레드 예외 {cnt['thread_err']}) · "
-        f"{(time.time() - t_all) / 60:.1f}분 · PG doc={nd} chunk={nc} · 문서당 평균 {(time.time() - t_all) / max(done, 1) / 60:.1f}분 · 종료 코드 {rc} ==="
+        f"=== 문서별 flow 끝: {main_done}건(완료 {main_flow['ok']} · 건너뜀 {main_flow['skipped']} · "
+        f"파싱실패 {main_flow['parse_fail']} · 게시실패 {main_flow['pub_fail']} · gold실패 {main_flow['gold_fail']} · "
+        f"스레드 예외 {main_flow['thread_err']}) · 최종 실패 {len(main_flow['failed_keys'])} · "
+        f"{dlq_summary} · "
+        f"{(time.time() - t_all) / 60:.1f}분 · 문서당 평균 {main_elapsed / 60 / main_done if main_done else 0:.1f}분 · PG doc={nd} chunk={nc} · 종료 코드 {rc} ==="
     )
     return rc
 

@@ -32,7 +32,7 @@ GOLDEN = {
     "staging": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && mkdir -p /app/output/_staging && python -m pipeline.extract.candidate_ready --set SOURCE_STAGING=/app/output/_staging --set SOURCE_FETCH_WORKERS=2 stage --csv /app/output/_docflow/9/batch.csv --out /app/output/_docflow/9 --prepared /app/output/_docflow/9/prepared --no-scan-rotate'",
     "parse_light": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/7 && echo [envcheck] gate=9 채널=light; python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/_docflow/7 --set DOC_DIR_PREPARED=/app/output/_docflow/7/prepared --set PARSE_IMAGES_ROOT=/app/output/_docflow/7/parse/_images --set PARSE_RAW_ROOT=/app/output/_docflow/7/parse --set VLM_MAX_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set CPU_MAX_LOAD=9 parse --staged'",
     "parse_vlm": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/9 && echo [envcheck] gate=1.3 채널=vlm; python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/_docflow/9 --set DOC_DIR_PREPARED=/app/output/_docflow/9/prepared --set PARSE_IMAGES_ROOT=/app/output/_docflow/9/parse/_images --set PARSE_RAW_ROOT=/app/output/_docflow/9/parse --set VLM_MAX_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set VLM_MAX_CONCURRENCY=6 --set VLM_CONCURRENCY=6 --set PARSE_POST=supsub,charts,figures,context,attachments,vlm_page --set VLM_PAGE_MAX= --set CPU_MAX_LOAD=1.3 parse --staged'",
-    "struct": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/9 && python -m pipeline.transform.structure.gold_bundle --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --parse-dir /app/output/_docflow/9/parse --src /app/output/_docflow/9/prepared --out /app/output/_docflow/9/bundle && python -m pipeline.load.pgvector_load --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 load --bundle /app/output/_docflow/9/bundle --rep-dir /app/output/_docflow/9/parse/_rep --silver /app/output/_docflow/9/publish/silver.jsonl >> /app/output/_docflow/9/structure.log 2>&1'",
+    "struct": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/9 && python -m pipeline.transform.structure.gold_bundle --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --parse-dir /app/output/_docflow/9/parse --src /app/output/_docflow/9/prepared --out /app/output/_docflow/9/bundle && python -m pipeline.load.pgvector_load --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 load --fail-on-classify --bundle /app/output/_docflow/9/bundle --rep-dir /app/output/_docflow/9/parse/_rep --silver /app/output/_docflow/9/publish/silver.jsonl >> /app/output/_docflow/9/structure.log 2>&1'",
     "list": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && python -m pipeline.extract.candidate_pick list --filter RFP,proposal --start-offset 0 --skip-done --max-docs 30 --faq-seen /app/output/_faq_seen.txt --out /app/output/_docflow/targets.json'",
     "publish": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache RUN_PIPELINE_DOC=/app/output/_docflow/9 && python -m pipeline.load.publish_parse_result --out /app/output/_docflow/9 --source-system FileStorageMap --apply >> /app/output/_docflow/9/publish.log 2>&1'",
     "error": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && export PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache && python -m pipeline.shared.except_docs error --csv /app/output/_docflow/9/batch.csv --reason load_failed'",
@@ -150,6 +150,7 @@ def test_failed_stage_sweeps_doc(tmp_path):
         with (
             mock.patch.object(RD, "sh", sh),
             mock.patch.object(RD, "PROG", tmp_path),
+            mock.patch.object(RD, "_publish_parse_failed", return_value=False),
             mock.patch.object(RD, "DOCFLOW", tmp_path / "flow"),
         ):
             call()
@@ -484,3 +485,49 @@ def test_parse_one_skips_stage_dropped(tmp_path):
         ):
             assert RD.parse_one(3, row) == want, (staged, only)
         assert any("pipeline.cli" in c for c in calls) == (want != RD.SKIP), (staged, only, calls)
+
+
+def test_host_failure_cli_once():
+    rd = _load()
+    with (
+        mock.patch.object(rd, "sh", return_value=(0, "[DLQ] 확인 필요 — k", "[DLQ] 실패 기록 못 씀(RuntimeError) — 계속")) as shell,
+        mock.patch.object(rd, "log") as log,
+    ):
+        rd.note_error(7, "classify_failed", dlq_only=True)
+        rd.note_error(7, "load_failed")
+        shell.assert_called_once()
+        assert "--dlq-only" in _inner(shell.call_args.args[0])
+        assert log.call_args_list == [mock.call("[DLQ] 확인 필요 — k"), mock.call("[DLQ] 실패 기록 못 씀(RuntimeError) — 계속")]
+    assert "--fail-on-classify" in _inner(RD.struct_cmd(9))
+
+
+def test_error_row_shell_quoting_and_state_query(tmp_path):
+    row = {"s3_key": "SFDC/공백 ' 인용;$(echo nope).pdf", "original_filename": "dir/a ' ;$문서.pdf", "source_system": "DEV-1"}
+    args = shlex.split(_inner(RD.error_cmd(3, "stage_failed", row)).split(" && ")[-1])
+    assert f"--key={row['s3_key']}" in args
+    assert f"--name={RD._doc_name(row)}" in args
+    assert "--system=DEV-1" in args
+    with mock.patch.object(RD, "sh", return_value=(0, 'banner\n[{"source_key":"k","status":"dead"}]', "")) as shell:
+        assert RD.dlq_state()["k"]["status"] == "dead"
+    assert "list --status pending,dead --json" in _inner(shell.call_args.args[0])
+    with (
+        mock.patch.object(RD, "doc_sh", return_value=3),
+        mock.patch.object(RD, "DOCFLOW", tmp_path / "flow"),
+        mock.patch.object(RD, "PROG", tmp_path),
+    ):
+        assert RD.gold_one(3) == 3
+    assert "분류 실패(classify_failed)" in (tmp_path / "progress.log").read_text(encoding="utf-8")
+
+
+def test_error_cmd_leading_dash_filename():
+    from pipeline.shared import except_docs
+
+    row = {"s3_key": "-원본", "original_filename": "-견적서.pdf", "source_system": "-SFDC"}
+    args = shlex.split(_inner(RD.error_cmd(3, "stage_failed", row)).split(" && ")[-1])
+    with mock.patch.object(except_docs, "record_error") as record:
+        assert except_docs._error_cmd(args[args.index("error") + 1 :]) == 0
+    record.assert_called_once_with(
+        [{"source_key": "-원본", "file_name": "-견적서.pdf", "source_system": "-SFDC", "reason": "stage_failed"}],
+        to_dlq=True,
+        history=True,
+    )
