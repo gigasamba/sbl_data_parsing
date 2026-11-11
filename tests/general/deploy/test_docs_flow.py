@@ -48,7 +48,8 @@ def _run_main(work, rows, parse_one, gold_one=_ok_gold, publish_one=_ok_pub, dro
 
     M.time = _FastTime()
 
-    def configure(_settings):  # 설정 파일 대신 — 작업 폴더만 임시 폴더로
+    def configure(_settings, _overrides=()):  # 설정 파일 대신 — 작업 폴더만 임시 폴더로
+        M.POLICY.update(steps_precheck=False, steps_verify=False, run_limit=0)  # ② 문서 처리만 — ①③·건수는 test_run_pipeline
         M.TEST, M.PROG = work, work / "batch_progress"
         M.DOCSPACE = work / "out"
         M.DOCFLOW, M.STAGING = M.DOCSPACE / "_docflow", M.DOCSPACE / "_staging"

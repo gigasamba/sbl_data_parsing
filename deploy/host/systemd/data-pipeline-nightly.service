@@ -22,8 +22,9 @@ User=root
 WorkingDirectory=@CODE_DIR@
 ExecStart=/bin/bash deploy/host/scripts/nightly_batch.sh scheduled
 TimeoutStartSec=6h
-# 75 = 마감 도달·다른 run_pipeline이 도는 중(pl-18) — 예정된 끝이라 unit 실패로 치지 않음. 1(실패 문서)·2(설정)는 실패.
+# 75 = 마감 도달·다른 run_pipeline이 도는 중(pl-18) — 예정된 끝이라 unit 실패로 치지 않음. 1(실패 문서)·2(설정)·3(사전 점검·적재 확인)은 실패.
 SuccessExitStatus=75
 # 실패 알림(선택): OnFailure=rag-notify@%n.service  — 사내 메일·웹훅 단위 파일을 따로 만들 때
 # cron을 쓰면(systemd 대신 — cron 시각이 곧 일정, NIGHTLY_TIME은 안 봄):
-#   0 1 * * * cd <코드 폴더> && . deploy/host/scripts/load_settings.sh && load_settings && python3 deploy/host/scripts/run_pipeline.py --start-offset 0 --skip-done
+#   0 1 * * * cd <코드 폴더> && . deploy/host/scripts/load_settings.sh && load_settings && python3 deploy/host/scripts/run_pipeline.py --start-offset 0 --skip-done --limit 0
+#   (dev는 run_pipeline을 0번 벌 컨테이너 안에서 — 끝을 `docker exec -w /app/deploy data-pipeline-0 python3 deploy/host/scripts/run_pipeline.py --start-offset 0 --skip-done --limit 0`으로)

@@ -249,9 +249,131 @@ def test_configure_fixed_container(tmp_path):
         root.mkdir(exist_ok=True)
         f = root / "settings.yaml"
         f.write_text(yaml.safe_dump(rd._host().layout().to_file(model)), encoding="utf-8")
-        with mock.patch.object(rd, "_root", return_value=root):
+        with mock.patch.object(rd, "_root", return_value=root), mock.patch.object(rd, "_in_image", return_value=True):
             probs = rd.configure(f)
         assert probs == [] and (rd.PIPE_C, rd.PG_SCHEMA) == ("data-pipeline-0", "rag"), (run, name, probs)
+
+
+def _configure(tmp_path, run, in_image, drop=(), overrides=()):
+    """run_env·컨테이너 안 여부·빠진 칸·--set으로 configure() → (모듈, 문제 목록)."""
+    rd = _load()
+    model = {}
+    for p, _ in RD.SETTINGS_REQUIRED:
+        if p not in drop:
+            rd._host().layout().set_path(model, p, run if p == "common.run_env" else "x")
+    f = tmp_path / f"{run}-{in_image}-{len(drop)}.yaml"
+    f.write_text(yaml.safe_dump(rd._host().layout().to_file(model)), encoding="utf-8")
+    with mock.patch.object(rd, "_root", return_value=tmp_path), mock.patch.object(rd, "_in_image", return_value=in_image):
+        return rd, rd.configure(f, overrides)
+
+
+def test_run_place_by_env(tmp_path):
+    """실행 자리는 run_env 한 곳(rn-05): dev = 컨테이너 안에서만(명령을 바로, psql 칸 없이), prd = 호스트(docker exec), local = 거부."""
+    pg = RD.DIRECT_SKIP
+    for run, in_image, drop, ok, direct in [
+        ("dev", True, (), True, True),
+        ("dev", True, pg, True, True),  # 컨테이너 안은 앱이 PG에 붙음 — psql 칸 필요 없음
+        ("dev", False, (), False, True),  # dev를 호스트에서 — 거부(SSH로 컨테이너 안에서)
+        ("prd", False, (), True, False),
+        ("prd", False, pg, False, False),  # prd는 psql로 셈 — 칸 필요
+        ("local", False, (), False, False),
+    ]:
+        rd, probs = _configure(tmp_path, run, in_image, drop)
+        assert (probs == []) == ok and rd.DIRECT == direct, (run, in_image, drop, probs)
+    rd, probs = _configure(tmp_path, "dev", True)
+    with mock.patch.object(rd, "_code_root", return_value=__import__("pathlib").Path("/app/deploy")):
+        direct = {k: getattr(rd, f)(*a) for k, (f, a) in {"staging": ("stage_cmd", (9,)), "struct": ("struct_cmd", (9,))}.items()}
+    for k, cmd in direct.items():  # 컨테이너 안 = docker exec 없이 같은 안쪽 명령
+        assert cmd.startswith("bash -c ") and _inner(cmd) == _inner(GOLDEN[k]), (k, cmd)
+
+
+def test_set_overrides_settings(tmp_path):
+    """명령 인자 --set RUN_PIPELINE_<칸>=값이 settings.yaml 값을 이 실행에서만 덮는다 — 모르는 이름·형식은 시작 거부."""
+    for overrides, want, bad in [
+        ((), {"steps_precheck": True, "steps_verify": True, "run_limit": 2}, False),
+        (("RUN_PIPELINE_STEPS_VERIFY=false", "run_pipeline_run_limit=5"), {"steps_verify": False, "run_limit": 5}, False),
+        (("RUN_PIPELINE_STEPS_PRECHECK=0",), {"steps_precheck": False}, False),
+        (("RUN_PIPELINE_NOPE=1",), {}, True),
+        (("STEPS_VERIFY=false",), {}, True),
+        (("RUN_PIPELINE_RUN_LIMIT=-1",), {}, True),
+        (("RUN_PIPELINE_STEPS_VERIFY",), {}, True),  # = 없음
+    ]:
+        rd, probs = _configure(tmp_path, "prd", False, overrides=overrides)
+        assert bool(probs) == bad and all(rd.POLICY[k] == v for k, v in want.items()), (overrides, probs, rd.POLICY)
+
+
+def test_steps_stop_at_first_failure():
+    """① 사전 점검은 처음 실패에서 멈춤 · ③ 확인은 적재 → DB 검색(근거 1건+) → 검색 MCP 순서로 처음 실패를 돌려줌."""
+    n = len(RD.PRECHECK)
+    for rcs, want, calls in [
+        ([0] * n, None, n),
+        ([0, 1] + [0] * (n - 2), RD.PRECHECK[1][0], 2),
+        ([2] + [0] * (n - 1), RD.PRECHECK[0][0], 1),
+    ]:
+        with mock.patch.object(RD, "sh", side_effect=[(r, "", "") for r in rcs]) as shell, mock.patch.object(RD, "log"):
+            assert RD.precheck() == want and shell.call_count == calls, (rcs, shell.call_args_list)
+    for direct, gate, box in [
+        (False, "/app/docker/", "exec mcp-server-0 "),
+        (True, "/deploy/release/", ""),
+    ]:  # 배포 시험 판정 자리 · ③ 자리
+        with (
+            mock.patch.object(RD, "DIRECT", direct),
+            mock.patch.object(RD, "sh", return_value=(0, '{"evidence": [{"x": 1}]}', "")) as shell,
+            mock.patch.object(RD, "_psql", return_value=(0, "1|1", "")),
+            mock.patch.object(RD, "log"),
+        ):
+            RD.precheck()
+            assert f"{gate}selftest_gate.sh" in shell.call_args.args[0], shell.call_args
+            RD.verify({1: {"s3_key": "k", "source_system": "S", "original_filename": "a.pdf"}}, {"k"})
+            assert all((box or "bash -c ") in c.args[0] and "exec data-pipeline" not in c.args[0] for c in shell.call_args_list[-2:]), (
+                direct
+            )
+    rows = {1: {"s3_key": "k1", "source_system": "DEV-1", "original_filename": "a/보관 기간.pdf"}}
+    hit, miss = (0, 'log\n{"evidence": [{"x": 1}]}', ""), (0, '{"evidence": []}', "")
+    ok_log = (0, "3|12", "")  # (applog 조회) 이번 실행 pipe_run 3행 · 그 문서 pipe_event 12행
+    for done, logs, outs, want in [
+        (set(), ok_log, [], "적재"),
+        ({"k1"}, (0, "3|0", ""), [], "실행 기록(pipe_run 3행 · 그 문서 pipe_event 0행)"),
+        ({"k1"}, (0, "0|0", ""), [], "실행 기록(pipe_run 0행 · 그 문서 pipe_event 0행)"),
+        ({"k1"}, (1, "", "relation applog.pipe_run does not exist"), [], "실행 기록(pipe_run 0행 · 그 문서 pipe_event 0행)"),
+        ({"k1"}, ok_log, [miss], "DB 검색"),
+        ({"k1"}, ok_log, [(1, "", "[ask] db")], "DB 검색"),
+        ({"k1"}, ok_log, [hit, (1, "실패: 근거 0건", "")], "검색 MCP"),
+        ({"k1"}, ok_log, [hit, (0, "MCP 바깥 호출 통과", "")], None),
+    ]:
+        with (
+            mock.patch.object(RD, "sh", side_effect=outs) as shell,
+            mock.patch.object(RD, "_psql", return_value=logs) as pg,
+            mock.patch.object(RD, "log"),
+        ):
+            assert RD.verify(rows, done, since=1_700_000_000) == want, (done, logs, outs)
+        seen = [c.args[0] for c in shell.call_args_list]
+        assert len(seen) == len(outs) and all("--source DEV-1" in c and "'보관 기간'" in c for c in seen), seen
+        if done:  # 실행 시작 뒤 행만, 문서 이름(경로 뺀 파일 이름)으로
+            sql = pg.call_args.args[0]
+            assert "to_timestamp(1700000000)" in sql and "doc_id = '보관 기간.pdf'" in sql, sql
+
+
+def test_finish_exit_codes():
+    """② 뒤 끝 판정 — (rc, 적재 문서, ③ 켬, ③ 결과) → (종료 코드, ③ 불림)."""
+    for rc, loaded, on, bad, want, called in [
+        (0, {"k"}, True, None, 0, True),
+        (0, {"k"}, True, "검색 MCP", RD.EXIT_CHECK, True),
+        (0, {"k"}, False, "검색 MCP", 0, False),
+        (RD.EXIT_FAIL, {"k"}, True, None, RD.EXIT_FAIL, False),
+        (RD.EXIT_DEADLINE, set(), True, "적재", RD.EXIT_DEADLINE, False),
+        (0, set(), True, "적재", 0, False),  # 모두 건너뜀(중복·DRM) — 실패 아님
+        (RD.EXIT_DEADLINE, {"k"}, True, None, RD.EXIT_DEADLINE, True),
+        (RD.EXIT_DEADLINE, {"k"}, True, "DB 검색", RD.EXIT_CHECK, True),
+    ]:
+        flow = {"failed_keys": set(), "loaded": loaded}
+        with (
+            mock.patch.dict(RD.POLICY, steps_verify=on),
+            mock.patch.object(RD, "verify", return_value=bad) as check,
+            mock.patch.object(RD, "log") as out,
+        ):
+            assert RD.finish(rc, flow, {}) == want and check.called == called, (rc, loaded, on, bad)
+        assert out.call_args.args[0].startswith("[판정] ") and out.call_args.args[0].endswith(f"종료 코드 {want}")
 
 
 def test_staging_name_same():

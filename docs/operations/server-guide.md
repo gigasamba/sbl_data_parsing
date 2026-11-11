@@ -168,19 +168,22 @@ bash deploy/release/selftest_gate.sh docker run --rm --network host \
   -v $B:/app/deploy:ro,z data-pipeline-runtime:<이미지 판> selftest   # 예 <이미지 판> = 0.3.0 · 기대: [판정] 통과
 ```
 
-**④ 검색·MCP 기능 시험**
+**④ e2e — 벌 컨테이너 안에서 `run_pipeline` 한 번**(사전 점검 → 문서 2건 처리 → 적재·검색 확인 — 자세히 [§2-8](#2-8-dev-1-문서-한-번-처리하기))
+```bash
+ssh -p 8020 root@<서버 IP>                                            # 벌 0(data-pipeline-0) · 벌 1은 8021
+cd /app/deploy
+python3 deploy/host/scripts/run_pipeline.py                          # 기대 끝 줄: [판정] 통과 · 종료 코드 0
+```
+- 설정: 이 벌 settings.yaml `dev.search_ui.search_ui_mcp_url: http://<서버 IP>:8051/mcp`(③ 검색 MCP 확인 주소) · `required.tokens.mcp_token`. 단계·건수는 `ops.run_pipeline.steps`·`run_limit`(기본 둘 다 켬 · 2건), 한 번만 바꿀 때는 `--limit N`·`--set RUN_PIPELINE_STEPS_PRECHECK=false`처럼 명령 인자(설정보다 앞섬).
 
-검색만 볼 때(토큰·포트 없이 DB 검색):
+검색·MCP만 따로(같은 SSH 셸 — `cd /app/deploy`):
 ```bash
-docker exec data-pipeline-0 python -m mcp_server.cli.search_ask ask --source DEV-1 --k 3 --q "<처리한 문서에 있는 낱말>"   # 예 --q "보관 기간"
+python -m mcp_server.cli.search_ask ask --source DEV-1 --k 3 --q "<처리한 문서에 있는 낱말>"   # DB 검색만(토큰·포트 없이) · 예 --q "보관 기간"
+curl -s http://<서버 IP>:8051/health                                                   # 기대: {"ok":true,"ready":true,…}
+python -m mcp_server.cli.mcp_smoke --source DEV-1 --q "<낱말>"                          # 기대 끝 줄 MCP 바깥 호출 통과(주소·토큰은 settings.yaml)
+python -m validation.e2e.answer_gen --url http://<서버 IP>:8051/mcp --q "<질문>"        # 답변 생성 점검(§3-3-4)
 ```
-실제 클라이언트와 같은 길(HTTP — 벌 0의 `mcp-server-0`, 서버 8051):
-```bash
-curl -s http://127.0.0.1:8051/health                                 # 기대: {"ok":true,"ready":true,…}
-docker exec data-pipeline-0 python -m mcp_server.cli.mcp_smoke --url http://<서버 IP>:8051/mcp --token "<토큰>" --source DEV-1 --q "<낱말>"   # 기대 끝 줄 MCP 바깥 호출 통과
-docker exec data-pipeline-0 python -m validation.e2e.answer_gen --url http://<서버 IP>:8051/mcp --q "<질문>"                            # 답변 생성 점검(§3-3-4)
-```
-- `<토큰>` = settings.yaml `required.tokens.mcp_token` 값. 주소는 `search.server.mcp_allowed_hosts`에 적은 `<서버 IP>:8051`로 부른다(다른 Host는 거부).
+- 주소는 `search.server.mcp_allowed_hosts`에 적은 `<서버 IP>:8051`로 부른다(다른 Host는 거부). 토큰은 명령 줄에 쓰지 않는다(`mcp_smoke`가 `required.tokens.mcp_token`을 읽음).
 - 벌 1이 자기 코드로 MCP를 시험할 때는 SSH 셸(`ssh -p 8021 root@<서버>`) 안에서 잠깐 연다 — `python -m mcp_server.main --set MCP_PORT=18771 --set MCP_HOST=127.0.0.1 & echo $! > /tmp/mcp.pid` → 같은 셸에서 `mcp_smoke --url http://127.0.0.1:18771/mcp …` → `kill $(cat /tmp/mcp.pid)`. 컨테이너 안에서만 보이고, 컨테이너를 다시 띄우면 사라진다.
 
 **⑤ 타이머**(벌 0 폴더에서 — 새벽 배치 + MCP 살리기)
@@ -404,6 +407,7 @@ docker exec pgvector psql -U rag -d rag -c 'CREATE EXTENSION IF NOT EXISTS vecto
 | `required.pg.pg_host`·`pg_port`·`pg_database`·`pg_user`·`pg_password`·`pg_schema` | 검색 DB(pgvector) — `pg_schema`는 비우면 `data_parsing` | DB 담당 · 이 서버에 띄우면 [§1-4](#서버-pg-띄우기) | `host.docker.internal` · `5433` · `rag` · `rag` · `<비밀>` · (비움) | PC·dev·prd | `host_ctl.sh check` ① check_env · ③ migrate check |
 | `required.models.embed_base_url`·`embed_model`·`embed_api_key` | 임베딩 모델(`embed_model`은 적재·검색 때 같아야 함) | 모델 담당(내부망 주소) | `http://llm.example.local:8000/v1` · `<모델>` · `<비밀>` | PC·dev·prd | `host_ctl.sh check` ② ping_models |
 | `required.models.llm_*`·`vlm_*` | LLM·VLM 모델 | 모델 담당 | `http://llm.example.local:8001/v1` · `<모델>` | dev·prd | `host_ctl.sh check` ② ping_models |
+| `dev.search_ui.search_ui_mcp_url` | run_pipeline ③ 검색 MCP 확인 주소(dev는 벌 컨테이너, prd는 `mcp-server-0`에서 부름 — 비우면 `127.0.0.1:8765`라 서버에서는 실패) | 운영 담당 | `http://<서버 IP>:8051/mcp` | dev·prd | run_pipeline `[판정] 실패 — ③ 적재·검색 확인 검색 MCP` |
 | `required.edw.edw_host`·`edw_port`·`edw_database`·`edw_read_*` | 회사 DB(EDW) 접속 — 읽기 계정(원천 목록·`query_edw`, EDW는 읽기만 함 — 쓰기 계정 칸은 없음) · `edw_port`는 비우면 1433 | DB 담당 | `edw.example.local` · (비움) · `EDW` · `<계정>` · `<비밀>` | dev·prd | `run_pipeline` 시작(빠지면 칸 이름을 찍고 멈춤) · `pipe_exec.sh publish --dry-run`(§1-9) |
 | `required.edw.edw_file_table` | 파싱 대상 파일 목록을 읽을 EDW 표(`<스키마>.<표>` — 영문·숫자·_만) · 기본 `AI.FileStorageMap` | DB 담당 | `AI.FileStorageMap` | dev·prd | 설정을 읽을 때(꼴이 틀리면 시작 거부) · `run_pipeline` 대상 목록 |
 | `dev.local.*` | PC 전용 값(가짜 EDW·게시 폴더·원본 폴더·새 문서 상한) — **서버는 읽지 않음**(`local_edw_sqlite_file`이 적혀 있으면 EDW를 쓸 때 거부) | — | (sample 그대로) | PC만 | — |
@@ -769,18 +773,26 @@ bash deploy/host/scripts/host_ctl.sh check
 
 ### 2-8. `DEV-1` 문서 한 번 처리하기
 
-`run_pipeline.py`가 문서마다 받기 → 파싱 → 게시(Object Storage — silver) → 원본 삭제 → 구조화·적재(PG — gold)를 끝까지 돌린다. 게시와 적재는 따로 부르지 않는다. 처음에는 `--limit`로 두세 건만 돌린다.
+`run_pipeline.py` 한 번이 e2e다 — **① 사전 점검 → ② 문서 처리 → ③ 적재·검색 확인**을 순서대로 돌고, 처음 실패한 단계에서 멈춘다.
+- ① 사전 점검: 설정(`check_env`) → 모델 연결(`ping_models`) → DB 판(`migrate check`) → 배포 시험(`selftest` — 몇 분)
+- ② 문서 처리: 문서마다 받기 → 파싱 → 게시(Object Storage — silver) → 원본 삭제 → 구조화·적재(PG — gold)
+- ③ 적재·검색 확인: 이번 실행에서 적재까지 끝난 문서 하나로 — 실행 기록(applog: 실행 시작 뒤 `pipe_run` 1행 이상 · 그 문서 `pipe_event` 1행 이상) → 그 이름으로 원천을 DB 검색(근거 1건 이상) → 검색 MCP 바깥 호출(`mcp_smoke`)
+
+개발 서버(dev)에서는 **벌 컨테이너 안에서** 돌린다 — SSH로 들어간 셸에서 명령을 바로 부른다(서버 호스트에서 부르면 `dev는 data-pipeline 컨테이너 안에서 실행`으로 멈춘다). 건수는 settings.yaml `ops.run_pipeline.run_limit`(기본 2건).
 
 ```bash
-cd /home/sbl/sbl_data_parsing-main-1
-python3 deploy/host/scripts/run_pipeline.py --help                  # 인자 목록이 나오면 호스트 준비 OK
-nohup python3 deploy/host/scripts/run_pipeline.py --limit 2 > run_first.out 2>&1 &
+ssh -p 8021 root@<서버 IP>                                          # 벌 1(data-pipeline-1) · 벌 0은 8020
+cd /app/deploy                                                      # 벌 폴더(코드·settings.yaml)
+python3 deploy/host/scripts/run_pipeline.py --help                  # 인자 목록
+nohup python3 deploy/host/scripts/run_pipeline.py > run_first.out 2>&1 &   # ①②③ · 2건
 tail -f deploy/host/scripts/test_space/batch_progress/progress.log  # Ctrl+C로 보기만 멈춤(실행은 계속)
 ```
+- ③의 검색 MCP 주소는 이 벌 settings.yaml `dev.search_ui.search_ui_mcp_url`(예 `http://<서버 IP>:8051/mcp` — 벌 0의 `mcp-server-0`), 토큰은 `required.tokens.mcp_token`이다(명령 줄에 쓰지 않음). 벌 1이 자기 코드로 연 MCP를 볼 때는 그 주소([§0-2 ④](#0-2-dev--개발-서버-개발자별-벌)).
 - 대상은 settings.yaml `source_systems`(예 `DEV-1`)의 행만이다. 문서 이름으로 더 좁히려면 `--filter <키워드,…>`.
-- 진행 줄(문서마다 셋): `doc#<번호> 파싱 OK(…)` → `doc#<번호> publish OK(…)` → `doc#<번호> 구조화+적재 OK(…)`.
-- **성공이면 끝 줄**: `=== 문서별 flow 끝: 2건(완료 2 · 건너뜀 0 · …) · 최종 실패 0 · DLQ pending … · dead … · …분 · 문서당 평균 …분 · PG doc=… chunk=… · 종료 코드 0 ===`.
-- `처리할 문서 없음 — 종료` → EDW 목록에 `dev-1` 행이 없거나 이미 다 처리했다(2-1 — 담당에게 행 확인).
+- 진행 줄: `[점검] <이름> — 통과`(넷) → 문서마다 `doc#<번호> 파싱 OK(…)` → `doc#<번호> publish OK(…)` → `doc#<번호> 구조화+적재 OK(…)` → `[확인] 적재 — 통과(원천 … · 질문 …)` → `[확인] DB 검색 — 통과(근거 N건)` → `[확인] 검색 MCP — 통과`.
+- **성공이면 끝 줄**: `[판정] 통과 · 종료 코드 0`. 실패면 `[판정] 실패 — <단계> <이름> · 종료 코드 <코드>`이고, 바로 위 줄에 그 명령의 출력 끝이 있다. 마감 도달·다른 실행이 도는 중은 `[판정] 멈춤 — … · 종료 코드 75`(실패 아님 — 다음 실행에서).
+- 한 번만 다르게(명령 인자가 settings.yaml보다 앞섬): 건수 `--limit 5`(0 = 전체) · 단계 끄기 `--set RUN_PIPELINE_STEPS_PRECHECK=false`(배포 시험 몇 분을 건너뜀) · `--set RUN_PIPELINE_STEPS_VERIFY=false`.
+- `처리할 문서 없음 — 종료` → EDW 목록에 `dev-1` 행이 없거나 이미 다 처리했다(2-1 — 담당에게 행 확인). 이때는 ③을 하지 않는다(`[판정] 통과 — 대상 0건`).
 - `[중단] <칸 경로> …` → 그 settings.yaml 칸이 비었다(종료 2). 채우고 다시.
 - `다른 run_pipeline이 도는 중(…) — 종료 코드 75` → 이 벌에서 이미 하나가 돈다(새벽 배치 포함). 끝난 뒤 다시.
 - 종료 코드 뜻과 실패 문서 다시 돌리기는 [§3-3](#3-3-파이프라인-실행--run_pipeline)·[§3-6](#3-6-실패한-문서-찾기와-다시-돌리기). 다음부터 이어서 돌릴 때는 `--skip-done`(이미 적재한 문서와 영구 제외 문서는 건너뜀).
@@ -797,14 +809,14 @@ docker exec <PG 컨테이너> psql -U <계정> -d <DB 이름> -c "SELECT file_pa
 
 ### 2-10. 검색 확인
 
-`data-pipeline-0` 컨테이너 안에서 바로 검색한다 — 토큰 없이 DB 검색만 본다(실행 이미지가 `mcp_server`를 불러올 수 있음):
+2-8의 ③이 아래 둘을 이미 돈다. 다른 낱말로 더 볼 때 벌 컨테이너 안(SSH 셸, `cd /app/deploy`)에서 하나씩 부른다(실행 이미지가 `mcp_server`를 불러올 수 있음):
 ```bash
-cd /home/sbl/sbl_data_parsing-main-0
-docker exec data-pipeline-0 python -m mcp_server.cli.search_ask ask --source DEV-1 --k 3 --q "<처리한 문서에 있는 낱말>"
+python -m mcp_server.cli.search_ask ask --source DEV-1 --k 3 --q "<처리한 문서에 있는 낱말>"   # DB 검색만(토큰·포트 없이)
+python -m mcp_server.cli.mcp_smoke --source DEV-1 --q "<낱말>"                                # 검색 MCP 바깥 호출(HTTP) — 주소·토큰은 settings.yaml
 ```
-- **성공이면** `질문: … (원천 DEV-1 · 근거 <N>건)` 줄 뒤에 `[1] <파일 경로>  p.<쪽> L.<줄>`처럼 근거가 나온다. `[ask] …`로 끝나면 그 오류 글자를 읽는다(원천 스키마가 없으면 2-6).
-- `근거 0건` → 2-9에서 `doc` 행이 있는지, 질문 낱말이 문서에 있는지 본다.
-- 실제 클라이언트와 같은 길(HTTP — `mcp-server-0`, 서버 8051)로 부르는 시험(`mcp_smoke`)은 [§0-2 ④](#0-2-dev--개발-서버-개발자별-벌)·[mcp-guide.md](mcp-guide.md).
+- **DB 검색 성공이면** `질문: … (원천 DEV-1 · 근거 <N>건)` 줄 뒤에 `[1] <파일 경로>  p.<쪽> L.<줄>`처럼 근거가 나온다. `[ask] …`로 끝나면 그 오류 글자를 읽는다(원천 스키마가 없으면 2-6).
+- **검색 MCP 성공이면** 끝 줄 `MCP 바깥 호출 통과`(도구 목록 6종 · `search` 근거 1건 이상 · 근거 칸이 계약과 같음). 주소는 `dev.search_ui.search_ui_mcp_url`(다른 주소는 `--url http://<서버 IP>:8051/mcp`), 토큰은 `required.tokens.mcp_token` — 명령 줄에 `--token`을 쓰지 않는다(ps·셸 기록에 남음).
+- `근거 0건` → 2-9에서 `doc` 행이 있는지, 질문 낱말이 문서에 있는지 본다. MCP가 응답하지 않으면 `docker logs mcp-server-0`(서버 호스트)과 [mcp-guide.md](mcp-guide.md).
 
 ### 2-11. 로그 보기
 
@@ -974,19 +986,22 @@ bash deploy/host/scripts/host_ctl.sh timers        # 단위의 코드 폴더 자
 | 새벽 배치 | systemd `data-pipeline-nightly.timer` → `nightly_batch.sh scheduled` | §3-3-2 | 정기 운영 |
 | 파싱·게시만 | `pipe_exec.sh parse` · `pipe_exec.sh publish [--dry-run]` | 상주 컨테이너 안에서 한 번 | 단계 확인 — §3-3-3 |
 
-서버 입구는 `run_pipeline.py` 하나다 — 문서마다 파싱 → publish(Object Storage) → 원본 삭제 → 구조화·적재(PG — 처리 기록 포함)를 상주 컨테이너 안에서 `exec`로 돌린다. **PC에서는 실행하지 않는다**(운영 EDW·Object Storage에 접속).
-- **자리:** 코드 폴더에서 `python3 deploy/host/scripts/run_pipeline.py …`로 실행한다(다른 자리에 복사해 돌리면 `--code <코드 폴더>`).
+서버 입구는 `run_pipeline.py` 하나다 — 한 번 실행 = e2e: **① 사전 점검 → ② 문서 처리 → ③ 적재·검색 확인**(처음 실패한 단계에서 멈춤, 끝 줄 `[판정] 통과|실패 — <단계>`). ②는 문서마다 파싱 → publish(Object Storage) → 원본 삭제 → 구조화·적재(PG — 처리 기록 포함). **PC에서는 실행하지 않는다**(원본 받기의 PC 대역이 없음 — `run_env: local`이면 시작 거부).
+- **자리:** 개발 서버(dev)는 **벌 컨테이너 안**(SSH 셸, `cd /app/deploy`)에서 명령을 바로 부른다. 운영 서버(prd)는 **서버 호스트**의 코드 폴더에서 부르고, 컨테이너(`data-pipeline-0`) 안 명령을 `docker exec`로 돌린다(다른 자리에 복사해 돌리면 `--code <코드 폴더>`). 자리가 틀리면 시작하지 않는다.
 - **대상:** 기본은 FileStorageMap의 모든 문서를 처음(`--start-offset` 기본 0)부터. 이름으로 좁힐 때만 `--filter <키워드,…>`(하나라도 들면). 몇 개만은 `--limit N`·`--seqs <번호,…>`.
-- **설정**은 서버 settings.yaml(`--settings` · `SETTINGS_FILE` · `<루트>/settings.yaml` 순)에서 읽는다 — 호스트 python에 PyYAML 필요. 필요한 칸이 없으면 칸 경로만 찍고 종료 2. `required.env.run_env`가 `dev`·`prd`가 아니면 시작하지 않는다.
+- **단계·건수**(우선순위: 명령 인자 > settings.yaml > 코드 기본값): `ops.run_pipeline.steps.steps_precheck`·`steps_verify`(① · ③ — 기본 켬, ②는 항상) · `ops.run_pipeline.run_limit`(사람이 돌릴 때 건수 — 기본 2, 0 = 전체). 운영 서버에서 사람이 전체를 돌리려면 prd settings.yaml에 `run_limit: 0`. 한 번만: `--limit N` · `--set RUN_PIPELINE_<칸>=값`(예 `--set RUN_PIPELINE_STEPS_VERIFY=false` — `ops.run_pipeline` 칸만).
+  - ① 사전 점검: `check_env` → `ping_models` → `migrate check --target all` → `selftest`(알려진 실패 목록으로 판정 — 몇 분).
+  - ③ 적재·검색 확인: 이번 실행에서 적재까지 끝난 문서 하나로 — 실행 기록(applog: 실행 시작 뒤 `pipe_run` 1행 이상 · 그 문서 `pipe_event` 1행 이상 — 0이면 `ops.log.log_db_enabled`·applog 판 확인) → 그 이름(확장자 뺌)으로 원천을 DB 검색(근거 1건 이상) → 검색 MCP 바깥 호출(`mcp_smoke` — 주소 `dev.search_ui.search_ui_mcp_url`, 토큰 `required.tokens.mcp_token`). dev는 벌 컨테이너 안에서, prd는 `mcp-server-0` 안에서 부른다(prd 파이프라인 이미지에는 검색 명령이 없음). 대상 0건·적재 0건(마감·모두 건너뜀)이면 ③은 하지 않는다.
+- **설정**은 서버 settings.yaml(`--settings` · `SETTINGS_FILE` · `<루트>/settings.yaml` 순)에서 읽는다 — 호스트 python에 PyYAML 필요. 필요한 칸이 없으면 칸 경로만 찍고 종료 2. `required.env.run_env`가 `dev`·`prd`가 아니면 시작하지 않는다. 컨테이너 안(dev)은 문서 수를 앱의 PG 접속(`required.pg`)으로 세므로 `ops.host.pg_container` 칸이 필요 없다.
   - 작업 폴더 `ops.run_pipeline.run_pipeline_work_dir`(비우면 스크립트 옆 `test_space/` — 진행 기록 `batch_progress/`)
-  - 결과 폴더 `<루트>/output`(컨테이너 `/app/output`의 원본)
+  - 결과 폴더: prd `<루트>/output`(컨테이너 `/app/output`의 원본) · dev 컨테이너 안 `/app/output`(같은 폴더)
   - MCP 업로드 작업 폴더는 `<결과 폴더>/_mcp_parse/jobs`(고정)
   - 레인·동시 수 값 `ops.run_pipeline.*`(비우면 코드 기본값)
 - **게시·EDW 설정**(settings.yaml `required` — 빠지면 run_pipeline이 칸 이름을 찍고 종료 2): 게시 위치 `required.publish.publish_bucket`·`publish_prefix`, Object Storage 접속 `required.object_storage.*`, EDW 접속 `required.edw.*` — 칸 뜻은 [§1-6](#꼭-채울-값). `dev.local.*`(가짜 EDW 등)은 PC 전용이라 서버에서는 읽지 않는다(`local_edw_sqlite_file`은 비운다).
 - 파싱·publish·구조화가 실패하거나 시간 제한을 넘기면 그 문서의 컨테이너 안 프로세스도 끈다(다음 문서와 CPU·메모리를 다투지 않게).
 - publish는 gold(PG 원천 스키마 `doc`)에 이미 끝난 문서를 Object Storage에 올리지 않는다(`--reparse` 목록만 새 날짜 폴더). 올린 문서의 처리 기록은 문서 폴더 `publish/silver.jsonl`에 쓰고, 적재가 그 값을 `doc` 칸으로 옮긴다.
 - 원본(`_staging/*.bin`·그 ETag 파일 `*.etag`·`_docflow/<seq>/_source_files`)은 **publish가 성공한 뒤에만** 지운다. 파싱·publish가 실패한 문서는 원본이 남고 `batch_progress/progress.log`와 `applog.except_doc_info`(`error` 행)에 적힌다(다음 `--skip-done` 실행이 다시 고름). 구조화·적재가 실패하면 publish한 결과는 그대로이고 `doc` 행이 없으므로 다음 `--skip-done` 실행이 다시 고른다(`error` 행도 남김).
-- **종료 코드**(PRD [pl-18](../prd/ops.md#pl-18)): `0` 대상 0건·모두 끝 · `1` 실패 문서가 하나라도 · `75` 마감(`--deadline`) 도달(실패 없음) 또는 다른 run_pipeline이 도는 중 · `2` 설정 문제. 실패와 마감이 함께면 `1`. 새벽 배치 unit은 `75`를 성공으로 친다.
+- **종료 코드**(PRD [pl-18](../prd/ops.md#pl-18)): `0` 대상 0건·모두 끝 · `1` 실패 문서가 하나라도 · `75` 마감(`--deadline`) 도달(실패 없음) 또는 다른 run_pipeline이 도는 중 · `2` 설정 문제 · `3` ① 사전 점검 또는 ③ 적재·검색 확인 실패. 실패와 마감이 함께면 `1`. 새벽 배치 unit은 `75`를 성공으로 친다.
 - **겹침 잠금:** run_pipeline은 `batch_progress/run_pipeline.lock`을 `flock`으로 잡는다 — 새벽 배치와 사람이 직접 돌린 run_pipeline이 함께 돌지 않는다(뒤에 온 쪽이 75). 죽으면 잠금은 저절로 풀린다. 작업 폴더가 같아야 같은 잠금이다. 같은 결과 폴더에 두 작업이 겹치면 `/app/output/.pipeline.lock` 때문에 뒤쪽이 종료 75.
 - 우선순위 낮추기(`tuning.extract.low_priority_engines` — 일괄 파싱 엔진 자식 nice +10)는 같은 세션·autogroup 안에서만 효과가 있다. 컨테이너끼리는 CPU 나눔 비율(compose 파일 `mcp-data-parsing-0`의 `cpu_shares` 4096 대 일괄 1024)이 정한다.
 
@@ -1003,7 +1018,7 @@ tail -n 50 <결과 폴더>/_docflow/<seq>/structure.log                    # 그
 #### 3-3-2. 새벽 배치
 
 - systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `ops.nightly.nightly_start_time: "HH:MM"`(그 시각부터 5분 안에 시작) · `ops.nightly.nightly_max_docs`(새 문서 수 상한, 1 이상) · `ops.nightly.nightly_stop_time: "HH:MM"`(마감 — 시작보다 5분 넘게 뒤). **셋 중 하나라도 비면 돌지 않는다**(기본 비움 — 타이머가 켜져 있어도 아무것도 하지 않음).
-- `nightly_batch.sh scheduled`가 시작 시각부터 5분 안일 때만 applog 파티션 정리(`pipe_exec.sh migrate maintain --target applog` — 실패하면 경고만 남기고 계속) 뒤 `run_pipeline.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>`을 부른다(마감이 지나면 새 문서를 받지 않고, 받은 문서는 끝까지).
+- `nightly_batch.sh scheduled`가 시작 시각부터 5분 안일 때만 applog 파티션 정리(`pipe_exec.sh migrate maintain --target applog` — 실패하면 경고만 남기고 계속) 뒤 `run_pipeline.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감> --limit 0`을 부른다(마감이 지나면 새 문서를 받지 않고, 받은 문서는 끝까지 · `--limit 0` = 사람 실행 기본 건수 `run_limit`을 쓰지 않음). ①③도 settings.yaml `ops.run_pipeline.steps`대로 돈다(환경이 깨진 날은 처리를 시작하지 않음). 개발 서버(dev)는 그 run_pipeline을 0번 벌 컨테이너 안에서 부른다(`docker exec -w /app/deploy data-pipeline-0 python3 …`).
 - 형식이 틀리면(HH:MM 아님 · 상한이 1 이상 정수 아님 · 마감이 시작보다 5분 이내) 종료 2. 지금 바로 돌리려면 run_pipeline을 직접 부른다.
 - 개발자 벌은 새벽 배치가 필요 없으면 `systemctl disable --now data-pipeline-nightly-<번호>.timer`.
 
@@ -1685,7 +1700,7 @@ $DOCKER exec data-pipeline-0 python -m pipeline.load.pgvector_load --set PIPE_OU
 - 끝나면 `<결과 폴더>/redo/`를 지운다(원본 사본이 들어 있음).
 - `--replace`는 판 표가 있는 우리 스키마에서만 된다. 적재는 묶음에 없는 문서를 지우지 않는다.
 
-**파싱부터 전부.** `python3 deploy/host/scripts/run_pipeline.py`를 `--skip-done` 없이 돌린다(문서 몇 개만이면 `--seqs <번호,…>`). 게시를 다시 하므로 Object Storage에 같은 문서가 새 날짜 이름으로 한 벌 더 생긴다. 적재는 같은 문서를 건너뛰므로 gold까지 바꾸려면 새 스키마에 적재한다(§4-8 (나)).
+**파싱부터 전부.** `python3 deploy/host/scripts/run_pipeline.py --limit 0`을 `--skip-done` 없이 돌린다(`--limit 0` — 빼면 `run_limit` 2건만 · 문서 몇 개만이면 `--seqs <번호,…>`). 게시를 다시 하므로 Object Storage에 같은 문서가 새 날짜 이름으로 한 벌 더 생긴다. 적재는 같은 문서를 건너뛰므로 gold까지 바꾸려면 새 스키마에 적재한다(§4-8 (나)).
 
 ### 4-10. 올린 뒤 점검
 

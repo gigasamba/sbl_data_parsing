@@ -9,7 +9,7 @@
 #   설정: settings.yaml(SETTINGS_FILE, 기본 <루트>/settings.yaml — 루트 = 코드 폴더 자체)의
 #     호스트 칸(NIGHTLY_* 등)을 load_settings.sh load_settings가 셸 env로 — 이미 셸에 있는 이름은 그대로. 대상 컨테이너는 0번 data-pipeline-0뿐.
 #     settings.yaml이 없으면 종료 코드 2.
-# 종료 코드: run_pipeline 그대로(0 끝남·건너뜀·대상 0건 · 1 실패 문서 있음 · 75 실행 중(잠금)·마감 · 2 설정 문제) · scheduled가 아니면 2
+# 종료 코드: run_pipeline 그대로(0 끝남·건너뜀·대상 0건 · 1 실패 문서 있음 · 75 실행 중(잠금)·마감 · 2 설정 문제 · 3 사전 점검·적재 확인 실패) · scheduled가 아니면 2
 #   겹침 잠금은 run_pipeline.py 안(flock batch_progress/run_pipeline.lock) — 사람이 이 스크립트 없이 run_pipeline을 돌려도 같은 잠금을 씀
 set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트
@@ -44,7 +44,13 @@ if [ "$mod" = "scheduled" ]; then
   bash deploy/host/scripts/pipe_exec.sh migrate maintain --target applog \
     || echo "[nightly_batch] 경고 — applog 파티션 정리(migrate maintain --target applog) 실패, 배치는 계속" >&2
   echo "[nightly_batch] $(date '+%F %T') 새벽 배치 — run_pipeline.py 시작"
-  python3 deploy/host/scripts/run_pipeline.py --start-offset 0 --skip-done --max-docs "$n" --deadline "$dl" "$@"; rc=$?
+  # 건수 제한 없음(--limit 0 — 사람 실행 기본 run_limit을 덮음, 상한은 --max-docs). dev는 컨테이너 안에서 돈다(rn-05 — 0번 벌 data-pipeline-0).
+  rp=(deploy/host/scripts/run_pipeline.py --start-offset 0 --skip-done --max-docs "$n" --deadline "$dl" --limit 0 "$@")
+  if [ "${RUN_ENV:-}" = dev ]; then
+    ${DOCKER:-docker} exec -w "$APP_CODE_ROOT" data-pipeline-0 python3 "${rp[@]}"; rc=$?
+  else
+    python3 "${rp[@]}"; rc=$?
+  fi
   echo "[nightly_batch] $(date '+%F %T') 새벽 배치 — run_pipeline.py 끝 (종료 코드 $rc)"
   exit $rc
 fi

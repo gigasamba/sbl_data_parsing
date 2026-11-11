@@ -232,6 +232,10 @@ ops:
       batch_skip_full_qa: true                # 전체 문서 CER·순서 비교 생략 · true(켬)·false(끔)
       batch_rotate_scans: false               # 스캔 쪽 방향 바로잡기 · true(켬)·false(끔)
       batch_max_cpu_load: 1.3                 # light 밖 레인 CPU 문턱(부하÷코어) · 숫자
+    steps:
+      steps_precheck: true                    # ① 사전 점검(설정·모델 연결·DB 판·배포 시험) — 실패하면 문서 처리 안 함 · true(켬)·false(끔)
+      steps_verify: true                      # ③ 적재·검색 확인(이번 실행 문서로 DB 검색 → 검색 MCP) · true(켬)·false(끔)
+    run_limit: 2                              # 사람이 돌릴 때 처리 건수 · 0 = 전체 (새벽 배치는 늘 전체 — 명령 인자 --limit이 덮음) · 정수
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
 # tuning — 거의 바꾸지 않는 값(분류별 — 결과 파라미터·내부 상한·제한 시간·자원 세부값). 코드 기본값 그대로 두는 것이 보통.

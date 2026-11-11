@@ -65,7 +65,7 @@
 ## pl-18 · `run_pipeline` 종료 코드와 겹침 잠금
 - 이유: 스케줄러가 실패를 봐야 한다.
 - 규칙:
-  1. 종료 코드: 0 = 대상 0건·모두 끝 · 1 = 실패 문서(파싱·게시·gold) 하나라도(받기가 뺀 건너뜀 문서는 실패 아님 — pl-24) · 75 = 마감 도달(실패 없음) 또는 다른 run_pipeline이 도는 중 · 2 = 설정 문제. 실패와 마감이 함께면 1.
+  1. 종료 코드: 0 = 대상 0건·모두 끝 · 1 = 실패 문서(파싱·게시·gold) 하나라도(받기가 뺀 건너뜀 문서는 실패 아님 — pl-24) · 75 = 마감 도달(실패 없음) 또는 다른 run_pipeline이 도는 중 · 2 = 설정 문제 · 3 = ① 사전 점검 또는 ③ 적재·검색 확인 실패(마감에 걸려 적재 0건이면 ③ 없이 75). 실패와 마감이 함께면 1.
   2. 겹침 잠금: `flock batch_progress/run_pipeline.lock`(프로세스가 죽으면 커널이 풂). 사람이 직접 돌려도 같은 잠금.
   3. `--deadline HH:MM`: 그 시각(지금보다 이르거나 같으면 다음 날)이 지나면 새 문서를 받지 않는다.
 - 파일: `deploy/host/scripts/run_pipeline.py`, `deploy/host/scripts/nightly_batch.sh`.
@@ -126,10 +126,13 @@
   3. 원본 받기는 한 길이다 — `python -m pipeline.extract.candidate_ready stage`가 문서를 `_staging/`(`extract.source.source_staging_dir`)에 한 번 받고, 같은 실행에서 바로 중복 제외(받은 파일 SHA-256 — 같은 묶음·gold에 끝난 다른 원본, pl-02)와 형식·DRM·암호·미지원 거르기(`filter_and_rotate`)를 이 순서로 한다. 살아남은 문서만 파싱하고, 파싱(`parse --staged`)은 받아 둔 파일만 읽는다 — 받지 못한 문서는 파싱 실패, 받기가 뺀 문서(중복·DRM·암호)는 건너뜀이고 받기가 `except_doc_info` `skip`에 쓴다(pl-24). DRM 문서는 표시만 하고 건너뛴다(처리 단계 없음). 회전은 기본 꺼짐 그대로다. 원본은 게시가 성공한 뒤 `drop_original()`만 지운다(pl-24).
   4. PC(`RUN_ENV=local`)도 같은 `run_pipeline`로 E2E를 돈다 — 가짜 대상만(EDW sqlite·`file://` 게시 폴더·상대 경로, op-14). PC만의 분기는 접속 대상을 고르는 한 곳이다.
   5. 커밋 전 점검 스크립트는 점검 도구 자리 `common/check/`에 있다(`.githooks/pre-commit`·CLAUDE.md §5-2·README가 그 경로를 부른다).
+  6. run_pipeline 한 번이 e2e다 — ① 사전 점검(설정 `checker env` → 모델 연결 `checker ping` → DB 판 `dbtool check --target all` → 배포 시험 `selftest_gate.sh … selftest`) → ② 문서 처리 → ③ 적재·검색 확인(적재까지 마친 문서 하나로 실행 기록 applog `pipe_run`·그 문서 `pipe_event` 1행+ → DB 검색 `search_ask` 근거 1건+ → 검색 MCP `mcp_smoke` — prd는 `mcp-server-0` 안에서 · 적재 0건이면 하지 않음). 단계 순서대로, 첫 실패에서 멈추고, 끝에 `[판정] 통과|실패 — 이유 · 종료 코드` 한 줄을 남긴다. ①·③ 실패는 종료 코드 `3`, 마감·잠금 `75`는 `[판정] 멈춤`. 새벽 배치도 같은 run_pipeline을 부른다.
+  7. 실행 자리: 개발 서버(dev)는 `data-pipeline` 컨테이너 안(`cd /app/deploy`)에서 명령을 바로 부르고, 운영 서버(prd)는 호스트에서 컨테이너마다 `docker exec`로 부른다. 그 밖의 자리(dev인데 컨테이너 밖)는 시작을 거부한다.
+  8. 단계 켜기·건수는 settings.yaml `ops.run_pipeline.steps.steps_precheck`·`steps_verify`(기본 켜짐)·`ops.run_pipeline.run_limit`(사람 실행 기본 2건)이고, 명령 인자 `--limit N`·`--set RUN_PIPELINE_<칸>=값`이 설정보다 앞선다. 새벽 배치는 `--limit 0`(건수는 `--max-docs`).
 - 비고(현재와 다른 점, 11-05 확인):
-  - `configure()`가 `run_env`가 dev·prd가 아니면 거부하고, CLAUDE.md §4가 "run_pipeline은 PC에서 실행하지 않는다"고 적는다 — PC는 `python -m pipeline.cli parse`를 바로 부른다. 바꾸는 것은 등급 A(운영 접속 가드).
+  - `configure()`가 `run_env`가 dev·prd가 아니면 거부하고, CLAUDE.md §4가 "run_pipeline은 PC에서 실행하지 않는다"고 적는다 — PC는 `python -m pipeline.cli parse`를 바로 부른다. 바꾸는 것은 등급 A(운영 접속 가드). PC(요건 4)는 Object Storage 대역이 있어야 해서(`objectstore.client()`가 local을 거부 — 대역을 넣으면 레이어 코드 지문이 바뀜) 다음 판으로 미룬다.
   - 점검 스크립트가 `deploy/release/lint_changed.sh`에 있다.
-- QA: 바꾸기 전후 같은 문서 묶음의 결과(대표 결과·gold `doc` 처리 기록·게시 파일)가 같음 · 대상 목록 고르기 사례 표 `tests/server/pipeline/test_target_list.py`(키워드·크기순·시작 자리·골라 돌리기·끝난 문서·FAQ 교체·max-docs) · 받기·중복·거르기 `tests/server/pipeline/test_stage_batch.py`·`test_candidate.py::test_stage_batch` · PC에서 run_pipeline 한 번으로 gold 대역 `doc` 행과 `file://` 폴더 결과가 생김.
+- QA: 바꾸기 전후 같은 문서 묶음의 결과(대표 결과·gold `doc` 처리 기록·게시 파일)가 같음 · 대상 목록 고르기 사례 표 `tests/server/pipeline/test_target_list.py`(키워드·크기순·시작 자리·골라 돌리기·끝난 문서·FAQ 교체·max-docs) · 받기·중복·거르기 `tests/server/pipeline/test_stage_batch.py`·`test_candidate.py::test_stage_batch` · PC에서 run_pipeline 한 번으로 gold 대역 `doc` 행과 `file://` 폴더 결과가 생김 · 실행 자리·`--set` 우선·첫 실패에서 멈춤 사례 표 `tests/general/deploy/test_run_pipeline.py`(`test_run_place_by_env`·`test_set_overrides_settings`·`test_steps_stop_at_first_failure`) · 개발 서버 컨테이너 안 run_pipeline 2건에서 `[판정] 통과`.
 - Status: todo
 
 <a id="rn-06"></a>
