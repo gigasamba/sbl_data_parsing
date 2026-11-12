@@ -30,9 +30,10 @@ export DOCKER=docker; S=/home/sbl          # 공용 폴더
 ### A-1. 벌 폴더 만들기
 ```bash
 cd $S && unzip -q <코드 zip>                                   # 기대: sbl_data_parsing-<판>/ (git archive로 만든 zip — 커밋 표시가 들어감)
+(cd sbl_data_parsing-<판> && rm -rf valid_env validation tests/general tests/conftest.py docs/history)   # PC 전용(시험 데이터·검증 도구·PC 시험·지난 기록) — 서버에서 안 씀
 for b in data_pipeline-1 data_pipeline-2 data_pipeline-3 data_pipeline-4 data_pipeline; do
   mkdir -p $S/$b/home && cp -a sbl_data_parsing-<판> $S/$b/app; done
-rm -rf sbl_data_parsing-<판> $S/data_pipeline*/app/valid_env    # 서버에는 PC 시험 데이터가 필요 없다
+rm -rf sbl_data_parsing-<판>
 ```
 
 ### A-2. 실행 이미지 불러오기(판마다 한 번)
@@ -177,11 +178,11 @@ docker exec pgvector pg_dump -U <계정> -d <DB> -Fc -n <스키마> -n '<스키�
 
 ### A-14. 새 판 코드로 바꾸기(벌 app 덮어쓰기)
 ```bash
-cd $S && unzip -q <코드 zip>
+cd $S && unzip -q <코드 zip> && (cd sbl_data_parsing-<판> && rm -rf valid_env validation tests/general tests/conftest.py docs/history)   # A-1과 같은 PC 전용 빼기
 B=$S/data_pipeline-<n>/app; T=deploy/host/scripts/test_space; C=deploy/host/compose/compose-dev.yml
 { [ ! -d "$B/$T" ] || mv "$B/$T" "$B.test_space"; } && cp -p "$B/$C" "$B.compose.yml" &&   # 채운 비밀번호 보관
   find "$B" -mindepth 1 -maxdepth 1 ! -name .git ! -name output ! -name "settings*" -exec rm -rf {} + &&
-  cp -a sbl_data_parsing-<판>/. "$B/" && rm -rf "$B/valid_env" &&
+  cp -a sbl_data_parsing-<판>/. "$B/" &&
   { [ ! -d "$B.test_space" ] || mv "$B.test_space" "$B/$T"; }
 vi "$B/$C" && chmod 600 "$B/$C" && rm "$B.compose.yml"   # 새 판 파일의 null 칸을 $B.compose.yml의 값으로 다시 채움
 cd "$B" && bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>

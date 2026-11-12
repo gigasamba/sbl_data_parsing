@@ -27,7 +27,7 @@ def selftest():
     assert areas("import data_retrieval.retriever") == {"search"}
     assert areas("def f():\n    import pipeline.eval.stages") == set()
     two = ast.parse("import pipeline.eval.stages\nimport mcp_server.main")
-    assert len(_cli_eval_violations("evaluation/stack_matrix.py", two, None)) == 1  # ⑨ etl+search top-level 동시
+    assert len(_cli_eval_violations("evaluation/answer_gen.py", two, None)) == 1  # ⑨ etl+search top-level 동시
     print("[selftest] check_modules — 점 이름 import 영역 판정·옛/새 검색 이름·⑨ 동시 import 통과")
     _env_selftest()
     _planted_selftest()
@@ -72,14 +72,14 @@ def _planted_selftest():
     import tempfile
 
     bad_cases = {  # 경로 → 내용(모두 위반이어야 함)
-        "pipeline/v_e2e_flat.py": "import stack_matrix\n",  # etl → PC 평가 도구 맨 이름
+        "pipeline/v_e2e_flat.py": "import answer_gen\n",  # etl → PC 평가 도구 맨 이름
         "pipeline/v_e2e.py": "from validation.e2e import graph_llm\n",  # etl → validation 정적 import
         "pipeline/v_tests.py": "from tests.server.common import appcheck\n",  # 앱 → tests/ import
         "common/v_tests.py": "import tests.runner\n",
-        "mcp_server/v_e2e.py": "import validation.e2e.stack_matrix\n",
-        "common/v_e2e.py": "import validation.e2e.model_matrix\n",
+        "mcp_server/v_e2e.py": "import validation.e2e.answer_gen\n",
+        "common/v_e2e.py": "import validation.e2e.tool_loop\n",
         "pipeline/v_old.py": "import common_tools\n",  # 옛 공용 패키지 이름
-        "mcp_server/v_old.py": "from common_tools.evaluation import stack_matrix\n",
+        "mcp_server/v_old.py": "from common_tools.evaluation import answer_gen\n",
         "validation/e2e/v_old.py": "import common_tools.cli.assets\n",
         "mcp_server/v_etl.py": "import pipeline.eval.stages\n",  # 앱 사이(기존 규칙)
         "validation/e2e/v_both.py": "import pipeline.eval.stages\nimport mcp_server.main\n",  # ⑨
@@ -91,7 +91,7 @@ def _planted_selftest():
         "pipeline/eval/ok_stages.py": "import stages\n",
         "validation/e2e/ok_etl.py": "import pipeline.eval.stages\n\ndef f():\n    import mcp_server.main\n",
         "pipeline/eval/ok_dyn.py": "import importlib\nimportlib.import_module('validation.e2e.graph_llm')\n",  # 문자열 — 정적 점검 밖
-        "validation/e2e/triple_extract/agent.py": "from google.adk.agents import LlmAgent\n",  # ⑦ 지시서 agent.py
+        "valid_env/answer_test/rag_qa/agent.py": "from google.adk.agents import LlmAgent\n",  # ⑦ 지시서 agent.py
         "common/core/ok_fp.py": "OLD = b'common_tools.text'\n",  # 바이트 글자(지문 대응표)는 import 아님
     }
     saved = M.ROOT
@@ -100,8 +100,8 @@ def _planted_selftest():
         for rel, src in {**bad_cases, **ok_cases}.items():
             (t / rel).parent.mkdir(parents=True, exist_ok=True)
             (t / rel).write_text(src, encoding="utf-8")
-        (t / "validation" / "e2e" / "stack_matrix.py").write_text("", encoding="utf-8")  # flat 표(validation/e2e glob)
-        (t / "validation" / "e2e" / "model_matrix.py").write_text("", encoding="utf-8")
+        (t / "validation" / "e2e" / "answer_gen.py").write_text("", encoding="utf-8")  # flat 표(validation/e2e glob)
+        (t / "validation" / "e2e" / "tool_loop.py").write_text("", encoding="utf-8")
         M.ROOT = t
         try:
             errs = check()

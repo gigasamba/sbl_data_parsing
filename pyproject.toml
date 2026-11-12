@@ -15,7 +15,6 @@ extend-exclude = [
   "common/core/terms.py",
   "common/core/text.py",
   "resources/prompts",                 # 지시서 지문
-  "validation/e2e/triple_extract",
   "valid_env",                         # PC 전용 데이터(rag_qa 지시서 패키지 포함)
   "output",
 ]
@@ -54,7 +53,6 @@ exclude = [
   "^resources/",
   "^valid_env/",
   "^output/",
-  "^validation/e2e/triple_extract/",
 ]
 
 # 인계 파일 4개(FINGERPRINT — 바이트를 고치면 인계 지문이 바뀜, CLAUDE.md §4)는 고칠 수 없어 오류를 보지 않는다.

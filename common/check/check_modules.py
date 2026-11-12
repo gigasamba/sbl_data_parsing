@@ -41,7 +41,6 @@ PKG_AREA = (
     ("data_retrieval", "search"),
     ("mcp_server", "search"),
     ("resources/prompts", "prompts"),  # 지시서 패키지 자리
-    ("validation/e2e/triple_extract", "prompts/triple_extract"),  # PC 전용 지시서(⑦ agent.py 규칙)
     (
         "valid_env/answer_test/rag_qa",
         "prompts/rag_qa",
