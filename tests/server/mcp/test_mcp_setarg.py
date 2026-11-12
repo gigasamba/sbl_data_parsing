@@ -1,4 +1,4 @@
-"""op-18 — 검색 쪽 진입점(`mcp_server.main`·`ask`)도 `--set 이름=값`을 받는다(setarg.apply). 값이 실제로 먹는지는 그 값 때문에
+"""op-22 — 검색 쪽 진입점(`mcp_server.main`·`ask`)도 `--set 이름=값`을 받는다(setarg.apply). 값이 실제로 먹는지는 그 값 때문에
 시작이 멈추는 것으로 본다(멈추지 않으면 서버가 떠 시간 초과로 실패). 임시 설정 파일(run_env local, PG 없음)만 — 외부 접속 없음."""
 
 import subprocess

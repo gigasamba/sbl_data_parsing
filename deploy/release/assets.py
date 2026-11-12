@@ -14,9 +14,9 @@
 
 사용:
   (개발 PC) PYTHONPATH=. python deploy/release/assets.py pack           → assets/ 채움(아래 SOURCES 경로에서) + MANIFEST.json
-  (서버)    python /app/docker/assets.py install [--python <venv python>]  → 합치기·해시 확인·제자리 복사·휠 설치
+  (서버)    python /opt/sbl/docker/assets.py install [--python <venv python>]  → 합치기·해시 확인·제자리 복사·휠 설치
             PYTHONPATH=. python deploy/release/assets.py check → 설치 상태만 표로
-paddle·mineru·임베딩(bge-m3 등)은 크기·venv가 달라 여기 없음. 준비 가이드: docs/operations/server-guide.md §5-3-1.
+paddle·mineru·임베딩(bge-m3 등)은 크기·venv가 달라 여기 없음.
 """
 
 import argparse
@@ -28,11 +28,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+from common.config.settings import IMAGE_PATHS, IN_IMAGE
 from common.core.console import utf8_stdout
 from common.core.paths import APP_ROOT  # assets/는 패키지 밖 저장소 루트
 
 ROOT = APP_ROOT
-A = ROOT / "assets"
+A = Path(IMAGE_PATHS["assets_root"]) if IN_IMAGE else ROOT / "assets"  # 이미지 안은 /opt/sbl/assets
 PART = 90 * 1024 * 1024
 
 

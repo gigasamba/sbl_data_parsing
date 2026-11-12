@@ -2,12 +2,10 @@
 # 반입 판정 — selftest를 돌려 "알려진 FAIL(known_fail.txt) 밖의 FAIL 0개"면 종료 코드 0, 아니면 1.
 #   selftest 자체의 종료 코드(FAIL이 하나라도 있으면 1)는 그대로 두고, 이 스크립트가 그 출력을 읽어 판정만 한다.
 #   bash deploy/release/selftest_gate.sh docker run --rm <태그> selftest                # PC·서버 호스트(저장소·코드 폴더 루트에서)
-#   bash deploy/release/selftest_gate.sh ssh <서버> "docker run --rm <태그> selftest"    # 원격(build_ship.sh 4단계)
-#   docker run --rm --entrypoint bash <태그> /app/docker/selftest_gate.sh /app/docker/entrypoint.sh selftest   # 이미지 안 목록으로
-#   KNOWN_FAIL=<파일>로 목록을 바꿀 수 있다(기본: 이 스크립트 옆 known_fail.txt — 이미지에는 /app/docker/known_fail.txt).
+#   docker run --rm --entrypoint bash <태그> /opt/sbl/docker/selftest_gate.sh /opt/sbl/docker/entrypoint.sh selftest   # 이미지 안 목록으로
+#   KNOWN_FAIL=<파일>로 목록을 바꿀 수 있다(기본: 이 스크립트 옆 known_fail.txt — 이미지에는 /opt/sbl/docker/known_fail.txt).
 # 통과 조건: 요약 줄("N/M 통과")이 있고 · selftest 종료 코드가 0, 또는 1이면서 FAIL 줄이 모두 목록 안.
-#   (종료 코드 1인데 FAIL 줄이 없으면 — PC의 단계 4 도구 목록 어긋남 등 — 실패로 본다.)
-#   이미지 2개: data-pipeline·mcp-server — 둘 다 알려진 FAIL 목록이 비어 있어 기대 줄은 "[판정] 통과 — FAIL 0".
+#   (종료 코드 1인데 FAIL 줄이 없으면 실패.) 지금 목록은 비어 있어 기대 줄은 "[판정] 통과 — FAIL 0".
 set -uo pipefail
 [ $# -gt 0 ] || { echo "사용: bash selftest_gate.sh <selftest 명령…>" >&2; exit 2; }
 KNOWN_FAIL=${KNOWN_FAIL:-$(dirname "$0")/known_fail.txt}

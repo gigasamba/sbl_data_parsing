@@ -34,7 +34,7 @@
 3. 빠진 중복은 `<결과 폴더>/dedup/keep.txt`에 없고(나머지 폴더 파일은 그대로 있음), `applog.except_doc_info`에 `skip` `duplicate_sha256`으로 남는다(다음 실행이 다시 고르지 않음 — [pl-58](#pl-58)). 서버 러너는 받기가 뺀 문서(`only.txt`가 빔 — 중복·DRM·암호)를 파싱 실패가 아니라 건너뜀으로 세고 게시와 원본 삭제를 그대로 한다(pl-24). 문서는 S3 키마다 따로 둔다(키마다 메타가 다름).
 4. 회전 바로잡기는 `extract.prepare.rotate_pages`(기본 `false`)가 켜졌을 때만 한다. 꺼져 있으면 회전용 OCR을 하지 않고 파일을 그대로 놓는다. 서버 러너는 `ops.run_pipeline.parse.batch_rotate_scans`(기본 `false`)가 꺼져 있으면 `stage --no-scan-rotate`로 이미지 PDF(스캔)는 돌리지 않는다.
 5. 켜져 있으면 이미지·스캔 PDF 쪽마다 4방향(0·90·180·270도) RapidOCR 점수를 스레드 4개로 동시에 재고 가장 높은 방향으로 돌린다 — 같으면 0도, 모두 0이면 그대로. 기록은 `output/prepared/rotation.csv`(파일·쪽·각도·네 방향 점수·회전 전 원본 sha256 `orig_sha256`).
-6. DRM·암호 파일은 감지해서 표시하고 건너뛴다(상태 `skipped_document`, `prepared/_records/skipped.jsonl`). 복호화는 하지 않는다 — 수동 명령도 없다(사용자 11-08).
+6. DRM·암호 파일은 감지해서 표시하고 건너뛴다(상태 `skipped_document`, `prepared/_records/skipped.jsonl`). 복호화는 하지 않는다 — 수동 명령도 없다.
 7. 압축 원본 `.zip`·`.tar`·`.tgz`·`.tar.gz`는 풀어 파싱하고(암호·깨짐·안전 상한은 `pipeline.extract.archive.check`가 거름 — [pl-57](#pl-57)), `.7z`·`.rar`·`.bz2`·`.xz`는 지원하지 않는다고 표시한다(`unsupported_archive`). 처리 엔진 없는 확장자(`registry.engines_for`가 빈 것)는 두 곳에서만 거른다 — 받기 전 `candidate_pick.rdb_pick`(`_filter_unsupported_rows` — rdb:csv 대상 고르기), 받은 뒤 `filter_and_rotate`(`unsupported_*`). 파일 크기 상한(`extract.max_source_file_mb`)은 파싱(`parse_engines`)이 본다.
 8. 중복·DRM·암호·미지원으로 건너뛴 문서는 문서마다 `applog.pipe_event`에 한 행을 남긴다(`pipeline/shared/runtrace.py` `skip_event` — 단계 `extract.skip`, `doc_id` = 파일 이름, `status=skip`, `err_kind=doc`, `err`·`metrics.reason` = 이유 `dup_batch`·`dup_done`·`dup_run`·`drm_*`·`encrypted_*`·`unsupported_*`, 중복이면 `metrics.dup_of` = 남긴 문서 — 같은 묶음은 파일 이름, 끝난 문서·이번 실행은 원본 키). 받기 전(`rdb_pick`)에 뺀 지원 안 하는 확장자도 같은 행을 남긴다. 다시 받아도 같은 결과인 문서는 [pl-58](#pl-58).
 
@@ -46,7 +46,7 @@
 ## pl-58 · 영구 건너뜀 문서는 다시 고르지 않음
 
 ### 무엇·왜
-지원 안 하는 확장자·확장자 없음·DRM·암호 문서는 다시 받아도 파싱할 수 없다. 기록이 없으면 밤마다 같은 문서를 다시 받고 `--max-docs` 자리를 차지한다(사용자 11-05).
+지원 안 하는 확장자·확장자 없음·DRM·암호 문서는 다시 받아도 파싱할 수 없다. 기록이 없으면 밤마다 같은 문서를 다시 받고 `--max-docs` 자리를 차지한다.
 
 ### 규칙
 1. 건너뛴 이유가 `unsupported_*`·`drm_*`·`encrypted_*`·`duplicate_sha256`(같은 묶음·이번 실행·끝난 문서와 같은 내용 — [pl-02](#pl-02)·[pl-59](#pl-59))이면 → `applog.except_doc_info`에 원본 키(`source_key` — `s3_key`, 폴더 원천은 상대 경로·이름)당 `except_type` `skip` 한 행을 쓴다. 칸: `source_system`(그 행의 FileStorageMap `source_system` 값 — manifest에서)·`file_name`·`reason`(확장자 없는 이름의 지원 안 함은 `no_extension`)·`level`(`error`)·`first_seen`·`last_seen`·`count`. 같은 키·종류가 다시 오면 `last_seen`·`count`·이유만 바꾼다(`pipeline/shared/except_docs.py` `record`).
@@ -98,16 +98,16 @@ A: `, 절 `DS`. 5행 = `divider`만 → 건너뜀. 머리글 없는 시트 `memo
 
 <a id="pl-57"></a>
 ## pl-57 · 압축 원본은 풀어서 안 파일의 글을 그 문서에
-- 이유(사용자 11-05): zip으로 올라온 원본 안의 문서도 검색되어야 한다. 메일 첨부 zip은 이미 풀어 파싱한다(pl-36).
+- 이유: zip으로 올라온 원본 안의 문서도 검색되어야 한다. 메일 첨부 zip은 이미 풀어 파싱한다(pl-36).
 
-### 규칙(사용자 11-06 결정)
+### 규칙
 1. 압축 원본 하나 = 검색 문서 하나(메일 첨부와 같은 방식 — [transform.md#pl-36](transform.md#pl-36)). 안 파일은 형식별 엔진으로 글을 뽑아 대표 본문에 `[파일 <안 경로>]` 절로 덧붙인다(글자만 — 표 구조·그림 설명 없음, 안의 그림 파일은 읽지 않음). 문서 키·처리 기록은 압축 원본 하나(`s3_key` 그대로).
 2. 푸는 형식: `.zip`·`.tar`·`.tgz`·`.tar.gz`(표준 라이브러리, 확장자로 고름). `.7z`·`.rar`·`.bz2`·`.xz`, tar가 아닌 `.gz`는 `unsupported_archive`.
 3. 압축 엔진 `archive`(엔진 폴더 `engines/archive` — 새 엔진이라 다른 엔진의 엔진 지문은 그대로, 사람 검토 등급 A)는 맨 바깥 파일 목록을 본문으로 낸다. 안 파일은 받기 단계가 준비 폴더에 풀어 두고([pl-63](#pl-63)), 대표 결과의 첨부 단계(`mail_attachments`, 후보정 `attachments`)가 파싱한다(P0 캐시 같음). 엔진 구성 `parse`에 `.zip`·`.tar`·`.tgz`·`.gz` → `archive`.
 4. 깊이는 [pl-63](#pl-63) 규칙 2(원본에서 2단계 — 안의 압축은 한 단계 더 풀림). 안의 압축이 풀리지 않으면(tar 아닌 `.gz`·깨짐) 보통 파일로 두고 바깥 압축은 그대로 처리한다.
 5. 안전 상한(평소엔 걸리지 않을 큰 값, 설정 칸): 풀린 크기 합계 `tuning.extract.archive.archive_max_total_mb`(2048), 파일 수 `archive_max_files`(1000). 안의 압축은 크기가 합계 상한 안일 때만 열어 본다. 안 파일 하나의 크기 상한은 없다.
 6. 받기의 거르기(`filter_and_rotate` — `archive.check`)가 목록만 읽어 판정하고, 걸리면 `applog.except_doc_info`에 `skip`으로 남겨 다음 실행도 건너뛴다: 암호 `encrypted_archive` · 깨짐 `broken_archive` · 상한 넘음 `archive_too_big`. 상한을 올렸거나 원본을 다시 올렸으면 그 행을 지워야 다시 고른다.
-7. 압축 읽기(목록·상한·암호 판정·꺼내기)는 받기 단계 `pipeline/extract/archive.py` 한 곳(사용자 11-06 — shared 아님. 엔진은 엔진 지문을 지키려고 엔진 폴더 안에서 목록만 따로 읽음). 나중에 안 파일마다 문서 하나로 바꿀 때도 풀어 둔 `_parts/`를 쓴다.
+7. 압축 읽기(목록·상한·암호 판정·꺼내기)는 받기 단계 `pipeline/extract/archive.py` 한 곳(shared 아님. 엔진은 엔진 지문을 지키려고 엔진 폴더 안에서 목록만 따로 읽음). 나중에 안 파일마다 문서 하나로 바꿀 때도 풀어 둔 `_parts/`를 쓴다.
 8. 검색 MCP의 `parse_document`는 압축을 받지 않는다(`engine_check.allowed_exts`에서 뺌).
 
 ### QA
@@ -117,10 +117,10 @@ A: `, 절 `DS`. 5행 = `divider`만 → 건너뜀. 머리글 없는 시트 `memo
 
 <a id="pl-63"></a>
 ## pl-63 · 문서 안 문서는 받기 단계에서 풀어 둔다(압축·메일 첨부·오피스 개체)
-- 이유(사용자 11-06): 압축 안 문서, 메일에 붙은 문서, 문서 안에 개체로 넣은 문서가 같은 길로 가야 한다. 겉 상자만 열면 찾을 수 있는 것은 받기 단계에서 미리 꺼내 두고, 변환 단계는 꺼낸 파일만 읽는다.
+- 이유: 압축 안 문서, 메일에 붙은 문서, 문서 안에 개체로 넣은 문서가 같은 길로 가야 한다. 겉 상자만 열면 찾을 수 있는 것은 받기 단계에서 미리 꺼내 두고, 변환 단계는 꺼낸 파일만 읽는다.
 
-### 규칙(사용자 11-06 결정)
-1. 받기 단계(`filter_and_rotate` — 준비 폴더에 원본을 둔 뒤)가 원본 안의 문서를 `<준비 폴더>/_parts/<원본 이름>/`에 파일로 꺼내 두고, 목록 `parts.json`(꺼낸 파일 이름·안 경로·깊이·종류 `파일`·`첨부`·`개체`·위치 — 부모는 안 경로의 앞부분)을 쓴다. 꺼내는 것: 압축 안 파일([pl-57](#pl-57)), 메일 첨부와 메일 안 메일([transform.md#pl-36](transform.md#pl-36)), 새 형식 오피스 안 개체(규칙 5). 꺼낸 파일이 또 상자면 같은 규칙으로 다시 연다. 풀린 안 압축과 `.eml` 안의 메일은 목록에서 그 안 파일로 대신한다 — 압축 엔진 글은 목록뿐이고, `.eml` 엔진은 안 메일의 글까지 이미 본문에 읽는다(같은 글이 두 번 들어가지 않게 — PC E2E 11-06). `.msg` 안의 메일은 `[첨부 <첨부 이름(없으면 제목)>.msg]` 절로 둔다.
+### 규칙
+1. 받기 단계(`filter_and_rotate` — 준비 폴더에 원본을 둔 뒤)가 원본 안의 문서를 `<준비 폴더>/_parts/<원본 이름>/`에 파일로 꺼내 두고, 목록 `parts.json`(꺼낸 파일 이름·안 경로·깊이·종류 `파일`·`첨부`·`개체`·위치 — 부모는 안 경로의 앞부분)을 쓴다. 꺼내는 것: 압축 안 파일([pl-57](#pl-57)), 메일 첨부와 메일 안 메일([transform.md#pl-36](transform.md#pl-36)), 새 형식 오피스 안 개체(규칙 5). 꺼낸 파일이 또 상자면 같은 규칙으로 다시 연다. 풀린 안 압축과 `.eml` 안의 메일은 목록에서 그 안 파일로 대신한다 — 압축 엔진 글은 목록뿐이고, `.eml` 엔진은 안 메일의 글까지 이미 본문에 읽는다(같은 글이 두 번 들어가지 않게 — PC E2E). `.msg` 안의 메일은 `[첨부 <첨부 이름(없으면 제목)>.msg]` 절로 둔다.
 2. 깊이: 원본에서 2단계까지 — 종류가 섞여도 같이 센다(메일 → 첨부 docx → 그 안 엑셀 = 2, zip → 안 zip → 파일 = 2). 설정 `tuning.extract.attach.attachment_max_depth` 기본 2(압축도 이 값). 그 밑은 파일 그대로 둔다.
 3. 상한은 지금 값 그대로: 압축은 [pl-57](#pl-57) 안전 상한(합계 2 GB·1000개), 메일 첨부와 오피스 개체는 메일 첨부 상한(하나 20 MB 넘으면 건너뜀, 메일·오피스 파일 하나에서 10개 — 단계마다 따로 셈).
 4. 꺼내지 않는 것: 그림 파일(그림 기능이 맡음), 차트에 딸린 엑셀(차트 단계가 이미 숫자를 읽음 — 중복), 개체 아이콘 그림, 연결만 된 개체(파일 경로만 있음).
@@ -137,7 +137,7 @@ A: `, 절 `DS`. 5행 = `divider`만 → 건너뜀. 머리글 없는 시트 `memo
 <a id="pl-64"></a>
 ## pl-64 · 옛 형식·PDF·한글 안 개체
 - 요건: 옛 형식(`.doc`·`.xls`·`.ppt` — `ObjectPool`, olefile), PDF 첨부 파일·첨부 주석(pymupdf), 한글 `.hwpx` `BinData` 개체도 [pl-63](#pl-63)과 같이 꺼낸다.
-- 반영: 없음(사용자 11-06 — 이번에는 새 형식 오피스만).
+- 반영: 없음(이번에는 새 형식 오피스만).
 - Status: todo
 
 <a id="pl-59"></a>
@@ -164,8 +164,8 @@ A: `, 절 `DS`. 5행 = `divider`만 → 건너뜀. 머리글 없는 시트 `memo
 
 <a id="pl-65"></a>
 ## pl-65 · 안 문서를 못 꺼낸 경우의 기록과 꺼내기 바로잡기
-- 요건: pl-63 꺼내기에서 빠지는 것이 보이고, 이름·크기·목록이 안전하게(사용자 11-08). 꺼내는 깊이는 pl-63 규칙 2(2단계) 그대로, 속도(안 파일마다 한 프로세스)는 이번에 다루지 않는다.
-- 반영: 아래 규칙대로(사용자 11-08).
+- 요건: pl-63 꺼내기에서 빠지는 것이 보이고, 이름·크기·목록이 안전하게. 꺼내는 깊이는 pl-63 규칙 2(2단계) 그대로, 속도(안 파일마다 한 프로세스)는 이번에 다루지 않는다.
+- 반영: 아래 규칙대로.
 
 ### 규칙
 1. 못 꺼낸 안 파일(안 열리는 안 상자 `cannot_open`·압축 안 암호 항목 `encrypted`·크기 상한 `too_big`·개수 상한 `too_many`·원본 하나의 꺼낸 합계 상한 `total_cap`·못 벗긴 `.bin` `no_unwrap`·읽는 도중 깨진 압축 `read_failed`)은 `parts.json`의 `failed`에 `{name, why}`로 남고, 성한 안 파일은 그대로 붙는다. 맨 바깥 원본이 안 열리는 것은 엔진이 판정한다(기록 안 함). 압축 안 파일이 합계·개수 상한에 닿으면 거기서 멈추고 첫 이름 하나에 `외 N개`를 붙여 한 줄로 적는다. 그림·차트 엑셀·깊이 상한 밑·tar 아닌 `.gz`(보통 파일로 둠)·같은 내용 두 번째는 일부러 꺼내지 않는 것이라 적지 않는다.
@@ -187,5 +187,4 @@ A: `, 절 `DS`. 5행 = `divider`만 → 건너뜀. 머리글 없는 시트 `memo
 - 요건: 같은 검사를 두 벌로 두지 않는다. 남길 쪽은 olefile — 견본 `.doc`·`.xls`·`.ppt`(암호 있음·없음)로 두 코드 결과가 같은지 먼저 시험.
 - 규칙: `filter_and_rotate._ole_encrypted_reason`이 olefile로만 읽는다 — `.doc` `WordDocument` FIB fEncrypted · `.xls` `Workbook`/`Book` BIFF FILEPASS · `.ppt` `EncryptedSummary` 스트림. 규격(MS-CFB)대로 4096바이트 미만 스트림은 미니 스트림에서 읽는다. 깨지거나 잘린 복합 파일·DRM 머리는 신호 없음(엔진이 각자 판정 — 옛 형식은 DRM 머리를 보지 않는다).
 - 시험: `tests/server/pipeline/test_prepare.py::test_ole_encrypted_cases` 사례 표(규격대로 만든 `_build_cfb` — 암호 있음·없음, 미니 스트림, DRM 흉내, 깨진·잘린 파일 + PC에서는 `valid_env` 견본 4건과 반으로 자른 사본). 견본 `encrypted_ole.doc`는 규격대로 다시 만들었다(크기 2560, sha256 `622c1824…` — `valid_env/edw/ai.sql`·`edw.sqlite` 함께).
-- 반영: 사용자 11-08.
 - Status: done

@@ -17,7 +17,7 @@
 4. CRMS는 `FileStorageMap_CRMS.rm_contract_code → CRMS.RM_CM_PJTLIST`, LAS는 `FileStorageMap_LAS.manage_no → LAS.Contract`(최신 판). LAS `client_edw`(`PartnerCorpName`)는 지금 모두 비어 있다. FAQ는 고객 연결이 없다.
 5. 같은 sha256 묶음에도 고객은 전파하지 않는다.
 6. 만약 EDW를 못 읽으면 → 메타 없이 적재하고 경고·실행 기록 `meta_missing`을 남긴다. 적재 뒤 바뀐 연결은 자동으로 갱신하지 않는다 — `--replace`로 다시 적재해 채운다.
-7. 사슬 파일 = 코드 폴더 맨 위 `edw_chain.yaml`(git — 이미지에도 들어감, 적재·검색 MCP가 함께 읽음). 다른 파일을 쓰려면 설정 `ops.paths.edw_chain_file`. 만약 파일이 없거나 틀리면 → 적재는 시작 때 멈추고 검색은 오류(기본 파일로 돌아가지 않음). 서버 사본을 고쳐 쓰는 법은 [server-guide §3-9-2](../operations/server-guide.md#3-9-2-edw-조인-사슬-파일-고쳐-쓰기).
+7. 사슬 파일 = 코드 폴더 맨 위 `edw_chain.yaml`(git — 이미지에도 들어감, 적재·검색 MCP가 함께 읽음). 다른 파일을 쓰려면 설정 `ops.paths.edw_chain_file`. 만약 파일이 없거나 틀리면 → 적재는 시작 때 멈추고 검색은 오류(기본 파일로 돌아가지 않음). 서버 사본을 고쳐 쓰는 법은 [server-guide-0.4 §3-9-2](../history/server-guide-0.4.md#3-9-2-edw-조인-사슬-파일-고쳐-쓰기).
 8. 파일만 점검: `python -m pipeline.load.edw_doc_meta --check [--file F]`(EDW·PG에 붙지 않음).
 
 ### QA
@@ -219,7 +219,7 @@ FAQ는 판을 잇지 않는다. 새 FAQ가 오면 gold faq를 비우고 FAQ 전�
 - Status: dev
 
 ### 무엇·왜
-실패 이력(`except_doc_info error`·`pipe_event`)은 그대로 남기고, 실패 횟수와 pending·dead·resolved 상태를 PostgreSQL `applog.dlq_doc`에 원본 키당 한 행으로 관리한다. 이슈 #174 합의에 따라 DLQ 적재·조회·수동 재기동을 먼저 구축한다. 자동 재시도 시점·건수 정책은 12월 안정화 단계에서 논의한다.
+실패 이력(`except_doc_info error`·`pipe_event`)은 그대로 남기고, 실패 횟수와 pending·dead·resolved 상태를 PostgreSQL `applog.dlq_doc`에 원본 키당 한 행으로 관리한다. 이슈 #174 합의에 따라 DLQ 적재·조회·수동 재기동을 먼저 구축한다. 자동 재시도 시점·건수 정책은 안정화 단계에서 정한다.
 
 ### 규칙
 1. 실패 DLQ는 호스트 run_pipeline이 부르는 `python -m pipeline.shared.except_docs error` CLI만 쓴다. 컨테이너의 `record_error`·`note_error`(publish·load 등)는 except_doc_info 이력만 남기며 단독 publish·load 명령은 DLQ 횟수를 늘리지 않는다. `part`·`silver`도 DLQ 대상이 아니다. 호스트는 컨테이너가 이미 이력을 쓴 분류 실패·게시의 파싱 실패를 `--dlq-only`로 기록해 이력 횟수를 중복 집계하지 않는다. 실패·해소 기록 오류는 경고 뒤 계속한다. 마지막 이유·단계·파이프라인 판과 처음·마지막 실패 시각을 남기며, NULL 원천·파일 이름은 이미 아는 값을 지우지 않는다.
@@ -228,11 +228,11 @@ FAQ는 판을 잇지 않는다. 새 FAQ가 오면 gold faq를 비우고 FAQ 전�
 4. dead 전이 때 `[DLQ] 확인 필요`와 조회 명령을 출력한다. 호스트는 실패 기록 CLI의 모든 `[DLQ]` 확인·경고 줄을 progress.log에 옮기고, CLI 자체가 실패해도 경고를 남긴다. dead의 횟수·dead 시각은 추가 실패에도 유지한다. 사람이 원인을 고친 뒤 `requeue --key K`(여러 번 가능) 또는 `--all-dead`로 pending·attempts=0으로 돌리면 다음 실행 본 흐름이 다시 고른다.
 5. gold 적재 성공 때 resolve한다. skip-done 본 목록 생성 때 이미 gold에 들어갔거나 영구 뺌인 pending·dead도 resolve한다(마지막 이유 보존). resolved가 다시 실패하면 새로운 실패 주기로 1회부터 센다. 원본 부재 해소는 이번 범위에 없다.
 6. `dbtool maintain --target applog`가 `log_retention_days`보다 오래된 resolved만 DELETE한다. pending·dead는 보존한다. **DB 담당 승인 뒤 `dbtool up --target applog`(판 `0005_applog`) 먼저 → 그다음 코드 폴더 교체가 필수**다. 새 표 추가는 옛 코드에 무해하지만 새 코드의 maintain은 applog head 전에는 거부한다.
-7. 실행 시작·끝에 pending/dead와 이번 실행 새 dead 건수를 안내한다. 대상이 0건이면 시작 요약만 남기고 `처리할 문서 없음 — 종료` 후 종료 0으로 끝난다. 조회는 `python -m pipeline.shared.dlq list --status dead` 또는 `--status pending --json`이다([server-guide §3-6](../operations/server-guide.md#3-6-실패한-문서-찾기와-다시-돌리기)). DLQ 조회 실패는 경고 뒤 제외·요약 없이 계속하며 종료 코드는 단계 결과로 정한다.
-8. 종료 코드(pl-18)는 실패·stuck이면 1, 실패 없이 마감 때문에 새 받기를 멈췄으면 75, 그 외 0이다. 이미 받은 본 흐름을 모두 끝냈으면 마감 시각을 지났어도 0이다. 성공·영구 뺌 뒤 관찰·정리 오류는 경고만 남기며 실패로 기록하지 않는다. 적재는 분류 실패 counts를 남기고 기본 종료 0을 유지한다. 호스트는 `--fail-on-classify`로 종료 3을 요청해 gold 실패로 세며, 분류 실패는 호스트가 classify_failed로 DLQ에 기록하고 적재가 남긴 이력은 중복 집계하지 않는다. publish가 엔진 없는 rep을 failed로 제외하면 기존 publish.log JSON의 by_status.failed를 읽어 parse_failed로 실패 집계·DLQ 기록·종료 1 처리한다(원본 보존·gold로 보내지 않음). publish 출력·종료 코드 계약은 그대로다.
+7. 실행 시작·끝에 pending/dead와 이번 실행 새 dead 건수를 안내한다. 대상이 0건이면 시작 요약만 남기고 `처리할 문서 없음 — 종료` 후 종료 0으로 끝난다. 조회는 `python -m pipeline.shared.dlq list --status dead` 또는 `--status pending --json`이다(서버 명령: [dev.md](../operations/dev.md) A-10). DLQ 조회 실패는 경고 뒤 제외·요약 없이 계속하며 종료 코드는 단계 결과로 정한다.
+8. run_pipeline 종료 코드는 [pl-18](ops.md#pl-18) 한 곳에 둔다. 이미 받은 본 흐름을 모두 끝냈으면 마감 시각을 지났어도 0이다. 성공·영구 뺌 뒤 관찰·정리 오류는 경고만 남기며 실패로 기록하지 않는다. 적재는 분류 실패 counts를 남기고 기본 종료 0을 유지한다. 호스트는 `--fail-on-classify`로 종료 3을 요청해 gold 실패로 세며, 분류 실패는 호스트가 classify_failed로 DLQ에 기록하고 적재가 남긴 이력은 중복 집계하지 않는다. publish가 엔진 없는 rep을 failed로 제외하면 기존 publish.log JSON의 by_status.failed를 읽어 parse_failed로 실패 집계·DLQ 기록·종료 1 처리한다(원본 보존·gold로 보내지 않음). publish 출력·종료 코드 계약은 그대로다.
 
 ### 남은 일
-- 자동 재시도 패스와 시점·건수 정책은 12월 안정화 단계(#174 합의).
+- 자동 재시도 패스와 시점·건수 정책은 안정화 단계에서 정한다(#174 합의).
 - 서버 판 0005와 새 표 권한은 DB 담당 승인 뒤 적용([C-120](../refactoring/refactor.md)).
 - silver에서 gold만 재생성은 [pl-32](load-schema.md#pl-32) 뒤 후속. 현재 다음 실행은 받기부터 전체 흐름이다.
 

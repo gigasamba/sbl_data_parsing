@@ -1,6 +1,6 @@
 """host_ctl.sh(op-20) — compose 하위 명령은 `docker compose -f deploy/host/compose/compose-<run_env>.yml <인자…>` 그대로(덧붙임 파일·
-묶음 이름 계산 없음), 모르는 run_env면 종료 2. mcp_keepalive.sh는 0번 벌만(redis·mcp-data-parsing-0·mcp-server-0) 보고 /health는
-http://127.0.0.1:8051/health. DOCKER=echo·대역 명령으로 명령 줄만 본다(docker·설정 읽기 없음 — PC 전용)."""
+묶음 이름 계산 없음), 모르는 run_env면 종료 2. mcp_keepalive.sh는 운영 묶음(redis·mcp-data-parsing·mcp-server — 이름은 settings.yaml)을 보고 /health는
+mcp-server 안에서 http://<mcp_bind_host>:8051/health(docker exec). DOCKER=echo·대역 명령으로 명령 줄만 본다(docker·설정 읽기 없음 — PC 전용)."""
 
 import os
 import subprocess
@@ -19,11 +19,13 @@ def _posix(p):
     return f"/{p[0].lower()}{p[2:]}" if p[1:2] == ":" else p  # Git Bash(Windows)가 절대 경로로 보는 꼴
 
 
+ENV_YAML = "required:\n  env: {{run_env: {}}}\n"
+
 CASES = [  # (run_env, 인자, 종료 코드, 표준 출력(compose 파일 자리는 이름만) 또는 표준 오류에 나올 문구)
     ("local", ["up", "-d"], 0, "compose -f compose-local.yml up -d"),
-    ("dev", ["up", "-d", "mcp-server-0"], 0, "compose -f compose-dev.yml up -d mcp-server-0"),
+    ("dev", ["up", "-d", "data-pipeline-1"], 0, "compose -f compose-dev.yml up -d data-pipeline-1"),
     ("prd", ["ps"], 0, "compose -f compose-prd.yml ps"),
-    ("prd", ["logs", "--tail", "5", "data-pipeline-0"], 0, "compose -f compose-prd.yml logs --tail 5 data-pipeline-0"),
+    ("prd", ["logs", "--tail", "5", "data-pipeline"], 0, "compose -f compose-prd.yml logs --tail 5 data-pipeline"),
     ("qa", ["up", "-d"], 2, "required.env.run_env는 local·dev·prd"),
 ]
 
@@ -36,12 +38,12 @@ def test_dc_command():
     assert subprocess.run([bash, "-n", str(SCRIPT)], capture_output=True).returncode == 0
     with tempfile.TemporaryDirectory() as d:
         sf = Path(d) / "settings.yaml"
-        sf.write_text("required:\n  env: {run_env: dev}\n", encoding="utf-8")
+        sf.write_text(ENV_YAML.format("dev"), encoding="utf-8")
         for run_env, args, rc, want in CASES:
             env = {  # env 남김 — 하위 프로세스(호스트 셸이 load_settings로 받는 이름 — 시험)
                 "PATH": os.environ.get("PATH", ""),
                 "SETTINGS_FILE": _posix(sf),
-                "SETTINGS_LOADED": _posix(sf),  # 이미 읽은 것으로 — settings_to_env.py(PyYAML)를 부르지 않음
+                "SETTINGS_LOADED": _posix(sf),  # 이미 읽은 것으로 — 호스트 칸은 settings_to_env.py를 부르지 않음
                 "RUN_ENV": run_env,
                 "DOCKER": "echo",
             }
@@ -89,19 +91,21 @@ def test_stale_shell_reads_own_root():
         assert r.stdout.strip() == f"{root_b}|{root_b}/settings.yaml|b|echo", r.stdout
 
 
-# (redis 상태, mcp-data-parsing-0 Running, mcp-server-0 상태, 기대 docker 명령(앞 낱말들))
-#   /health는 늘 응답 없음(대역 python3 실패) — 다시 띄운 뒤에도 없어 종료 1
+# (redis 상태, mcp-data-parsing Running, mcp-server 상태, 기대 docker 명령(앞 낱말들))
+#   /health는 늘 응답 없음(대역 docker exec 실패) — 다시 띄운 뒤에도 없어 종료 1
 KEEP_CASES = [
-    ("true healthy", "true", "running", [["restart", "mcp-server-0"]]),
-    ("true unhealthy", "true", "running", [["restart", "redis"], ["restart", "mcp-server-0"]]),
+    ("true healthy", "true", "running", [["restart", "mcp-server"]]),
+    ("true unhealthy", "true", "running", [["restart", "redis"], ["restart", "mcp-server"]]),
+    ("false", "true", "running", [["start", "redis"], ["restart", "mcp-server"]]),  # 멈춘 redis — 어느 묶음 것이든 start만
     (
         "",
         "false",
         "none",
         [
-            ["compose", "--env-file", ".env", "-f", "compose-redis.yml", "up", "-d"],
-            ["compose", "-f", "compose-dev.yml", "up", "-d", "mcp-data-parsing-0"],
-            ["compose", "-f", "compose-dev.yml", "up", "-d", "mcp-server-0"],
+            ["start", "redis"],  # 컨테이너 없음 — start 실패 뒤 만듦
+            ["compose", "-f", "compose-prd.yml", "up", "-d", "redis"],  # 프로필 db — 서비스 이름을 주면 켜짐
+            ["compose", "-f", "compose-prd.yml", "up", "-d", "mcp-data-parsing"],
+            ["compose", "-f", "compose-prd.yml", "up", "-d", "mcp-server"],
         ],
     ),
 ]
@@ -115,20 +119,21 @@ def test_keepalive():
     with tempfile.TemporaryDirectory() as d:
         stub = Path(d) / "bin"
         stub.mkdir()
-        calls = Path(d) / "py.log"  # 호스트 python3 대역이 받은 인자(/health 주소)
-        py = f'#!/bin/sh\necho "$*" >> "{_posix(calls)}"\nexit 1\n'
+        calls = Path(d) / "exec.log"  # docker exec 대역이 받은 인자(/health 확인)
         # 컨테이너 도구 대역: inspect는 STATE_<컨테이너> 값, 그 밖은 명령 줄을 log에
         log = Path(d) / "dk.log"
         dk = (
             "#!/bin/bash\n"
             'if [ "$1" = inspect ]; then n=${@: -1}; n=STATE_${n//-/_}; echo "${!n:-}"; [ -n "${!n:-}" ]; exit; fi\n'
+            f'if [ "$1" = exec ]; then echo "$*" >> "{_posix(calls)}"; exit 1; fi\n'
+            f'if [ "$1" = start ]; then echo "$*" >> "{_posix(log)}"; n=STATE_${{2//-/_}}; [ -n "${{!n:-}}" ]; exit; fi\n'
             f'echo "$*" >> "{_posix(log)}"\n'
         )
-        for exe, body in (("python3", py), ("sleep", "#!/bin/sh\nexit 0\n"), ("dk", dk)):
+        for exe, body in (("sleep", "#!/bin/sh\nexit 0\n"), ("dk", dk)):
             (stub / exe).write_text(body, encoding="utf-8", newline="\n")
             (stub / exe).chmod(0o755)
         sf = Path(d) / "settings.yaml"
-        sf.write_text("required:\n  env: {run_env: dev}\n", encoding="utf-8")
+        sf.write_text(ENV_YAML.format("prd"), encoding="utf-8")
         script = _posix(SCRIPT.parent / "mcp_keepalive.sh")
         # 대역을 PATH 맨 앞에 — Git Bash(Windows) 입구는 시작 때 /usr/bin을 앞에 붙이므로 셸 안에서 붙이고 bash를 다시 부름
         cmd = f'PATH="{_posix(stub)}:$PATH" exec bash "{script}"'
@@ -139,11 +144,12 @@ def test_keepalive():
                 "PATH": os.environ.get("PATH", ""),
                 "SETTINGS_FILE": _posix(sf),
                 "SETTINGS_LOADED": _posix(sf),
-                "RUN_ENV": "dev",
+                "PY": Path(sys.executable).as_posix(),
+                "RUN_ENV": "prd",
                 "DOCKER": "dk",
                 "STATE_redis": redis,
-                "STATE_mcp_data_parsing_0": parse,
-                "STATE_mcp_server_0": "" if mcp == "none" else mcp,
+                "STATE_mcp_data_parsing": parse,
+                "STATE_mcp_server": "" if mcp == "none" else mcp,
             }
             r = subprocess.run([bash, "-c", cmd], env=env, capture_output=True, text=True, encoding="utf-8", timeout=60)
             got = [
@@ -152,4 +158,5 @@ def test_keepalive():
                 if not line.startswith("logs ")
             ]
             assert r.returncode == 1 and got == want, (redis, parse, mcp, got, r.stdout, r.stderr)
-            assert "http://127.0.0.1:8051/health" in calls.read_text(encoding="utf-8"), calls.read_text(encoding="utf-8")
+            c = calls.read_text(encoding="utf-8")
+            assert c.startswith("exec mcp-server python") and "server.host}:8051/health" in c, c

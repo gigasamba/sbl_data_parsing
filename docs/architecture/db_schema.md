@@ -3,7 +3,7 @@
 이 프로젝트가 쓰는 DB 표와 칸 — 표마다 칸, 타입, 뜻, 쓰는 코드, 읽는 코드, 결정. 요건은 [prd/load-schema.md#pl-25](../prd/load-schema.md#pl-25).
 
 - **결정 칸:** `유지` = 지금 있고 남김 · `삭제` = 지금 있고 없앰 · `새로` = 지금 없고 만듦. 지금 상태 = `유지`+`삭제`, 목표 상태 = `유지`+`새로`.
-- **시험:** `tests/server/common/test_db_schema.py`가 gold 표(5벌 칸 합집합)와 master 표를 Alembic 모델(`common/store/db/models/`)과 비교한다. 지금 상태가 다르면 실패하고, 목표 상태와의 차이는 목록으로 찍기만 한다.
+- **시험:** `tests/server/common/test_db_schema.py`가 gold 표(5벌 칸 합집합)와 master 표를 Alembic 모델(`common/store/db/models/`)과 비교한다(applog는 대조하지 않음 — `dbtool check --target applog`). 지금 상태가 다르면 실패하고, 목표 상태와의 차이는 목록으로 찍기만 한다.
 - **쓰는 곳·읽는 곳**의 괄호 안은 코드가 아니다 — `(운영자)`처럼 사람이 보는 곳이거나, 아직 코드가 없는 일이다. 코드가 없는 일은 PRD 행이 맡는다: 같은 `s3_key`의 기준 행 고르기는 [pl-32](../prd/load-schema.md#pl-32).
 - **예 칸:** 값 꼴을 보여 주는 지어낸 값이다(실제 데이터 아님).
 
@@ -151,14 +151,14 @@ EDW 표(`AI.FileStorageMap`, 원천 표 SFDC·CRMS·LAS 등)는 서버에서 운
 
 | 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|---|
-| row_no | INTEGER PK | `1` | CSV 파일 순서(1부터) | `dbtool master load` | 읽기 순서(ORDER BY) | 새로 |
-| kind | TEXT | `term` | 구분 — `client`(고객)·`term`(용어)·`id`(ID 꼴) | `dbtool master load` | `common.store.master.to_tables` | 새로 |
-| canonical | TEXT | `Contract Manufacturing Organization` | 원본 값 — 고객은 정식 이름(빈칸이면 `name_ko` 줄이 이름), 용어는 표준 이름, ID는 종류(`contract_no`·`product_code` 등). 묶는 법은 위 "읽는 모양" | 〃 | 〃 | 새로 |
-| variant | TEXT | `위탁생산` | 유사값 — `variant_kind`가 정하는 값(별칭·동의어·정규식·참조 ID·속성 값) | 〃 | 〃 | 새로 |
-| variant_kind | TEXT | `synonym` | 유사 종류. client: `client_id`·`name_ko`·`alias`(여러 줄)·`client_type`·`segment`·`country`·`parent`·`status`(`inactive`·`deleted`면 건너뜀)·`source`·`updated` · term: `concept_id`·`synonym`·`abbr`·`weak`(약한 동의어)·`broader`·`related`(개념 ID)·`category`(여러 줄 — `org_client`면 고객 명부에도)·`definition_en`·`source`·`owner`·`status`(approved만 씀)·`updated` · id: `regex`(머리 줄 — 줄마다 한 꼴)·`example`·`updated`. 여러 줄이 되는 것은 `alias`·`synonym`·`abbr`·`weak`·`broader`·`related`·`category`·`regex`, 나머지는 한 줄 | 〃 | 〃 | 새로 |
-| description | TEXT | `고객이 확립한 공정으로 생산만 위탁 수행` | 설명 — `client_id` 줄은 고객 설명, `concept_id` 줄은 한글 정의, `regex` 줄은 메모. 다른 줄은 비움 | 〃 | 〃 | 새로 |
-| context_required | TEXT | `생산\|제조\|계약` | 용어의 문맥 필요 — 동음이의 줄임말이면 질문에 함께 나와야 하는 말(`\|` 구분). term만(변환본은 `concept_id` 줄) | 〃 | `mcp_server.services.search.query_expand`(질문 넓히기) | 새로 |
-| case_sensitive | TEXT | `N` | 용어의 대소문자 구분 — `Y`면 구분. term만(변환본은 `concept_id` 줄) | 〃 | 〃 | 새로 |
+| row_no | INTEGER PK | `1` | CSV 파일 순서(1부터) | `dbtool master load` | 읽기 순서(ORDER BY) | 유지 |
+| kind | TEXT | `term` | 구분 — `client`(고객)·`term`(용어)·`id`(ID 꼴) | `dbtool master load` | `common.store.master.to_tables` | 유지 |
+| canonical | TEXT | `Contract Manufacturing Organization` | 원본 값 — 고객은 정식 이름(빈칸이면 `name_ko` 줄이 이름), 용어는 표준 이름, ID는 종류(`contract_no`·`product_code` 등). 묶는 법은 위 "읽는 모양" | 〃 | 〃 | 유지 |
+| variant | TEXT | `위탁생산` | 유사값 — `variant_kind`가 정하는 값(별칭·동의어·정규식·참조 ID·속성 값) | 〃 | 〃 | 유지 |
+| variant_kind | TEXT | `synonym` | 유사 종류. client: `client_id`·`name_ko`·`alias`(여러 줄)·`client_type`·`segment`·`country`·`parent`·`status`(`inactive`·`deleted`면 건너뜀)·`source`·`updated` · term: `concept_id`·`synonym`·`abbr`·`weak`(약한 동의어)·`broader`·`related`(개념 ID)·`category`(여러 줄 — `org_client`면 고객 명부에도)·`definition_en`·`source`·`owner`·`status`(approved만 씀)·`updated` · id: `regex`(머리 줄 — 줄마다 한 꼴)·`example`·`updated`. 여러 줄이 되는 것은 `alias`·`synonym`·`abbr`·`weak`·`broader`·`related`·`category`·`regex`, 나머지는 한 줄 | 〃 | 〃 | 유지 |
+| description | TEXT | `고객이 확립한 공정으로 생산만 위탁 수행` | 설명 — `client_id` 줄은 고객 설명, `concept_id` 줄은 한글 정의, `regex` 줄은 메모. 다른 줄은 비움 | 〃 | 〃 | 유지 |
+| context_required | TEXT | `생산\|제조\|계약` | 용어의 문맥 필요 — 동음이의 줄임말이면 질문에 함께 나와야 하는 말(`\|` 구분). term만(변환본은 `concept_id` 줄) | 〃 | `mcp_server.services.search.query_expand`(질문 넓히기) | 유지 |
+| case_sensitive | TEXT | `N` | 용어의 대소문자 구분 — `Y`면 구분. term만(변환본은 `concept_id` 줄) | 〃 | 〃 | 유지 |
 
 ## 5. DB 담당자 확인 필요
 
@@ -172,16 +172,16 @@ EDW 표(`AI.FileStorageMap`, 원천 표 SFDC·CRMS·LAS 등)는 서버에서 운
 | D-8 | FAQ 원천 등록 — Object Storage `FAQ/<uuid>/<파일>`을 `AI.FileStorageMap`에 등록(candidate_pick list는 `s3_key LIKE 'FAQ/%'`로 고름) | FAQ 행을 누가 어떻게 넣나 |
 | D-10 | `applog` 스키마 추가(§6) — `up`의 `CREATE SCHEMA`, `maintain`의 파티션 생성·DROP, 앱의 INSERT와 `pipe_run` UPDATE 권한. 호출량 기준 용량(`mcp_log` 행 본문 최대 약 80KB) | 새 스키마이고 로그 쓰기가 기존 PG 접속 정보를 함께 씀 |
 | D-11 | `applog.mcp_log`의 `args`·`result` 읽기 권한 분리 | 문서 본문·EDW 결과가 들어가는데(`get_doc_fulltext` 응답은 문서 원문 전체) 판에 GRANT가 없어 지금은 앱 계정이 읽을 수 있음 |
-| D-12 | 실제 보존 기간 약 90~120일(월 단위 DROP)이 감사·개인정보 기준에 맞는지, `dbtool maintain` 매일 예약 | 예약이 약 2개월 이상 멈추면 새 달 파티션이 없어 DB 쓰기가 실패하고 대체 파일로만 쌓임 |
+| D-12 | 실제 보존 기간 약 90~120일(월 단위 DROP)이 감사·개인정보 기준에 맞는지 | 정리는 새벽 배치가 돌 때만 돈다(§6 보존) — 배치가 약 2개월 이상 멈추면 새 달 파티션이 없어 DB 쓰기가 실패하고 대체 파일로만 쌓임 |
 
 ## 6. applog — 로그 저장소 (pgvector PG, 스키마 `applog`)
 
 gold·EDW와 별개인 로그 표다. 서버 적용 절차는 refactor.md C-79.
 
-판: `common/store/db/migrations/versions/0001_applog_base.py`(브랜치 `applog`)·`0002_applog_skip.py`·`0003_applog_except.py`(`except_doc_info` — 옛 `skip_doc_info` 행을 `skip`으로 옮김)·`0004_applog_docs.py`(`pipe_event.source_system`·`except_doc_info`의 확장자·크기 칸)·`0005_applog_dlq.py`(`dlq_doc` — 재시도 상태) · 파티션 관리: `common/store/db/migrations/applog_parts.py` · 모델: `common/store/db/models/log_tables.py` · 쓰기: `common/store/logsink.py`(큐 → 배치 INSERT, 실패하면 `output/logs/*.jsonl`, 앱이 DDL을 실행하지 않음). 켜는 설정: 파일 자리 `ops.log.log_db_enabled`(모델 `ops.log.log_db_enabled`, 서버 이미지 기본 켬·PC 기본 꺼짐 — op-13). `tests/server/common/test_db_schema.py`는 이 절을 대조하지 않는다 — DB 판 확인은 `dbtool check --target applog`.
+판: `common/store/db/migrations/versions/0001_applog_base.py`(브랜치 `applog`)·`0002_applog_skip.py`·`0003_applog_except.py`(`except_doc_info` — 옛 `skip_doc_info` 행을 `skip`으로 옮김)·`0004_applog_docs.py`(`pipe_event.source_system`·`except_doc_info`의 확장자·크기 칸)·`0005_applog_dlq.py`(`dlq_doc` — 재시도 상태) · 파티션 관리: `common/store/db/migrations/applog_parts.py` · 모델: `common/store/db/models/log_tables.py` · 쓰기: `common/store/logsink.py`(큐 → 배치 INSERT, 실패하면 `output/logs/*.jsonl`, 앱이 DDL을 실행하지 않음). 켜는 설정 `ops.log.log_db_enabled`(서버 기본 켬·PC 기본 꺼짐 — op-13). 어느 기록이 어느 표에 가는지는 [op-01](../prd/ops.md#op-01).
 
 - **파티션:** `mcp_log`(`requested_at`)·`pipe_event`(`ts_start`)는 월 단위(UTC). 이름은 `<표>_YYYYMM`. `dbtool up`과 `dbtool maintain`이 현재 달부터 3개월 치를 만든다.
-- **보존:** `dbtool maintain --target applog`를 매일 실행한다. `ops.log.log_retention_days`(기본 90)가 지난 달의 파티션을 DROP하고 `pipe_run`과 보존 기간이 지난 `dlq_doc` resolved 행은 DELETE한다(pending·dead는 보존). 달이 통째로 지나야 DROP되므로 파티션 표의 행은 약 90~120일 남는다.
+- **보존:** 서버는 새벽 배치(`deploy/host/scripts/nightly_batch.sh`)가 run_pipeline 앞에 `migrate maintain --target applog`(= `dbtool maintain`)를 부른다(실패해도 배치는 계속, 새벽 배치 칸이 비어 배치가 돌지 않는 날은 정리도 없음). `ops.log.log_retention_days`(기본 90)가 지난 달의 파티션을 DROP하고 `pipe_run`과 보존 기간이 지난 `dlq_doc` resolved 행은 DELETE한다(pending·dead는 보존). 달이 통째로 지나야 DROP되므로 파티션 표의 행은 약 90~120일 남는다.
 - **되돌리기:** `downgrade`는 막혀 있다. 지우려면 DB 담당자가 직접 한다.
 - **연결:** `pipe_event.run_id` → `pipe_run.run_id`는 외래 키가 없다(지우는 시점이 달라 짝 없는 행이 생길 수 있음). 파티션 표의 `id`는 기본 키가 시각과 묶여 있어 그것만으로는 고유하지 않다.
 - **기록하지 않는 값:** MCP `clientInfo`(`args`에서도 뺌). 접속 IP는 `mcp_log.client_ip`에 남긴다.
@@ -192,37 +192,37 @@ MCP 요청 1건당 1행. 인증 실패와 `initialize`도 행으로 남는다. �
 
 | 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|---|
-| id | BIGSERIAL | `120394` | 일련번호(PK 일부) | DB | 없음 | 새로 |
-| request_id | UUID | `7c1e2f4a-9b3d-4e5f-8a6b-1c2d3e4f5a6b` | 요청 ID(`X-Request-Id`, 없으면 서버가 만듦) — `qa_log`와 연결 | call_log | 없음 | 새로 |
-| session_id | VARCHAR(128) | `a3f9c2e17b4d4f0e9c8b7a6d5e4f3c2b` | `Mcp-Session-Id`. 없으면 NULL | 〃 | 없음 | 새로 |
-| turn_id | VARCHAR(128) | `NULL` | 대화 턴 ID. 아직 채우는 코드 없음 | (없음) | 없음 | 새로 |
-| agent_id | SMALLINT | `NULL` | 인증된 Agent. `agent` 표가 생기면 FK 추가, 그 전까지 NULL | (없음) | 없음 | 새로 |
-| api_key_id | INTEGER | `NULL` | 요청에 쓴 API 키. `agent_api_key` 표가 생기면 `agent_api_key.id` FK 추가, 그 전까지 NULL. 키 문자열은 로그에 남기지 않음. 아직 채우는 코드 없음 | (없음) | 없음 | 새로 |
-| knox_id | VARCHAR(64) | `tester01` | `X-MCP-User`, 없으면 `_meta.user`(자기 신고 값, 검증 안 함) | call_log | 없음 | 새로 |
-| requested_at | TIMESTAMPTZ NOT NULL | `2026-10-15 05:12:03.418+00` | 호출 시각(기본 now, 파티션 키) | 〃 | 없음 | 새로 |
-| finished_at | TIMESTAMPTZ | `2026-10-15 05:12:04.902+00` | 끝난 시각 | 〃 | 없음 | 새로 |
-| duration_ms | INTEGER | `1484` | 걸린 시간 | 〃 | 없음 | 새로 |
-| queue_wait_ms | INTEGER | `3` | 실행 전 대기 시간 | 〃 | 없음 | 새로 |
-| rpc_method | VARCHAR(32) CHECK | `tools/call` | initialize·tools/list·tools/call. 인증 거부 행은 본문을 읽기 전이라 NULL. 지금 `tools/list`는 기록하지 않음 | 〃 | 없음 | 새로 |
-| tool_name | VARCHAR(64) | `search` | `tools/call`일 때만 도구 이름 | 〃 | 없음 | 새로 |
-| status | VARCHAR(16) CHECK | `ok` | ok·error·denied·unauthorized·busy·timeout. `denied`는 권한 설계 전이라 아직 안 씀 | 〃 | 없음 | 새로 |
-| error_code | VARCHAR(64) | `NULL` | `tool_timeout`·`busy`·`invalid_key`·`tool_error`·`audit_queue_full` | 〃 | 없음 | 새로 |
-| error_message | TEXT | `NULL` | 오류 내용(비밀값 가림) | 〃 | 없음 | 새로 |
-| args | TEXT | `{"query": "KVX LXT204 배치 일정", "top_k": 8}` | 입력 JSON 앞부분(`tuning.search.audit.audit_max_input_bytes`, 기본 16KB). 비밀값 가림. `content_b64`는 해시와 크기로 바꿈 | 〃 | 없음 | 새로 |
-| args_bytes | INTEGER | `58` | 입력 원본 크기 | 〃 | 없음 | 새로 |
-| args_truncated | BOOLEAN | `false` | 입력이 잘렸는지. 잘리면 JSON으로 안 읽힐 수 있음 | 〃 | 없음 | 새로 |
-| result | TEXT | `{"evidence": [{"chunk_key": "1042:7", …}], …}` | 출력 JSON 앞부분(`tuning.search.audit.audit_max_output_bytes`, 기본 64KB). 문서 본문·EDW 결과 포함 가능 | 〃 | 없음 | 새로 |
-| result_bytes | INTEGER | `18342` | 출력 원본 크기 | 〃 | 없음 | 새로 |
-| result_truncated | BOOLEAN | `false` | 출력이 잘렸는지 | 〃 | 없음 | 새로 |
-| result_sha256 | CHAR(64) | `5d1e9a07…`(64자) | 출력 원본 전체의 해시 | 〃 | 없음 | 새로 |
-| result_keys | JSONB | `{"chunk_keys": ["1042:7", "1042:8"], "evidence_status": "ok"}` | 자르지 않는 응답 식별 정보(search `chunk_keys`, 원문 도구 `doc_keys`·파일 요약, `row_count` 등) | 〃 | 없음 | 새로 |
-| result_count | INTEGER | `NULL` | 돌려준 근거 수·행 수. 아직 채우는 코드 없음(`result_keys`에 있음) | (없음) | 없음 | 새로 |
-| client_ip | INET | `192.0.2.10` | 접속 소켓 주소(프록시 뒤면 프록시 IP). stdio는 NULL | call_log | 없음 | 새로 |
-| app_version | VARCHAR(32) | `0.2.0` | 앱 버전 | 〃 | 없음 | 새로 |
+| id | BIGSERIAL | `120394` | 일련번호(PK 일부) | DB | 없음 | 유지 |
+| request_id | UUID | `7c1e2f4a-9b3d-4e5f-8a6b-1c2d3e4f5a6b` | 요청 ID(`X-Request-Id`, 없으면 서버가 만듦) — `qa_log`와 연결 | call_log | 없음 | 유지 |
+| session_id | VARCHAR(128) | `a3f9c2e17b4d4f0e9c8b7a6d5e4f3c2b` | `Mcp-Session-Id`. 없으면 NULL | 〃 | 없음 | 유지 |
+| turn_id | VARCHAR(128) | `NULL` | 대화 턴 ID. 아직 채우는 코드 없음 | (없음) | 없음 | 유지 |
+| agent_id | SMALLINT | `NULL` | 인증된 Agent. `agent` 표가 생기면 FK 추가, 그 전까지 NULL | (없음) | 없음 | 유지 |
+| api_key_id | INTEGER | `NULL` | 요청에 쓴 API 키. `agent_api_key` 표가 생기면 `agent_api_key.id` FK 추가, 그 전까지 NULL. 키 문자열은 로그에 남기지 않음. 아직 채우는 코드 없음 | (없음) | 없음 | 유지 |
+| knox_id | VARCHAR(64) | `tester01` | `X-MCP-User`, 없으면 `_meta.user`(자기 신고 값, 검증 안 함) | call_log | 없음 | 유지 |
+| requested_at | TIMESTAMPTZ NOT NULL | `2026-10-15 05:12:03.418+00` | 호출 시각(기본 now, 파티션 키) | 〃 | 없음 | 유지 |
+| finished_at | TIMESTAMPTZ | `2026-10-15 05:12:04.902+00` | 끝난 시각 | 〃 | 없음 | 유지 |
+| duration_ms | INTEGER | `1484` | 걸린 시간 | 〃 | 없음 | 유지 |
+| queue_wait_ms | INTEGER | `3` | 실행 전 대기 시간 | 〃 | 없음 | 유지 |
+| rpc_method | VARCHAR(32) CHECK | `tools/call` | initialize·tools/list·tools/call. 인증 거부 행은 본문을 읽기 전이라 NULL. 지금 `tools/list`는 기록하지 않음 | 〃 | 없음 | 유지 |
+| tool_name | VARCHAR(64) | `search` | `tools/call`일 때만 도구 이름 | 〃 | 없음 | 유지 |
+| status | VARCHAR(16) CHECK | `ok` | ok·error·denied·unauthorized·busy·timeout. `denied`는 권한 설계 전이라 아직 안 씀 | 〃 | 없음 | 유지 |
+| error_code | VARCHAR(64) | `NULL` | `tool_timeout`·`busy`·`invalid_key`·`tool_error`·`audit_queue_full` | 〃 | 없음 | 유지 |
+| error_message | TEXT | `NULL` | 오류 내용(비밀값 가림) | 〃 | 없음 | 유지 |
+| args | TEXT | `{"query": "KVX LXT204 배치 일정", "top_k": 8}` | 입력 JSON 앞부분(`tuning.search.audit.audit_max_input_bytes`, 기본 16KB). 비밀값 가림. `content_b64`는 해시와 크기로 바꿈 | 〃 | 없음 | 유지 |
+| args_bytes | INTEGER | `58` | 입력 원본 크기 | 〃 | 없음 | 유지 |
+| args_truncated | BOOLEAN | `false` | 입력이 잘렸는지. 잘리면 JSON으로 안 읽힐 수 있음 | 〃 | 없음 | 유지 |
+| result | TEXT | `{"evidence": [{"chunk_key": "1042:7", …}], …}` | 출력 JSON 앞부분(`tuning.search.audit.audit_max_output_bytes`, 기본 64KB). 문서 본문·EDW 결과 포함 가능 | 〃 | 없음 | 유지 |
+| result_bytes | INTEGER | `18342` | 출력 원본 크기 | 〃 | 없음 | 유지 |
+| result_truncated | BOOLEAN | `false` | 출력이 잘렸는지 | 〃 | 없음 | 유지 |
+| result_sha256 | CHAR(64) | `5d1e9a07…`(64자) | 출력 원본 전체의 해시 | 〃 | 없음 | 유지 |
+| result_keys | JSONB | `{"chunk_keys": ["1042:7", "1042:8"], "evidence_status": "ok"}` | 자르지 않는 응답 식별 정보(search `chunk_keys`, 원문 도구 `doc_keys`·파일 요약, `row_count` 등) | 〃 | 없음 | 유지 |
+| result_count | INTEGER | `NULL` | 돌려준 근거 수·행 수. 아직 채우는 코드 없음(`result_keys`에 있음) | (없음) | 없음 | 유지 |
+| client_ip | INET | `192.0.2.10` | 접속 소켓 주소(프록시 뒤면 프록시 IP). stdio는 NULL | call_log | 없음 | 유지 |
+| app_version | VARCHAR(32) | `0.2.0` | 앱 버전 | 〃 | 없음 | 유지 |
 
 `session_id`·`knox_id`·`tool_name`·`app_version`은 길이를 넘으면 `call_log._columns`가 자른다(넘으면 배치 INSERT가 통째로 실패해 파일 대체 기록으로 간다).
 
-과부하로 감사 대기열이 차면 `args`·`result` 없는 행이 남고(`error_code=audit_queue_full`), 기록기 큐까지 차면 행 없이 건수로만 집계된다(호출 1건 = 1행의 예외, 사용자 11-01).
+과부하로 감사 대기열이 차면 `args`·`result` 없는 행이 남고(`error_code=audit_queue_full`), 기록기 큐까지 차면 행 없이 건수로만 집계된다(호출 1건 = 1행의 예외).
 
 ### applog.pipe_run
 
@@ -230,27 +230,27 @@ MCP 요청 1건당 1행. 인증 실패와 `initialize`도 행으로 남는다. �
 
 | 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|---|
-| run_id | UUID PK | `0f6b2c9e-4d1a-4c3b-9e8f-7a6b5c4d3e2f` | 실행 ID | runtrace | perf | 새로 |
-| command | TEXT | `parse` | 명령 | 〃 | 〃 | 새로 |
-| args | TEXT | `parse --workers 4` | 인자(비밀값 가림) | 〃 | 없음 | 새로 |
-| started_at | TIMESTAMPTZ NOT NULL | `2026-10-15 00:00:05+00` | 시작 시각(기본 now) | 〃 | perf | 새로 |
-| ended_at | TIMESTAMPTZ | `2026-10-15 00:42:17+00` | 끝 시각 | 〃 | 없음 | 새로 |
-| duration_ms | INTEGER | `2532140` | 걸린 시간 | 〃 | perf | 새로 |
-| status | TEXT | `ok` | 실행 상태(CHECK 없음) | 〃 | 〃 | 새로 |
-| host | TEXT | `pipeline-host-01` | 서버 이름 | 〃 | 없음 | 새로 |
-| pid | INTEGER | `48211` | 프로세스 ID | 〃 | 없음 | 새로 |
-| app_version | TEXT | `0.2.0` | 앱 버전 | 〃 | perf | 새로 |
-| run_env | TEXT | `dev` | 실행 환경 | 〃 | 〃 | 새로 |
-| code_fp | JSONB | `{"p0": "a1b2c3d4e5f6", "p1": "…", "r": "…", "s": "…"}` | 레이어별 code_fp(DB 기록이 켜졌을 때만 계산) | 〃 | 〃(실행 비교) | 새로 |
-| stack | TEXT | `dev-v1` | 스택 이름 | 〃 | 〃 | 새로 |
-| settings_hash | TEXT | `9c4e2a7b1d03` | 설정 해시(DB 기록이 켜졌을 때만 계산) | 〃 | 〃 | 새로 |
-| docs_total | INTEGER | `120` | 문서 수 | 〃 | 〃 | 새로 |
-| docs_ok | INTEGER | `117` | 성공 문서 수 | 〃 | 〃 | 새로 |
-| docs_fail | INTEGER | `3` | 실패 문서 수 | 〃 | 〃 | 새로 |
-| docs_reused | INTEGER | `NULL` | 재사용 문서 수. 지금은 비어 있음(실행마다 새로 파싱) | 〃 | 〃 | 새로 |
-| workers | INTEGER | `4` | 작업자 수 | 〃 | 〃 | 새로 |
-| cpu_max_load | FLOAT | `0.8` | CPU 문턱값 | 〃 | 〃 | 새로 |
-| mem_start_pct | FLOAT | `23.5` | 실행 시작 때 메모리 사용률(%) | 〃 | 없음 | 새로 |
+| run_id | UUID PK | `0f6b2c9e-4d1a-4c3b-9e8f-7a6b5c4d3e2f` | 실행 ID | runtrace | perf | 유지 |
+| command | TEXT | `parse` | 명령 | 〃 | 〃 | 유지 |
+| args | TEXT | `parse --workers 4` | 인자(비밀값 가림) | 〃 | 없음 | 유지 |
+| started_at | TIMESTAMPTZ NOT NULL | `2026-10-15 00:00:05+00` | 시작 시각(기본 now) | 〃 | perf | 유지 |
+| ended_at | TIMESTAMPTZ | `2026-10-15 00:42:17+00` | 끝 시각 | 〃 | 없음 | 유지 |
+| duration_ms | INTEGER | `2532140` | 걸린 시간 | 〃 | perf | 유지 |
+| status | TEXT | `ok` | 실행 상태(CHECK 없음) | 〃 | 〃 | 유지 |
+| host | TEXT | `pipeline-host-01` | 서버 이름 | 〃 | 없음 | 유지 |
+| pid | INTEGER | `48211` | 프로세스 ID | 〃 | 없음 | 유지 |
+| app_version | TEXT | `0.2.0` | 앱 버전 | 〃 | perf | 유지 |
+| run_env | TEXT | `dev` | 실행 환경 | 〃 | 〃 | 유지 |
+| code_fp | JSONB | `{"p0": "a1b2c3d4e5f6", "p1": "…", "r": "…", "s": "…"}` | 레이어별 code_fp(DB 기록이 켜졌을 때만 계산) | 〃 | 〃(실행 비교) | 유지 |
+| stack | TEXT | `dev-v1` | 스택 이름 | 〃 | 〃 | 유지 |
+| settings_hash | TEXT | `9c4e2a7b1d03` | 설정 해시(DB 기록이 켜졌을 때만 계산) | 〃 | 〃 | 유지 |
+| docs_total | INTEGER | `120` | 문서 수 | 〃 | 〃 | 유지 |
+| docs_ok | INTEGER | `117` | 성공 문서 수 | 〃 | 〃 | 유지 |
+| docs_fail | INTEGER | `3` | 실패 문서 수 | 〃 | 〃 | 유지 |
+| docs_reused | INTEGER | `NULL` | 재사용 문서 수. 지금은 비어 있음(실행마다 새로 파싱) | 〃 | 〃 | 유지 |
+| workers | INTEGER | `4` | 작업자 수 | 〃 | 〃 | 유지 |
+| cpu_max_load | FLOAT | `0.8` | CPU 문턱값 | 〃 | 〃 | 유지 |
+| mem_start_pct | FLOAT | `23.5` | 실행 시작 때 메모리 사용률(%) | 〃 | 없음 | 유지 |
 
 ### applog.pipe_event
 
@@ -258,38 +258,38 @@ MCP 요청 1건당 1행. 인증 실패와 `initialize`도 행으로 남는다. �
 
 | 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|---|
-| id | BIGSERIAL | `904112` | 일련번호(PK 일부) | DB | 없음 | 새로 |
-| ts_start | TIMESTAMPTZ NOT NULL | `2026-10-15 00:03:11+00` | 시작 시각(기본 now, 파티션 키) | span | perf | 새로 |
-| ts_end | TIMESTAMPTZ | `2026-10-15 00:03:19+00` | 끝 시각 | 〃 | 〃 | 새로 |
-| run_id | UUID | `0f6b2c9e-4d1a-4c3b-9e8f-7a6b5c4d3e2f` | 실행 ID | 〃 | 〃 | 새로 |
-| span_id | UUID | `2b7d…`(UUID) | 단계 ID | 〃 | 없음 | 새로 |
-| parent_id | UUID | `NULL` | 부모 단계 ID | 〃 | 없음 | 새로 |
-| layer | TEXT | `extract` | 레이어(extract·transform·load 등) | 〃 | perf | 새로 |
-| stage | TEXT | `extract.parse` | 단계(`extract.parse`, `run.progress` 등) | 〃 | 〃 | 새로 |
-| engine | TEXT | `pymupdf` | 엔진 | 〃 | 〃 | 새로 |
-| model | TEXT | `NULL` | 모델 | 〃 | 없음 | 새로 |
-| attempt | INTEGER | `1` | 시도 번호(1부터, 시간 초과로 다시 돌면 2 — `extract.parse`만 채움) | 〃 | 없음 | 새로 |
-| doc_id | TEXT | `kvx_rfp_main.pdf` | 문서 ID | 〃 | perf | 새로 |
-| ext | TEXT | `.pdf` | 확장자(소문자, 점 포함) — 문서 사건에서 span이 안 주면 `doc_id` 이름에서 | 〃 | 없음 | 새로 |
-| file_bytes | BIGINT | `448556` | 파일 크기(바이트) — 문서 사건에서 span이 안 주면 이번 실행 manifest `size` | 〃 | 없음 | 새로 |
-| seq | INTEGER | `17` | 실행 안에서 몇 번째 | 〃 | perf | 새로 |
-| total | INTEGER | `120` | 전체 개수 | 〃 | 〃 | 새로 |
-| duration_ms | INTEGER | `8120` | 전체 시간 | 〃 | 〃 | 새로 |
-| wait_mem_ms | INTEGER | `0` | 메모리 문 대기 | 〃 | 〃 | 새로 |
-| wait_cpu_ms | INTEGER | `250` | CPU 문 대기 | 〃 | 〃 | 새로 |
-| cpu_ms | INTEGER | `6930` | CPU 시간(회수된 자식 포함). 다른 단계와 겹쳐 정확히 못 재면 NULL | 〃 | 〃 | 새로 |
-| ext_call_ms | INTEGER | `0` | 외부 모델 호출 시간의 합. 병렬 호출은 더해지므로 `duration_ms`보다 클 수 있음 | 〃 | 없음 | 새로 |
-| rss_peak_mb | FLOAT | `412.6` | 최대 메모리 | 〃 | perf | 새로 |
-| load1_per_cpu_start | FLOAT | `0.42` | 시작 때 코어당 부하 | 〃 | 없음 | 새로 |
-| load1_per_cpu_end | FLOAT | `0.61` | 끝날 때 코어당 부하 | 〃 | 없음 | 새로 |
-| mem_used_pct | FLOAT | `38.2` | 메모리 사용률(`/proc` 없는 macOS는 빔) | 〃 | 없음 | 새로 |
-| inflight | INTEGER | `3` | 같은 단계에서 동시에 돌던 작업 수 | 〃 | 없음 | 새로 |
-| metrics | JSONB | `{"pages": 12, "chunks": 34}` | 단계별 지표(쪽 수, 청크 수, 캐시 적중, 표별 적재 행 수 등) | 〃 | perf | 새로 |
-| status | TEXT CHECK | `ok` | ok·fail·timeout·skip·reused | 〃 | 〃 | 새로 |
-| err_kind | TEXT CHECK | `NULL` | env·timeout·doc·external·db | 〃 | 〃 | 새로 |
-| err | TEXT | `NULL` | 예외 타입과 고정 문구만. 외부 예외 원문은 저장 안 함 | 〃 | 없음 | 새로 |
-| app_version | TEXT | `0.2.0` | 앱 버전 | 〃 | perf | 새로 |
-| source_system | TEXT | `SFDC` | 원천 — 문서 사건(`doc_id` 있음)만, 이번 실행 manifest의 그 문서 행(applog를 여러 벌이 함께 써서 행만 보고 원천을 알게 — 판 0004) | 〃 | 없음 | 새로 |
+| id | BIGSERIAL | `904112` | 일련번호(PK 일부) | DB | 없음 | 유지 |
+| ts_start | TIMESTAMPTZ NOT NULL | `2026-10-15 00:03:11+00` | 시작 시각(기본 now, 파티션 키) | span | perf | 유지 |
+| ts_end | TIMESTAMPTZ | `2026-10-15 00:03:19+00` | 끝 시각 | 〃 | 〃 | 유지 |
+| run_id | UUID | `0f6b2c9e-4d1a-4c3b-9e8f-7a6b5c4d3e2f` | 실행 ID | 〃 | 〃 | 유지 |
+| span_id | UUID | `2b7d…`(UUID) | 단계 ID | 〃 | 없음 | 유지 |
+| parent_id | UUID | `NULL` | 부모 단계 ID | 〃 | 없음 | 유지 |
+| layer | TEXT | `extract` | 레이어(extract·transform·load 등) | 〃 | perf | 유지 |
+| stage | TEXT | `extract.parse` | 단계(`extract.parse`, `run.progress` 등) | 〃 | 〃 | 유지 |
+| engine | TEXT | `pymupdf` | 엔진 | 〃 | 〃 | 유지 |
+| model | TEXT | `NULL` | 모델 | 〃 | 없음 | 유지 |
+| attempt | INTEGER | `1` | 시도 번호(1부터, 시간 초과로 다시 돌면 2 — `extract.parse`만 채움) | 〃 | 없음 | 유지 |
+| doc_id | TEXT | `kvx_rfp_main.pdf` | 문서 ID | 〃 | perf | 유지 |
+| ext | TEXT | `.pdf` | 확장자(소문자, 점 포함) — 문서 사건에서 span이 안 주면 `doc_id` 이름에서 | 〃 | 없음 | 유지 |
+| file_bytes | BIGINT | `448556` | 파일 크기(바이트) — 문서 사건에서 span이 안 주면 이번 실행 manifest `size` | 〃 | 없음 | 유지 |
+| seq | INTEGER | `17` | 실행 안에서 몇 번째 | 〃 | perf | 유지 |
+| total | INTEGER | `120` | 전체 개수 | 〃 | 〃 | 유지 |
+| duration_ms | INTEGER | `8120` | 전체 시간 | 〃 | 〃 | 유지 |
+| wait_mem_ms | INTEGER | `0` | 메모리 문 대기 | 〃 | 〃 | 유지 |
+| wait_cpu_ms | INTEGER | `250` | CPU 문 대기 | 〃 | 〃 | 유지 |
+| cpu_ms | INTEGER | `6930` | CPU 시간(회수된 자식 포함). 다른 단계와 겹쳐 정확히 못 재면 NULL | 〃 | 〃 | 유지 |
+| ext_call_ms | INTEGER | `0` | 외부 모델 호출 시간의 합. 병렬 호출은 더해지므로 `duration_ms`보다 클 수 있음 | 〃 | 없음 | 유지 |
+| rss_peak_mb | FLOAT | `412.6` | 최대 메모리 | 〃 | perf | 유지 |
+| load1_per_cpu_start | FLOAT | `0.42` | 시작 때 코어당 부하 | 〃 | 없음 | 유지 |
+| load1_per_cpu_end | FLOAT | `0.61` | 끝날 때 코어당 부하 | 〃 | 없음 | 유지 |
+| mem_used_pct | FLOAT | `38.2` | 메모리 사용률(`/proc` 없는 macOS는 빔) | 〃 | 없음 | 유지 |
+| inflight | INTEGER | `3` | 같은 단계에서 동시에 돌던 작업 수 | 〃 | 없음 | 유지 |
+| metrics | JSONB | `{"pages": 12, "chunks": 34}` | 단계별 지표(쪽 수, 청크 수, 캐시 적중, 표별 적재 행 수 등) | 〃 | perf | 유지 |
+| status | TEXT CHECK | `ok` | ok·fail·timeout·skip·reused | 〃 | 〃 | 유지 |
+| err_kind | TEXT CHECK | `NULL` | env·timeout·doc·external·db | 〃 | 〃 | 유지 |
+| err | TEXT | `NULL` | 예외 타입과 고정 문구만. 외부 예외 원문은 저장 안 함 | 〃 | 없음 | 유지 |
+| app_version | TEXT | `0.2.0` | 앱 버전 | 〃 | perf | 유지 |
+| source_system | TEXT | `SFDC` | 원천 — 문서 사건(`doc_id` 있음)만, 이번 실행 manifest의 그 문서 행(applog를 여러 벌이 함께 써서 행만 보고 원천을 알게 — 판 0004) | 〃 | 없음 | 유지 |
 
 ### applog.except_doc_info
 
@@ -297,42 +297,65 @@ gold에 적재되지 않은 원본 1개·종류 1개당 1행(op-17). 기본 키 
 
 | 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|---|
-| source_key | TEXT PK | `SFDC/2a9c…/kvx_drm_copy.pdf` | 원본 키(Object Storage `s3_key`, 폴더 원천은 상대 경로·이름) | except_docs | candidate_pick | 새로 |
-| except_type | TEXT PK | `skip` | 종류 — `skip`(영구 뺌: 지원 안 하는 확장자·확장자 없음·DRM·암호·내용 중복) · `error`(파싱·적재 실패 — 기록만) · `part`(수준 `warn` — 안 문서를 일부 못 꺼냄, 성한 안 파일은 적재됨 — 기록만, pl-65) · `silver`(수준 `warn` — 실버만 게시, 골드 적재가 성공하면 지움, pl-68) | 〃 | candidate_pick(`skip`만) | 새로 |
-| source_system | TEXT | `SFDC` | 원천(FileStorageMap `source_system`) | 〃 | 없음 | 새로 |
-| file_name | TEXT | `kvx_drm_copy.pdf` | 파일 이름 | 〃 | 없음 | 새로 |
-| reason | TEXT NOT NULL | `drm_fasoo` | 이유 — `skip`: `unsupported_archive`·`encrypted_archive`·`broken_archive`·`archive_too_big`·`unsupported_format`·`no_extension`·`drm_*`·`encrypted_*`·`duplicate_sha256` · `error`: `parse_failed`·`publish_failed`·`load_failed`·`classify_failed` | 〃 | 없음 | 새로 |
-| level | TEXT NOT NULL | `error` | 수준(기본 `error`) | 〃 | 없음 | 새로 |
-| first_seen | TIMESTAMPTZ NOT NULL | `2026-10-14 15:02:11+00` | 처음 기록한 시각(기본 now) | 〃 | 없음 | 새로 |
-| last_seen | TIMESTAMPTZ NOT NULL | `2026-10-15 15:01:47+00` | 마지막으로 기록한 시각(기본 now) | 〃 | 없음 | 새로 |
-| count | INTEGER NOT NULL | `2` | 기록한 횟수(기본 1) | 〃 | 없음 | 새로 |
-| file_ext | TEXT | `pdf` | 확장자(소문자, 점 없음 — `file_name`에서, 판 0004) | 〃 | 없음 | 새로 |
-| file_size | BIGINT | `448556` | 파일 크기(바이트 — 문서 위치 표·manifest의 `file_size`, 모르면 NULL — 판 0004) | 〃 | 없음 | 새로 |
+| source_key | TEXT PK | `SFDC/2a9c…/kvx_drm_copy.pdf` | 원본 키(Object Storage `s3_key`, 폴더 원천은 상대 경로·이름) | except_docs | candidate_pick | 유지 |
+| except_type | TEXT PK | `skip` | 종류 — `skip`(영구 뺌: 지원 안 하는 확장자·확장자 없음·DRM·암호·내용 중복) · `error`(파싱·적재 실패 — 기록만) · `part`(수준 `warn` — 안 문서를 일부 못 꺼냄, 성한 안 파일은 적재됨 — 기록만, pl-65) · `silver`(수준 `warn` — 실버만 게시, 골드 적재가 성공하면 지움, pl-68) | 〃 | candidate_pick(`skip`만) | 유지 |
+| source_system | TEXT | `SFDC` | 원천(FileStorageMap `source_system`) | 〃 | 없음 | 유지 |
+| file_name | TEXT | `kvx_drm_copy.pdf` | 파일 이름 | 〃 | 없음 | 유지 |
+| reason | TEXT NOT NULL | `drm_fasoo` | 이유 — `skip`: `unsupported_archive`·`encrypted_archive`·`broken_archive`·`archive_too_big`·`unsupported_format`·`no_extension`·`drm_*`·`encrypted_*`·`duplicate_sha256` · `error`: `parse_failed`·`publish_failed`·`load_failed`·`classify_failed` | 〃 | 없음 | 유지 |
+| level | TEXT NOT NULL | `error` | 수준(기본 `error`) | 〃 | 없음 | 유지 |
+| first_seen | TIMESTAMPTZ NOT NULL | `2026-10-14 15:02:11+00` | 처음 기록한 시각(기본 now) | 〃 | 없음 | 유지 |
+| last_seen | TIMESTAMPTZ NOT NULL | `2026-10-15 15:01:47+00` | 마지막으로 기록한 시각(기본 now) | 〃 | 없음 | 유지 |
+| count | INTEGER NOT NULL | `2` | 기록한 횟수(기본 1) | 〃 | 없음 | 유지 |
+| file_ext | TEXT | `pdf` | 확장자(소문자, 점 없음 — `file_name`에서, 판 0004) | 〃 | 없음 | 유지 |
+| file_size | BIGINT | `448556` | 파일 크기(바이트 — 문서 위치 표·manifest의 `file_size`, 모르면 NULL — 판 0004) | 〃 | 없음 | 유지 |
 
 ### applog.dlq_doc
 
-실패 문서 재시도 상태([pl-69](../prd/load.md#pl-69)), 원본 키당 한 행. 판 `0005_applog`, 고정 DDL `0005_applog_dlq.py`. 일반 표이며 색인 `ix_dlq_doc_status_failed(status, last_failed_at)`를 둔다. 실패 이력 `except_doc_info error`·`pipe_event`와 별개다. 실패 3회면 dead, 사람이 requeue한다. 자동 재시도 정책은 12월(#174 합의)이다.
+실패 문서 재시도 상태([pl-69](../prd/load.md#pl-69)) — 원본 키당 1행. 일반 표(파티션 없음 — `dbtool maintain`이 보존 기한 지난 `resolved` 행만 DELETE). 판 `0005_applog_dlq.py`. 색인 `ix_dlq_doc_status_failed`(`status`, `last_failed_at`). 실패 이력(`except_doc_info` `error`·`pipe_event`)과 따로 둔다. 쓰는 곳: `pipeline/shared/dlq.py` — `record_failure`(호스트 `except_docs error` 명령만, 실패 3회면 `dead`)·`resolve`(gold 적재 성공·영구 뺌 확인)·`requeue`(사람). 읽는 곳: `candidate_pick.list_targets`(`--skip-done`이면 `dead` 키를 뺌), `python -m pipeline.shared.dlq list`, run_pipeline 끝 요약.
 
-쓰는 곳: `pipeline/shared/dlq.py` — 호스트의 `except_docs error` CLI만 실패 upsert(컨테이너 record_error는 이력만), gold 적재 성공과 skip-done 본 목록의 gold/영구 뺌 대조가 resolve, 운영자가 requeue. 읽는 곳: `candidate_pick.list_targets`(`--skip-done`일 때 dead 제외·pending은 다음 실행 본 흐름에서 재시도, FAQ도 동일), 호스트 실행기 요약과 `python -m pipeline.shared.dlq list`. `dbtool maintain --target applog`는 보존 기한 지난 resolved만 지운다.
+| 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
+|---|---|---|---|---|---|---|
+| source_key | TEXT PK | `SFDC/2a9c…/kvx_rfp_scan.pdf` | 원본 키(`FileStorageMap.s3_key` = gold `doc.file_path`) | dlq `record_failure` | candidate_pick, `dlq list` | 유지 |
+| source_system | TEXT | `SFDC` | 원천 | 〃 | `dlq list` | 유지 |
+| file_name | TEXT | `kvx_rfp_scan.pdf` | 원본 파일 이름 | 〃 | 〃 | 유지 |
+| stage | TEXT | `parse` | 마지막 실패 단계(실패 이유 앞부분 — parse·publish·load·classify) | 〃 | 〃 | 유지 |
+| last_reason | TEXT NOT NULL | `parse_failed` | 마지막 실패 이유(해소 뒤에도 남김) | 〃 | 〃 | 유지 |
+| attempts | INTEGER NOT NULL | `2` | 실패 횟수(기본 1, 호스트가 실행당 문서마다 한 번 셈, requeue 때 0) | `record_failure`·`requeue` | 〃 | 유지 |
+| status | TEXT NOT NULL | `pending` | `pending`(다음 실행이 다시 시도)·`dead`(3회 실패 — 사람이 requeue할 때까지 뺌)·`resolved`(기본 `pending`) | `record_failure`·`resolve`·`requeue` | candidate_pick, `dlq list`, maintain | 유지 |
+| first_failed_at | TIMESTAMPTZ NOT NULL | `2026-10-14 15:02:11+00` | 이번 실패 주기의 첫 실패 시각(기본 now — `resolved` 뒤 다시 실패하면 새로) | `record_failure` | `dlq list` | 유지 |
+| last_failed_at | TIMESTAMPTZ NOT NULL | `2026-10-15 15:01:47+00` | 마지막 실패 시각(기본 now) | 〃 | `dlq list`(정렬) | 유지 |
+| dead_at | TIMESTAMPTZ | `NULL` | `dead`가 된 시각(requeue·새 실패 주기면 비움) | `record_failure`·`requeue` | `dlq list` | 유지 |
+| resolved_at | TIMESTAMPTZ | `NULL` | gold 완료·영구 뺌을 확인한 시각(보존 DELETE 기준) | `resolve` | maintain | 유지 |
+| pipeline_version | TEXT | `0.4.0` | 마지막 실패 때의 `common.pipeline_version()` | `record_failure` | `dlq list` | 유지 |
 
-| 칸 | 형식 | 뜻 |
+## 7. 판 올리기 — `dbtool`
+
+표는 코드가 실행 중에 만들지 않는다 — 모두 Alembic 판(`common/store/db/migrations/versions/`)이고 명령은 `dbtool` 하나다(PC `python -m common.store.db.dbtool`, 서버 `bash deploy/host/scripts/pipe_exec.sh migrate`).
+
+| 갈래(`--target`) | 스키마 | 끝 판 |
 |---|---|---|
-| source_key | TEXT PK | 원본 키(`FileStorageMap.s3_key`·gold `doc.file_path`) |
-| source_system | TEXT | 원천 시스템 |
-| file_name | TEXT | 원본 파일 이름 |
-| stage | TEXT | 마지막 실패 단계(parse·publish·load·classify 등, 실패 이유에서) |
-| last_reason | TEXT NOT NULL | 마지막 실패 이유(해소 때도 보존) |
-| attempts | INTEGER NOT NULL DEFAULT 1 | 실패 시도 횟수(호스트가 문서당 한 번 기록, requeue 때 0) |
-| status | TEXT NOT NULL DEFAULT 'pending' | CHECK pending·dead·resolved |
-| first_failed_at | TIMESTAMPTZ NOT NULL DEFAULT now() | 현재 실패 주기의 첫 실패 시각(resolved 뒤 재실패면 새로) |
-| last_failed_at | TIMESTAMPTZ NOT NULL DEFAULT now() | 마지막 실패 기록 시각 |
-| dead_at | TIMESTAMPTZ | dead가 된 시각(requeue·새 실패 주기 때 비움) |
-| resolved_at | TIMESTAMPTZ | gold 완료 또는 영구 뺌 확인 시각(보존 DELETE 기준) |
-| pipeline_version | TEXT | 마지막 실패의 `common.pipeline_version()` |
+| `search` | 기준 스키마(`required.pg.pg_schema`) + 원천 스키마 5벌 + (개발 서버·PC) DEV 원천 스키마(§2) | `0007_search` |
+| `applog` | `applog`(고정 이름 — 다른 `--schema`는 종료 2, PC 시험 스키마 `test_*`만 예외) | `0005_applog` |
+| `master` | `<기준>_master` | `0002_master` |
+
+| 명령 | 하는 일 |
+|---|---|
+| `up --target search\|applog\|master\|all` | 끝 판까지 실행(`--bundle <묶음>` 또는 `--dim`으로 벡터 차원, 새 PG면 `--create-extension`) |
+| `current --target …` | 지금 DB 판과 코드의 끝 판 |
+| `check --target …` | `current`와 같고, 끝 판이 아니면 종료 1(읽기만) |
+| `maintain --target applog` | 다음 달 파티션 준비·보존 정리(§6) |
+| `master load [--dir <폴더>]` | 마스터 표를 `glossary.csv`(기본 `resources/vocab/glossary/`)로 통째로 바꿈 |
+
+- 실행할 때: 처음 설치(초기화 순서 `up`(search·applog·master) → `master load` → 파싱·구조화·적재), 마이그레이션이 바뀐 릴리스(적재 전에 `up`), 새 검색 스키마(임베딩 차원이 바뀜 — `up --target all --schema <새 스키마> --dim <차원>`).
+- DB에 붙지 않고 SQL만 보려면 같은 인자에 `--sql <파일>`(있는 DB는 `--from <지금 판>` — 갈래마다 하나) — DB 담당이 읽고 고쳐 손으로 실행한다. DB를 읽어야 하는 확인(지금 판·vector 확장·남의 스키마·차원)은 파일 안 `-- 수동:` 줄.
+
+## 8. 아직 없는 표
+
+PRD 행이 요구하지만 아직 판·코드가 없는 표다(결정 칸 모두 `새로`, 시험 비교 대상 아님).
 
 ### applog.superseded_doc_log
 
-같은 `s3_key`의 더 새 `FileStorageMap` 행 때문에 밀려난 행의 이력 — 밀려난 행 1개당 1행. 아직 표·코드가 없다(요건 [pl-32](../prd/load-schema.md#pl-32) — applog Alembic 판으로 추가). 시험 비교 대상이 아니다.
+같은 `s3_key`의 더 새 `FileStorageMap` 행 때문에 밀려난 행의 이력 — 밀려난 행 1개당 1행. 요건 [pl-32](../prd/load-schema.md#pl-32) — applog Alembic 판으로 추가.
 
 | 칸 | 타입 | 예 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|---|

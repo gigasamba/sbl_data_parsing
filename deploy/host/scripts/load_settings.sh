@@ -17,9 +17,14 @@
 # `PYTHONPATH=. python deploy/release/gen_host_keys.py`)와 common/config/layout.py로 읽는다.
 # DOCKER로 docker·podman을 고른다(`DOCKER="sudo docker"`처럼 두 낱말도 — 따옴표 없이 펼침). 값은 출력하지 않는다(source 쪽 — 실행 쪽은 요청한 줄만 표준 출력에).
 #   셸 env와 settings.yaml(ops.host.container_cli)에 없으면 docker(서버 기본 컨테이너 도구), docker가 없으면 podman(docker_default).
-docker_default() { command -v docker >/dev/null 2>&1 && echo docker || echo podman; }   # 서버 기본 docker(재부팅 때 docker 서비스가 restart: unless-stopped 컨테이너를 다시 띄움), 없으면 podman(bake_prod_image.sh·stage_images.sh도 이 함수를 씀)
-_SETTINGS_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)   # 코드 폴더(deploy/host가 바로 아래 — 서버 sbl_data_parsing-<판> · PC 저장소 루트)
-# 서버 루트 — 코드 폴더 자체(settings.yaml·output/이 바로 아래). 앞선 load_settings가 구한 값이면 다시 구함
+docker_default() { command -v docker >/dev/null 2>&1 && echo docker || echo podman; }   # docker 우선, 없으면 podman(bake_prod_image.sh·stage_images.sh도 씀)
+# 판정 시험 컨테이너 옵션 → 배열 GATE(host_ctl.sh check·bake_prod_image.sh): DB 사례가 서버 PG에 붙게 host 네트워크·이 설정 파일(읽기 전용)·RUN_ENV — load_settings 뒤에
+gate_args() {
+  GATE=(--network host --add-host host.docker.internal:host-gateway --tmpfs "${APP_OUTPUT_ROOT:?APP_OUTPUT_ROOT 필요 — load_settings}:mode=1777"
+    -v "${SETTINGS_FILE:?SETTINGS_FILE 필요 — load_settings}:/etc/rag/settings.yaml:ro,z" -e SETTINGS_FILE=/etc/rag/settings.yaml -e "RUN_ENV=${RUN_ENV:?RUN_ENV 필요 — load_settings}")
+}
+_SETTINGS_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)   # 코드 폴더(서버 벌의 app · PC 저장소 루트)
+# 루트 = 코드 폴더 자체(settings.yaml·output/이 바로 아래). 앞선 load_settings가 구한 값이면 다시 구함
 if [ -z "${RAG_ROOT:-}" ] || [ "$RAG_ROOT" = "${_SETTINGS_AUTO_ROOT:-}" ]; then
   RAG_ROOT=$_SETTINGS_ROOT; _SETTINGS_AUTO_ROOT=$RAG_ROOT
 fi
@@ -38,7 +43,7 @@ load_settings() {   # 위 설명(source) — 성공 0 · 설정 파일 없음·�
     [ -f "$RAG_ROOT/settings.yaml" ] && SETTINGS_FILE=$RAG_ROOT/settings.yaml
   fi
   if [ -z "${SETTINGS_FILE:-}" ] || [ ! -f "$SETTINGS_FILE" ]; then
-    echo "[설정] 설정 파일 없음: ${SETTINGS_FILE:-$RAG_ROOT/settings.yaml} — 루트(코드 폴더)에 settings.yaml을 둘 것(docs/operations/env-guide.md)" >&2
+    echo "[설정] 설정 파일 없음: ${SETTINGS_FILE:-$RAG_ROOT/settings.yaml} — 루트(코드 폴더)에 settings.yaml을 둘 것(docs/operations/settings.md)" >&2
     return 2
   fi
   case "$SETTINGS_FILE" in /*) ;; *) SETTINGS_FILE=$PWD/$SETTINGS_FILE ;; esac

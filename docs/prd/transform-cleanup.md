@@ -42,7 +42,7 @@
 - 요건(되어야 할 모습):
   1. DB 도구 `dbtool`에는 첫 이관용 기능이 없다 — 옛 스키마와 견주는 비교(`dbcompare`)와 판만 기록하는 `stamp`. `check`는 판 상태만 보고(끝 판이 아니면 종료 1), `up`은 표는 있는데 판 기록이 없는 스키마를 거부한다(새 스키마로 다시 적재).
   2. 이미지 의존성(`deploy/docker/requirements*`)에는 앱 코드가 쓰는 패키지만 둔다 — `google-adk`·`litellm`은 없다(지시서 패키지의 `agent.py`는 지시서 지문으로 바이트만 읽고 import하지 않는다). 빼면 `deps_hash`가 바뀌어 새 이미지 버전이 필요하다.
-- 반영: 0.3.0(11-05) — `deps_hash` `f0fcc30bd067bc2f` → `da796674b39fd674`(새 실행 이미지 — refactor.md C-102).
+- 반영: 0.3.0 — `deps_hash` `f0fcc30bd067bc2f` → `da796674b39fd674`(새 실행 이미지 — refactor.md C-102).
 - Status: done
 
 <a id="pl-47"></a>
@@ -61,8 +61,8 @@
 - QA:
   - `tests/server/pipeline/test_gold_bundle.py` `test_infer_clients_prefilter_same` — 명부 3벌 × 본문 9개(겹치는 이름·별칭·대소문자·이름 안 공백·조사·`re.I` 특수 글자 İ ı ſ K) × 머리 길이 2가지에서 거르기 전 몸통과 결과가 같다.
   - `tests/server/pipeline/test_runtrace.py`(자식 줄 `@@chars`) · `test_engine_run.py`(재시도 뒤 글자 수).
-  - 문서 4건(`valid_env/object_storage/SFDC`의 pdf·docx·xlsx·eml)을 `pipeline.cli parse` → `gold_bundle --embed none`(외부 모델 끔)으로 ae9113ea와 견줌(11-05): 본문·facts·청크(`chunks.jsonl` 바이트 같음)·`_DONE.json` digest·`runs.jsonl` `chars`가 같다. 다른 것은 시각·소요 시간·출력 폴더 경로·`post.code_fp`(층 지문)와 의도한 두 가지 — `index.json`에 `digest` 칸이 생김, 묶음 `meta.json` `stack_conf`에서 `graph`가 빠져 `body_sha`가 바뀜(재사용 열쇠가 아니라 기록만).
-- 반영: 0.3.0(11-05) — 층 지문이 바뀜(커밋 메시지).
+  - 문서 4건(`valid_env/object_storage/SFDC`의 pdf·docx·xlsx·eml)을 `pipeline.cli parse` → `gold_bundle --embed none`(외부 모델 끔)으로 ae9113ea와 견줌: 본문·facts·청크(`chunks.jsonl` 바이트 같음)·`_DONE.json` digest·`runs.jsonl` `chars`가 같다. 다른 것은 시각·소요 시간·출력 폴더 경로·`post.code_fp`(층 지문)와 의도한 두 가지 — `index.json`에 `digest` 칸이 생김, 묶음 `meta.json` `stack_conf`에서 `graph`가 빠져 `body_sha`가 바뀜(재사용 열쇠가 아니라 기록만).
+- 반영: 0.3.0 — 층 지문이 바뀜(커밋 메시지).
 - Status: done
 
 <a id="pl-50"></a>

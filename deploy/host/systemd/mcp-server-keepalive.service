@@ -1,6 +1,4 @@
-# 0번 벌 상주 확인(Redis·mcp-data-parsing-0·근거 MCP mcp-server-0): 꺼졌거나 /health 응답이 없으면 다시 띄움(deploy/host/scripts/mcp_keepalive.sh).
-# 설치: 코드 폴더에서 `sudo bash deploy/host/scripts/host_ctl.sh timers`(@CODE_DIR@를 채워 쓰고 타이머를 켬 — 이 파일을 그대로 복사하지 않는다).
-# 서버 컨테이너 도구 = docker 하나(User=root — 이미지를 load.sh로 넣은 docker와 같게) — 도구 이름은 settings.yaml ops.host.container_cli(비우면 docker, 없으면 podman — load_settings.sh).
+# 운영 묶음 상주 확인(Redis·parse_document 작업·검색 MCP) — 꺼졌거나 /health 응답이 없으면 다시 띄움(mcp_keepalive.sh). 설치: host_ctl.sh timers.
 [Unit]
 Description=근거 MCP 상주 확인·기동
 Wants=network-online.target
@@ -9,10 +7,7 @@ After=network-online.target docker.service
 [Service]
 Type=oneshot
 User=root
-# WorkingDirectory = 코드 폴더(host_ctl.sh timers가 채움). 호스트 스크립트는 코드 폴더의 deploy/host/.
+# 코드 폴더(host_ctl.sh timers가 채움) — settings.yaml은 그 폴더에서 찾는다
 WorkingDirectory=@CODE_DIR@
-# 설정 파일은 적지 않음 — mcp_keepalive.sh가 load_settings.sh load_settings로 <루트>/settings.yaml(루트 = 코드 폴더 자체)을 읽는다.
-#   settings.yaml이 다른 자리에 따로 있을 때만 Environment=SETTINGS_FILE=<파일>을 더한다.
-#   RUN_ENV는 settings.yaml required.env.run_env에만 적는다. 호스트 python에는 PyYAML이 있어야 한다(load_settings.sh — settings_to_env.py).
 ExecStart=/bin/bash deploy/host/scripts/mcp_keepalive.sh
 TimeoutStartSec=5min

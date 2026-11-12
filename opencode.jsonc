@@ -1,1 +1,39 @@
-{}
+// opencode 프로젝트 권한 — /app(저장소 맨 위)에서 시작하면 홈 설정보다 앞선다.
+// 마지막에 맞는 규칙이 이긴다: "*"를 먼저, 그다음 물어볼 명령(git 쓰기·지우기·다른 컨테이너 접속).
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "edit": "allow",
+    "external_directory": "ask",
+    "bash": {
+      "*": "allow",
+      "git push*": "ask",
+      "git commit*": "ask",
+      "git add -A*": "ask",
+      "git add .*": "ask",
+      "git reset*": "ask",
+      "git checkout*": "ask",
+      "git clean*": "ask",
+      "git rebase*": "ask",
+      "rm -rf*": "ask",
+      "rm -fr*": "ask",
+      "rm -r *": "ask",
+      "git add --all*": "ask",
+      "git -C*": "ask",
+      "* && git *": "ask",
+      "sudo*": "ask",
+      "podman*": "ask",
+      "ruff format*": "ask",
+      "chmod*": "ask",
+      "docker*": "ask",
+      "ssh *": "ask",
+      "scp *": "ask",
+      "sftp *": "ask",
+      "sshpass *": "ask",
+      "telnet *": "ask",
+      "nc *": "ask",
+      "ncat *": "ask",
+      "socat *": "ask"
+    }
+  }
+}

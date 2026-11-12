@@ -118,7 +118,7 @@ def _semver(text):
 
 
 def pipeline_version(root=None):
-    """버전 표기(한 곳) — 두 이미지 공통 SemVer, 저장소 루트 VERSION(이미지 /app/deploy/VERSION).
+    """버전 표기(한 곳) — 두 이미지 공통 SemVer, 저장소 루트 VERSION(이미지 /app/VERSION).
     SemVer 꼴이 아니거나 없으면 env PIPELINE_VERSION → 'unknown'.
     게시(silver_version)·실행 보드(run_board)·parse_parallel이 같이 씀."""
     import os

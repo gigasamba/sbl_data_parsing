@@ -1,17 +1,13 @@
 #!/bin/bash
-# 서버 이미지(2개: pipeline·mcp) — 로컬 스테이징만(push 안 함·저장소 생성 안 함 — 사람 승인 뒤 수동 push, docs/operations/server-guide.md §4-5·§5-3).
-#   bash deploy/release/stage_images.sh [태그 — 기본 저장소 루트 VERSION, 예: 0.1.0] [대상들… 기본 pipeline mcp; Redis는 redis 대상 추가]
-#   개발 서버: 대상 pipeline-runtime·mcp-runtime(코드 없는 실행 이미지 — 코드는 코드 저장소 zip, server-guide §1-1)
-#   운영 서버: bake_prod_image.sh가 pipeline·mcp + CODE_BUNDLE(시험한 코드 폴더 묶음 — 호스트 스크립트용, 판 폴더에 같이 놓음)
-# 전제: 이미지가 이미 로컬에 있어야 함(build_ship.sh·bake_prod_image.sh) — 이 스크립트는 빌드하지 않는다.
-# 이미지 저장소 배치 하나(server-guide §1-1 — 이미지 git `sbl_images`):
-#   $OUT/<저장소>/load.sh                                   ← deploy/release/load.sh 사본(조각 확인 → 합치기 → docker/podman load)
-#   $OUT/<저장소>/<판>/BUILD.txt                             ← 판·빌드 커밋·DEPS_HASH·이미지 태그
-#   $OUT/<저장소>/<판>/<이미지 이름>/<이미지 이름>.tar.gz.part000… · <이미지 이름>.sha256
-#   저장소 이름 SHIP_REPO(기본 sbl_images) · 조각 CHUNK(기본 45m — GitHub 100MB 상한 아래, 저장소 관례) · 서버에서: bash <저장소>/load.sh <판>
+# 이미지를 이미지 저장소(sbl_images) 배치로 저장·분할 — 로컬만(push·저장소 생성은 사람이 승인 뒤 손으로).
+#   bash deploy/release/stage_images.sh [태그 — 기본 VERSION] [대상… 기본 pipeline mcp]   대상: pipeline·mcp·pipeline-runtime·mcp-runtime·redis
+#   개발 서버용은 pipeline-runtime·mcp-runtime, 운영용은 bake_prod_image.sh가 pipeline·mcp + CODE_BUNDLE(시험한 코드 폴더 묶음)으로 부른다.
+#   이미지는 미리 있어야 한다(build_ship.sh·bake_prod_image.sh) — 빌드하지 않는다.
+# 배치: $OUT/<저장소>/load.sh · <판>/BUILD.txt · <판>/<이미지>/<이미지>.tar.gz.part000…·<이미지>.sha256
+#   SHIP_REPO(기본 sbl_images) · CHUNK(기본 45m — GitHub 100MB 상한 아래) · 서버에서: bash <저장소>/load.sh <판>
 set -euo pipefail
 cd "$(dirname "$0")/../.."                                # deploy/release/ → 저장소 루트
-. deploy/release/image_names.sh   # image_name_of·app_version — 타깃 → 이미지 이름(build_ship.sh와 같은 파일) — 대상은 repo_of()가 이미 걸러냄
+. deploy/release/image_names.sh   # image_name_of·app_version
 case "${1:-}" in
   ""|pipeline|mcp|pipeline-runtime|mcp-runtime|redis) TAG=$(app_version) || exit 2 ;;   # 태그를 안 주면 VERSION(두 이미지 같은 버전 태그)
   *) TAG="$1"; shift ;;
@@ -23,7 +19,7 @@ CHUNK="${CHUNK:-45m}"
 DOCKER="${DOCKER:-$(docker_default)}"
 REPO="${SHIP_REPO:-sbl_images}"
 
-repo_of() {    # 대상 검사만 — 이미지 저장소는 하나(mono repo)
+repo_of() {    # 대상 검사 — 이미지 저장소는 하나
   case "$1" in
     pipeline|mcp|pipeline-runtime|mcp-runtime|redis) echo "$REPO" ;;   # 실행 이미지도
     *) return 1 ;;
@@ -34,8 +30,8 @@ repo_of() {    # 대상 검사만 — 이미지 저장소는 하나(mono repo)
 stage_one() {
   local target="$1" tag name dir n
   repo_of "$target" >/dev/null || { echo "[stage_images] 모르는 대상: $target (pipeline·mcp·pipeline-runtime·mcp-runtime·redis)"; return 2; }
-  if [ "$target" = redis ]; then   # 공식 Redis 이미지(compose-redis.yml과 같은 판 — 앱 판과 별개, 이름 그대로 반입)
-    tag=$(sed -n 's/^ *image: *//p' deploy/host/compose/compose-redis.yml | head -n1)   # 판은 compose-redis.yml 한 곳
+  if [ "$target" = redis ]; then   # 공식 Redis 이미지(compose-prd.yml redis와 같은 판 — 앱 판과 별개, 이름 그대로 반입)
+    tag=$(sed -n '/^  redis:/,/image:/s/^ *image: *//p' deploy/host/compose/compose-prd.yml)
     name=redis
   else
     name=$(image_name_of "$target")

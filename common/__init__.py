@@ -13,11 +13,11 @@ from pathlib import Path as _Path
 def _pin():
     """설정 파일 점검 — 설정 파일이 없고 이미지 배치도 아니면(호스트 python·파일 없는 PC) pydantic도 import하지 않고 돌아온다.
     서버에서 파일이 틀리면 SettingsError로 시작 실패(STRICT), local은 경고 뒤 계속(settings.pin_env)."""
-    root = _Path(__file__).resolve().parents[1]  # PC = 저장소 루트 · 이미지 = /app/deploy
+    root = _Path(__file__).resolve().parents[1]  # PC = 저장소 루트 · 이미지 = /app
     run = _os.environ.get("RUN_ENV") or None  # env 남김 — RUN_ENV 신호
     local = root / "settings.yaml"  # settings.LOCAL_FILE과 같은 자리(저장소 루트)
     if not (
-        _os.environ.get("SETTINGS_FILE") or root.name == "deploy" or (run in (None, "local") and local.is_file())
+        _os.environ.get("SETTINGS_FILE") or root.as_posix() == "/app" or (run in (None, "local") and local.is_file())
     ):  # env 남김 — 설정 파일 자리 신호
         return
     import warnings  # python -m common.config.show·pipeline.config·mcp_server.config — 이 import가 먼저 불러 runpy가 내는 경고(동작 무관)

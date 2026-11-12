@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""문서별 flow 러너 — 배치 장벽 없이 문서마다 끝나는 순서대로 흐른다.
+"""문서별 flow 러너 — 배치 장벽 없이 문서마다 끝나는 순서대로 흐른다. 한 번 실행 = e2e(rn-05): ① 사전 점검 → ② 문서 처리 → ③ 적재·검색 확인.
+
+실행 자리(run_env — 한 곳 configure()): dev = data-pipeline 컨테이너 안(SSH 셸 — 명령을 바로 부름) · prd = 서버 호스트(컨테이너마다
+docker exec) · local은 거부(원본 받기의 PC 대역이 없음 — rn-05). ①③은 settings.yaml ops.run_pipeline.steps(기본 켬), 사람이 돌릴 때
+건수는 ops.run_pipeline.run_limit(기본 2, 0 = 전체 — --limit이 덮음). 처음 실패한 단계에서 멈추고 끝 줄 `[판정] 통과|실패 — <단계>`.
 
 0) 대상 목록 — 컨테이너 안 `candidate_pick list`가 EDW FileStorageMap에서 고르고(끝난 문서 빼기·FAQ 먼저) 목록 파일을 쓴다 — 여기는 읽기만.
 1) 대기열 — 앞으로 나올 문서 STAGING_TARGET(기본 20)개를 미리 받아 둔다(컨테이너 `candidate_ready stage` — 받기·중복·거르기). 진행중 문서는 대기 개수에서 제외.
@@ -16,10 +20,11 @@
 4) --skip-done 실행은 pending을 다음 실행 본 흐름에서 다시 시도하며 dead를 본 목록에서 뺀다. 사람이 requeue하면 다시 고른다.
    --seqs만 주거나 --skip-done 없이 실행하면 dead도 처리한다(--seqs와 --skip-done을 함께 주면 같은 제외 규칙 적용).
 5) 종료 코드(pl-18): 0 = 대상 0건·모두 끝 · 1 = 실패 문서 있음 · 75 = 마감 도달(실패 없음) 또는 다른 run_pipeline이 도는 중
-   (잠금 batch_progress/run_pipeline.lock — 사람이 돌린 실행과 새벽 배치가 겹치지 않게) · 2 = 설정 문제.
+   (잠금 batch_progress/run_pipeline.lock — 사람이 돌린 실행과 새벽 배치가 겹치지 않게) · 2 = 설정 문제 · 3 = 사전 점검 또는 검색 확인 실패.
 
 사용: python3 run_pipeline.py [--start-offset N](기본 0) [--staging 20] [--struct-workers 2]
-                  [--filter RFP,proposal](기본 모든 문서 — 이름 키워드로 좁힐 때만) [--limit N](시험: N건만) [--no-cleanup](임시 유지)
+                  [--filter RFP,proposal](기본 모든 문서 — 이름 키워드로 좁힐 때만) [--limit N](기본 run_limit) [--no-cleanup](임시 유지)
+                  [--set 이름=값](설정 한 번 덮기 — 예 --set RUN_PIPELINE_STEPS_VERIFY=false)
 로그: test_space/batch_progress/progress.log · 문서별 파싱 로그 test_space/batch_progress/doc_<seq>.log
 """
 
@@ -44,14 +49,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 # 운영 접속 값·비밀·운영 고정값은 코드에 두지 않고 서버 settings.yaml에서 읽는다(configure() — 시작 때 한 번).
 #   파일: --settings 또는 SETTINGS_FILE, 없으면 <루트>/settings.yaml(루트 = 코드 폴더 자체). 호스트 python에 PyYAML이 있어야 한다(pymssql처럼 —
-#   refactor.md C-09). 필요한 칸이 없으면 칸 경로만 찍고 종료 코드 2(값은 찍지 않음). required.env.run_env가 dev·prd가 아니면 거부(로컬 실행 금지 — CLAUDE.md 3절).
-#   docker exec로 부르는 상주 컨테이너(0번 data-pipeline-0)는 같은 파일을 붙여 읽으므로 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
+#   refactor.md C-09). 필요한 칸이 없으면 칸 경로만 찍고 종료 코드 2(값은 찍지 않음).
+#   prd: docker exec로 부르는 상주 컨테이너(ops.host.pipeline_container)는 같은 파일을 붙여 읽으므로 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
+#   dev(DIRECT): 같은 명령을 이 프로세스가 바로 부른다 — 벌 컨테이너 안(코드 폴더 = 이미지 코드 자리 /app)에서만.
 #   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.run_pipeline.run_pipeline_work_dir(비우면 이 스크립트 옆 test_space/), 결과 공유 폴더는
-#   <루트>/output(compose-<환경>.yml이 컨테이너 /app/output으로 붙이는 원본 그대로).
+#   prd <루트>/output(compose-prd.yml이 컨테이너 /app/output으로 붙이는 원본 그대로), dev 컨테이너 안은 /app/output.
 TEST = PROG = DOCSPACE = DOCFLOW = STAGING = None  # configure()가 채움
-PIPE_C = (
-    "data-pipeline-0"  # docker exec 대상 상주 컨테이너(목록·받기·파싱·게시·구조화·정리) — 새벽 배치는 0번만(compose-<환경>.yml 이름 그대로)
-)
+DIRECT = False  # dev — 명령을 docker exec 없이 바로(configure()가 run_env로 정함)
+PIPE_C = "data-pipeline"  # docker exec 대상 상주 컨테이너 — configure()가 ops.host.pipeline_container로 채움
+MCP_C = "mcp-server"  # ③ 검색 확인 자리(prd — 파이프라인 이미지에는 mcp_server.cli가 없음) — configure()가 ops.host.mcp_container로 채움
 DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.container_cli(없으면 docker, 그것도 없으면 podman)로 채움
 CODE_DIR = None  # --code(설정 배치 모듈 layout.py·이미지 경로 표를 찾을 코드 폴더 — 운영자 폴더에서 돌릴 때, 기본 배치 경로 없음)
 SOURCE_BUCKET = PG_CONTAINER = PG_USER = PG_DB = PG_SCHEMA = None  # staging 파일 이름의 원천 버킷 · 문서 수 세기(psql)
@@ -71,6 +77,7 @@ SETTINGS_REQUIRED = (  # (칸 경로, 무엇에 쓰나) — 없으면 시작 거
     ("common.connections.pg.user", "PostgreSQL 계정 — 문서 수 세기(psql)"),
     ("common.connections.pg.db", "PostgreSQL DB — 문서 수 세기(psql)"),
 )
+DIRECT_SKIP = ("common.host.pg_container", "common.connections.pg.user", "common.connections.pg.db")  # 바로 부르면 psql 대신 앱이 PG에 붙음
 
 
 def _code_root():
@@ -92,8 +99,13 @@ def _inside(seq, sub=""):
 
 
 def _img(name):
-    """컨테이너 안 약속 경로(settings.IMAGE_PATHS 한 곳)."""
+    """명령이 보는 약속 경로(settings.IMAGE_PATHS 한 곳) — dev(DIRECT)도 컨테이너 안이라 같은 자리."""
     return _const(f"image.{name}")
+
+
+def _in_image():
+    """이 코드 폴더가 이미지 코드 자리(/app)인가 — dev는 컨테이너 안에서만 돈다."""
+    return _code_root().resolve() == Path(_const("image.code_root"))
 
 
 @functools.cache
@@ -109,10 +121,6 @@ def _const(key):
         if len(row) >= 4 and row[2] == "const" and row[0] == key:  # 칸이 모자란 줄(손 편집·잘린 사본)은 건너뜀
             return row[3]
     sys.exit(f"run_pipeline: host_settings.tsv에 {key} 없음 — PYTHONPATH=. python deploy/release/gen_host_keys.py로 다시 만들 것")
-
-
-def _app():
-    return _img("code_root").rsplit("/", 1)[0]  # 컨테이너 작업 자리(코드 자리의 부모 — 이미지 WORKDIR)
 
 
 @functools.cache
@@ -144,18 +152,27 @@ def work_dir(doc):
     return Path(work) if work else ROOT / "test_space"
 
 
-def configure(settings_file=None):
-    """서버 settings.yaml을 한 번 읽어 모듈 값(경로·접속)을 채운다 — 문제 목록(빈 목록이면 통과). 값은 찍지 않는다."""
+def configure(settings_file=None, overrides=()):
+    """서버 settings.yaml을 한 번 읽어 모듈 값(경로·접속)을 채운다 — 문제 목록(빈 목록이면 통과). 값은 찍지 않는다.
+    overrides = --set 글자(`RUN_PIPELINE_<칸>=값`) — ops.run_pipeline 칸만 이 실행에서 덮는다."""
     global TEST, PROG, DOCSPACE, DOCFLOW, STAGING, MCP_JOBS_DIR, SOURCE_BUCKET, PG_CONTAINER, PG_USER, PG_DB, PG_SCHEMA
-    global DOCKER, STAGING_TARGET, STAGING_WORKERS, STRUCT_WORKERS, VLM_CAP, LANE_WORKERS, _BACKLOG_SETTING
+    global DOCKER, PIPE_C, MCP_C, STAGING_TARGET, STAGING_WORKERS, STRUCT_WORKERS, VLM_CAP, LANE_WORKERS, _BACKLOG_SETTING, DIRECT
     doc, err = read_settings(settings_file)
     if err:
         return [err]
-    probs = [f"설정 필요: {_host().layout().to_yaml(p)} — {why}" for p, why in SETTINGS_REQUIRED if _host().get(doc, p) in (None, "")]
     run_env = _host().get(doc, "common.run_env")
+    DIRECT = run_env == "dev"
+    skip = DIRECT_SKIP if DIRECT else ()
+    probs = [
+        f"설정 필요: {_host().layout().to_yaml(p)} — {why}"
+        for p, why in SETTINGS_REQUIRED
+        if p not in skip and _host().get(doc, p) in (None, "")
+    ]
     if run_env not in (None, "") and run_env not in ("dev", "prd"):
-        probs.append("required.env.run_env가 dev·prd가 아님 — 서버 전용 러너(로컬 실행 금지, CLAUDE.md 3절)")
-    policy, bad = run_pipeline_policy(doc)
+        probs.append("required.env.run_env가 dev·prd가 아님 — 서버 전용 러너(PC는 원본 받기 대역이 없음 — rn-05, CLAUDE.md 4절)")
+    elif DIRECT and not _in_image():
+        probs.append("dev는 벌 컨테이너 안에서 실행 — ssh -p 802<n> root@<서버> 뒤 cd /app (docs/operations/dev.md A-10)")
+    policy, bad = run_pipeline_policy(doc, overrides)
     probs += bad
     if probs:
         return probs
@@ -166,7 +183,8 @@ def configure(settings_file=None):
     _BACKLOG_SETTING = policy["struct_backlog"]
     TEST = work_dir(doc)
     PROG = TEST / "batch_progress"
-    DOCSPACE = _root() / "output"  # 컨테이너 /app/output 공유 볼륨의 원본(compose-<환경>.yml과 같은 자리)
+    # prd: 컨테이너 /app/output 공유 볼륨의 원본(compose-prd.yml과 같은 자리) · dev: 컨테이너 안 그 자리
+    DOCSPACE = Path(_const("image.output_root")) if DIRECT else _root() / "output"
     DOCFLOW = DOCSPACE / "_docflow"  # 문서별 임시 디렉토리(종료 시 삭제)
     STAGING = DOCSPACE / "_staging"  # SOURCE_STAGING 대기열 저장소
     DOCKER = (
@@ -177,6 +195,8 @@ def configure(settings_file=None):
     MCP_JOBS_DIR = DOCSPACE / "_mcp_parse" / "jobs"  # mcp-data-parsing의 작업 폴더(같은 결과 폴더 — run_mcp_parsing.JOBS_DIR)
     SOURCE_BUCKET = _host().get(doc, "pipeline.connections.rdb.bucket")
     PG_CONTAINER = _host().get(doc, "common.host.pg_container")
+    PIPE_C = _host().get(doc, "common.host.pipeline_container") or PIPE_C
+    MCP_C = _host().get(doc, "common.host.mcp_container") or MCP_C
     PG_USER, PG_DB = _host().get(doc, "common.connections.pg.user"), _host().get(doc, "common.connections.pg.db")
     PG_SCHEMA = _host().get(doc, "common.connections.pg.db_schema") or "data_parsing"  # 앱 설정 모델 기본값과 같음
     return []
@@ -223,12 +243,13 @@ DOC_MARK = "RUN_PIPELINE_DOC"  # 문서 표지 env(설정 칸 아님) — 고아
 _ERROR_NOTED: set = set()  # 호스트만 DLQ 기록 — 한 실행의 문서 번호마다 실패 CLI를 한 번만 호출
 
 
-def pexec(script, seq=None):
-    """컨테이너 명령 한 줄(목록·받기·분류·파싱·게시·구조화·정리 모두 여기서) — docker exec · umask · 작업 폴더 · PYTHONPATH ·
-    라이브러리 env가 모두 같다. seq를 주면 그 문서 표지 env(DOC_MARK)도 붙인다(실패·시간 초과 뒤 sweep_cmd가 끔).
+def pexec(script, seq=None, box=None):
+    """컨테이너 명령 한 줄(목록·받기·분류·파싱·게시·구조화·정리 모두 여기서) — docker exec(dev는 이미 컨테이너 안이라 bash만) · umask ·
+    작업 폴더 · PYTHONPATH · 라이브러리 env가 모두 같다. seq를 주면 그 문서 표지 env(DOC_MARK)도 붙인다(실패·시간 초과 뒤 sweep_cmd가 끔).
     export라 script 안 여러 python(구조화 → 적재)에 같은 env가 간다. script는 통째로 따옴표(shlex) — 안의 따옴표도 그대로."""
     env = f"PYTHONPATH={_img('code_root')} {LIB_ENV}" + (f" {DOC_MARK}={_inside(seq)}" if seq is not None else "")
-    return f"{DOCKER} exec {PIPE_C} bash -c " + shlex.quote(f"umask 0002 && cd {_app()} && export {env} && {script}")
+    run = "bash -c " if DIRECT else f"{DOCKER} exec {box or PIPE_C} bash -c "
+    return run + shlex.quote(f"umask 0002 && cd {_img('code_root')} && export {env} && {script}")
 
 
 def sets(*pairs):
@@ -358,6 +379,10 @@ RUN_PIPELINE_DEFAULTS = {
     "embed_concurrency": 6,
     "embed_batch": 32,
     "bm25_threads": 3,
+    # e2e 단계(rn-05) — ① 사전 점검 · ③ 적재·검색 확인 켜기, 사람이 돌릴 때 건수(0 = 전체 — 새벽 배치는 --limit 0)
+    "steps_precheck": True,
+    "steps_verify": True,
+    "run_limit": 2,
 }
 POLICY = dict(RUN_PIPELINE_DEFAULTS)  # configure()가 settings.yaml 값으로 바꿈
 LANES = ("light", "medium", "vlm")
@@ -439,11 +464,20 @@ def pick_lane(own, shared, queues, inflight, vlm_cap):
     return None
 
 
-def run_pipeline_policy(doc):
-    """settings.yaml ops.run_pipeline(모델 pipeline.host.run_pipeline) → (값, 문제 목록). 비운 칸은 RUN_PIPELINE_DEFAULTS. 글자 그대로 읽으므로(BaseLoader) 정수로 바꿈."""
+def run_pipeline_policy(doc, overrides=()):
+    """settings.yaml ops.run_pipeline(모델 pipeline.host.run_pipeline) → (값, 문제 목록). 비운 칸은 RUN_PIPELINE_DEFAULTS. 글자 그대로 읽으므로(BaseLoader) 정수로 바꿈.
+    overrides(--set `RUN_PIPELINE_<칸>=값` — 칸 이름은 설정 모델의 옛 env 이름과 같음)가 파일 값을 이 실행에서만 덮는다."""
     sec = _host().get(doc, "pipeline.host.run_pipeline")
-    sec = sec if isinstance(sec, dict) else {}
+    sec = dict(sec) if isinstance(sec, dict) else {}
     vals, probs = {}, []
+    for o in overrides:
+        name, eq, v = o.partition("=")
+        up = name.strip().upper()
+        k = up[len("RUN_PIPELINE_") :].lower()
+        if not eq or not up.startswith("RUN_PIPELINE_") or k not in RUN_PIPELINE_DEFAULTS:
+            probs.append(f"--set {name} — RUN_PIPELINE_<칸>=값만(칸: {', '.join(k.upper() for k in RUN_PIPELINE_DEFAULTS)})")
+            continue
+        sec[k] = v.strip()
     where = lambda k: _host().layout().to_yaml(f"pipeline.host.run_pipeline.{k}")  # 안내 글자에 파일 자리
     for k, d in RUN_PIPELINE_DEFAULTS.items():
         v = sec.get(k)
@@ -487,7 +521,79 @@ def stack_check():
     rc, _, err = sh(pexec("python -m pipeline.cli show-stack"), timeout=120)
     if rc != 0:
         print(f"[중단] 엔진 구성 파일을 읽지 못함(종료 코드 {rc}) — {(err or '').strip()[-200:]}", flush=True)
-        raise SystemExit(2)  # 설정 문제 = 2(실패 문서 1과 가름)
+        raise SystemExit(verdict(2, "엔진 구성 파일"))  # 설정 문제 = 2(실패 문서 1과 가름)
+
+
+# ① 사전 점검 — (이름, 컨테이너 명령, 시간 제한 초), 이 순서로 처음 실패에서 멈춤(host_ctl.sh check와 같은 점검 — 검색 MCP 응답은 ③에서).
+#   배포 시험 판정은 종료 코드가 아니라 알려진 실패 목록으로(selftest_gate.sh {gate} — prd 이미지 /opt/sbl/docker, dev는 코드 폴더 deploy/release).
+PRECHECK = (
+    ("설정", "python -m common.check.checker env", 300),
+    ("모델 연결", "python -m common.check.checker ping", 300),
+    ("DB 판", "python -m common.store.db.dbtool check --target all", 300),
+    ("배포 시험", "bash {gate} python -m pipeline.cli selftest", 3600),
+)
+
+
+def _step_fail(step, name, rc, out, err):
+    """점검 하나 실패 — 그 명령 출력 끝(최대 20줄)을 진행 기록에 남기고 그 이름을 돌려줌."""
+    log(f"[{step}] {name} — 실패(종료 코드 {rc})")
+    for ln in f"{out or ''}\n{err or ''}".strip().splitlines()[-20:]:
+        log(f"  {ln}")
+    return name
+
+
+def precheck():
+    """① 사전 점검 → 실패한 점검 이름(통과면 None)."""
+    gate = f"{_img('code_root')}/deploy/release/selftest_gate.sh" if DIRECT else f"{_const('image.docker_root')}/selftest_gate.sh"
+    for name, cmd, t in PRECHECK:
+        rc, out, err = sh(pexec(cmd.format(gate=gate)), timeout=t)
+        if rc != 0:
+            return _step_fail("점검", name, rc, out, err)
+        log(f"[점검] {name} — 통과")
+    return None
+
+
+def verify(rows, done_keys, since):
+    """③ 적재·검색 확인 → 실패한 확인 이름(통과면 None). 이번 실행에서 적재까지 끝난 문서 하나로 — 실행 기록(applog: since 뒤
+    pipe_run 1행+ · 그 문서 pipe_event 1행+) → 그 이름(확장자 뺌)을 질문으로 원천 DB 검색(search_ask, 근거 1건 이상) →
+    검색 MCP 바깥 호출(mcp_smoke — 주소 dev.search_ui.search_ui_mcp_url · 토큰 required.tokens.mcp_token). 개발 벌(DIRECT)은 DB 검색까지 —
+    운영 묶음 검색 MCP는 DEV 원천을 검색하지 않는다(op-17)."""
+    row = next((rows[s] for s in rows if rows[s]["s3_key"] in done_keys), None)
+    if row is None:
+        log("[확인] 적재 — 이번 실행에서 적재까지 끝난 문서 0건")
+        return "적재"
+    name = _doc_name(row)
+    stem = Path(name).stem
+    src, q = shlex.quote(str(row["source_system"])), shlex.quote(stem)
+    log(f"[확인] 적재 — 통과(원천 {row['source_system']} · 질문 {stem})")
+    t, doc = f"to_timestamp({since:.0f})", "'" + name.replace("'", "''") + "'"
+    rc, out, err = _psql(
+        f"SELECT (SELECT count(*) FROM applog.pipe_run WHERE started_at >= {t}),"
+        f" (SELECT count(*) FROM applog.pipe_event WHERE doc_id = {doc} AND ts_start >= {t})"
+    )
+    try:
+        runs, events = (int(x) for x in (out or "").strip().splitlines()[-1].split("|")) if rc == 0 else (0, 0)
+    except (ValueError, IndexError):
+        runs = events = 0
+    if runs < 1 or events < 1:
+        return _step_fail("확인", f"실행 기록(pipe_run {runs}행 · 그 문서 pipe_event {events}행)", rc or 1, out, err)
+    log(f"[확인] 실행 기록 — 통과(pipe_run {runs}행 · 그 문서 pipe_event {events}행)")
+    rc, out, err = sh(pexec(f"python -m mcp_server.cli.search_ask ask --source {src} --k 3 --q={q} --json", box=MCP_C), timeout=300)
+    try:
+        n = len(json.loads((out or "")[(out or "").index("{") :]).get("evidence") or []) if rc == 0 else 0
+    except ValueError:
+        n = 0
+    if n < 1:
+        return _step_fail("확인", "DB 검색", rc or 1, out, err)
+    log(f"[확인] DB 검색 — 통과(근거 {n}건)")
+    if DIRECT:
+        log("[확인] 검색 MCP — 건너뜀(개발 벌 — 운영 묶음 MCP는 DEV 원천을 검색하지 않음)")
+        return None
+    rc, out, err = sh(pexec(f"python -m mcp_server.cli.mcp_smoke --source {src} --q={q}", box=MCP_C), timeout=300)
+    if rc != 0:
+        return _step_fail("확인", "검색 MCP", rc, out, err)
+    log("[확인] 검색 MCP — 통과")
+    return None
 
 
 def sh(cmd, timeout=1800, log=None):
@@ -618,9 +724,17 @@ def classify_doc(seq, row, cache=None):
 
 DEADLINE_AT = None  # --deadline(새벽 배치 마감) — 이 시각(epoch 초)이 지나면 새 문서를 받기 시작하지 않음
 _deadline_hit = threading.Event()  # 마감으로 남은 문서를 받지 않았음 → 종료 코드 75
-# 종료 코드(규칙: pl-18): 대상 0건·모두 끝 = 0, 실패 있음 = 1, 마감 도달(실패 없음)·다른 run_pipeline이 도는 중 = 75
+# 종료 코드(규칙: pl-18): 대상 0건·모두 끝 = 0, 실패 있음 = 1, 마감 도달(실패 없음)·다른 run_pipeline이 도는 중 = 75,
+# ① 사전 점검·③ 적재·검색 확인 실패 = 3(rn-05)
 EXIT_FAIL = 1
+EXIT_CHECK = 3
 EXIT_DEADLINE = 75
+
+
+def verdict(rc, why=""):
+    """끝 줄 판정 — 사람이 돌린 e2e·새벽 배치 모두 이 줄 하나로 본다(rn-05). rc를 그대로 돌려줌."""
+    log(f"[판정] {'통과' if rc == 0 else '멈춤' if rc == EXIT_DEADLINE else '실패'}{' — ' + why if why else ''} · 종료 코드 {rc}")
+    return rc
 
 
 def deadline_at(hhmm, now=None):
@@ -870,7 +984,13 @@ PG_SOURCES = (
 )  # 원천 스키마 <스키마>_<원천>(search_tables.SOURCES와 같음 — 호스트 python은 common을 못 읽음)
 
 
+# dev 컨테이너 안에는 psql·docker가 없어 앱의 PG 접속(required.pg)으로 같은 꼴(psql -At: 칸은 |, 행은 줄)을 찍는다.
+PG_PY = "import sys; from common.store.pg import PG, conf; [print('|'.join(map(str, r))) for r in PG(conf()).cn.execute(sys.argv[1]).fetchall()]"
+
+
 def _psql(sql):
+    if DIRECT:
+        return sh(pexec(f"python -c {shlex.quote(PG_PY)} {shlex.quote(sql)}"), timeout=60)
     return sh(
         f"{DOCKER} exec {PG_CONTAINER} psql -U {PG_USER} -d {PG_DB} -Atc {shlex.quote(sql)}", timeout=60
     )  # 설정 칸(PG 컨테이너·DB·스키마)
@@ -970,7 +1090,7 @@ def dlq_state():
 
 def run_flow(rows, order):
     """받기 → 파싱 → silver 게시 → gold를 한 번 실행하고 결과를 반환."""
-    completed, failed_keys = set(), set()
+    completed, failed_keys, loaded = set(), set(), set()  # loaded = gold까지 끝난 문서(③ 확인 대상 — 건너뜀 제외)
     t_all = time.time()
     tf = threading.Thread(target=downloader, args=(rows, order), daemon=True, name="downloader")
     tf.start()
@@ -1041,6 +1161,8 @@ def run_flow(rows, order):
         with _flow_lock:  # 집계를 기록(mark — 디스크 가득이면 예외)보다 먼저
             cnt["ok" if ok else "gold_fail"] += 1
             (completed if ok else failed_keys).add(row["s3_key"])
+            if ok:
+                loaded.add(row["s3_key"])
             report = ok and cnt["ok"] % 5 == 0
         if not ok:
             if rc == 3:
@@ -1149,7 +1271,7 @@ def run_flow(rows, order):
         log(f"[중단] 종료 대기 시간 초과 — 남은 스레드: {', '.join(alive)}")
     cnt["thread_err"] += _STAGE_ERR[0]
     failed_keys.update(rows[i]["s3_key"] for i in _STAGE_FAILED)
-    cnt.update(completed=completed, failed_keys=failed_keys, deadline=_deadline_hit.is_set(), stuck=bool(alive))
+    cnt.update(completed=completed, loaded=loaded, failed_keys=failed_keys, deadline=_deadline_hit.is_set(), stuck=bool(alive))
     failed = len(failed_keys)
     log(
         f"=== flow 끝: 완료 {cnt['ok']} · 건너뜀 {cnt['skipped']} · 실패 {failed} "
@@ -1176,7 +1298,9 @@ def main():
         help="구조화 스레드 수 — 기본 settings.yaml ops.run_pipeline.structure.structure_workers(2)",
     )
     ap.add_argument("--filter", default="", help="원본 파일 이름 키워드(쉼표 — 하나라도 들면)로 좁힘 — 기본 모든 문서")
-    ap.add_argument("--limit", type=int, default=0, help="시험 — 이 개수만 처리")
+    ap.add_argument(
+        "--limit", type=int, default=None, help="이 개수만 처리 — 기본 settings.yaml ops.run_pipeline.run_limit(2), 0 = 전체(새벽 배치)"
+    )
     ap.add_argument("--max-docs", type=int, default=0, help="새벽 배치 — 끝난 문서를 뺀 뒤 앞에서 이 개수만(0 = 상한 없음, 사용자 11-02)")
     ap.add_argument("--deadline", default="", help="새벽 배치 마감(HH:MM) — 지나면 새 문서를 받기 시작하지 않음(사용자 11-02)")
     ap.add_argument("--seqs", default="", help="임의 문서 집합(쉼표 seq 목록) — 지정 시 연속 범위 대신 이 목록만 처리")
@@ -1198,16 +1322,26 @@ def main():
         default=None,
         help="코드 폴더(설정 배치 모듈·이미지 경로 표를 찾음 — 기본: 이 스크립트가 든 코드 폴더 · op-10, 기본 배치 경로 없음 — 사용자 11-02)",
     )
+    ap.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="이름=값",
+        help="ops.run_pipeline 칸 한 번 덮기 — 이름은 RUN_PIPELINE_<칸>(예 RUN_PIPELINE_STEPS_VERIFY=false · RUN_PIPELINE_RUN_LIMIT=5)",
+    )
     a = ap.parse_args()
     if not re.fullmatch(r"[\w,.\-]*", a.filter) or not re.fullmatch(r"[0-9,]*", a.seqs):  # 컨테이너 명령 줄에 그대로 들어감
         print("[중단] --filter는 글자·숫자·_ , . -만(띄어쓰기 없음), --seqs는 숫자와 쉼표만", flush=True)
         raise SystemExit(2)
     CODE_DIR = Path(a.code) if a.code else None
-    bad = configure(a.settings)
+    bad = configure(a.settings, a.set)
     if bad:
         for msg in bad:
             print(f"[중단] {msg}", flush=True)
+        print("[판정] 실패 — 설정 · 종료 코드 2", flush=True)  # 설정을 못 읽어 progress.log 자리도 모름 — 화면에만
         raise SystemExit(2)
+    if a.limit is None:
+        a.limit = POLICY["run_limit"]
     NO_CLEANUP = a.no_cleanup
     if a.cpu_gate is not None:
         POLICY["cpu_gate"] = a.cpu_gate
@@ -1221,8 +1355,7 @@ def main():
     PROG.mkdir(parents=True, exist_ok=True)
     _LOCK = take_lock(PROG / "run_pipeline.lock")
     if _LOCK is None:
-        log(f"다른 run_pipeline이 도는 중({PROG / 'run_pipeline.lock'}) — 종료 코드 {EXIT_DEADLINE}, 다음 실행에서 다시")
-        return EXIT_DEADLINE
+        return verdict(EXIT_DEADLINE, f"다른 run_pipeline이 도는 중({PROG / 'run_pipeline.lock'}) — 다음 실행에서 다시")
     if not MCP_JOBS_DIR.is_dir():
         log(f"[안내] MCP 업로드 작업 폴더 {MCP_JOBS_DIR} 없음 — MCP 업로드 감지(medium 레인 양보) 꺼짐")
     os.umask(0)  # 컨테이너( uid 10001 rag )가 /app/output(=_docflow/<seq>)에 쓰려면 777 필요
@@ -1230,6 +1363,10 @@ def main():
     DOCFLOW.mkdir(mode=0o777, parents=True, exist_ok=True)
     stack_check()
     t_all = time.time()
+    if POLICY["steps_precheck"]:
+        bad_check = precheck()
+        if bad_check:
+            return verdict(EXIT_CHECK, f"① 사전 점검 {bad_check}")
     before = dlq_state()
     if before is None:
         log("[DLQ] 상태 못 읽음 — 단계별 결과로 진행(applog 판 0005·접속 확인)")
@@ -1239,7 +1376,7 @@ def main():
         )
     picked = pick_targets(a)
     if picked is None:
-        return EXIT_FAIL
+        return verdict(EXIT_FAIL, "② 문서 처리 — 대상 목록")
     rows, order, total, start = picked
     log(
         f"=== 문서별 flow 시작: offset={start} · 남은 {total - start}건 · 레인(전담/공유) "
@@ -1248,7 +1385,7 @@ def main():
     )
     if not order:
         log("처리할 문서 없음 — 종료")
-        return 0
+        return verdict(0, "대상 0건(③ 검색 확인 안 함)")
     t_main = time.time()
     main_flow = run_flow(rows, order)
     main_elapsed = time.time() - t_main
@@ -1272,7 +1409,20 @@ def main():
         f"{dlq_summary} · "
         f"{(time.time() - t_all) / 60:.1f}분 · 문서당 평균 {main_elapsed / 60 / main_done if main_done else 0:.1f}분 · PG doc={nd} chunk={nc} · 종료 코드 {rc} ==="
     )
-    return rc
+    return finish(rc, main_flow, rows, t_all)
+
+
+def finish(rc, flow, rows, since):
+    """② 뒤 끝 판정 — 실패 문서면 1(③ 안 함) · 적재 0건(마감·모두 건너뜀)이면 rc 그대로(③ 안 함) · ③ 실패면 3 · 그 밖은 rc 그대로."""
+    if rc == EXIT_FAIL:
+        return verdict(rc, f"② 문서 처리 — 실패 {len(flow['failed_keys'])}건")
+    if not flow["loaded"]:  # 마감에 걸렸거나 모두 건너뜀(중복·DRM·암호 — pl-24) — 실패 아님, 확인할 문서 없음
+        return verdict(rc, ("마감 도달" if rc == EXIT_DEADLINE else "모두 건너뜀") + "(적재 0건 — ③ 안 함)")
+    if POLICY["steps_verify"]:
+        bad_check = verify(rows, flow["loaded"], since)
+        if bad_check:
+            return verdict(EXIT_CHECK, f"③ 적재·검색 확인 {bad_check}")
+    return verdict(rc, "마감 도달" if rc == EXIT_DEADLINE else "")
 
 
 if __name__ == "__main__":

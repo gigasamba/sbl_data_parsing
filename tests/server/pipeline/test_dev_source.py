@@ -67,6 +67,7 @@ UP = [
 ]
 
 
+@COMMON.env(RUN_ENV="dev")  # DEV 원천은 개발 서버·PC만(prd 거부는 test_prd_refuses_dev)
 def test_up_dev_schemas():
     for systems, in_db, want in UP:
         calls = []
@@ -121,6 +122,7 @@ def test_prd_refuses_dev():
         assert dbtool.dev_from_settings() == ["dev_1", "dev_3"] and ST.dev_sources("ai", q) == ["dev_2"]
 
 
+@COMMON.env(RUN_ENV="dev")  # DEV 원천은 개발 서버·PC만(prd 거부는 test_prd_refuses_dev)
 def test_up_sql_dev():
     """--sql: 설정의 DEV 원천 스키마를 빈 스키마부터(판 기록 표·doc_id 공용 시퀀스) — 고정 5벌 부분은 DEV가 없을 때와 글자 그대로.
     DB에 있는 다른 _dev_*는 DB를 읽어야 알아 `-- 수동:` 줄로."""

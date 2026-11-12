@@ -142,7 +142,7 @@ sequenceDiagram
         R->>C: python -m pipeline.load.publish_parse_result --apply
         R->>C: gold_bundle → pgvector_load load
     end
-    R-->>S: 종료 코드 0 · 1 · 2 · 75
+    R-->>S: 종료 코드(pl-18)
 ```
 
 `run_pipeline.py`는 호스트 python으로 돈다(pydantic 없음 — 설정 읽기는 `deploy/host/scripts/settings_to_env.py`를 파일로 읽어 쓰고, 그 모듈이 `common/config/layout.py`를 파일로 읽는다). 컨테이너 안 명령은 모두 상주 컨테이너 `data-pipeline`에 `docker exec`(서버는 podman)로 보낸다. 문서별 값(결과 폴더, VLM 동시 수 등)은 환경변수가 아니라 `--set 이름=값`으로 넘기고, 받는 쪽 진입 모듈이 `common.config.setarg.apply()`로 읽는다.
@@ -182,11 +182,11 @@ flowchart TD
 | 정리 | `deploy.host.scripts.run_pipeline.drop_temp()`·`deploy.host.scripts.run_pipeline.sweep_cmd()` | 문서 임시 폴더 삭제. 파싱 실패·시간 초과면 그 문서 표지(`RUN_PIPELINE_DOC`)를 가진 컨테이너 안 프로세스를 끔 | — |
 | MCP 양보 | `deploy.host.scripts.run_pipeline._mcp_pause_monitor()`·`deploy.host.scripts.run_pipeline.mcp_busy()` | `_mcp_parse/jobs/`가 30초 안에 바뀌면 medium 전담 워커가 쉼 | — |
 
-종료 코드(정본 [ops.md#pl-18](../prd/ops.md#pl-18)): 0 = 끝남 또는 대상 0건 · 1 = 실패 문서 있음 · 75 = 마감 도달 또는 다른 `run_pipeline`가 도는 중 · 2 = 설정 문제. 레인·대기열 규칙: [ops.md#rn-01](../prd/ops.md#rn-01)~[rn-04](../prd/ops.md#rn-04).
+종료 코드: [ops.md#pl-18](../prd/ops.md#pl-18). 레인·대기열 규칙: [ops.md#rn-01](../prd/ops.md#rn-01)~[rn-04](../prd/ops.md#rn-04).
 
 ### 2-2. PC: 명령을 차례로 직접
 
-PC에서는 `run_pipeline.py`를 돌리지 않는다(운영 EDW·Object Storage에 접속함). README §4-4의 ①~⑥ 순서로 같은 모듈을 직접 부른다.
+PC에서는 `run_pipeline.py`를 돌리지 않는다(운영 EDW·Object Storage에 접속함). [local.md 5](../operations/local.md#5-문서-몇-건-돌리기파싱--구조화--db-표--적재--검색) 순서로 같은 모듈을 직접 부른다.
 
 | 순서 | 명령 | 이 문서의 절 |
 |---|---|---|
@@ -497,23 +497,22 @@ flowchart TD
 
 ### 7-1. 설정
 
-| 무엇 | 파일·함수 | 하는 일 |
-|---|---|---|
-| 설정 객체 | `common.config.settings.cfg()` · `pipeline.config.cfg()`·`pipeline.config.stack()` · `mcp_server.config.cfg()` | `settings.yaml` 하나를 읽은 객체. 코드는 환경변수가 아니라 이 객체로 읽는다. 파일 자리: `SETTINGS_FILE` > (local이면) 저장소 루트 `settings.yaml` |
-| 시작 관문 | `common.config.settings.require_run_env()`·`common.config.settings.pin_env()` | `run_env`가 없거나 서버인데 설정이 틀리면 시작 거부 |
-| 한 번만 덮기 | `common.config.setarg.apply()` | `--set 이름=값`을 덮기 파일로 만들어 자기와 자식 프로세스에 넘김(비밀 칸은 거부) |
-| 자식에 넘기기 | `common.config.settings.child_env()`·`common.config.settings.put()` | 자식 프로세스에 설정 값을 덮기 파일로 넘김(`parse_module`이 `VLM_CONCURRENCY`·`DOC_DIR` 등에 씀) |
-| 이미지 약속 경로 | `common.config.settings.IMAGE_PATHS` → `deploy/host/scripts/host_settings.tsv` | `/app/output`·`/app/deploy`·`/data/docs`·`/app/output/prepared` — 호스트 쪽 `run_pipeline.py`는 `host_settings.tsv`로 읽음 |
-| 호스트 셸 | `deploy/host/scripts/load_settings.sh`·`settings_to_env.py` | `load_settings`가 호스트 칸(이미지·`RAG_OUT`·`NIGHTLY_*`)을 셸 변수로 |
+규칙(설정 객체·`--set`·자식에 넘기기·`run_env`)은 [CLAUDE.md §3](../../CLAUDE.md), 칸 설명은 [settings.md](../operations/settings.md), 요건은 [ops-settings.md](../prd/ops-settings.md).
 
-키 설명: [operations/env-guide.md](../operations/env-guide.md), 요건 [ops-settings.md](../prd/ops-settings.md).
+| 무엇 | 파일·함수 |
+|---|---|
+| 설정 객체 | `common.config.settings.cfg()` · `pipeline.config.cfg()`·`pipeline.config.stack()` · `mcp_server.config.cfg()` |
+| 시작 관문 | `common.config.settings.require_run_env()`·`common.config.settings.pin_env()` |
+| 한 번만 덮기 · 자식에 넘기기 | `common.config.setarg.apply()` · `common.config.settings.child_env()`·`put()`(`parse_module`이 `VLM_CONCURRENCY`·`DOC_DIR` 등에 씀) |
+| 이미지 약속 경로 | `common.config.settings.IMAGE_PATHS` → `deploy/host/scripts/host_settings.tsv`(호스트 `run_pipeline.py`가 읽음) |
+| 호스트 셸 | `deploy/host/scripts/load_settings.sh`·`settings_to_env.py`(호스트 칸을 셸 변수로) |
 
 ### 7-2. 지문(핑거프린트)과 캐시 — 무엇이 재사용을 정하나
 
+핸드오프 지문(`FINGERPRINT`)·레이어 코드 지문(`code_fp`)의 대상·규칙은 [CLAUDE.md §4](../../CLAUDE.md), 지금 값은 [test.md#e2-02](../prd/test.md#e2-02). 기록 자리: `FINGERPRINT`는 `_rep/_DONE.json`(인계 형식 판 `CONTRACT`가 끝 표시를 새로 쓸지 정함), `code_fp`는 `rep.post.code_fp`(p1)·`applog.pipe_run.code_fp`(모든 층). 아래는 그 밖의 재사용 열쇠다.
+
 | 이름 | 파일·함수 | 계산 대상 | 지금 쓰는 곳 |
 |---|---|---|---|
-| `FINGERPRINT`·`CONTRACT` | `common/core/fingerprint.py` | 핸드오프 파일(`core/contract.py`·`repfmt.py`·`terms.py`·`text.py`) 내용 · 인계 형식 판(2) | `_rep/_DONE.json`에 기록. `CONTRACT`는 끝 표시를 새로 쓸지 판정에 씀 |
-| `code_fp(층)` | `common.core.artifacts.code_fp()`(`LAYER_CODE`) | 층(p0 엔진·parse_engines · p1 represent·figures · s 구조화 · r 검색) 파일 + 그 파일이 import하는 `common` 모듈. 층 파일이 import하는 pipeline 파일(`pipeline/config.py`·`shared/raw_cache.py` 등)도 층 목록에 적는다(실행 기록 `runtrace.py`만 뺌 — `tests/server/common/test_code_fp.py`가 확인) | `rep.post.code_fp`(p1), `applog.pipe_run.code_fp`(모든 층)에 기록 |
 | `engine_code_fp`·`p0_key` | `pipeline.transform.parse.parse_engines.engine_code_fp()`·`pipeline.transform.parse.parse_engines.p0_key()` | 엔진 폴더 + `_common` · (원본 sha, 엔진 판, 엔진 코드 지문) | `runs.jsonl`·결과 출처에 기록(엔진 결과를 건너뛰지는 않음) |
 | 쪽 VLM 열쇠 `det_key` | `pipeline.shared.vlmcall.det_key()` | 원본 sha·쪽·DPI·긴 변·회전·모델·지시서 id | 같으면 VLM을 다시 안 부름(VLM 엔진·쪽 VLM 후보정·pptx 공통) |
 | 그림·첨부 P0 경로 | `pipeline.shared.raw_cache.raw_vlm_path()`·`pipeline.shared.raw_cache.raw_engine_path()` | 이미지 sha·모델·지시서 id · 첨부 sha·엔진@판 | 같으면 다시 안 부름 |
@@ -522,21 +521,14 @@ flowchart TD
 | 끝난 문서 | `pipeline.shared.gold_docs.done_keys()` | 원천 스키마 `doc` 행의 원본 키(`file_path`) | 문서 단위로 다시 파싱 안 함(`run_pipeline --skip-done`, `candidate_pick.done_keys`) |
 | 중간 캐시 정리 | `pipeline.transform.parse.parse_engines.purge_caches()` | `_reread_p3/_vlm_cache`·`_agent/_vlm_cache`·`signals` | 합계가 `tuning.extract.cache.parse_cache_max_gb`(5GB)를 넘으면 오래된 것부터 지움(parse_engines 시작 때) |
 
-공용·레이어 파일을 고칠 때의 규칙과 지금 기준값은 [CLAUDE.md §4](../../CLAUDE.md)와 [test.md#e2-02](../prd/test.md#e2-02)에 있다.
-
 ### 7-3. 실행 기록(로그)
+
+DB 로그(`applog` 표 — 실행·문서×단계·MCP 감사·적재 안 된 문서·DLQ)와 JSON 줄 로그는 [ops.md#op-01](../prd/ops.md#op-01), 칸은 [db_schema.md §6](db_schema.md#6-applog--로그-저장소-pgvector-pg-스키마-applog). 실행 기록(`pipeline.shared.runtrace`)은 `pipeline.cli parse`에서만 켠다. 호스트 run_pipeline만 파일에 따로 남긴다.
 
 | 무엇 | 파일·함수 | 어디에 |
 |---|---|---|
-| 실행 1건 | `pipeline.shared.runtrace.run()`·`pipeline.shared.runtrace.Progress` | `applog.pipe_run`(시작·끝) + 60초마다 진행 행. `pipeline.cli parse`에서만 켬 |
-| 문서×단계 | `common.core.span.span()` | `applog.pipe_event` 한 행(`extract.plan`·`extract.parse`·`transform.represent`·`transform.figures`·`embed.bundle`·`proc.run` 등). run_id가 없으면 아무것도 안 함 |
-| 보내기 | `common/store/logsink.py` | 메모리 큐 → 배치 INSERT(`ops.log.log_db_enabled`). DB가 안 되면 `output/logs/<날짜>_<pid>.jsonl`(`paths.LOG_DIR`)에 대신 씀 |
-| JSON 로그 | `common/core/jsonlog.py` | run_id·span_id 문맥, 비밀값 가림 |
 | run_pipeline 진행 | `deploy.host.scripts.run_pipeline.log()`·`deploy.host.scripts.run_pipeline.mark()`·`deploy.host.scripts.run_pipeline.depth()` | `<작업 폴더>/batch_progress/progress.log`·`doc_<seq>.log`·`queue_depth.jsonl` · 받기 출력은 문서 폴더 `_docflow/<seq>/stage.log`(실패하면 끝 100자를 progress.log에 — 문서가 끝나면 폴더째 지움) |
 | 문서별 로그 | `deploy.host.scripts.run_pipeline.struct_cmd()`·`deploy.host.scripts.run_pipeline.publish_cmd()` | `_docflow/<seq>/structure.log`·`publish.log`(문서 임시 폴더와 함께 지워짐) |
-| 분석 도구 | `pipeline/tools/perf_report.py` | 성능 행(applog.pipe_event) 요약 |
-
-요건: [ops.md#op-01](../prd/ops.md#op-01).
 
 ### 7-4. 출력 폴더 모양(서버)
 
@@ -589,7 +581,7 @@ flowchart TD
 
 | 파일·함수 | 하는 일 |
 |---|---|
-| `common.ai.guard.require_internal()`·`common.ai.guard.precheck()`·`common.ai.guard.spend_reserve()` | 주소가 내부망(사설 IP·회사 접미사 등)이 아니면 거부. 외부 허용은 `dev.models.<역할>.allow_external`(`LLM_ALLOW_EXTERNAL`·`VLM_ALLOW_EXTERNAL`·`EMBED_ALLOW_EXTERNAL`)이 켜지고 `run_env`가 정확히 local일 때만. 리다이렉트로 밖에 나가는 것도 막음. 하루 지출 장부로 예산을 미리 떼고 정산 |
+| `common.ai.guard.require_internal()`·`common.ai.guard.precheck()`·`common.ai.guard.spend_reserve()` | 내부망이 아닌 주소 거부(리다이렉트로 밖에 나가는 것도), 외부 허용 확인, 하루 지출 장부로 예산을 미리 떼고 정산 — 규칙은 [CLAUDE.md §7](../../CLAUDE.md) |
 | `common.ai.llm.chat()`·`common.ai.llm.complete()` | OpenAI 호환 호출, 응답 캐시, 가짜 LLM(`dev.fake_llm`, local만), 빈 응답 한 번 재요청, 모델 서버 '다운' 판정(`tuning.common.models.transport.*`). VLM은 `pipeline.shared.vlmcall.ask()`만 이 함수를 부름(§4-2) |
 | `common.ai.embed.embed_texts()` | 문서 청크('passage')와 질문('query')을 같은 모델·접두·정규화로, 질문은 프로세스 안 LRU(2048개)로 다시 씀 |
 | `common/ai/agent_prompts.py` | `resources/prompts/**` 지시서 읽기(글자 해시가 캐시 열쇠에 들어감) |

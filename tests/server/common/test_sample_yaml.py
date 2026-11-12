@@ -23,7 +23,7 @@ def _get(obj, path):
 
 
 def _code():
-    """앱 코드 글자 — 이 이미지에 있는 폴더만. 코드 루트는 DEPLOY_ROOT(PC = 저장소 루트, 이미지 = /app/deploy — PROJ_ROOT는 이미지에서 /app이라 코드가 없음)."""
+    """앱 코드 글자 — 이 이미지에 있는 폴더만. 코드 루트는 DEPLOY_ROOT(PC = 저장소 루트, 이미지 = /app — PROJ_ROOT와 같음)."""
     for top in ("common", "pipeline", "mcp_server", "validation"):
         for f in (DEPLOY_ROOT / top).rglob("*.py") if (DEPLOY_ROOT / top).is_dir() else ():
             yield f.read_text(encoding="utf-8")

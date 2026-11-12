@@ -385,6 +385,7 @@ def _cases():
     _selftest_search_attrs()
 
 
+@patch("mcp_server.services.search.server_state.dev_served", new=lambda: [])  # PG에 이미 있는 DEV 스키마는 빼고 사슬 5벌만
 def _selftest_search_attrs():
     """pl-52 — edw_meta 인자 없음의 search_attrs: 원천별 거르기 이름 → attrs 키·근거 키(사슬 파일 그대로) · 인자가 있으면 안 붙음."""
     from mcp_server.services import edw_calls

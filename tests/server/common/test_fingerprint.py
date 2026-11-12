@@ -56,7 +56,7 @@ def test_main():
 
 
 def test_version_file():
-    """저장소 루트 VERSION(이미지 /app/deploy/VERSION) — 두 이미지 공통 SemVer. pipeline_version()이 그 값을 낸다."""
+    """저장소 루트 VERSION(이미지 /app/VERSION) — 두 이미지 공통 SemVer. pipeline_version()이 그 값을 낸다."""
     root = DEPLOY_ROOT
     v = (root / "VERSION").read_text(encoding="utf-8").strip()
     parts = v.split(".")

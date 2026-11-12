@@ -1,10 +1,8 @@
-# op-07(사용자 10-30) — 개발 → 운영: 개발 서버에서 쓰던 실행 이미지(*-runtime, 코드 없음) + 개발 서버에서 시험한 코드 폴더를
-# 그대로 묶어 운영용 이미지(코드가 든 이미지 — 코드 폴더 마운트 없이 뜸)를 만든다. 패키지 설치·네트워크 없음(폐쇄망 개발 서버에서 빌드).
-#   빌드 문맥 = 코드 폴더(저장소 트리 그대로 — .dockerignore 허용 목록도 그 안의 것): deploy/release/bake_prod_image.sh가 부른다.
-#   COPY 줄은 Dockerfile의 코드가 든 타깃(pipeline·mcp)과 같다 — 같은 파일이 같은 자리에(바탕만 실행 이미지 그 판).
+# 운영 이미지 굽기 — 개발 서버에서 쓰던 실행 이미지(*-runtime) 그 판 + 시험한 코드 폴더 = 코드가 든 이미지(op-07). 패키지 설치·네트워크 없음.
+#   빌드 문맥 = 코드 폴더 — deploy/release/bake_prod_image.sh가 부른다. COPY 줄은 Dockerfile의 pipeline·mcp 타깃과 같다.
 ARG RUNTIME_IMAGE
 
-# 소스(복사 원본) — /src/appdocker = 이미지 /app/docker 내용(Dockerfile의 src 단계와 같음)
+# 소스(복사 원본) — /src/appdocker = 이미지 /opt/sbl/docker 내용(Dockerfile의 src 단계와 같음)
 FROM ${RUNTIME_IMAGE} AS src
 USER root
 COPY . /src
@@ -15,54 +13,54 @@ RUN mkdir -p /src/appdocker && cp /src/deploy/docker/entrypoint.sh \
 FROM ${RUNTIME_IMAGE} AS mcp
 USER root
 WORKDIR /app
-COPY --from=src /src/common /app/deploy/common
-COPY --from=src /src/mcp_server /app/deploy/mcp_server
-COPY --from=src /src/pipeline/__init__.py /src/pipeline/cli.py /src/pipeline/config.py /app/deploy/pipeline/
-COPY --from=src /src/resources /app/deploy/resources
-COPY --from=src /src/VERSION /app/deploy/VERSION
-COPY --from=src /src/edw_chain.yaml /app/deploy/edw_chain.yaml
-COPY --from=src /src/CODE_COMMIT /app/deploy/CODE_COMMIT
-COPY --from=src /src/appdocker /app/docker
-COPY --from=src /src/tests/__init__.py /src/tests/runner.py /app/deploy/tests/
-COPY --from=src /src/tests/server/__init__.py /app/deploy/tests/server/
-COPY --from=src /src/tests/server/common /app/deploy/tests/server/common
-COPY --from=src /src/tests/server/mcp /app/deploy/tests/server/mcp
-RUN sed -i 's/\r$//' /app/docker/entrypoint.sh && chmod +x /app/docker/entrypoint.sh
+COPY --from=src /src/common /app/common
+COPY --from=src /src/mcp_server /app/mcp_server
+COPY --from=src /src/pipeline/__init__.py /src/pipeline/cli.py /src/pipeline/config.py /app/pipeline/
+COPY --from=src /src/resources /app/resources
+COPY --from=src /src/VERSION /app/VERSION
+COPY --from=src /src/edw_chain.yaml /src/opencode.jsonc /app/
+COPY --from=src /src/CODE_COMMIT /app/CODE_COMMIT
+COPY --from=src /src/appdocker /opt/sbl/docker
+COPY --from=src /src/tests/__init__.py /src/tests/runner.py /app/tests/
+COPY --from=src /src/tests/server/__init__.py /app/tests/server/
+COPY --from=src /src/tests/server/common /app/tests/server/common
+COPY --from=src /src/tests/server/mcp /app/tests/server/mcp
+RUN sed -i 's/\r$//' /opt/sbl/docker/entrypoint.sh && chmod +x /opt/sbl/docker/entrypoint.sh
 ARG APP_VERSION=
 ARG VCS_REF=
 ARG RUNTIME_ID=
-RUN [ -z "$APP_VERSION" ] || [ "$APP_VERSION" = "$(tr -d ' \r\n' < /app/deploy/VERSION)" ] \
+RUN [ -z "$APP_VERSION" ] || [ "$APP_VERSION" = "$(tr -d ' \r\n' < /app/VERSION)" ] \
     || { echo "APP_VERSION($APP_VERSION) ≠ VERSION 파일" >&2; exit 1; }
 LABEL org.opencontainers.image.version=$APP_VERSION org.opencontainers.image.revision=$VCS_REF org.opencontainers.image.title=mcp-server \
       org.opencontainers.image.base.digest=$RUNTIME_ID
 USER rag
-ENTRYPOINT ["/app/docker/entrypoint.sh"]
+ENTRYPOINT ["/opt/sbl/docker/entrypoint.sh"]
 CMD ["help"]
 
 # ── 파이프라인(data-pipeline) ──
 FROM ${RUNTIME_IMAGE} AS pipeline
 USER root
 WORKDIR /app
-COPY --from=src /src/common /app/deploy/common
-COPY --from=src /src/pipeline /app/deploy/pipeline
-COPY --from=src /src/mcp_server/__init__.py /src/mcp_server/config.py /app/deploy/mcp_server/
-COPY --from=src /src/resources /app/deploy/resources
-COPY --from=src /src/VERSION /app/deploy/VERSION
-COPY --from=src /src/edw_chain.yaml /app/deploy/edw_chain.yaml
-COPY --from=src /src/CODE_COMMIT /app/deploy/CODE_COMMIT
-COPY --from=src /src/appdocker /app/docker
-COPY --from=src /src/tests/__init__.py /src/tests/runner.py /app/deploy/tests/
-COPY --from=src /src/tests/server/__init__.py /app/deploy/tests/server/
-COPY --from=src /src/tests/server/common /app/deploy/tests/server/common
-COPY --from=src /src/tests/server/pipeline /app/deploy/tests/server/pipeline
-RUN sed -i 's/\r$//' /app/docker/entrypoint.sh && chmod +x /app/docker/entrypoint.sh
+COPY --from=src /src/common /app/common
+COPY --from=src /src/pipeline /app/pipeline
+COPY --from=src /src/mcp_server/__init__.py /src/mcp_server/config.py /app/mcp_server/
+COPY --from=src /src/resources /app/resources
+COPY --from=src /src/VERSION /app/VERSION
+COPY --from=src /src/edw_chain.yaml /src/opencode.jsonc /app/
+COPY --from=src /src/CODE_COMMIT /app/CODE_COMMIT
+COPY --from=src /src/appdocker /opt/sbl/docker
+COPY --from=src /src/tests/__init__.py /src/tests/runner.py /app/tests/
+COPY --from=src /src/tests/server/__init__.py /app/tests/server/
+COPY --from=src /src/tests/server/common /app/tests/server/common
+COPY --from=src /src/tests/server/pipeline /app/tests/server/pipeline
+RUN sed -i 's/\r$//' /opt/sbl/docker/entrypoint.sh && chmod +x /opt/sbl/docker/entrypoint.sh
 ARG APP_VERSION=
 ARG VCS_REF=
 ARG RUNTIME_ID=
-RUN [ -z "$APP_VERSION" ] || [ "$APP_VERSION" = "$(tr -d ' \r\n' < /app/deploy/VERSION)" ] \
+RUN [ -z "$APP_VERSION" ] || [ "$APP_VERSION" = "$(tr -d ' \r\n' < /app/VERSION)" ] \
     || { echo "APP_VERSION($APP_VERSION) ≠ VERSION 파일" >&2; exit 1; }
 LABEL org.opencontainers.image.version=$APP_VERSION org.opencontainers.image.revision=$VCS_REF org.opencontainers.image.title=data-pipeline \
       org.opencontainers.image.base.digest=$RUNTIME_ID
 USER rag
-ENTRYPOINT ["/app/docker/entrypoint.sh"]
+ENTRYPOINT ["/opt/sbl/docker/entrypoint.sh"]
 CMD ["help"]

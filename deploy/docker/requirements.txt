@@ -48,3 +48,11 @@ pillow
 pymssql==2.4.2              # 바이너리 wheel에 FreeTDS 포함 — 폐쇄망 서버에 시스템 ODBC 드라이버 설치 불필요
 mcp==1.30.0               # 검색 MCP 클라이언트·서버(cli/mcp_eval.py·mcp_smoke.py, modules/search/mcp_server.py) — 이미지와 같은 버전(SI28 대조)
 boto3                     # Object Storage(S3 호환) 받기 — modules/parse/source.py s3:// · rdb: (이미지와 같이 버전 미고정)
+
+# 설정·DB·큐(이미지 requirements-core.txt와 같은 판 — 진단 check_env가 대조)
+redis==5.2.1
+pydantic-settings==2.16.1
+PyYAML==6.0.3
+SQLAlchemy==2.1.6
+alembic==1.20.1
+Mako==1.4.3

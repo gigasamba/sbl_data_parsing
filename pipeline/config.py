@@ -327,6 +327,18 @@ class PipelineHostRunPipeline(Section):
     scan_rotate: bool | None = F(
         False, "RUN_PIPELINE_SCAN_ROTATE", "이미지 PDF 쪽 방향 바로잡기 — false면 받기(stage)에 --no-scan-rotate를 붙여 회전 OCR 생략"
     )
+    # e2e 단계(rn-05) — 한 번 실행 = ① 사전 점검 → ② 문서 처리 → ③ 적재·검색 확인(①③만 끄고 켬, ②는 항상). 명령 인자(--set·--limit)가 덮음
+    steps_precheck: bool | None = F(
+        True, "RUN_PIPELINE_STEPS_PRECHECK", "① 사전 점검(설정·모델 연결·DB 판·배포 시험) — 실패하면 문서를 처리하지 않음"
+    )
+    steps_verify: bool | None = F(
+        True,
+        "RUN_PIPELINE_STEPS_VERIFY",
+        "③ 적재·검색 확인(이번 실행 문서로 DB 검색 → 검색 MCP 바깥 호출 — 주소 dev.search_ui.search_ui_mcp_url)",
+    )
+    run_limit: int | None = F(
+        2, "RUN_PIPELINE_RUN_LIMIT", "사람이 돌릴 때 처리 건수 — 0 = 전체(새벽 배치는 --limit 0, 명령 인자 --limit이 덮음)"
+    )
     cpu_gate: float | None = F(1.3, "RUN_PIPELINE_CPU_GATE", "light 밖 레인의 파싱 CPU 게이트(CPU_MAX_LOAD — 명령 인자 --cpu-gate가 덮음)")
     light_cpu_gate: float | None = F(9.0, "RUN_PIPELINE_LIGHT_CPU_GATE", "light 레인 CPU 게이트(CPU_MAX_LOAD — 높게 두어 바로 소화)")
     embed_concurrency: int | None = F(6, "RUN_PIPELINE_EMBED_CONCURRENCY", "구조화·적재 임베딩 호출 병렬 수(EMBED_CONCURRENCY)")

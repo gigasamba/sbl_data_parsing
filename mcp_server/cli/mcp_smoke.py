@@ -61,16 +61,18 @@ def main(argv=None):
     utf8_stdout()
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", help="MCP 주소 — 비우면 설정 mcp.dev.mcp_url")
-    ap.add_argument("--token", default="")
+    ap.add_argument("--token", default=None, help="비우면 설정 required.tokens.mcp_token(명령 줄은 ps·로그에 남음 — 서버 안에서는 비워 둠)")
     ap.add_argument("--q", default="계약 단가")
     ap.add_argument(
         "--source", required=True, help="원천 하나(SFDC·CRMS·LAS·FAQ·Other, 개발 서버는 DEV-<숫자>도 — search의 source_system과 같음)"
     )
     a = ap.parse_args(argv)
-    if not a.url:  # 주소를 주면 설정 파일 없이도(호스트·다른 서버에서 부름)
+    if not a.url or a.token is None:  # 주소·토큰(토큰 없는 서버는 --token "")을 둘 다 주면 설정 파일 없이도(호스트·다른 서버에서 부름)
         from mcp_server import config as mc
 
-        a.url = mc.cfg().dev.mcp_url
+        a.url = a.url or mc.cfg().dev.mcp_url
+        if a.token is None:
+            a.token = mc.token_text(mc.common_cfg().tokens.mcp) or ""
     bad = asyncio.run(run(a.url, a.token, a.q, a.source))
     print("MCP 바깥 호출 통과" if not bad else "실패: " + " · ".join(bad))
     raise SystemExit(1 if bad else 0)

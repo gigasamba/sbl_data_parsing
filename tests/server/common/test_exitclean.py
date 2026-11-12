@@ -24,7 +24,7 @@ mode, hb, pid_file = sys.argv[1], sys.argv[2], sys.argv[3]
 p = C.child_env(None, PIPE_PROCS="1")["SETTINGS_FILE"]
 exitclean.remove_at_exit(pid_file)
 open(pid_file, "w").write("1")
-child = RS.gated_popen([sys.executable, "-c", {_HEART!r}, hb])
+child = RS.gated_popen([sys.executable, "-c", {_HEART!r}, hb], log=lambda m: print(m, file=sys.stderr))  # 문 대기 줄은 stderr로(stdout 첫 줄 = 결과)
 while not os.path.exists(hb):
     time.sleep(0.05)
 print(p, child.pid, flush=True)
@@ -111,7 +111,7 @@ from common.config import settings as C
 from common.core import resources as RS
 p = C.child_env(None, PIPE_PROCS="1")["SETTINGS_FILE"]
 code = "import signal, time\\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\\nopen(__import__('sys').argv[1], 'w').close()\\ntime.sleep(120)"
-child = RS.gated_popen([sys.executable, "-c", code, sys.argv[1]])
+child = RS.gated_popen([sys.executable, "-c", code, sys.argv[1]], log=lambda m: print(m, file=sys.stderr))  # 문 대기 줄은 stderr로
 while not os.path.exists(sys.argv[1]):
     time.sleep(0.05)
 print(p, child.pid, flush=True)
