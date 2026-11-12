@@ -535,9 +535,9 @@ PRECHECK = (
 
 
 def _step_fail(step, name, rc, out, err):
-    """점검 하나 실패 — 그 명령 출력 끝(최대 20줄)을 진행 기록에 남기고 그 이름을 돌려줌."""
+    """점검 하나 실패 — 그 명령 출력 끝(최대 120줄 — 배포 시험은 실패 내용이 요약 줄 바로 위)을 진행 기록에 남기고 그 이름을 돌려줌."""
     log(f"[{step}] {name} — 실패(종료 코드 {rc})")
-    for ln in f"{out or ''}\n{err or ''}".strip().splitlines()[-20:]:
+    for ln in f"{out or ''}\n{err or ''}".strip().splitlines()[-120:]:
         log(f"  {ln}")
     return name
 

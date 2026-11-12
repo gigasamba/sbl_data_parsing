@@ -23,7 +23,7 @@ want=$(tr -d '\r\n' < deploy/docker/DEPS_HASH)
 commit=$(cut -d' ' -f1 CODE_COMMIT 2>/dev/null); case "$commit" in ''|'$Format'*) commit=$(git rev-parse HEAD 2>/dev/null || echo unknown) ;; esac   # clone이면 틀 그대로
 # 운영 서버 호스트 스크립트도 이미지와 같은 코드로 — 시험한 코드 폴더를 묶음. git clone이면 git archive(추적 파일만)
 BUNDLE="$OUT/code-$TAG-$(echo "$commit" | cut -c1-7).tar.gz"
-NOT_PRD=(deploy/host/scripts/test_space valid_env validation)
+NOT_PRD=(deploy/host/scripts/test_space $(awk '$2 == "export-ignore" { sub("^/", "", $1); print $1 }' "$CODE_DIR/.gitattributes"))   # PC 전용 = .gitattributes export-ignore(.git 없는 폴더도 같게)
 if [ -d "$CODE_DIR/.git" ] && command -v git >/dev/null 2>&1; then
   xs=(); for d in "${NOT_PRD[@]}"; do xs+=(":(exclude)$d"); done
   git -c safe.directory='*' -C "$CODE_DIR" archive --format=tar.gz HEAD -- . "${xs[@]}" > "$BUNDLE"

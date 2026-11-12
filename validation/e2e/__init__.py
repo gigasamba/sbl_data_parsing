@@ -1,1 +1,1 @@
-"""PC 전용 평가·비교 도구(stack_matrix·model_matrix) + LLM 그래프 실험 지시서 triple_extract."""
+"""PC 전용 답변 점검(answer_gen·tool_loop)과 가짜 EDW 만들기(edw_standin)."""

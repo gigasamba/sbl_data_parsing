@@ -77,3 +77,8 @@ valid_env/object_storage/test_doc_purpose.md text eol=lf
 DEPS_HASH   text eol=lf
 # op-06 — git archive·GitHub zip 받기가 CODE_COMMIT을 "<커밋> <짧은 커밋>"으로 채움(clone에는 틀 그대로)
 CODE_COMMIT text eol=lf export-subst
+# 서버 코드 zip(git archive·GitHub zip)에 넣지 않는 PC 전용 — 시험 데이터·검증 도구·PC 시험(clone에는 그대로 — bake_prod_image가 이 목록을 읽어 뺌)
+/valid_env export-ignore
+/validation export-ignore
+/tests/general export-ignore
+/tests/conftest.py export-ignore

@@ -59,7 +59,7 @@ if [ "$RUNTIME" = 1 ]; then
   if $DOCKER run --rm "$TAG" help >/dev/null 2>&1; then echo "[오류] 코드 마운트 없이 실행 이미지가 떴음"; exit 1; fi   # runtime_entry.sh가 멈춰야 함
   # 판정·묶음 = 이 커밋의 코드 트리(git archive — 커밋 안 한 변경은 빠짐) + CODE_COMMIT
   CODE_DIR=$(mktemp -d); trap 'rm -rf "$CODE_DIR"' EXIT
-  git archive HEAD -- . ':(exclude)valid_env' ':(exclude)validation' | tar -x -C "$CODE_DIR"
+  git archive HEAD | tar -x -C "$CODE_DIR"   # PC 전용 폴더는 .gitattributes export-ignore
   echo "$(git rev-parse HEAD 2>/dev/null || echo unknown) $VCS_REF $APP_VERSION" > "$CODE_DIR/CODE_COMMIT"
   chmod -R u=rwX,go=rX "$CODE_DIR"   # mktemp -d는 0700 — 서버에서 푼 폴더를 모두가 읽게
   mkdir -p "$(dirname "$CODE_OUT")"

@@ -279,7 +279,7 @@ def selftest(a):
         if r.returncode != 0 and miss and all(_image_lacks(m) for m in set(miss)):
             return (mod, "SKIP", f"다른 이미지 모듈 필요({', '.join(sorted(set(miss)))})")
         if r.returncode != 0:
-            return (mod, "FAIL", out[-1500:])
+            return (mod, "FAIL", out[-2500:])
         return (mod, "PASS", " · ".join(re.findall(r"^\[시험\] SKIP \S+?\.(test_\w+)", r.stdout, re.M)))  # 시험 함수 SKIP(운영 DB 쓰기 등)
 
     # 사례는 서로 다른 자식 프로세스라 함께 돌림(쓸 수 있는 CPU 수, 많아도 8개) — map은 순서를 지켜 표는 그대로
@@ -292,8 +292,9 @@ def selftest(a):
     fn_skips = sum(len(detail.split(" · ")) for _, status, detail in rows if status == "PASS" and detail)
     for name, status, detail in rows:
         print(f"{status:4} {name}" + (f"  ({'SKIP ' if status == 'PASS' else ''}{detail})" if status != "FAIL" and detail else ""))
+    for name, status, detail in rows:  # 실패 내용은 표 뒤 요약 줄 바로 위에 — 출력 끝만 남기는 쪽(run_pipeline 등)도 원인을 봄
         if status == "FAIL":
-            print("     " + detail.replace("\n", "\n     "))
+            print(f"\n── {name}\n     " + detail.replace("\n", "\n     "))
     print(
         f"\n{len(rows) - len(fails) - skips}/{len(rows) - skips} 통과"
         + (f" · SKIP {skips}" if skips else "")

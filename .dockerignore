@@ -29,7 +29,7 @@
 **/.env
 **/.env.local
 **/*.env
-# S6b(VS6a R-2) — 코드 폴더 안에 생긴 실행 결과(output/ — 예: model_matrix가 common/output을 만듦)가 이미지에 들지 않게
+# 코드 폴더 안에 생긴 실행 결과(output/)가 이미지에 들지 않게
 **/output
 # S6a 리뷰 — common/config/에 .env*.example이 있어, 그 안내대로 만든 키 파일(.env.openrouter 등)이 컨텍스트에 들지 않게. 빈 틀만 보냄
 # S6b(VS6a R-6) — 빈 틀 예외를 common/config/로 좁힘(전에는 !**/*.example이 다른 *.example도 다시 넣었음)

@@ -13,7 +13,7 @@ for t in ruff mypy; do
   [ -x "$BIN/$t" ] || [ -x "$BIN/$t.exe" ] || { echo "[점검] $t 없음 — uv pip install --python $BIN/python -r requirements-dev.txt" >&2; exit 2; }
 done
 BASE=${1:-HEAD}
-SKIP='^(pipeline/transform/parse/engines/|common/core/(contract|repfmt|terms|text)\.py$|resources/|valid_env/|output/|validation/e2e/triple_extract/)'
+SKIP='^(pipeline/transform/parse/engines/|common/core/(contract|repfmt|terms|text)\.py$|resources/|valid_env/|output/)'
 if [ "${ALL:-0}" = 1 ]; then
   FILES=$(git ls-files -- '*.py' | grep -Ev "$SKIP" || true)
 else
