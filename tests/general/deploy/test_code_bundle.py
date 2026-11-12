@@ -68,7 +68,8 @@ def test_runtime_entry_commit():
 
 
 KEEP = ["deploy/host/scripts/run.sh", "settings.sample.yaml", "valid_env.md"]
-DROP = ["deploy/host/scripts/test_space/x.log", "valid_env/a.txt", "validation/b.py", "settings.yaml", "settings copy.yaml"]
+DROP = ["deploy/host/scripts/test_space/x.log", "settings.yaml", "settings copy.yaml"]
+PC_ONLY = ["valid_env/a.txt", "validation/b.py", "tests/general/c.py", "tests/conftest.py"]  # .gitattributes export-ignore
 
 
 def test_prd_bundle_excludes():
@@ -81,9 +82,10 @@ def test_prd_bundle_excludes():
     for use_git in (True, False):
         with tempfile.TemporaryDirectory(prefix="orca_bake_") as d:
             code = Path(d) / "code"
-            for rel in KEEP + DROP:
+            for rel in KEEP + DROP + PC_ONLY:
                 (code / rel).parent.mkdir(parents=True, exist_ok=True)
                 (code / rel).write_text("x", encoding="utf-8")
+            shutil.copy(ROOT / ".gitattributes", code / ".gitattributes")
             if use_git:
                 (code / ".gitignore").write_text("settings.yaml\nsettings copy.yaml\n", encoding="utf-8")
                 _git(code, "init", "-q")
@@ -98,6 +100,7 @@ def test_prd_bundle_excludes():
             n
             for n in names
             if n.split("/")[0] in {".git", "valid_env", "validation"}
+            or n.startswith(("tests/general", "tests/conftest.py"))
             or n.startswith("deploy/host/scripts/test_space")
             or n in {"settings.yaml", "settings copy.yaml"}
         ]

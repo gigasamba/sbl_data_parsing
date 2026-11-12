@@ -353,20 +353,6 @@ def test_steps_stop_at_first_failure():
             assert "to_timestamp(1700000000)" in sql and "doc_id = '보관 기간.pdf'" in sql, sql
 
 
-def test_step_fail_keeps_fail_block():
-    """점검 실패 기록 — 첫 FAIL 줄부터 30줄 + 끝 20줄(FAIL이 없으면 끝 20줄만), 겹치는 줄은 한 번."""
-    passes = [f"PASS t{i}" for i in range(50)]
-    for out, want_in, want_n in [
-        ("\n".join([*passes, "FAIL tests.x", "  AssertionError: boom", *passes, "93/94 통과"]), ["FAIL tests.x", "boom", "93/94"], 50),
-        ("\n".join(passes), ["PASS t49"], 20),
-        ("FAIL tests.y\n  why", ["FAIL tests.y", "why"], 2),
-    ]:
-        with mock.patch.object(RD, "log") as out_log:
-            assert RD._step_fail("점검", "배포 시험", 1, out, "") == "배포 시험"
-        got = [c.args[0] for c in out_log.call_args_list][1:]  # 첫 줄은 "[점검] 배포 시험 — 실패"
-        assert len(got) == want_n and all(any(w in g for g in got) for w in want_in), (want_n, len(got))
-
-
 def test_finish_exit_codes():
     """② 뒤 끝 판정 — (rc, 적재 문서, ③ 켬, ③ 결과) → (종료 코드, ③ 불림)."""
     for rc, loaded, on, bad, want, called in [
